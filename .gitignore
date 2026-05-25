@@ -1,0 +1,13 @@
+node_modules/
+dist/
+dist-renderer/
+apps/desktop/dist-main/
+apps/desktop/dist-preload/
+apps/desktop/dist-renderer/
+coverage/
+.vite/
+.cache/
+*.tsbuildinfo
+*.log
+data/sessions/*.jsonl
+!.gitkeep

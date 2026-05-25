@@ -1,0 +1,33 @@
+{
+  "name": "greyfield-next",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "test": "vitest run",
+    "test:unit": "vitest run --exclude \"packages/dev-harness/src/**\"",
+    "test:changed": "vitest related --run",
+    "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
+    "build:desktop": "pnpm --filter @greyfield/desktop build:all",
+    "harness:acceptance": "tsx packages/dev-harness/src/acceptance.ts",
+    "harness:fallback": "tsx packages/dev-harness/src/fallback-check.ts",
+    "harness:live2d": "tsx packages/dev-harness/src/live2d-check.ts",
+    "harness:electron": "pnpm build:desktop && tsx packages/dev-harness/src/electron-check.ts",
+    "harness:electron:quick": "tsx packages/dev-harness/src/electron-check.ts",
+    "harness:pet:quick": "tsx packages/dev-harness/src/electron-check.ts --quick",
+    "dev:live2d": "node apps/desktop/scripts/dev-live2d-electron.mjs",
+    "dev:live2d:fast": "node apps/desktop/scripts/dev-live2d-electron.mjs --skip-build",
+    "dev:live2d:rebuild": "node apps/desktop/scripts/dev-live2d-electron.mjs --force-build",
+    "dev:live2d:stop": "node apps/desktop/scripts/stop-live2d-electron.mjs",
+    "dev:live2d:url": "tsx packages/dev-harness/src/dev-live2d-url.ts",
+    "dev": "pnpm --filter @greyfield/desktop dev"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "playwright": "^1.60.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.13"
+  }
+}

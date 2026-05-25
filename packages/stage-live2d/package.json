@@ -1,0 +1,26 @@
+{
+  "name": "@greyfield/stage-live2d",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@pixi/app": "6.5.10",
+    "@pixi/constants": "6.5.10",
+    "@pixi/core": "6.5.10",
+    "@pixi/display": "6.5.10",
+    "@pixi/extensions": "6.5.10",
+    "@pixi/interaction": "6.5.10",
+    "@pixi/loaders": "6.5.10",
+    "@pixi/math": "6.5.10",
+    "@pixi/runner": "6.5.10",
+    "@pixi/settings": "6.5.10",
+    "@pixi/sprite": "6.5.10",
+    "@pixi/ticker": "6.5.10",
+    "@pixi/utils": "6.5.10",
+    "jszip": "3.10.1",
+    "live2dcubismcore": "1.0.2",
+    "pixi-live2d-display": "0.4.0"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "../../.cache/tsbuildinfo/desktop.tsbuildinfo"
+  },
+  "references": [
+    { "path": "../../packages/core-runtime" },
+    { "path": "../../packages/audio-runtime" },
+    { "path": "../../packages/persistence" },
+    { "path": "../../packages/stage-live2d" }
+  ],
+  "include": ["src/**/*.ts"]
+}

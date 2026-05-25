@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "../../.cache/tsbuildinfo/core-runtime.tsbuildinfo"
+  },
+  "references": [{ "path": "../audio-runtime" }],
+  "include": ["src/**/*.ts"]
+}

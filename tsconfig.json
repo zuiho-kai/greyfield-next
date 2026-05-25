@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/core-runtime" },
+    { "path": "./packages/audio-runtime" },
+    { "path": "./packages/stage-live2d" },
+    { "path": "./packages/persistence" },
+    { "path": "./packages/dev-harness" },
+    { "path": "./apps/desktop" }
+  ]
+}

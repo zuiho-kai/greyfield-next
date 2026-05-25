@@ -1,0 +1,67 @@
+# Development Speed Policy
+
+Date: 2026-05-25
+
+This project needs two modes: fast feature iteration and slower checkpoint validation. The recent slowdown came from using checkpoint validation after too many small edits. That made the work safer, but the throughput was wrong for active development.
+
+## Root Cause
+
+- Full Electron harness was used too often. `pnpm harness:electron` rebuilds desktop bundles, starts Electron, and drives Playwright. It is a checkpoint tool, not a per-edit tool.
+- TDD steps were too small for architecture cleanup. Red/green is still required for behavior changes, but several tiny refactors were each followed by too much global validation.
+- Documentation was updated too frequently. Progress and retros should be updated at phase boundaries or after real misses, not after every small edit.
+- Subagent review and long retros were used in the middle of implementation. They are valuable at phase boundaries, but they slow down feature throughput when used as the default loop.
+
+## Default Verification Matrix
+
+| Change Type | During Iteration | Before Claiming Done |
+| --- | --- | --- |
+| Pure unit logic | Targeted `vitest` for touched module | `pnpm test` |
+| Type-only or package boundary change | Targeted `vitest` if behavior exists, then `pnpm typecheck` | `pnpm typecheck && pnpm test` |
+| Pet drag / hit-test / wheel / pass-through | Targeted `vitest pet-interaction` plus `pnpm harness:pet:quick` | `pnpm harness:electron` |
+| Live2D loader / model rendering | Targeted stage tests | `pnpm harness:live2d` |
+| Settings / chat / preload / main IPC | Targeted tests plus `pnpm typecheck` | `pnpm harness:electron` |
+| Core runtime / provider / interrupt | Targeted runtime/provider tests | `pnpm test && pnpm harness:acceptance` |
+| CI or packaging scripts | Script-specific smoke command | Relevant checkpoint command |
+
+## Fast Loop
+
+Use this while actively editing:
+
+```bash
+pnpm vitest run <specific-test-file>
+pnpm typecheck
+pnpm harness:pet:quick
+```
+
+Only run commands that prove the touched behavior. Do not run full Electron after every small refactor unless the change touches settings/chat/preload/main IPC or native pet-window behavior in a way quick harness cannot cover.
+
+## Checkpoint Loop
+
+Use this before claiming a milestone, after risky refactors, or before handing the build back for user verification:
+
+```bash
+pnpm typecheck
+pnpm test
+pnpm harness:acceptance
+pnpm harness:live2d
+pnpm harness:electron
+```
+
+If a full checkpoint fails after a fast loop passed, fix the harness or product issue and record the lesson only if it changes future practice.
+
+## Documentation Policy
+
+- Update `docs/progress.md` after a meaningful batch, not every file edit.
+- Update retro docs only for repeated bugs, real product misses, or corrected assumptions.
+- Update `packages/dev-harness/v1-features.json` when feature scope, acceptance, status, or QA command changes.
+- Keep plan docs focused on next execution order, not a transcript of every action.
+
+## Subagent Policy
+
+- Use subagents for phase-end architecture review, black-box QA, and specialized audits.
+- Do not open subagents as a default substitute for reading local code and running targeted tests.
+- After subagent findings, implement only the smallest high-value fixes first, then return to feature delivery.
+
+## Practical Rule
+
+During active development, prefer one targeted test and one relevant fast harness over a full checkpoint. Run the full checkpoint when the result is ready to be trusted, shown, or used as a new baseline.

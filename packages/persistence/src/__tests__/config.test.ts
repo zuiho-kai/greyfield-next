@@ -1,0 +1,38 @@
+import { describe, expect, it } from "vitest";
+import { defaultGreyfieldConfig, mergeConfig } from "../config";
+
+describe("Greyfield config", () => {
+  it("keeps provider, voice, microphone, window, live2d, and character settings in one schema", () => {
+    expect(defaultGreyfieldConfig.provider.llm).toBe("fake");
+    expect(defaultGreyfieldConfig.provider.baseUrl).toBe("https://api.openai.com/v1");
+    expect(defaultGreyfieldConfig.audio.microphoneId).toBe("default");
+    expect(defaultGreyfieldConfig.characterFile).toBe("characters/greyfield.yaml");
+    expect(defaultGreyfieldConfig.live2d.modelPath).toContain(".model3.json");
+    expect(defaultGreyfieldConfig.window.modelPassThrough).toBe(false);
+    expect(defaultGreyfieldConfig.ui.speechBubbleEnabled).toBe(true);
+  });
+
+  it("deep-merges nested settings without dropping defaults", () => {
+    const config = mergeConfig({
+      provider: { model: "local-test-model" },
+      audio: { microphoneId: "mic-2" },
+      live2d: { scale: 1.25 },
+      ui: { speechBubbleEnabled: false }
+    });
+
+    expect(config.provider).toMatchObject({
+      llm: "fake",
+      asr: "fake",
+      tts: "fake",
+      model: "local-test-model",
+      baseUrl: "https://api.openai.com/v1",
+      apiKey: ""
+    });
+    expect(config.audio.microphoneId).toBe("mic-2");
+    expect(config.live2d).toMatchObject({
+      modelPath: defaultGreyfieldConfig.live2d.modelPath,
+      scale: 1.25
+    });
+    expect(config.ui.speechBubbleEnabled).toBe(false);
+  });
+});

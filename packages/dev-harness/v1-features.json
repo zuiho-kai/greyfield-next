@@ -1,0 +1,233 @@
+{
+  "version": "v1",
+  "project": "Greyfield Next",
+  "northStar": "A visible, interruptible, personable Live2D desktop companion with recent context continuity.",
+  "nonGoals": [
+    "desktop-control",
+    "browser-control",
+    "screen-reading",
+    "long-running-task-system",
+    "multi-agent",
+    "livestream",
+    "godot-vrm",
+    "message-platform-gateway",
+    "self-generating-skills"
+  ],
+  "features": [
+    {
+      "id": "GFN-V1-001",
+      "title": "Transparent pet window",
+      "status": "completed",
+      "package": "apps/desktop",
+      "acceptance": [
+        "Electron starts a transparent always-on-top pet window.",
+        "The pet window has no OS title bar, browser chrome, visible page frame, or document scrollbars.",
+        "The renderer background is truly transparent; the user sees the desktop behind non-model pixels.",
+        "Transparent non-model pixels pass pointer events through to apps underneath unless an explicit visible control is present.",
+        "Visible model pixels remain interactive for touch, drag, and context commands when click-through is disabled.",
+        "The window can toggle pointer passthrough and can be dragged from the pet surface when unlocked.",
+        "Dragging moves the desktop pet/window rather than scrolling a page or only offsetting the Live2D model inside a stale invisible rectangle.",
+        "The renderer receives a typed preload bridge exposed as window.greyfield."
+      ],
+      "qa": {
+        "script": "pnpm harness:electron"
+      }
+    },
+    {
+      "id": "GFN-V1-002",
+      "title": "Live2D model import",
+      "status": "completed",
+      "package": "packages/stage-live2d",
+      "acceptance": [
+        "A .model3.json file or containing directory resolves to one model manifest.",
+        "The model3 manifest parser extracts moc, textures, expression names, and motion groups.",
+        "The desktop stage loads a real Live2D model through Pixi/Cubism.",
+        "The fallback preview is never counted as V1 Live2D acceptance.",
+        "The Live2D harness proves usedFallback=false with non-transparent WebGL pixels and frame changes.",
+        "Model scale and position settings affect the real stage and persist through settings IPC."
+      ],
+      "qa": {
+        "script": "vitest model-manifest model3-parser fallback-stage-frame live2d-deps; pnpm harness:live2d"
+      }
+    },
+    {
+      "id": "GFN-V1-003",
+      "title": "Motion expression touch mapping",
+      "status": "completed",
+      "package": "packages/stage-live2d",
+      "acceptance": [
+        "Touch areas resolve deterministically with topmost-last ordering.",
+        "Expression and motion requests map through explicit fallback rules.",
+        "DigitalMate-style touch and emotion reactions are profile-driven, not hardcoded in the renderer.",
+        "Audio volume maps to bounded mouth-open values with a noise gate."
+      ],
+      "qa": {
+        "script": "vitest stage-config stage-driver interaction-profile audio-level-meter; pnpm harness:live2d"
+      }
+    },
+    {
+      "id": "GFN-V1-010",
+      "title": "Model alpha hit test",
+      "status": "completed",
+      "package": "packages/stage-live2d",
+      "acceptance": [
+        "Visible model pixels are detected from the final rendered alpha channel.",
+        "Transparent Live2D canvas pixels are not treated as model hits.",
+        "The pet renderer emits model hit state changes for pointer movement.",
+        "Fallback stage exposes equivalent alpha hit semantics so dev mode does not lie."
+      ],
+      "qa": {
+        "script": "vitest alpha-hit-test pet-interaction; pnpm harness:live2d"
+      }
+    },
+    {
+      "id": "GFN-V1-011",
+      "title": "Transparent-area pass-through",
+      "status": "completed",
+      "package": "apps/desktop",
+      "acceptance": [
+        "Transparent area uses renderer alpha hit testing to request Electron mouse pass-through.",
+        "Visible model area requests passthrough=false when Model Pass Through is disabled.",
+        "Model Pass Through forces passthrough=true even on visible model pixels.",
+        "Electron main only applies setIgnoreMouseEvents/window movement and does not decide Live2D hit semantics.",
+        "Native BrowserWindow.setShape is not the default Windows V1 path because it visually clips animated Live2D and can drift native bounds."
+      ],
+      "qa": {
+        "script": "vitest pet-interaction desktop-runtime-bridge; pnpm harness:pet:quick; pnpm harness:electron"
+      }
+    },
+    {
+      "id": "GFN-V1-012",
+      "title": "Model drag window",
+      "status": "completed",
+      "package": "apps/desktop",
+      "acceptance": [
+        "Left pointer down on visible model pixels starts a window drag.",
+        "Pointer move during drag updates only window x/y.",
+        "Native window width and height stay unchanged during drag.",
+        "Drag never changes live2d scale or model transform.",
+        "Pointer up/cancel releases drag and later pointer moves do not continue moving the window."
+      ],
+      "qa": {
+        "script": "vitest pet-interaction; pnpm harness:pet:quick; pnpm harness:electron"
+      }
+    },
+    {
+      "id": "GFN-V1-013",
+      "title": "Bounded wheel scale",
+      "status": "completed",
+      "package": "apps/desktop",
+      "acceptance": [
+        "Wheel scale only runs on visible model pixels.",
+        "Scale is clamped to the V1 range 0.4..2.0.",
+        "Wheel input is throttled.",
+        "Wheel scale is disabled during drag and when Model Pass Through is enabled."
+      ],
+      "qa": {
+        "script": "vitest pet-interaction; pnpm harness:pet:quick; pnpm harness:electron"
+      }
+    },
+    {
+      "id": "GFN-V1-014",
+      "title": "Speech bubble placement",
+      "status": "in-progress",
+      "package": "apps/desktop",
+      "acceptance": [
+        "Speech bubble is enabled by default and can be disabled from settings.",
+        "Bubble anchors to the model mask region, not the whole window rectangle.",
+        "Default placement is upper-right of the model.",
+        "Bubble flips to the left when the model is near the right edge and clamps vertically inside the viewport."
+      ],
+      "qa": {
+        "script": "vitest speech-bubble-placement; pnpm harness:electron"
+      }
+    },
+    {
+      "id": "GFN-V1-004",
+      "title": "Streaming text runtime",
+      "status": "in-progress",
+      "package": "packages/core-runtime",
+      "acceptance": [
+        "text.input streams assistant.text.delta before final output.",
+        "The turn is appended to session history.",
+        "Electron renderer can send a message and display the fake assistant reply.",
+        "Hosted Electron renderer never constructs real LLM providers; it sends runtime input to Electron main.",
+        "A newer text input interrupts the active main-process runtime before starting a new provider stream.",
+        "OpenAI-compatible provider timeouts and malformed stream data become readable runtime error state instead of crashing the renderer."
+      ],
+      "qa": {
+        "script": "vitest runtime-loop runtime-service desktop-runtime-bridge openai-compatible-provider"
+      }
+    },
+    {
+      "id": "GFN-V1-005",
+      "title": "Sentence-level TTS queue",
+      "status": "in-progress",
+      "package": "packages/audio-runtime",
+      "acceptance": [
+        "Complete sentences synthesize before the full assistant response is finished.",
+        "Partial sentence text remains buffered until punctuation or final flush.",
+        "Audio runtime exposes a pure RMS VAD boundary before microphone integration."
+      ],
+      "qa": {
+        "script": "vitest sentence-splitter vad"
+      }
+    },
+    {
+      "id": "GFN-V1-006",
+      "title": "Interrupt state machine",
+      "status": "in-progress",
+      "package": "packages/core-runtime",
+      "acceptance": [
+        "runtime.interrupt stops later LLM chunks.",
+        "Desktop bridge clears pending assistant draft, TTS queue, and mouth-open state.",
+        "Electron renderer Stop button drives the interrupt path.",
+        "Main-process runtime aborts the active OpenAI-compatible request signal.",
+        "Concurrent text inputs do not leave older provider streams alive."
+      ],
+      "qa": {
+        "script": "vitest runtime-loop desktop-runtime-bridge runtime-service interrupt"
+      }
+    },
+    {
+      "id": "GFN-V1-007",
+      "title": "Persona and memory injection",
+      "status": "completed",
+      "package": "packages/core-runtime",
+      "acceptance": [
+        "Prompt assembly includes character persona, boundaries, memory, handoff, and recent turns.",
+        "Recent context is capped to the configured turn budget."
+      ],
+      "qa": {
+        "script": "vitest prompt-assembler session-store"
+      }
+    },
+    {
+      "id": "GFN-V1-008",
+      "title": "Settings shell",
+      "status": "in-progress",
+      "package": "apps/desktop",
+      "acceptance": [
+        "Settings state exposes provider model, voice, microphone, character file, and model path.",
+        "Settings edits do not mutate conversation history.",
+        "Settings persist to greyfield.config.json through Electron IPC."
+      ],
+      "qa": {
+        "script": "vitest desktop-runtime-bridge config settings-controller; pnpm harness:electron"
+      }
+    },
+    {
+      "id": "GFN-V1-009",
+      "title": "Fake provider acceptance chain",
+      "status": "completed",
+      "package": "packages/dev-harness",
+      "acceptance": [
+        "Fake LLM, ASR, and TTS run without network credentials.",
+        "Acceptance verifies text -> LLM -> TTS -> stage event flow."
+      ],
+      "qa": {
+        "script": "pnpm harness:acceptance"
+      }
+    }
+  ]
+}
