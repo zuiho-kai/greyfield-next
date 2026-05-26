@@ -18,7 +18,7 @@ Execution speed rule: follow `docs/development-speed-policy.md`. During active i
 | Speech bubble | Basic bubble exists and placement reducer is tested | `vitest speech-bubble-placement` | In progress |
 | Settings/chat windows | Separate settings/chat surfaces exist; settings persist through IPC | `pnpm harness:electron` | In progress |
 | Fake runtime | Text -> fake LLM -> sentence fake TTS -> mouth/stage events works | `pnpm harness:acceptance`, renderer bridge tests | Stable fake path |
-| Main runtime service | Electron main owns the desktop runtime path and broadcasts `runtime:event` to renderer windows | `runtime-service.test`, `desktop-runtime-bridge.test`, `pnpm harness:electron` | Needs persistent stores, retry UX, and real-network provider QA |
+| Main runtime service | Electron main owns the desktop runtime path and broadcasts `runtime:event` to renderer windows | `runtime-service.test`, `desktop-runtime-bridge.test`, `pnpm harness:electron`, `pnpm harness:electron:restart-context` | Needs retry UX and real-network provider QA |
 
 ## LLM Call Progress
 
@@ -45,14 +45,14 @@ Execution speed rule: follow `docs/development-speed-policy.md`. During active i
 - Done in Electron harness: provider settings have a dedicated test action that reports first-token success or a readable failure.
 - Done in main tests: Test LLM is single-flight and is rejected while a chat provider stream is active.
 - Provider settings still need fuller retry UX and real-network manual QA.
-- Persona file and JSONL session persistence are not wired into the Electron desktop runtime path yet; main `RuntimeService` still uses in-memory session and fake memory.
+- Persona file, Markdown memory, and JSONL session persistence are wired into the Electron desktop runtime path and covered by the restart context harness.
 - TTS is still fake in the desktop path, so "LLM -> real voice -> audio mouth sync" is not complete.
 
 ### Current LLM Status
 
 LLM is at **main-process provider skeleton + deterministic test path**.
 
-It is not yet a finished V1 LLM path. The Electron desktop path now sends `runtime:input` to main and receives `runtime:event` back, while fake provider remains the default. The current Test LLM path proves the main-process probe and UI result rendering. The next milestone is real-network manual QA, retry UX, and persistence-backed persona/recent context.
+It is not yet a finished V1 LLM path. The Electron desktop path now sends `runtime:input` to main and receives `runtime:event` back, while fake provider remains the default. The current Test LLM path proves the main-process probe and UI result rendering, and the restart context harness proves persistence-backed persona/recent context. The next milestone is real-network manual QA and retry UX.
 
 ## Next Implementation Order
 
@@ -137,6 +137,8 @@ Exit criteria:
 - Interrupt aborts the active stream signal in tests; runtime errors are visible, but retry UX still needs product work.
 
 ### Phase E: Persistent Persona And Recent Context
+
+Status: completed on 2026-05-26.
 
 1. Load `characters/greyfield.yaml` in main runtime service.
 2. Load `data/memory.md` through `MemoryStore`.

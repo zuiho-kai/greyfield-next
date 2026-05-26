@@ -119,8 +119,9 @@ Review 结论被采纳：没有 1k 行级源码文件，但热点已到该拆的
 | `apps/desktop/src/renderer/ChatWindow.vue` | 47 | chat surface |
 | `apps/desktop/src/renderer/SettingsWindow.vue` | 234 | settings surface |
 | `apps/desktop/src/renderer/desktop-runtime-bridge.ts` | 261 | bridge 保留协调逻辑 |
-| `packages/dev-harness/src/electron-check.ts` | 304 | 主验收流程 |
+| `packages/dev-harness/src/electron-check.ts` | 339 | 主验收流程 |
 | `packages/dev-harness/src/electron-check-helpers.ts` | 232 | Playwright/config helpers |
+| `packages/dev-harness/src/electron-restart-context-check.ts` | 152 | Phase E restart context harness |
 
 暂缓拆分：
 
@@ -134,7 +135,7 @@ Review 结论被采纳：没有 1k 行级源码文件，但热点已到该拆的
 | GitHub token 缺 `workflow` scope | 中 | CI workflow 暂未 push；需要刷新 token scope 或后续单独提交 workflow。 |
 | fresh worktree Electron binary 下载失败 | 中 | 本轮用同版本本地 binary 验证；后续可做 install/cache runbook。 |
 | Settings Test LLM 仍偏功能骨架 | 中 | 下一步补 retry UX、真实网络手动 QA。 |
-| Main runtime 仍用 in-memory session/fake memory | 中高 | Phase E 进入 persistence-backed persona/memory/session。 |
+| Main runtime 仍用 in-memory session/fake memory | 已处理 | 会后 Phase E 已接入 persona YAML、Markdown memory、JSONL session，并用 restart harness 验证。 |
 | `GFN-V1-007` 曾把 core prompt assembly 和 desktop continuity 混在一起 | 中 | 已拆成 `GFN-V1-007` core-only 和 `GFN-V1-015` desktop persistent recent context。 |
 | Live2DStageView 仍是复杂热点 | 中 | 下次触碰 stage/pet interaction 时拆 helper，不在无关任务里大改。 |
 
@@ -160,3 +161,9 @@ Review 结论被采纳：没有 1k 行级源码文件，但热点已到该拆的
    - 使用 JSONL `SessionStore`;
    - 增加 restart harness 证明最近上下文连续性。
 5. 如果下轮触碰 stage/pet interaction，拆 `Live2DStageView.vue` 的 helper。
+
+## 会后 Phase E 更新
+
+- `GFN-V1-015 Desktop persistent recent context` 已完成实现：Electron main runtime 现在使用文件 backed persona、memory、session stores。
+- 新增 `pnpm harness:electron:restart-context`，启动两次 Electron 并验证第二次 provider prompt 包含第一次持久化的 user/assistant turn。
+- 真实网络手动 QA 和 retry UX 仍留给下一轮；不要把这个 completion 扩大成真实 LLM/TTS 完成状态。

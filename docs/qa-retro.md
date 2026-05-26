@@ -90,3 +90,17 @@ Current command split:
 - Stop visible dev pet: `pnpm dev:live2d:stop`
 - Fast pet regression: `pnpm harness:pet:quick`
 - Checkpoint desktop shell regression: `pnpm harness:electron`
+
+## 2026-05-26 Regression: Main Bundle Load Failure And Session Race
+
+Phase E exposed two desktop runtime QA misses:
+
+- Adding the YAML persona loader pulled a CommonJS dependency into the Electron main ESM bundle. The app failed before creating any `BrowserWindow` with `Dynamic require of "process" is not supported`.
+- The full Electron harness checked JSONL session persistence immediately after the renderer displayed the assistant final text. Core runtime emits `assistant.text.final` before appending the assistant turn, so the check raced and sometimes saw only the user line.
+
+How we avoid repeating it:
+
+- When Electron waits for the first window, inspect main-process stdout/stderr or run the built main bundle directly before changing Playwright waits.
+- Main-process ESM bundles that include CommonJS dependencies must provide a `createRequire(import.meta.url)` shim, or the dependency must be proven ESM-safe.
+- Harness checks for async persistence must poll the persisted condition, not read once after a UI event that can precede disk writes.
+- `GFN-V1-015` acceptance must include both full Electron session write proof and a restart harness proving the next launch prompt sees the previous turn.

@@ -1,5 +1,9 @@
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { describe, expect, it, vi } from "vitest";
 import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
+import { createDesktopRuntimeStoreOptions } from "../desktop-runtime-stores";
 import { RuntimeService } from "../runtime-service";
 
 describe("RuntimeService", () => {
@@ -239,6 +243,83 @@ describe("RuntimeService", () => {
       { role: "user", content: "第二轮" },
       { role: "assistant", content: "你好，我醒着。现在可以继续做桌宠了。" }
     ]);
+  });
+
+  it("loads desktop persona, memory, and recent turns from file-backed stores", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "greyfield-runtime-"));
+    try {
+      await mkdir(join(dir, "characters"), { recursive: true });
+      await mkdir(join(dir, "data"), { recursive: true });
+      await writeFile(
+        join(dir, "characters", "test.yaml"),
+        [
+          "name: File Greyfield",
+          "tone: exact test tone",
+          "boundaries:",
+          "  - File persona boundary.",
+          "expressionMap:",
+          "  neutral: file-neutral",
+          "  speaking: file-speaking"
+        ].join("\n"),
+        "utf8"
+      );
+      await writeFile(join(dir, "data", "memory.md"), "- File memory fact.\n", "utf8");
+
+      const config = {
+        ...defaultGreyfieldConfig,
+        characterFile: "characters/test.yaml"
+      };
+      const firstService = new RuntimeService(config, createDesktopRuntimeStoreOptions({ projectRoot: dir, userDataPath: dir }));
+
+      await firstService.handle({ type: "text.input", text: "第一轮持久化" }, () => undefined);
+
+      const sessionFile = await readFile(join(dir, "sessions", "desktop-main-session.jsonl"), "utf8");
+      expect(sessionFile).toContain("第一轮持久化");
+      expect(sessionFile).toContain("你好，我醒着。现在可以继续做桌宠了。");
+
+      let requestBody = "";
+      const fetch = vi.fn(async (_url, init) => {
+        requestBody = String(init?.body ?? "");
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            const encoder = new TextEncoder();
+            controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"second"}}]}\n\n'));
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            controller.close();
+          }
+        });
+        return new Response(body, { status: 200 });
+      });
+      const secondService = new RuntimeService(
+        {
+          ...config,
+          provider: {
+            ...config.provider,
+            llm: "openai-compatible",
+            apiKey: "secret",
+            baseUrl: "https://llm.example/v1",
+            model: "remote-model"
+          }
+        },
+        {
+          ...createDesktopRuntimeStoreOptions({ projectRoot: dir, userDataPath: dir }),
+          fetch
+        }
+      );
+
+      await secondService.handle({ type: "text.input", text: "第二轮读取" }, () => undefined);
+
+      const messages = JSON.parse(requestBody).messages as Array<{ role: string; content: string }>;
+      const system = messages[0]?.content ?? "";
+      expect(system).toContain("Character: File Greyfield");
+      expect(system).toContain("Tone: exact test tone");
+      expect(system).toContain("- File persona boundary.");
+      expect(system).toContain("- File memory fact.");
+      expect(messages).toContainEqual({ role: "user", content: "第一轮持久化" });
+      expect(messages).toContainEqual({ role: "assistant", content: "你好，我醒着。现在可以继续做桌宠了。" });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it("interrupt aborts the active OpenAI-compatible request", async () => {
