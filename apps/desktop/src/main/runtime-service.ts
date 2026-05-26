@@ -29,6 +29,7 @@ export class RuntimeService {
   private readonly sessionStore = new InMemorySessionStore("desktop-main-session");
   private readonly interactionProfile = createDefaultInteractionProfile();
   private activeRuntime: GreyfieldRuntime | undefined;
+  private testingLLM = false;
 
   constructor(config: GreyfieldConfig, private readonly options: RuntimeServiceOptions = {}) {
     this.config = config;
@@ -69,6 +70,18 @@ export class RuntimeService {
   }
 
   async testLLM(): Promise<LLMTestResult> {
+    if (this.activeRuntime) {
+      return {
+        ok: false,
+        message: "LLM test is unavailable while a chat response is running."
+      };
+    }
+    if (this.testingLLM) {
+      return {
+        ok: false,
+        message: "LLM test is already running."
+      };
+    }
     if (this.config.provider.llm === "openai-compatible" && this.config.provider.apiKey.trim().length === 0) {
       return {
         ok: false,
@@ -76,6 +89,7 @@ export class RuntimeService {
       };
     }
 
+    this.testingLLM = true;
     try {
       const provider = this.createLLMProvider();
       const messages: ChatMessage[] = [
@@ -101,6 +115,8 @@ export class RuntimeService {
         ok: false,
         message: error instanceof Error ? error.message : String(error)
       };
+    } finally {
+      this.testingLLM = false;
     }
   }
 

@@ -136,10 +136,12 @@
         "Speech bubble is enabled by default and can be disabled from settings.",
         "Bubble anchors to the model mask region, not the whole window rectangle.",
         "Default placement is upper-right of the model.",
-        "Bubble flips to the left when the model is near the right edge and clamps vertically inside the viewport."
+        "Bubble flips to the left when the model is near the right edge and clamps vertically inside the viewport.",
+        "Bubble text normalizes whitespace and caps long replies so the pet bubble remains a short surface while full history stays in chat.",
+        "Bubble hit/shape rect stays stable while text is capped."
       ],
       "qa": {
-        "script": "vitest speech-bubble-placement; pnpm harness:electron"
+        "script": "vitest speech-bubble-placement speech-bubble-text pet-window-shape; pnpm harness:electron"
       }
     },
     {
@@ -192,12 +194,13 @@
     },
     {
       "id": "GFN-V1-007",
-      "title": "Persona and memory injection",
+      "title": "Core persona and memory prompt assembly",
       "status": "completed",
       "package": "packages/core-runtime",
       "acceptance": [
-        "Prompt assembly includes character persona, boundaries, memory, handoff, and recent turns.",
-        "Recent context is capped to the configured turn budget."
+        "Core prompt assembly includes character persona, boundaries, memory, handoff, and recent turns.",
+        "Core recent context injection is capped to the configured turn budget.",
+        "This feature proves package-level prompt assembly only; desktop restart continuity is tracked separately."
       ],
       "qa": {
         "script": "vitest prompt-assembler session-store"
@@ -211,10 +214,27 @@
       "acceptance": [
         "Settings state exposes provider model, voice, microphone, character file, and model path.",
         "Settings edits do not mutate conversation history.",
-        "Settings persist to greyfield.config.json through Electron IPC."
+        "Settings persist to greyfield.config.json through Electron IPC.",
+        "Settings exposes a Test LLM action and renders first-token success or a readable failure without writing chat history."
       ],
       "qa": {
-        "script": "vitest desktop-runtime-bridge config settings-controller; pnpm harness:electron"
+        "script": "vitest desktop-runtime-bridge config settings-controller runtime-service; pnpm harness:electron"
+      }
+    },
+    {
+      "id": "GFN-V1-015",
+      "title": "Desktop persistent recent context",
+      "status": "in-progress",
+      "package": "apps/desktop",
+      "acceptance": [
+        "Electron main runtime loads the configured character persona from characters/greyfield.yaml.",
+        "Electron main runtime loads local memory from data/memory.md.",
+        "Electron main runtime appends user and assistant turns to a JSONL SessionStore instead of an in-memory session only.",
+        "A restart harness proves recent conversation context is available after app restart.",
+        "Recent context remains capped and inspectable so prompt growth is bounded."
+      ],
+      "qa": {
+        "script": "vitest runtime-service jsonl-session-store prompt-assembler; restart Electron harness TBD"
       }
     },
     {

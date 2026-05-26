@@ -128,6 +128,101 @@ describe("RuntimeService", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("rejects provider testing while a chat response is active", async () => {
+    let requestStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      requestStarted = resolve;
+    });
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "secret",
+          model: "remote-model"
+        }
+      },
+      {
+        fetch: vi.fn(async (_url, init) => {
+          requestStarted?.();
+          const signal = init?.signal;
+          const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+              const encoder = new TextEncoder();
+              controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"慢"}}]}\n\n'));
+              signal?.addEventListener("abort", () => controller.close(), { once: true });
+            }
+          });
+          return new Response(body, { status: 200 });
+        })
+      }
+    );
+
+    const running = service.handle({ type: "text.input", text: "慢一点" }, () => undefined);
+    await started;
+
+    await expect(service.testLLM()).resolves.toEqual({
+      ok: false,
+      message: "LLM test is unavailable while a chat response is running."
+    });
+    await service.handle({ type: "runtime.interrupt" }, () => undefined);
+    await running;
+  });
+
+  it("rejects concurrent provider tests", async () => {
+    let requestStarted: (() => void) | undefined;
+    let finishRequest: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      requestStarted = resolve;
+    });
+    const finish = new Promise<void>((resolve) => {
+      finishRequest = resolve;
+    });
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "secret",
+          model: "remote-model"
+        }
+      },
+      {
+        fetch: vi.fn(async () => {
+          requestStarted?.();
+          await finish;
+          const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+              const encoder = new TextEncoder();
+              controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"pong"}}]}\n\n'));
+              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+              controller.close();
+            }
+          });
+          return new Response(body, { status: 200 });
+        })
+      }
+    );
+
+    const firstTest = service.testLLM();
+    await started;
+
+    await expect(service.testLLM()).resolves.toEqual({
+      ok: false,
+      message: "LLM test is already running."
+    });
+    finishRequest?.();
+    await expect(firstTest).resolves.toEqual({
+      ok: true,
+      message: "LLM test succeeded: pong",
+      firstToken: "pong"
+    });
+  });
+
   it("can update config without losing accumulated fake session history", async () => {
     const service = new RuntimeService(defaultGreyfieldConfig);
     await service.handle({ type: "text.input", text: "第一轮" }, () => undefined);

@@ -43,7 +43,8 @@ V1 仍然只做“活着的 Live2D 桌面桌宠”：
 | Live2D stage | V1 可用 | 既有 `harness:live2d` 基线；PR #1 未改 stage package | 用户模型导入和更多 fixture 仍待打磨。 |
 | Speech bubble | 进行中，已改善 | 气泡文本 normalize/cap；稳定 bubble rect 进入 pet shape；Electron harness 通过 | 需要真实长文本/屏幕边缘视觉 QA。 |
 | Settings/chat shell | 进行中，结构已拆 | `App.vue` 拆出 pet/chat/settings 三个窗口组件；Electron harness 验证隔离和 fake chat | AIRI 风格视觉 pass、model manager UX 仍待做。 |
-| Main runtime / LLM | 进行中，Phase D 主要测试路径完成 | Settings `Test LLM` 经 main runtime service 探测 provider；provider timeout/malformed SSE 可读错误；interrupt abort 已有测试 | 真实网络手动 QA、retry UX、持久化 session/memory 仍未完成。 |
+| Main runtime / LLM | 进行中，确定性 Test LLM 路径完成 | Settings `Test LLM` 经 main runtime service 探测 provider；provider timeout/malformed SSE 可读错误；interrupt abort 已有测试；Test LLM 已加 single-flight guard | 真实网络手动 QA、retry UX、持久化 session/memory 仍未完成。 |
+| Persona / recent context | Core prompt assembly 完成，desktop continuity 另列进行中 | `GFN-V1-007` 只代表 core prompt assembly；新增 `GFN-V1-015` 跟踪 persona/memory/JSONL session/restart harness | Electron main runtime 仍未接入持久化 memory/session。 |
 | Fake runtime chain | 稳定 | `pnpm harness:acceptance` 通过 | 真实 TTS/ASR 仍不属于完成状态。 |
 | 复杂度热点 | 已先拆第一轮 | `App.vue` 278 行；`desktop-runtime-bridge.ts` 261 行；`electron-check.ts` 304 行 | `Live2DStageView.vue` 仍是下一批拆分候选。 |
 
@@ -56,7 +57,13 @@ V1 仍然只做“活着的 Live2D 桌面桌宠”：
   - Electron main 调用 `RuntimeService.testLLM()`;
   - fake provider 返回 first token；
   - OpenAI-compatible 缺 API key 时返回可读失败；
+  - active chat response 或并发 provider test 时拒绝执行；
   - 探测不写 session history。
+- PM/架构 review 后修正 V1 manifest：
+  - `GFN-V1-007` 改为 core persona/memory prompt assembly，不再暗示 desktop restart continuity 已完成；
+  - 新增 `GFN-V1-015 Desktop persistent recent context`，承接 persona file、memory.md、JSONL session、restart harness；
+  - speech bubble acceptance 增补 whitespace normalize、long reply cap、stable bubble shape；
+  - settings shell acceptance 增补 Test LLM UI result。
 - 更新 Electron harness，增加 `providerTestWorked: true` 验收。
 - 拆 `App.vue`：
   - `PetWindow.vue`
@@ -92,9 +99,10 @@ $env:ELECTRON_OVERRIDE_DIST_PATH='E:\在线live2d桌宠\node_modules\.pnpm\elect
 结果：
 
 - `pnpm typecheck`：通过。
-- `pnpm test`：38 test files / 111 tests passed。
+- `pnpm test`：38 test files / 113 tests passed。
 - `pnpm harness:acceptance`：`ok=true`。
 - Electron harness：`ok=true`，`providerTestWorked=true`。
+- PM/架构 review 修正后新增 targeted verification：`runtime-service` + manifest tests，2 files / 11 tests passed；`pnpm harness:pet:quick` 也通过，drag moved window 且尺寸不变。
 
 说明：fresh worktree 里的 Electron binary 未下载成功，Electron harness 使用同版本 Electron 42.2.0 的本地已有 binary 覆盖路径完成验证。这证明代码路径和 harness 通过，但 fresh worktree 的 Electron 安装缓存/下载问题仍需另行处理。
 
@@ -127,6 +135,7 @@ Review 结论被采纳：没有 1k 行级源码文件，但热点已到该拆的
 | fresh worktree Electron binary 下载失败 | 中 | 本轮用同版本本地 binary 验证；后续可做 install/cache runbook。 |
 | Settings Test LLM 仍偏功能骨架 | 中 | 下一步补 retry UX、真实网络手动 QA。 |
 | Main runtime 仍用 in-memory session/fake memory | 中高 | Phase E 进入 persistence-backed persona/memory/session。 |
+| `GFN-V1-007` 曾把 core prompt assembly 和 desktop continuity 混在一起 | 中 | 已拆成 `GFN-V1-007` core-only 和 `GFN-V1-015` desktop persistent recent context。 |
 | Live2DStageView 仍是复杂热点 | 中 | 下次触碰 stage/pet interaction 时拆 helper，不在无关任务里大改。 |
 
 ## 决策记录
@@ -134,8 +143,9 @@ Review 结论被采纳：没有 1k 行级源码文件，但热点已到该拆的
 - PR #1 先保持一个 cohesive batch：settings Test LLM + renderer/harness complexity split。
 - 不把 CI workflow 强行推入仓库，避免绕过 GitHub token scope 限制。
 - settings Test LLM 只做 provider 探测，不写 session，不触发 TTS，不污染聊天历史。
+- settings Test LLM 不与 active chat response 或另一个 provider test 并发。
 - fake provider 仍然是 harness 和 CI 的默认确定性路径。
-- 下一步不要直接进真实 TTS；先完成 persistence-backed persona/recent context，或补 settings/provider retry UX。
+- 下一步不要直接进真实 TTS；先完成 persistence-backed persona/recent context，或补 settings/provider retry UX 和真实网络 QA。
 
 ## 下一步顺序
 
