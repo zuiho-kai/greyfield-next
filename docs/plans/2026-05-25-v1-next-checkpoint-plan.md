@@ -63,6 +63,12 @@ It is not yet a finished V1 LLM path. The Electron desktop path now sends `runti
 5. Split remaining coordination hotspots: settings-change handling, runtime IPC controller boundaries, and `Live2DStageView` when stage interaction work resumes.
 6. Start real TTS only after provider retry/manual QA is stable; add ASR after TTS playback and interrupt behavior are proven.
 
+Recommended next slice:
+
+1. Do the CI workflow scope fix first if credentials are available; it protects every later PR.
+2. If credentials are not available, take Phase B next: speech bubble visual QA and chat polish are the highest visible V1 product gaps.
+3. After that, take Phase D retry/manual real-network QA before starting real TTS.
+
 ## Next Implementation Order
 
 ### Phase A: Preserve Desktop-Pet Stability
@@ -120,7 +126,7 @@ Exit criteria:
 
 - The fake chat path still works after renderer no longer owns runtime execution.
 - OpenAI-compatible provider can be constructed in main/runtime service.
-- Remaining before closing Phase C fully: persistence-backed stores and one more controller split around settings/runtime coordination.
+- Remaining before closing Phase C fully: one more controller split around settings/runtime coordination.
 
 ### Phase D: Make Real LLM Provider Usable
 
