@@ -15,6 +15,7 @@
     "harness:live2d": "tsx packages/dev-harness/src/live2d-check.ts",
     "harness:electron": "pnpm build:desktop && tsx packages/dev-harness/src/electron-check.ts",
     "harness:electron:quick": "tsx packages/dev-harness/src/electron-check.ts",
+    "harness:electron:restart-context": "pnpm build:desktop && tsx packages/dev-harness/src/electron-restart-context-check.ts",
     "harness:pet:quick": "tsx packages/dev-harness/src/electron-check.ts --quick",
     "dev:live2d": "node apps/desktop/scripts/dev-live2d-electron.mjs",
     "dev:live2d:fast": "node apps/desktop/scripts/dev-live2d-electron.mjs --skip-build",

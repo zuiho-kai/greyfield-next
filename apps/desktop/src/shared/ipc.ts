@@ -4,6 +4,7 @@ import type { RendererGreyfieldConfig } from "./renderer-config";
 
 export interface DesktopIpcRequestMap {
   "runtime:input": RuntimeInputEvent;
+  "provider:test-llm": {};
   "settings:update": GreyfieldConfigPatch;
   "window:set-click-through": { enabled: boolean };
   "window:set-hit-test": { passthrough: boolean; reason: "transparent-area" | "model-pass-through" | "model-hit" };
@@ -24,6 +25,11 @@ export interface DesktopIpcRequestMap {
 
 export interface DesktopIpcEventMap {
   "runtime:event": RuntimeOutputEvent;
+  "provider:test-llm-result": {
+    ok: boolean;
+    message: string;
+    firstToken?: string;
+  };
   "settings:changed": RendererGreyfieldConfig;
   "window:state": {
     modelPassThrough: boolean;

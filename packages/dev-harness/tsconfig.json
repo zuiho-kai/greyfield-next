@@ -9,6 +9,7 @@
   "references": [
     { "path": "../audio-runtime" },
     { "path": "../core-runtime" },
+    { "path": "../persistence" },
     { "path": "../stage-live2d" }
   ],
   "include": ["src/**/*.ts"]

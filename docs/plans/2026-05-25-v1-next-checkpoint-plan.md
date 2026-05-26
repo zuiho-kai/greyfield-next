@@ -18,7 +18,7 @@ Execution speed rule: follow `docs/development-speed-policy.md`. During active i
 | Speech bubble | Basic bubble exists and placement reducer is tested | `vitest speech-bubble-placement` | In progress |
 | Settings/chat windows | Separate settings/chat surfaces exist; settings persist through IPC | `pnpm harness:electron` | In progress |
 | Fake runtime | Text -> fake LLM -> sentence fake TTS -> mouth/stage events works | `pnpm harness:acceptance`, renderer bridge tests | Stable fake path |
-| Main runtime service | Electron main owns the desktop fake runtime path and broadcasts `runtime:event` to renderer windows | `runtime-service.test`, `desktop-runtime-bridge.test`, `pnpm harness:electron` | Needs persistent stores, provider error UX, and API-key masking |
+| Main runtime service | Electron main owns the desktop runtime path and broadcasts `runtime:event` to renderer windows | `runtime-service.test`, `desktop-runtime-bridge.test`, `pnpm harness:electron`, `pnpm harness:electron:restart-context` | Needs retry UX and real-network provider QA |
 
 ## LLM Call Progress
 
@@ -28,29 +28,31 @@ Execution speed rule: follow `docs/development-speed-policy.md`. During active i
 - It posts to `{baseUrl}/chat/completions` with `model`, `messages`, `stream: true`, optional `tools`, and `Authorization: Bearer <apiKey>`.
 - It parses SSE `data:` lines and yields `choices[0].delta.content` chunks.
 - Unit coverage exists in `packages/core-runtime/src/__tests__/openai-compatible-provider.test.ts`.
-- `apps/desktop/src/renderer/desktop-runtime-bridge.ts` selects the OpenAI-compatible provider when:
-  - `providerLLM === "openai-compatible"`
-  - `providerApiKey` is non-empty
+- `apps/desktop/src/main/runtime-service.ts` selects the OpenAI-compatible provider when:
+  - `provider.llm === "openai-compatible"`
+  - `provider.apiKey` is non-empty
 - Settings already include provider kind, base URL, API key, and model fields.
-- Renderer bridge tests prove the configured OpenAI-compatible path calls `fetch` and reduces streamed text into chat state.
+- Runtime service tests prove the configured OpenAI-compatible path calls `fetch`; renderer bridge tests prove runtime events reduce into chat state.
 
 ### What Does Not Exist Yet
 
-- The Electron desktop path now uses main-process `RuntimeService` for fake runtime events, but the renderer fallback path can still construct an in-memory preview runtime when no host API exists.
-- API key currently lives in renderer state after settings sync. This is acceptable for scaffold testing but not the final desktop app boundary.
+- The Electron desktop path now uses main-process `RuntimeService` for runtime events. The renderer fallback path is fake-only and exists for no-host preview/dev contexts.
+- Renderer settings state stores only API-key presence, not the raw secret or mask. Main still owns provider execution.
 - Main-process `RuntimeService` owns the current Electron runtime path, but it still uses fake memory/TTS and in-memory sessions.
 - There is no real-network harness because fake provider must remain deterministic for CI/local QA.
 - Done in core/main tests: interrupt now aborts the active LLM stream signal.
 - Done in core/renderer tests: provider timeout and malformed SSE errors become readable runtime error state, and the chat window displays runtime errors.
-- Provider settings still need a dedicated test action and retry UX.
-- Persona file and JSONL session persistence are not wired into the Electron desktop runtime path yet; main `RuntimeService` still uses in-memory session and fake memory.
+- Done in Electron harness: provider settings have a dedicated test action that reports first-token success or a readable failure.
+- Done in main tests: Test LLM is single-flight and is rejected while a chat provider stream is active.
+- Provider settings still need fuller retry UX and real-network manual QA.
+- Persona file, Markdown memory, and JSONL session persistence are wired into the Electron desktop runtime path and covered by the restart context harness.
 - TTS is still fake in the desktop path, so "LLM -> real voice -> audio mouth sync" is not complete.
 
 ### Current LLM Status
 
-LLM is at **provider skeleton + main-process fake runtime integration**.
+LLM is at **main-process provider skeleton + deterministic test path**.
 
-It is not yet a finished V1 LLM path. The Electron desktop path now sends `runtime:input` to main and receives `runtime:event` back, while fake provider remains the default. The next milestone is making OpenAI-compatible provider safe and usable from main with error/interrupt handling.
+It is not yet a finished V1 LLM path. The Electron desktop path now sends `runtime:input` to main and receives `runtime:event` back, while fake provider remains the default. The current Test LLM path proves the main-process probe and UI result rendering, and the restart context harness proves persistence-backed persona/recent context. The next milestone is real-network manual QA and retry UX.
 
 ## Next Implementation Order
 
@@ -94,8 +96,9 @@ Implementation tasks:
 4. Done: main sends `runtime:event` back to pet/chat/settings windows.
 5. Done: keep fake provider as the default runtime provider.
 6. Done for Electron path: OpenAI-compatible provider construction is available in main runtime service.
-7. Remaining: stop syncing raw API key into renderer state where possible; renderer can show masked/edited settings but main should own provider execution.
-8. Remaining: replace fake memory/session/TTS in main runtime service with persistence-backed implementations.
+7. Done: renderer settings state stores only API-key presence, not the raw API key or a reusable mask.
+8. Remaining: consolidate duplicate settings-change handling between `App.vue` and the renderer bridge.
+9. Remaining: replace fake memory/session/TTS in main runtime service with persistence-backed implementations.
 
 Tests:
 
@@ -107,15 +110,16 @@ Exit criteria:
 
 - The fake chat path still works after renderer no longer owns runtime execution.
 - OpenAI-compatible provider can be constructed in main/runtime service.
-- Remaining before closing Phase C fully: API-key masking and persistence-backed stores.
+- Remaining before closing Phase C fully: persistence-backed stores and one more controller split around settings/runtime coordination.
 
 ### Phase D: Make Real LLM Provider Usable
 
 1. Done: add `AbortSignal` support to `OpenAICompatibleLLMProvider.stream`.
 2. Done: wire `runtime.interrupt` to abort the active provider request in `GreyfieldRuntime` and `RuntimeService`.
 3. Done: add provider timeout and readable error events.
-4. Remaining: add a settings "test LLM" action that sends a tiny prompt and reports first-token success/failure.
-5. Keep `pnpm harness:acceptance` on fake provider only.
+4. Done: add a settings "test LLM" action that sends a tiny prompt and reports first-token success/failure.
+5. Done: reject Test LLM while a chat response is active and reject concurrent provider tests.
+6. Keep `pnpm harness:acceptance` on fake provider only.
 
 Tests:
 
@@ -123,14 +127,18 @@ Tests:
 - Done: provider malformed SSE/error test.
 - Done in core/main unit tests: runtime interrupt aborts active stream signal.
 - Done: main IPC converts runtime-service rejections into `error` events, and renderer reduces those into visible chat error state.
+- Done in Electron harness: settings "Test LLM" reaches main runtime service and renders a success result for the fake provider path.
+- Done in main unit tests: Test LLM is single-flight and does not run concurrently with an active chat provider stream.
 
 Exit criteria:
 
-- User can configure OpenAI-compatible endpoint/model/key and test it.
-- First token can appear in chat/bubble via real provider.
-- Interrupt aborts the active stream signal in tests; remaining work is surfacing abort/error state cleanly in UI.
+- User can configure OpenAI-compatible endpoint/model/key and run a deterministic main-process test path.
+- First token appears in chat/bubble through the same runtime event reducer path; real-network provider QA is still manual/pending.
+- Interrupt aborts the active stream signal in tests; runtime errors are visible, but retry UX still needs product work.
 
 ### Phase E: Persistent Persona And Recent Context
+
+Status: completed on 2026-05-26.
 
 1. Load `characters/greyfield.yaml` in main runtime service.
 2. Load `data/memory.md` through `MemoryStore`.

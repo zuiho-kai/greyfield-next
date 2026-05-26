@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import type { GreyfieldConfig, GreyfieldConfigPatch } from "@greyfield/persistence/config-schema";
 import { loadGreyfieldConfig, saveGreyfieldConfig } from "@greyfield/persistence";
+import { createDesktopRuntimeStoreOptions } from "./desktop-runtime-stores";
 import { createChatWindowOptions, createPetWindowOptions, createSettingsWindowOptions, resolvePreloadPath, resolveRendererHtmlPath } from "./electron-window-options";
 import { Live2DModelController, type Live2DModelInfo } from "./live2d-model-controller";
 import { resolveLive2DModelSelection } from "./live2d-model-selection";
@@ -27,7 +28,7 @@ let live2DModelController: Live2DModelController | undefined;
 
 async function createWindows(): Promise<void> {
   const config = await loadGreyfieldConfig(resolveConfigPath());
-  runtimeService = new RuntimeService(config);
+  runtimeService = new RuntimeService(config, createDesktopRuntimeStoreOptions(resolveRuntimeStorePaths()));
   runtimeIpcController = new RuntimeIpcController({
     service: runtimeService,
     broadcast: broadcastRuntimeEvent
@@ -110,6 +111,10 @@ function registerIpc(): void {
     handleRuntimeInput(payload);
   });
 
+  ipcMain.on("provider:test-llm", () => {
+    void testLLMProvider();
+  });
+
   ipcMain.on("window:set-click-through", (_event, payload: { enabled: boolean }) => {
     setModelPassThrough(payload.enabled);
   });
@@ -173,6 +178,13 @@ function registerIpc(): void {
 
 function handleRuntimeInput(payload: Parameters<NonNullable<typeof runtimeService>["handle"]>[0]): void {
   void runtimeIpcController?.handleRuntimeInput(payload);
+}
+
+async function testLLMProvider(): Promise<void> {
+  const result = await runtimeService?.testLLM();
+  if (result) {
+    broadcastProviderTestResult(result);
+  }
 }
 
 async function setModelPassThrough(enabled: boolean): Promise<void> {
@@ -262,6 +274,12 @@ function broadcastRuntimeEvent(event: Parameters<Parameters<RuntimeService["hand
   }
 }
 
+function broadcastProviderTestResult(result: Awaited<ReturnType<RuntimeService["testLLM"]>>): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send("provider:test-llm-result", result);
+  }
+}
+
 function broadcastSettings(config: GreyfieldConfig): void {
   const rendererConfig = redactConfigForRenderer(config);
   for (const window of BrowserWindow.getAllWindows()) {
@@ -273,7 +291,17 @@ function resolveConfigPath(): string {
   return process.env.GREYFIELD_CONFIG_PATH ?? join(app.getPath("userData"), "greyfield.config.json");
 }
 
-app.whenReady().then(createWindows);
+function resolveRuntimeStorePaths(): { userDataPath: string; projectRoot: string } {
+  return {
+    userDataPath: process.env.GREYFIELD_USER_DATA_PATH ?? app.getPath("userData"),
+    projectRoot: process.env.GREYFIELD_PROJECT_ROOT ?? join(currentDir, "..", "..", "..")
+  };
+}
+
+app.whenReady().then(createWindows).catch((error) => {
+  console.error("Greyfield failed to create windows:", error);
+  app.quit();
+});
 
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {

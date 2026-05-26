@@ -2,29 +2,45 @@ import {
   GreyfieldRuntime,
   InMemorySessionStore,
   OpenAICompatibleLLMProvider,
+  type CharacterPersona,
   type LLMProvider,
   type MemoryStore,
+  type SessionStore,
   type RuntimeEventHandler,
   type RuntimeInputEvent,
-  type TTSProvider
+  type TTSProvider,
+  type ChatMessage
 } from "@greyfield/core-runtime";
 import { createDefaultInteractionProfile, FakeStageDriver } from "@greyfield/stage-live2d";
 import type { GreyfieldConfig } from "@greyfield/persistence/config-schema";
 
 export interface RuntimeServiceOptions {
   fetch?: typeof fetch;
+  loadPersona?: (config: GreyfieldConfig) => Promise<CharacterPersona>;
+  memoryStore?: MemoryStore;
+  sessionStore?: SessionStore;
+  recentTurnLimit?: number;
+}
+
+export interface LLMTestResult {
+  ok: boolean;
+  message: string;
+  firstToken?: string;
 }
 
 export class RuntimeService {
   private config: GreyfieldConfig;
   private readonly stage = new FakeStageDriver();
-  private readonly memoryStore = new MainFakeMemoryStore();
-  private readonly sessionStore = new InMemorySessionStore("desktop-main-session");
+  private readonly memoryStore: MemoryStore;
+  private readonly sessionStore: SessionStore;
   private readonly interactionProfile = createDefaultInteractionProfile();
   private activeRuntime: GreyfieldRuntime | undefined;
+  private testingLLM = false;
 
   constructor(config: GreyfieldConfig, private readonly options: RuntimeServiceOptions = {}) {
     this.config = config;
+    this.memoryStore = options.memoryStore ?? new MainFakeMemoryStore();
+    this.sessionStore = options.sessionStore ?? new InMemorySessionStore("desktop-main-session");
   }
 
   updateConfig(config: GreyfieldConfig): void {
@@ -41,7 +57,7 @@ export class RuntimeService {
       await this.activeRuntime.handle({ type: "runtime.interrupt" }, emit);
     }
 
-    const runtime = this.createRuntime();
+    const runtime = await this.createRuntime();
     if (input.type === "text.input") {
       this.activeRuntime = runtime;
     }
@@ -61,26 +77,87 @@ export class RuntimeService {
     );
   }
 
-  private createRuntime(): GreyfieldRuntime {
+  async testLLM(): Promise<LLMTestResult> {
+    if (this.activeRuntime) {
+      return {
+        ok: false,
+        message: "LLM test is unavailable while a chat response is running."
+      };
+    }
+    if (this.testingLLM) {
+      return {
+        ok: false,
+        message: "LLM test is already running."
+      };
+    }
+    if (this.config.provider.llm === "openai-compatible" && this.config.provider.apiKey.trim().length === 0) {
+      return {
+        ok: false,
+        message: "OpenAI-compatible provider needs an API key before testing."
+      };
+    }
+
+    this.testingLLM = true;
+    try {
+      const provider = this.createLLMProvider();
+      const messages: ChatMessage[] = [
+        { role: "system", content: "You are testing connectivity. Reply with one short token." },
+        { role: "user", content: "ping" }
+      ];
+      for await (const chunk of provider.stream(messages)) {
+        const firstToken = chunk.trim();
+        if (firstToken.length > 0) {
+          return {
+            ok: true,
+            message: `LLM test succeeded: ${firstToken}`,
+            firstToken
+          };
+        }
+      }
+      return {
+        ok: false,
+        message: "LLM test finished without receiving a token."
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : String(error)
+      };
+    } finally {
+      this.testingLLM = false;
+    }
+  }
+
+  private async createRuntime(): Promise<GreyfieldRuntime> {
+    const persona = await this.loadPersona();
     return new GreyfieldRuntime({
       llm: this.createLLMProvider(),
       tts: new MainFakeTTSProvider(),
       memoryStore: this.memoryStore,
       sessionStore: this.sessionStore,
-      persona: {
-        name: "Greyfield",
-        tone: "warm, concise, slightly playful",
-        boundaries: ["V1 cannot control the desktop", "V1 cannot browse the web on its own"],
-        expressionMap: Object.fromEntries(
-          Object.entries(this.interactionProfile.emotionReactions).map(([status, reaction]) => [
-            status,
-            reaction.expression ?? "default"
-          ])
-        )
-      },
+      persona,
       voice: this.config.voice.id,
-      stage: this.stage
+      stage: this.stage,
+      recentTurnLimit: this.options.recentTurnLimit
     });
+  }
+
+  private async loadPersona(): Promise<CharacterPersona> {
+    return this.options.loadPersona?.(this.config) ?? this.createDefaultPersona();
+  }
+
+  private createDefaultPersona(): CharacterPersona {
+    return {
+      name: "Greyfield",
+      tone: "warm, concise, slightly playful",
+      boundaries: ["V1 cannot control the desktop", "V1 cannot browse the web on its own"],
+      expressionMap: Object.fromEntries(
+        Object.entries(this.interactionProfile.emotionReactions).map(([status, reaction]) => [
+          status,
+          reaction.expression ?? "default"
+        ])
+      )
+    };
   }
 
   private createLLMProvider(): LLMProvider {

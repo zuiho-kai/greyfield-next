@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createGreyfieldDesktopApi } from "../index";
+import { createGreyfieldDesktopApi } from "../desktop-api";
 
 describe("createGreyfieldDesktopApi", () => {
   it("sends typed payloads through ipcRenderer", () => {
@@ -7,8 +7,10 @@ describe("createGreyfieldDesktopApi", () => {
     const api = createGreyfieldDesktopApi({ send, on: vi.fn() });
 
     api.send("window:set-click-through", { enabled: true });
+    api.send("provider:test-llm", {});
 
     expect(send).toHaveBeenCalledWith("window:set-click-through", { enabled: true });
+    expect(send).toHaveBeenCalledWith("provider:test-llm", {});
   });
 
   it("returns an unsubscribe function for event handlers", () => {
