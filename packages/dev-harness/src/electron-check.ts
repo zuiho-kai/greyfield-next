@@ -1,7 +1,7 @@
 import { _electron as electron, type Page } from "playwright";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
 import {
@@ -30,7 +30,9 @@ const app = await electron.launch({
   args: [join(desktopRoot, "dist-main", "index.mjs")],
   env: {
     ...process.env,
-    GREYFIELD_CONFIG_PATH: configPath
+    GREYFIELD_CONFIG_PATH: configPath,
+    GREYFIELD_PROJECT_ROOT: workspaceRoot,
+    GREYFIELD_USER_DATA_PATH: tempDir
   }
 });
 
@@ -243,6 +245,7 @@ try {
   await chatWindow.getByLabel("Message").fill("醒了吗？");
   await chatWindow.getByRole("button", { name: "Send" }).click();
   await chatWindow.locator(".message-list .assistant", { hasText: "你好，我醒着。现在可以继续做桌宠了。" }).waitFor();
+  await waitForSessionJsonl(["醒了吗？", "你好，我醒着。现在可以继续做桌宠了。"]);
   await chatWindow.getByRole("button", { name: "Stop" }).click();
 
   console.log(
@@ -264,6 +267,7 @@ try {
         dragBlockedWheelScale: true,
         modelPassThroughBlockedWheelScale: true,
         providerTestWorked: true,
+        persistentSessionWorked: true,
         repliedToText: true,
         chatWindowWorked: true
       },
@@ -318,4 +322,18 @@ async function waitForPetBoundsChange(before: { x: number; y: number }): Promise
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Timed out waiting for pet window drag from ${JSON.stringify(before)}`);
+}
+
+async function waitForSessionJsonl(expectedTexts: string[]): Promise<string> {
+  const path = join(tempDir, "sessions", "desktop-main-session.jsonl");
+  const started = Date.now();
+  let lastJsonl = "";
+  while (Date.now() - started < 5_000) {
+    lastJsonl = await readFile(path, "utf8").catch(() => "");
+    if (expectedTexts.every((text) => lastJsonl.includes(text))) {
+      return lastJsonl;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Desktop session JSONL did not persist the chat turn: ${lastJsonl}`);
 }

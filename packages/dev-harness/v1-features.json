@@ -224,7 +224,7 @@
     {
       "id": "GFN-V1-015",
       "title": "Desktop persistent recent context",
-      "status": "in-progress",
+      "status": "completed",
       "package": "apps/desktop",
       "acceptance": [
         "Electron main runtime loads the configured character persona from characters/greyfield.yaml.",
@@ -234,7 +234,7 @@
         "Recent context remains capped and inspectable so prompt growth is bounded."
       ],
       "qa": {
-        "script": "vitest runtime-service jsonl-session-store prompt-assembler; restart Electron harness TBD"
+        "script": "vitest runtime-service character-persona jsonl-session-store prompt-assembler; pnpm harness:electron:restart-context"
       }
     },
     {

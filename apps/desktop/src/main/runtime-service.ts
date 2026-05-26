@@ -2,8 +2,10 @@ import {
   GreyfieldRuntime,
   InMemorySessionStore,
   OpenAICompatibleLLMProvider,
+  type CharacterPersona,
   type LLMProvider,
   type MemoryStore,
+  type SessionStore,
   type RuntimeEventHandler,
   type RuntimeInputEvent,
   type TTSProvider,
@@ -14,6 +16,10 @@ import type { GreyfieldConfig } from "@greyfield/persistence/config-schema";
 
 export interface RuntimeServiceOptions {
   fetch?: typeof fetch;
+  loadPersona?: (config: GreyfieldConfig) => Promise<CharacterPersona>;
+  memoryStore?: MemoryStore;
+  sessionStore?: SessionStore;
+  recentTurnLimit?: number;
 }
 
 export interface LLMTestResult {
@@ -25,14 +31,16 @@ export interface LLMTestResult {
 export class RuntimeService {
   private config: GreyfieldConfig;
   private readonly stage = new FakeStageDriver();
-  private readonly memoryStore = new MainFakeMemoryStore();
-  private readonly sessionStore = new InMemorySessionStore("desktop-main-session");
+  private readonly memoryStore: MemoryStore;
+  private readonly sessionStore: SessionStore;
   private readonly interactionProfile = createDefaultInteractionProfile();
   private activeRuntime: GreyfieldRuntime | undefined;
   private testingLLM = false;
 
   constructor(config: GreyfieldConfig, private readonly options: RuntimeServiceOptions = {}) {
     this.config = config;
+    this.memoryStore = options.memoryStore ?? new MainFakeMemoryStore();
+    this.sessionStore = options.sessionStore ?? new InMemorySessionStore("desktop-main-session");
   }
 
   updateConfig(config: GreyfieldConfig): void {
@@ -49,7 +57,7 @@ export class RuntimeService {
       await this.activeRuntime.handle({ type: "runtime.interrupt" }, emit);
     }
 
-    const runtime = this.createRuntime();
+    const runtime = await this.createRuntime();
     if (input.type === "text.input") {
       this.activeRuntime = runtime;
     }
@@ -120,26 +128,36 @@ export class RuntimeService {
     }
   }
 
-  private createRuntime(): GreyfieldRuntime {
+  private async createRuntime(): Promise<GreyfieldRuntime> {
+    const persona = await this.loadPersona();
     return new GreyfieldRuntime({
       llm: this.createLLMProvider(),
       tts: new MainFakeTTSProvider(),
       memoryStore: this.memoryStore,
       sessionStore: this.sessionStore,
-      persona: {
-        name: "Greyfield",
-        tone: "warm, concise, slightly playful",
-        boundaries: ["V1 cannot control the desktop", "V1 cannot browse the web on its own"],
-        expressionMap: Object.fromEntries(
-          Object.entries(this.interactionProfile.emotionReactions).map(([status, reaction]) => [
-            status,
-            reaction.expression ?? "default"
-          ])
-        )
-      },
+      persona,
       voice: this.config.voice.id,
-      stage: this.stage
+      stage: this.stage,
+      recentTurnLimit: this.options.recentTurnLimit
     });
+  }
+
+  private async loadPersona(): Promise<CharacterPersona> {
+    return this.options.loadPersona?.(this.config) ?? this.createDefaultPersona();
+  }
+
+  private createDefaultPersona(): CharacterPersona {
+    return {
+      name: "Greyfield",
+      tone: "warm, concise, slightly playful",
+      boundaries: ["V1 cannot control the desktop", "V1 cannot browse the web on its own"],
+      expressionMap: Object.fromEntries(
+        Object.entries(this.interactionProfile.emotionReactions).map(([status, reaction]) => [
+          status,
+          reaction.expression ?? "default"
+        ])
+      )
+    };
   }
 
   private createLLMProvider(): LLMProvider {

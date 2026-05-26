@@ -10,6 +10,7 @@
     "./config-schema": "./src/config-schema.ts"
   },
   "dependencies": {
-    "@greyfield/core-runtime": "workspace:*"
+    "@greyfield/core-runtime": "workspace:*",
+    "yaml": "^2.9.0"
   }
 }

@@ -7,6 +7,9 @@ await build({
   format: "esm",
   outfile: "dist-main/index.mjs",
   external: ["electron"],
+  banner: {
+    js: "import { createRequire } from 'node:module';\nconst require = createRequire(import.meta.url);"
+  },
   sourcemap: true,
   target: "node22"
 });
