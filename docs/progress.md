@@ -16,7 +16,7 @@
 | OpenAI-compatible LLM | Main-process skeleton integrated, deterministic Test LLM path done | Provider unit tests; `RuntimeService` tests; Electron harness chat path goes through main `runtime:input`/`runtime:event`; settings Test LLM reaches main and reports first-token success/failure; Test LLM is single-flight and rejected during an active chat response; interrupt aborts active stream signal in tests; provider timeout/malformed SSE errors become readable runtime error state; renderer preview is fake-only even with OpenAI-compatible settings; renderer stores only API-key presence, not the secret or mask | Need fuller retry UX, real-network QA, and main-process controller split. |
 | Persona/recent context | Desktop persistence done | `GFN-V1-007` tracks package-level prompt assembly; `GFN-V1-015` now wires Electron main to character YAML, `data/memory.md`, JSONL session persistence, and `pnpm harness:electron:restart-context` proves restart continuity | Recent context remains capped by core runtime; future work is memory editing UX, not V1 acceptance wiring. |
 | Renderer/harness complexity | Improved in PR #1; Phase E added restart coverage | Largest hotspots reduced: `App.vue` 278 lines, `desktop-runtime-bridge.ts` 261, `electron-check.ts` 339 plus `electron-check-helpers.ts` 232, restart context harness 152 lines | `Live2DStageView.vue` remains a future split target; harness can later split by pet/settings/chat files. |
-| Repo/PR flow | Private repo created | Private GitHub repo `zuiho-kai/greyfield-next`; feature branch `feature/settings-test-llm`; PR #1 open | `.github/workflows/ci.yml` is still local/untracked in the base checkout because current GitHub token lacks `workflow` scope. |
+| Repo/PR flow | Private repo active; PR #1 and stacked PR #2 merged | Private GitHub repo `zuiho-kai/greyfield-next`; `feature/settings-test-llm` and `feature/desktop-persistent-context` merged to `main` on 2026-05-26 | `.github/workflows/ci.yml` is still not in the repo because current GitHub token lacks `workflow` scope. |
 | Dev/CI loop speed | Improved, policy documented | `dev:live2d:fast` reaches Electron PID in about 2.2s; `harness:pet:quick` about 6-8s; `harness:electron:quick` reuses built artifacts at about 7-8s locally; `docs/development-speed-policy.md` defines fast-loop vs checkpoint verification | Hosted CI Electron GUI may still need tuning; full harness must stay checkpoint-only. |
 
 Current next-step plan: [2026-05-25 V1 Next Checkpoint Plan](plans/2026-05-25-v1-next-checkpoint-plan.md).
@@ -111,6 +111,7 @@ Current next-step plan: [2026-05-25 V1 Next Checkpoint Plan](plans/2026-05-25-v1
 - Wired Electron main runtime to persistence-backed character persona, Markdown memory, and JSONL session stores for `GFN-V1-015`.
 - Added `pnpm harness:electron:restart-context`, which launches Electron twice against the same temp user data and verifies the second provider prompt includes the first persisted user/assistant turn.
 - Fixed the desktop main ESM bundle so bundled CommonJS dependencies can resolve Node built-ins under Electron.
+- Merged PR #2 into PR #1, then merged PR #1 into `main`. Updated the checkpoint plan with the remaining post-merge V1 work order.
 
 ## QA Bar
 

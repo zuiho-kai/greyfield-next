@@ -38,7 +38,7 @@ Execution speed rule: follow `docs/development-speed-policy.md`. During active i
 
 - The Electron desktop path now uses main-process `RuntimeService` for runtime events. The renderer fallback path is fake-only and exists for no-host preview/dev contexts.
 - Renderer settings state stores only API-key presence, not the raw secret or mask. Main still owns provider execution.
-- Main-process `RuntimeService` owns the current Electron runtime path, but it still uses fake memory/TTS and in-memory sessions.
+- Main-process `RuntimeService` owns the current Electron runtime path. Persona, memory, and sessions are persistence-backed; TTS remains fake in the desktop path.
 - There is no real-network harness because fake provider must remain deterministic for CI/local QA.
 - Done in core/main tests: interrupt now aborts the active LLM stream signal.
 - Done in core/renderer tests: provider timeout and malformed SSE errors become readable runtime error state, and the chat window displays runtime errors.
@@ -53,6 +53,15 @@ Execution speed rule: follow `docs/development-speed-policy.md`. During active i
 LLM is at **main-process provider skeleton + deterministic test path**.
 
 It is not yet a finished V1 LLM path. The Electron desktop path now sends `runtime:input` to main and receives `runtime:event` back, while fake provider remains the default. The current Test LLM path proves the main-process probe and UI result rendering, and the restart context harness proves persistence-backed persona/recent context. The next milestone is real-network manual QA and retry UX.
+
+## Remaining Work After 2026-05-26 Merge
+
+1. Restore repository CI workflow once a token with `workflow` scope is available.
+2. Finish speech bubble visual QA: edge flipping, clamping, long streaming replies, and screen-boundary behavior.
+3. Improve settings/provider retry UX and run real-network manual QA for OpenAI-compatible endpoints.
+4. Polish settings/chat product shape: AIRI-style visual pass, reliable model manager UX, and clearer provider status.
+5. Split remaining coordination hotspots: settings-change handling, runtime IPC controller boundaries, and `Live2DStageView` when stage interaction work resumes.
+6. Start real TTS only after provider retry/manual QA is stable; add ASR after TTS playback and interrupt behavior are proven.
 
 ## Next Implementation Order
 
@@ -98,7 +107,8 @@ Implementation tasks:
 6. Done for Electron path: OpenAI-compatible provider construction is available in main runtime service.
 7. Done: renderer settings state stores only API-key presence, not the raw API key or a reusable mask.
 8. Remaining: consolidate duplicate settings-change handling between `App.vue` and the renderer bridge.
-9. Remaining: replace fake memory/session/TTS in main runtime service with persistence-backed implementations.
+9. Remaining: split main-process runtime/settings coordination further before adding real audio provider complexity.
+10. Remaining: replace fake TTS in the desktop runtime path during Phase F.
 
 Tests:
 
@@ -184,4 +194,4 @@ pnpm harness:live2d
 pnpm harness:electron
 ```
 
-Do not use full Electron harness for every tiny pet interaction edit; it is a checkpoint gate. Do not claim LLM complete until main-process runtime, real provider error handling, interrupt abort, and persistent session are wired.
+Do not use full Electron harness for every tiny pet interaction edit; it is a checkpoint gate. Do not claim LLM complete until real-network provider QA and retry UX are proven. Do not start real TTS/ASR until main-process LLM behavior is stable under interrupt and error cases.
