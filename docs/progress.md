@@ -10,10 +10,12 @@
 | Model hit test | Done | Alpha smoke checks and `vitest alpha-hit-test pet-interaction` | Need future two-window input layer for perfect transparent holes without native clipping. |
 | Drag window | Done, revised | Drag changes window x/y; width/height and model scale stay stable in harness | Playwright plus ignore-mouse is brittle; keep quick/full harness separate. |
 | Wheel scale | Done | Mouse-anchored reducer, bounded range, disabled during drag/pass-through | Need visual tuning for head/upper-body zoom per model. |
-| Speech bubble | In progress | Placement unit tests and visible pet bubble path | Needs final visual QA against screen edges and long text. |
-| Settings/chat shell | In progress | Full Electron harness opens settings/chat and verifies isolation | Needs AIRI-style visual pass and real model manager UX. |
+| Speech bubble | In progress, improved in PR #1 | Placement unit tests; visible pet bubble path; bubble text normalized/capped and stable bubble hit box covered by Electron harness | Needs final visual QA against screen edges and real long streaming output. |
+| Settings/chat shell | In progress, split in PR #1 | Full Electron harness opens settings/chat and verifies isolation; `App.vue` split into `PetWindow.vue`, `ChatWindow.vue`, `SettingsWindow.vue`; Test LLM button covered by Electron harness | Needs AIRI-style visual pass, fuller retry UX, and real model manager UX. |
 | Fake runtime chain | Done | `pnpm harness:acceptance` path exists; Electron harness verifies fake chat reply | Real LLM/TTS/ASR are not V1-stable yet. |
 | OpenAI-compatible LLM | Main-process skeleton integrated, renderer provider path removed | Provider unit tests; `RuntimeService` tests; Electron harness chat path goes through main `runtime:input`/`runtime:event`; settings Test LLM reaches main and reports first-token success/failure; interrupt aborts active stream signal in tests; provider timeout/malformed SSE errors become readable runtime error state; renderer preview is fake-only even with OpenAI-compatible settings; renderer stores only API-key presence, not the secret or mask | Need fuller retry UX, real-network QA, persistent session/memory in Electron runtime path, and main-process controller split. |
+| Renderer/harness complexity | Improved in PR #1 | Largest hotspots reduced: `App.vue` 278 lines, `desktop-runtime-bridge.ts` 261, `electron-check.ts` 304 plus `electron-check-helpers.ts` 232 | `Live2DStageView.vue` remains a future split target; harness can later split by pet/settings/chat files. |
+| Repo/PR flow | Private repo created | Private GitHub repo `zuiho-kai/greyfield-next`; feature branch `feature/settings-test-llm`; PR #1 open | `.github/workflows/ci.yml` is still local/untracked in the base checkout because current GitHub token lacks `workflow` scope. |
 | Dev/CI loop speed | Improved, policy documented | `dev:live2d:fast` reaches Electron PID in about 2.2s; `harness:pet:quick` about 6-8s; `harness:electron:quick` reuses built artifacts at about 7-8s locally; `docs/development-speed-policy.md` defines fast-loop vs checkpoint verification | Hosted CI Electron GUI may still need tuning; full harness must stay checkpoint-only. |
 
 Current next-step plan: [2026-05-25 V1 Next Checkpoint Plan](plans/2026-05-25-v1-next-checkpoint-plan.md).
@@ -92,6 +94,17 @@ Current next-step plan: [2026-05-25 V1 Next Checkpoint Plan](plans/2026-05-25-v1
 - Added a settings-side `Test LLM` action that probes the current provider through Electron main and reports first-token success or readable failure without appending session history.
 - Split `App.vue` into pet, chat, and settings window components; split renderer bridge helpers for settings mapping, preview runtime events, and runtime event reduction.
 - Split shared Electron harness helpers out of `electron-check.ts` and changed the harness config import to the public `@greyfield/persistence/config-schema` package path.
+
+## 2026-05-26
+
+- Created private GitHub repository `zuiho-kai/greyfield-next` and pushed the initial `main` branch.
+- Opened PR #1 from `feature/settings-test-llm` for the settings-side LLM test and complexity split batch.
+- Added settings `Test LLM`, routed through Electron main `RuntimeService`, with first-token success/readable failure result rendering in settings.
+- Verified `Test LLM` in Electron harness with `providerTestWorked: true`.
+- Split renderer surfaces into `PetWindow.vue`, `ChatWindow.vue`, and `SettingsWindow.vue`; `App.vue` now primarily routes by window role and coordinates shared state.
+- Split renderer bridge helpers into `settings-state-mapper.ts`, `runtime-event-reducer.ts`, and `preview-runtime-events.ts`.
+- Split shared Electron harness helpers into `electron-check-helpers.ts` and changed the harness config import to the public package export.
+- Verification for PR #1: `pnpm typecheck`, `pnpm test` (38 files / 111 tests), `pnpm harness:acceptance`, and Electron harness with local Electron override all passed.
 
 ## QA Bar
 
