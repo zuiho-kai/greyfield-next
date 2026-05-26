@@ -1,11 +1,10 @@
-import {
-  type RuntimeOutputEvent,
-} from "@greyfield/core-runtime";
-import { defaultGreyfieldConfig, type GreyfieldConfig, type GreyfieldConfigPatch } from "@greyfield/persistence/config-schema";
+import { defaultGreyfieldConfig, type GreyfieldConfig } from "@greyfield/persistence/config-schema";
 import type { DesktopIpcEventChannel, DesktopIpcEventMap, DesktopIpcRequestChannel, DesktopIpcRequestMap } from "../shared/ipc";
-import type { RendererGreyfieldConfig } from "../shared/renderer-config";
 import { isMaskedApiKey } from "../shared/secrets";
-import { createDefaultInteractionProfile, resolveEmotionReaction } from "@greyfield/stage-live2d";
+import { createDefaultInteractionProfile } from "@greyfield/stage-live2d";
+import { createRendererPreviewRuntimeEvents } from "./preview-runtime-events";
+import { reduceRuntimeEvent } from "./runtime-event-reducer";
+import { configFromSettings, settingsFromConfig, settingsPatchToConfigPatch } from "./settings-state-mapper";
 
 export interface DesktopMessage {
   role: "user" | "assistant";
@@ -15,6 +14,11 @@ export interface DesktopMessage {
 export interface DesktopRendererState {
   status: string;
   errorMessage: string;
+  providerTest: {
+    status: "idle" | "testing" | "success" | "error";
+    message: string;
+    firstToken?: string;
+  };
   inputDraft: string;
   messages: DesktopMessage[];
   assistantDraft: string;
@@ -94,7 +98,18 @@ export class DesktopRuntimeBridge {
       this.emitStateChange();
     });
     this.host?.on("runtime:event", (event) => {
-      this.applyRuntimeEvent(event);
+      this.state = reduceRuntimeEvent(this.state, event, this.interactionProfile);
+      this.emitStateChange();
+    });
+    this.host?.on("provider:test-llm-result", (result) => {
+      this.state = {
+        ...this.state,
+        providerTest: {
+          status: result.ok ? "success" : "error",
+          message: result.message,
+          ...(result.firstToken ? { firstToken: result.firstToken } : {})
+        }
+      };
       this.emitStateChange();
     });
   }
@@ -124,7 +139,7 @@ export class DesktopRuntimeBridge {
     }
 
     for (const event of createRendererPreviewRuntimeEvents()) {
-      this.applyRuntimeEvent(event);
+      this.state = reduceRuntimeEvent(this.state, event, this.interactionProfile);
     }
 
     return this.getState();
@@ -191,80 +206,34 @@ export class DesktopRuntimeBridge {
     return this.getState();
   }
 
+  testLLMProvider(): DesktopRendererState {
+    this.state = {
+      ...this.state,
+      providerTest: {
+        status: "testing",
+        message: "Testing LLM provider..."
+      }
+    };
+    this.host?.send("provider:test-llm", {});
+    if (!this.host) {
+      this.state = {
+        ...this.state,
+        providerTest: {
+          status: "success",
+          message: "LLM test succeeded: fake-preview",
+          firstToken: "fake-preview"
+        }
+      };
+    }
+    return this.getState();
+  }
+
   getState(): DesktopRendererState {
     return structuredClone(this.state);
   }
 
   getConfigSnapshot(): GreyfieldConfig {
     return configFromSettings(this.state.settings);
-  }
-
-  private applyRuntimeEvent(event: RuntimeOutputEvent): void {
-    if (event.type === "runtime.status") {
-      this.state = {
-        ...this.state,
-        status: event.status,
-        stage: {
-          ...this.state.stage,
-          ...stageReactionForStatus(event.status, this.interactionProfile)
-        }
-      };
-      return;
-    }
-
-    if (event.type === "error") {
-      this.state = {
-        ...this.state,
-        status: "error",
-        errorMessage: event.message,
-        assistantDraft: "",
-        audioQueue: [],
-        stage: {
-          ...this.state.stage,
-          mouthOpen: 0
-        }
-      };
-      return;
-    }
-
-    if (event.type === "assistant.text.delta") {
-      this.state = {
-        ...this.state,
-        assistantDraft: `${this.state.assistantDraft}${event.text}`
-      };
-      return;
-    }
-
-    if (event.type === "assistant.text.final") {
-      this.state = {
-        ...this.state,
-        assistantDraft: "",
-        messages: [...this.state.messages, { role: "assistant", text: event.text }]
-      };
-      return;
-    }
-
-    if (event.type === "assistant.audio.chunk") {
-      this.state = {
-        ...this.state,
-        audioQueue: [...this.state.audioQueue, event.text],
-        stage: {
-          ...this.state.stage,
-          mouthOpen: 0
-        }
-      };
-      return;
-    }
-
-    if (event.type === "assistant.audio.end") {
-      this.state = {
-        ...this.state,
-        stage: {
-          ...this.state.stage,
-          mouthOpen: 0
-        }
-      };
-    }
   }
 
   private emitStateChange(): void {
@@ -283,6 +252,10 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
   return {
     status: "idle",
     errorMessage: "",
+    providerTest: {
+      status: "idle",
+      message: ""
+    },
     inputDraft: "",
     messages: [],
     assistantDraft: "",
@@ -310,131 +283,4 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       mouthOpen: 0
     }
   };
-}
-
-function stageReactionForStatus(
-  status: string,
-  profile: ReturnType<typeof createDefaultInteractionProfile>
-): Partial<DesktopRendererState["stage"]> {
-  if (status === "idle") {
-    return {};
-  }
-  const reaction = resolveEmotionReaction(profile, status);
-  return {
-    ...(reaction.expression ? { expression: reaction.expression } : {}),
-    ...(reaction.motion ? { motion: reaction.motion } : {})
-  };
-}
-
-function settingsFromConfig(config: RendererGreyfieldConfig | GreyfieldConfig): DesktopSettingsState {
-  const hasApiKey = "hasApiKey" in config.provider ? config.provider.hasApiKey : config.provider.apiKey.length > 0;
-  return {
-    providerLLM: config.provider.llm,
-    providerBaseUrl: config.provider.baseUrl,
-    providerApiKey: isMaskedApiKey(config.provider.apiKey) ? "" : config.provider.apiKey,
-    providerHasApiKey: hasApiKey,
-    providerModel: config.provider.model,
-    voiceId: config.voice.id,
-    microphoneId: config.audio.microphoneId,
-    characterFile: config.characterFile,
-    modelPath: config.live2d.modelPath,
-    modelScale: config.live2d.scale,
-    modelX: config.live2d.x,
-    modelY: config.live2d.y,
-    speechBubbleEnabled: config.ui.speechBubbleEnabled
-  };
-}
-
-function configFromSettings(settings: DesktopSettingsState): GreyfieldConfig {
-  return {
-    ...defaultGreyfieldConfig,
-    provider: {
-      ...defaultGreyfieldConfig.provider,
-      llm: settings.providerLLM,
-      baseUrl: settings.providerBaseUrl,
-      apiKey: settings.providerApiKey,
-      model: settings.providerModel
-    },
-    voice: {
-      ...defaultGreyfieldConfig.voice,
-      id: settings.voiceId
-    },
-    audio: {
-      ...defaultGreyfieldConfig.audio,
-      microphoneId: settings.microphoneId
-    },
-    live2d: {
-      ...defaultGreyfieldConfig.live2d,
-      modelPath: settings.modelPath,
-      scale: settings.modelScale,
-      x: settings.modelX,
-      y: settings.modelY
-    },
-    ui: {
-      ...defaultGreyfieldConfig.ui,
-      speechBubbleEnabled: settings.speechBubbleEnabled
-    },
-    characterFile: settings.characterFile
-  };
-}
-
-function settingsPatchToConfigPatch(patch: DesktopSettingsPatch): GreyfieldConfigPatch {
-  const configPatch: GreyfieldConfigPatch = {};
-  if (patch.providerModel !== undefined) {
-    configPatch.provider = { ...configPatch.provider, model: patch.providerModel };
-  }
-  if (patch.providerLLM !== undefined) {
-    configPatch.provider = { ...configPatch.provider, llm: patch.providerLLM };
-  }
-  if (patch.providerBaseUrl !== undefined) {
-    configPatch.provider = { ...configPatch.provider, baseUrl: patch.providerBaseUrl };
-  }
-  if (patch.providerApiKey !== undefined && !isMaskedApiKey(patch.providerApiKey)) {
-    configPatch.provider = { ...configPatch.provider, apiKey: patch.providerApiKey };
-  }
-  if (patch.voiceId !== undefined) {
-    configPatch.voice = { id: patch.voiceId };
-  }
-  if (patch.microphoneId !== undefined) {
-    configPatch.audio = { microphoneId: patch.microphoneId };
-  }
-  if (
-    patch.modelPath !== undefined ||
-    patch.modelScale !== undefined ||
-    patch.modelX !== undefined ||
-    patch.modelY !== undefined
-  ) {
-    configPatch.live2d = {
-      ...(patch.modelPath !== undefined ? { modelPath: patch.modelPath } : {}),
-      ...(patch.modelScale !== undefined ? { scale: patch.modelScale } : {}),
-      ...(patch.modelX !== undefined ? { x: patch.modelX } : {}),
-      ...(patch.modelY !== undefined ? { y: patch.modelY } : {})
-    };
-  }
-  if (patch.characterFile !== undefined) {
-    configPatch.characterFile = patch.characterFile;
-  }
-  if (patch.speechBubbleEnabled !== undefined) {
-    configPatch.ui = { speechBubbleEnabled: patch.speechBubbleEnabled };
-  }
-  return configPatch;
-}
-
-function createRendererPreviewRuntimeEvents(): RuntimeOutputEvent[] {
-  return [
-    { type: "runtime.status", status: "thinking" },
-    { type: "assistant.text.delta", text: "你好，我醒着。" },
-    { type: "runtime.status", status: "speaking" },
-    { type: "assistant.audio.chunk", text: "你好，我醒着。", data: new TextEncoder().encode("fake-audio:你好，我醒着。") },
-    { type: "assistant.text.delta", text: "现在可以继续做桌宠了。" },
-    { type: "runtime.status", status: "speaking" },
-    {
-      type: "assistant.audio.chunk",
-      text: "现在可以继续做桌宠了。",
-      data: new TextEncoder().encode("fake-audio:现在可以继续做桌宠了。")
-    },
-    { type: "assistant.text.final", text: "你好，我醒着。现在可以继续做桌宠了。" },
-    { type: "assistant.audio.end" },
-    { type: "runtime.status", status: "idle" }
-  ];
 }

@@ -71,6 +71,9 @@ importers:
       '@greyfield/core-runtime':
         specifier: workspace:*
         version: link:../core-runtime
+      '@greyfield/persistence':
+        specifier: workspace:*
+        version: link:../persistence
       '@greyfield/stage-live2d':
         specifier: workspace:*
         version: link:../stage-live2d

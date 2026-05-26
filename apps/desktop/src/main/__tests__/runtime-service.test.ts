@@ -55,6 +55,79 @@ describe("RuntimeService", () => {
     expect(events).toContainEqual({ type: "assistant.text.final", text: "远程" });
   });
 
+  it("tests the fake LLM provider without appending session turns", async () => {
+    const service = new RuntimeService(defaultGreyfieldConfig);
+
+    const result = await service.testLLM();
+
+    expect(result).toEqual({
+      ok: true,
+      message: "LLM test succeeded: 你好，我醒着。",
+      firstToken: "你好，我醒着。"
+    });
+    expect(await service.getRecentTurns(2)).toEqual([]);
+  });
+
+  it("tests the OpenAI-compatible provider and reports the first token", async () => {
+    const fetch = vi.fn(async () => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"pong"}}]}\n\n'));
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        }
+      });
+      return new Response(body, { status: 200 });
+    });
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "secret",
+          model: "remote-model"
+        }
+      },
+      { fetch }
+    );
+
+    const result = await service.testLLM();
+
+    expect(result).toEqual({ ok: true, message: "LLM test succeeded: pong", firstToken: "pong" });
+    expect(fetch).toHaveBeenCalledWith(
+      "https://llm.example/v1/chat/completions",
+      expect.objectContaining({
+        body: expect.stringContaining('"ping"')
+      })
+    );
+  });
+
+  it("reports missing API key before testing the OpenAI-compatible provider", async () => {
+    const fetch = vi.fn();
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "",
+          model: "remote-model"
+        }
+      },
+      { fetch }
+    );
+
+    await expect(service.testLLM()).resolves.toEqual({
+      ok: false,
+      message: "OpenAI-compatible provider needs an API key before testing."
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("can update config without losing accumulated fake session history", async () => {
     const service = new RuntimeService(defaultGreyfieldConfig);
     await service.handle({ type: "text.input", text: "第一轮" }, () => undefined);

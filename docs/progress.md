@@ -13,7 +13,7 @@
 | Speech bubble | In progress | Placement unit tests and visible pet bubble path | Needs final visual QA against screen edges and long text. |
 | Settings/chat shell | In progress | Full Electron harness opens settings/chat and verifies isolation | Needs AIRI-style visual pass and real model manager UX. |
 | Fake runtime chain | Done | `pnpm harness:acceptance` path exists; Electron harness verifies fake chat reply | Real LLM/TTS/ASR are not V1-stable yet. |
-| OpenAI-compatible LLM | Main-process skeleton integrated, renderer provider path removed | Provider unit tests; `RuntimeService` tests; Electron harness chat path goes through main `runtime:input`/`runtime:event`; interrupt aborts active stream signal in tests; provider timeout/malformed SSE errors become readable runtime error state; renderer preview is fake-only even with OpenAI-compatible settings; renderer stores only API-key presence, not the secret or mask | Need settings-side test action/retry UX, real-network QA, persistent session/memory in Electron runtime path, and main-process controller split. |
+| OpenAI-compatible LLM | Main-process skeleton integrated, renderer provider path removed | Provider unit tests; `RuntimeService` tests; Electron harness chat path goes through main `runtime:input`/`runtime:event`; settings Test LLM reaches main and reports first-token success/failure; interrupt aborts active stream signal in tests; provider timeout/malformed SSE errors become readable runtime error state; renderer preview is fake-only even with OpenAI-compatible settings; renderer stores only API-key presence, not the secret or mask | Need fuller retry UX, real-network QA, persistent session/memory in Electron runtime path, and main-process controller split. |
 | Dev/CI loop speed | Improved, policy documented | `dev:live2d:fast` reaches Electron PID in about 2.2s; `harness:pet:quick` about 6-8s; `harness:electron:quick` reuses built artifacts at about 7-8s locally; `docs/development-speed-policy.md` defines fast-loop vs checkpoint verification | Hosted CI Electron GUI may still need tuning; full harness must stay checkpoint-only. |
 
 Current next-step plan: [2026-05-25 V1 Next Checkpoint Plan](plans/2026-05-25-v1-next-checkpoint-plan.md).
@@ -89,6 +89,9 @@ Current next-step plan: [2026-05-25 V1 Next Checkpoint Plan](plans/2026-05-25-v1
 - Stabilized the interrupted controller extraction with targeted controller tests, `pnpm typecheck`, and `pnpm harness:pet:quick`.
 - Improved Step 2 bubble/chat UX: pet bubbles now normalize and cap long streaming text, reserve a stable bubble hit/placement box, and the chat window shows runtime status plus readable error messages.
 - Added OpenAI-compatible provider timeout handling and malformed SSE errors, with renderer error-state coverage so provider failures do not disappear behind the chat UI.
+- Added a settings-side `Test LLM` action that probes the current provider through Electron main and reports first-token success or readable failure without appending session history.
+- Split `App.vue` into pet, chat, and settings window components; split renderer bridge helpers for settings mapping, preview runtime events, and runtime event reduction.
+- Split shared Electron harness helpers out of `electron-check.ts` and changed the harness config import to the public `@greyfield/persistence/config-schema` package path.
 
 ## QA Bar
 

@@ -1,9 +1,22 @@
 import { _electron as electron, type Page } from "playwright";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { defaultGreyfieldConfig } from "../../persistence/src/config-schema";
+import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
+import {
+  dispatchStageMove,
+  dispatchStageWheel,
+  dispatchStageWheelUntilScaleChange,
+  findStagePoint,
+  readConfig,
+  waitForLive2DTransform,
+  waitForModelPassThrough,
+  waitForSavedModel,
+  waitForSpeechBubble,
+  waitForStageHit,
+  waitForWindowPosition
+} from "./electron-check-helpers";
 
 const workspaceRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const desktopRoot = join(workspaceRoot, "apps", "desktop");
@@ -218,6 +231,8 @@ try {
   await settingsWindow.getByLabel("Model Y").fill("-24");
   await settingsWindow.getByRole("button", { name: "Reset transform" }).click();
   const resetConfig = await waitForLive2DTransform(configPath, { scale: 1, x: 0, y: 0 });
+  await settingsWindow.getByRole("button", { name: "Test LLM" }).click();
+  await settingsWindow.locator(".provider-test-result", { hasText: "LLM test succeeded" }).waitFor();
   await settingsWindow.getByRole("textbox", { name: "Model", exact: true }).fill("electron-harness-model");
   const savedConfig = await waitForSavedModel(configPath, "electron-harness-model");
   await settingsWindow.getByLabel("Speech Bubble").uncheck();
@@ -248,6 +263,7 @@ try {
         },
         dragBlockedWheelScale: true,
         modelPassThroughBlockedWheelScale: true,
+        providerTestWorked: true,
         repliedToText: true,
         chatWindowWorked: true
       },
@@ -259,25 +275,6 @@ try {
 } finally {
   await app.close();
   await rm(tempDir, { recursive: true, force: true });
-}
-
-async function waitForLive2DTransform(
-  path: string,
-  expected: { scale: number; x: number; y: number }
-): Promise<typeof defaultGreyfieldConfig> {
-  const started = Date.now();
-  while (Date.now() - started < 5_000) {
-    const config = await readConfig(path).catch(() => null);
-    if (
-      config?.live2d.scale === expected.scale &&
-      config.live2d.x === expected.x &&
-      config.live2d.y === expected.y
-    ) {
-      return config;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`Timed out waiting for Live2D transform ${JSON.stringify(expected)}`);
 }
 
 async function waitForSettingsWindow(): Promise<Page> {
@@ -298,185 +295,6 @@ async function waitForRoleWindow(roleName: "settings" | "chat"): Promise<Page> {
   throw new Error(`Timed out waiting for ${roleName} window`);
 }
 
-async function waitForSavedModel(path: string, model: string): Promise<typeof defaultGreyfieldConfig> {
-  const started = Date.now();
-  while (Date.now() - started < 5_000) {
-    try {
-      const config = JSON.parse(await readFile(path, "utf8")) as typeof defaultGreyfieldConfig;
-      if (config.provider.model === model) {
-        return config;
-      }
-    } catch {
-      // The main process may be between truncate and write; retry until stable.
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`Timed out waiting for saved model ${model}`);
-}
-
-async function readConfig(path: string): Promise<typeof defaultGreyfieldConfig> {
-  return JSON.parse(await readFile(path, "utf8")) as typeof defaultGreyfieldConfig;
-}
-
-async function findStagePoint(page: Page, hit: boolean): Promise<{ x: number; y: number }> {
-  return page.evaluate((wantHit) => {
-    const smoke = (window as typeof window & {
-      __greyfieldStageSmoke?: { sampleModelHit(clientX: number, clientY: number): boolean };
-    }).__greyfieldStageSmoke;
-    const canvases = Array.from(
-      document.querySelectorAll<HTMLCanvasElement>("canvas.live2d-stage-canvas, canvas.fallback-stage-canvas")
-    );
-    if (canvases.length === 0) {
-      throw new Error("Missing pet stage canvas");
-    }
-    let strongest = { x: 0, y: 0, alpha: 0, canvas: "" };
-    for (const canvas of canvases) {
-      if (canvas.width === 0 || canvas.height === 0) {
-        continue;
-      }
-      const rect = canvas.getBoundingClientRect();
-      const getAlpha = createAlphaReader(canvas);
-      for (let y = 0; y < canvas.height; y += 4) {
-        for (let x = 0; x < canvas.width; x += 4) {
-          const alpha = getAlpha(x, y);
-          if (alpha > strongest.alpha) {
-            strongest = { x, y, alpha, canvas: canvas.className };
-          }
-          if ((alpha >= 16) === wantHit) {
-            const point = {
-              x: rect.left + (x / canvas.width) * rect.width,
-              y: rect.top + (y / canvas.height) * rect.height
-            };
-            if (!smoke || smoke.sampleModelHit(point.x, point.y) === wantHit) {
-              return point;
-            }
-          }
-        }
-      }
-    }
-    throw new Error(
-      `Could not find ${wantHit ? "model" : "transparent"} pet stage point; strongest=${JSON.stringify(strongest)} canvases=${canvases
-        .map((canvas) => `${canvas.className}:${canvas.width}x${canvas.height}`)
-        .join(",")}`
-    );
-
-    function createAlphaReader(target: HTMLCanvasElement): (x: number, y: number) => number {
-      const context = target.getContext("2d");
-      if (context) {
-        const image = context.getImageData(0, 0, target.width, target.height).data;
-        return (x, y) => image[(y * target.width + x) * 4 + 3];
-      }
-      const gl = target.getContext("webgl2") ?? target.getContext("webgl");
-      if (!gl) {
-        throw new Error("Missing stage canvas rendering context");
-      }
-      const image = new Uint8Array(target.width * target.height * 4);
-      gl.readPixels(0, 0, target.width, target.height, gl.RGBA, gl.UNSIGNED_BYTE, image);
-      return (x, y) => image[((target.height - 1 - y) * target.width + x) * 4 + 3];
-    }
-
-  }, hit);
-}
-
-async function waitForStageHit(page: Page, hit: boolean, point: { x: number; y: number }): Promise<void> {
-  const selector = `.live2d-stage-view[data-model-hit="${hit ? "true" : "false"}"]`;
-  const smokeMatches = await page.evaluate(({ x, y, expected }) => {
-    return (
-      (window as typeof window & {
-        __greyfieldStageSmoke?: { sampleModelHit(clientX: number, clientY: number): boolean };
-      }).__greyfieldStageSmoke?.sampleModelHit(x, y) === expected
-    );
-  }, { ...point, expected: hit });
-  if (smokeMatches) {
-    return;
-  }
-  try {
-    await page.waitForSelector(selector, { timeout: 3_000 });
-  } catch (error) {
-    const probe = await page.evaluate(({ x, y }) => {
-      const stage = document.querySelector<HTMLElement>(".live2d-stage-view");
-      const element = document.elementFromPoint(x, y);
-      return {
-        expectedPoint: { x, y },
-        stageHit: stage?.dataset.modelHit,
-        elementClass: element instanceof HTMLElement ? element.className : null,
-        smokeHit: (window as typeof window & {
-          __greyfieldStageSmoke?: { sampleModelHit(clientX: number, clientY: number): boolean };
-        }).__greyfieldStageSmoke?.sampleModelHit(x, y)
-      };
-    }, point);
-    throw new Error(`Timed out waiting for ${selector}; probe=${JSON.stringify(probe)}; cause=${String(error)}`);
-  }
-}
-
-async function dispatchStageMove(page: Page, point: { x: number; y: number }): Promise<void> {
-  await page.evaluate(({ x, y }) => {
-    const target = document.querySelector(".live2d-stage-view") ?? document.elementFromPoint(x, y);
-    if (!target) {
-      throw new Error(`No element at ${x},${y}`);
-    }
-    target.dispatchEvent(
-      new PointerEvent("pointermove", {
-        bubbles: true,
-        clientX: x,
-        clientY: y,
-        screenX: window.screenX + x,
-        screenY: window.screenY + y,
-        pointerId: 1,
-        pointerType: "mouse"
-      })
-    );
-    target.dispatchEvent(
-      new MouseEvent("mousemove", {
-        bubbles: true,
-        clientX: x,
-        clientY: y,
-        screenX: window.screenX + x,
-        screenY: window.screenY + y
-      })
-    );
-  }, point);
-}
-
-async function dispatchStageWheel(page: Page, point: { x: number; y: number }, deltaY: number): Promise<void> {
-  await page.evaluate(({ x, y, wheelDeltaY }) => {
-    const target = document.querySelector(".live2d-stage-view") ?? document.elementFromPoint(x, y);
-    if (!target) {
-      throw new Error(`No element at ${x},${y}`);
-    }
-    target.dispatchEvent(
-      new WheelEvent("wheel", {
-        bubbles: true,
-        cancelable: true,
-        clientX: x,
-        clientY: y,
-        screenX: window.screenX + x,
-        screenY: window.screenY + y,
-        deltaY: wheelDeltaY
-      })
-    );
-  }, { ...point, wheelDeltaY: deltaY });
-}
-
-async function dispatchStageWheelUntilScaleChange(
-  page: Page,
-  point: { x: number; y: number },
-  deltaY: number,
-  path: string,
-  previousScale: number
-): Promise<typeof defaultGreyfieldConfig> {
-  const started = Date.now();
-  while (Date.now() - started < 5_000) {
-    await dispatchStageWheel(page, point, deltaY);
-    const config = await readConfig(path).catch(() => null);
-    if (config && config.live2d.scale !== previousScale) {
-      return config;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 120));
-  }
-  throw new Error(`Timed out waiting for model scale to change from ${previousScale}`);
-}
-
 async function getPetBounds(): Promise<{ x: number; y: number; width: number; height: number }> {
   return app.evaluate(({ BrowserWindow }) => {
     const window = BrowserWindow.getAllWindows().find((browserWindow) => {
@@ -490,26 +308,6 @@ async function getPetBounds(): Promise<{ x: number; y: number; width: number; he
   });
 }
 
-async function stressDragPetWindow(
-  page: Page,
-  before: { x: number; y: number; width: number; height: number }
-): Promise<{ x: number; y: number; width: number; height: number }> {
-  let bounds = before;
-  for (let index = 0; index < 6; index += 1) {
-    const point = await findStagePoint(page, true);
-    await page.evaluate(() =>
-      window.greyfield?.send("window:set-hit-test", { passthrough: false, reason: "model-hit" })
-    );
-    const delta = index % 2 === 0 ? { x: 34, y: 22 } : { x: -28, y: -18 };
-    await page.mouse.move(point.x, point.y);
-    await page.mouse.down({ button: "left" });
-    await page.mouse.move(point.x + delta.x, point.y + delta.y, { steps: 4 });
-    await page.mouse.up({ button: "left" });
-    bounds = await waitForPetBoundsChange(bounds);
-  }
-  return bounds;
-}
-
 async function waitForPetBoundsChange(before: { x: number; y: number }): Promise<{ x: number; y: number; width: number; height: number }> {
   const started = Date.now();
   while (Date.now() - started < 5_000) {
@@ -520,44 +318,4 @@ async function waitForPetBoundsChange(before: { x: number; y: number }): Promise
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Timed out waiting for pet window drag from ${JSON.stringify(before)}`);
-}
-
-async function waitForWindowPosition(path: string, x: number, y: number): Promise<typeof defaultGreyfieldConfig> {
-  const started = Date.now();
-  while (Date.now() - started < 5_000) {
-    const config = await readConfig(path).catch(() => null);
-    if (config?.window.x === x && config.window.y === y) {
-      return config;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`Timed out waiting for persisted window position ${x},${y}`);
-}
-
-async function waitForModelPassThrough(path: string, enabled: boolean): Promise<typeof defaultGreyfieldConfig> {
-  const started = Date.now();
-  while (Date.now() - started < 5_000) {
-    const config = await readConfig(path).catch(() => null);
-    if (config?.window.modelPassThrough === enabled) {
-      return config;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`Timed out waiting for Model Pass Through ${enabled}`);
-}
-
-async function waitForSpeechBubble(path: string, enabled: boolean): Promise<typeof defaultGreyfieldConfig> {
-  const started = Date.now();
-  while (Date.now() - started < 5_000) {
-    try {
-      const config = JSON.parse(await readFile(path, "utf8")) as typeof defaultGreyfieldConfig;
-      if (config.ui.speechBubbleEnabled === enabled) {
-        return config;
-      }
-    } catch {
-      // Retry until the write is stable.
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`Timed out waiting for speech bubble setting ${enabled}`);
 }

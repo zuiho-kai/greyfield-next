@@ -138,6 +138,55 @@ describe("createDesktopRuntimeBridge", () => {
     ]);
   });
 
+  it("sends an LLM provider test request and reduces the result", () => {
+    const sent: Array<[string, unknown]> = [];
+    let providerTestResult:
+      | ((event: { ok: boolean; message: string; firstToken?: string }) => void)
+      | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: (channel, payload) => sent.push([channel, payload]),
+      on: (channel, handler) => {
+        if (channel === "provider:test-llm-result") {
+          providerTestResult = handler as typeof providerTestResult;
+        }
+        return () => undefined;
+      }
+    });
+
+    const testing = bridge.testLLMProvider();
+    providerTestResult?.({ ok: true, message: "LLM test succeeded: pong", firstToken: "pong" });
+
+    expect(testing.providerTest).toEqual({ status: "testing", message: "Testing LLM provider..." });
+    expect(sent).toContainEqual(["provider:test-llm", {}]);
+    expect(bridge.getState().providerTest).toEqual({
+      status: "success",
+      message: "LLM test succeeded: pong",
+      firstToken: "pong"
+    });
+  });
+
+  it("shows provider test errors in renderer state", () => {
+    let providerTestResult:
+      | ((event: { ok: boolean; message: string; firstToken?: string }) => void)
+      | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: () => undefined,
+      on: (channel, handler) => {
+        if (channel === "provider:test-llm-result") {
+          providerTestResult = handler as typeof providerTestResult;
+        }
+        return () => undefined;
+      }
+    });
+
+    providerTestResult?.({ ok: false, message: "provider failed" });
+
+    expect(bridge.getState().providerTest).toEqual({
+      status: "error",
+      message: "provider failed"
+    });
+  });
+
   it("sends runtime input to Electron main when a host API is available", async () => {
     const sent: Array<[string, unknown]> = [];
     let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;

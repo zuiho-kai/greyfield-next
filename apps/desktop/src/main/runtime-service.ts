@@ -6,13 +6,20 @@ import {
   type MemoryStore,
   type RuntimeEventHandler,
   type RuntimeInputEvent,
-  type TTSProvider
+  type TTSProvider,
+  type ChatMessage
 } from "@greyfield/core-runtime";
 import { createDefaultInteractionProfile, FakeStageDriver } from "@greyfield/stage-live2d";
 import type { GreyfieldConfig } from "@greyfield/persistence/config-schema";
 
 export interface RuntimeServiceOptions {
   fetch?: typeof fetch;
+}
+
+export interface LLMTestResult {
+  ok: boolean;
+  message: string;
+  firstToken?: string;
 }
 
 export class RuntimeService {
@@ -59,6 +66,42 @@ export class RuntimeService {
     return turns.flatMap((turn) =>
       turn.role === "user" || turn.role === "assistant" ? [{ role: turn.role, content: turn.content }] : []
     );
+  }
+
+  async testLLM(): Promise<LLMTestResult> {
+    if (this.config.provider.llm === "openai-compatible" && this.config.provider.apiKey.trim().length === 0) {
+      return {
+        ok: false,
+        message: "OpenAI-compatible provider needs an API key before testing."
+      };
+    }
+
+    try {
+      const provider = this.createLLMProvider();
+      const messages: ChatMessage[] = [
+        { role: "system", content: "You are testing connectivity. Reply with one short token." },
+        { role: "user", content: "ping" }
+      ];
+      for await (const chunk of provider.stream(messages)) {
+        const firstToken = chunk.trim();
+        if (firstToken.length > 0) {
+          return {
+            ok: true,
+            message: `LLM test succeeded: ${firstToken}`,
+            firstToken
+          };
+        }
+      }
+      return {
+        ok: false,
+        message: "LLM test finished without receiving a token."
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : String(error)
+      };
+    }
   }
 
   private createRuntime(): GreyfieldRuntime {

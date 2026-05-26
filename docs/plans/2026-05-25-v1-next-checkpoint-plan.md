@@ -42,7 +42,8 @@ Execution speed rule: follow `docs/development-speed-policy.md`. During active i
 - There is no real-network harness because fake provider must remain deterministic for CI/local QA.
 - Done in core/main tests: interrupt now aborts the active LLM stream signal.
 - Done in core/renderer tests: provider timeout and malformed SSE errors become readable runtime error state, and the chat window displays runtime errors.
-- Provider settings still need a dedicated test action and retry UX.
+- Done in Electron harness: provider settings have a dedicated test action that reports first-token success or a readable failure.
+- Provider settings still need fuller retry UX and real-network manual QA.
 - Persona file and JSONL session persistence are not wired into the Electron desktop runtime path yet; main `RuntimeService` still uses in-memory session and fake memory.
 - TTS is still fake in the desktop path, so "LLM -> real voice -> audio mouth sync" is not complete.
 
@@ -114,7 +115,7 @@ Exit criteria:
 1. Done: add `AbortSignal` support to `OpenAICompatibleLLMProvider.stream`.
 2. Done: wire `runtime.interrupt` to abort the active provider request in `GreyfieldRuntime` and `RuntimeService`.
 3. Done: add provider timeout and readable error events.
-4. Remaining: add a settings "test LLM" action that sends a tiny prompt and reports first-token success/failure.
+4. Done: add a settings "test LLM" action that sends a tiny prompt and reports first-token success/failure.
 5. Keep `pnpm harness:acceptance` on fake provider only.
 
 Tests:
@@ -123,6 +124,7 @@ Tests:
 - Done: provider malformed SSE/error test.
 - Done in core/main unit tests: runtime interrupt aborts active stream signal.
 - Done: main IPC converts runtime-service rejections into `error` events, and renderer reduces those into visible chat error state.
+- Done in Electron harness: settings "Test LLM" reaches main runtime service and renders a success result for the fake provider path.
 
 Exit criteria:
 

@@ -1,244 +1,55 @@
 <template>
-  <main v-if="isPetWindow" class="pet-shell" aria-label="Greyfield pet">
-    <Live2DStageView
-      :model-path="state.settings.modelPath"
-      :mouth-open="state.stage.mouthOpen"
-      :status="stageStatus"
-      :model-scale="state.settings.modelScale"
-      :model-x="state.settings.modelX"
-      :model-y="state.settings.modelY"
-      :expression="state.stage.expression"
-      :motion="state.stage.motion"
-      @hit-test="handlePetHitTest"
-      @drag-start="handlePetDragStart"
-      @drag-move="handlePetDragMove"
-      @drag-end="handlePetDragEnd"
-      @model-wheel="handlePetWheel"
-      @model-context-menu="handlePetContextMenu"
-      @model-bounds="updateModelBounds"
-      @model-shape="updateModelShape"
-    />
-    <div
-      v-if="state.settings.speechBubbleEnabled && visibleBubbleText"
-      class="speech-bubble"
-      :class="`speech-bubble--${bubblePlacement.side}`"
-      :style="{ left: `${bubblePlacement.x}px`, top: `${bubblePlacement.y}px` }"
-    >
-      <span class="speech-bubble__text">{{ visibleBubbleText }}</span>
-    </div>
-  </main>
-
-  <main v-else-if="isChatWindow" class="chat-shell">
-    <header class="window-titlebar">
-      <div class="chat-heading">
-        <span>Chat</span>
-        <span class="status-pill">{{ state.status }}</span>
-      </div>
-      <button type="button" @click="openSettings">Settings</button>
-    </header>
-    <div v-if="state.errorMessage" class="chat-error" role="alert">
-      {{ state.errorMessage }}
-    </div>
-    <div class="message-list" aria-live="polite">
-      <p v-for="(message, index) in state.messages" :key="index" :class="message.role">
-        {{ message.text }}
-      </p>
-      <p v-if="state.assistantDraft" class="assistant draft">{{ state.assistantDraft }}</p>
-    </div>
-    <form class="composer" @submit.prevent="send">
-      <input v-model="draft" aria-label="Message" autocomplete="off" spellcheck="false" />
-      <button type="submit">Send</button>
-      <button type="button" class="interrupt-button" @click="interrupt">Stop</button>
-    </form>
-  </main>
-
-  <main v-else class="greyfield-shell">
-    <nav class="settings-nav" aria-label="Settings sections">
-      <strong>Greyfield</strong>
-      <button type="button">Model</button>
-      <button type="button">Voice</button>
-      <button type="button">Window</button>
-      <button type="button" @click="openChat">Chat</button>
-    </nav>
-    <section class="stage-surface" :class="{ speaking: state.status === 'speaking' }">
-      <Live2DStageView
-        :model-path="state.settings.modelPath"
-        :mouth-open="state.stage.mouthOpen"
-        :status="stageStatus"
-        :model-scale="state.settings.modelScale"
-        :model-x="state.settings.modelX"
-        :model-y="state.settings.modelY"
-        :expression="state.stage.expression"
-        :motion="state.stage.motion"
-      />
-    </section>
-
-    <aside class="control-surface">
-      <header>
-        <h1>Greyfield Next</h1>
-        <span class="status-pill">{{ state.status }}</span>
-      </header>
-
-      <section class="settings-panel" aria-label="Settings">
-        <label>
-          <span>LLM</span>
-          <input
-            :value="state.settings.providerLLM"
-            autocomplete="off"
-            spellcheck="false"
-            @input="updateSetting('providerLLM', valueFrom($event))"
-          />
-        </label>
-        <label>
-          <span>Base URL</span>
-          <input
-            :value="state.settings.providerBaseUrl"
-            autocomplete="off"
-            spellcheck="false"
-            @input="updateSetting('providerBaseUrl', valueFrom($event))"
-          />
-        </label>
-        <label>
-          <span>API Key</span>
-          <input
-            :value="state.settings.providerApiKey"
-            autocomplete="off"
-            spellcheck="false"
-            :placeholder="state.settings.providerHasApiKey ? 'Saved API key' : ''"
-            type="password"
-            @input="updateSetting('providerApiKey', valueFrom($event))"
-          />
-        </label>
-        <label>
-          <span>Model</span>
-          <input
-            :value="state.settings.providerModel"
-            autocomplete="off"
-            spellcheck="false"
-            @input="updateSetting('providerModel', valueFrom($event))"
-          />
-        </label>
-        <label>
-          <span>Voice</span>
-          <input
-            :value="state.settings.voiceId"
-            autocomplete="off"
-            spellcheck="false"
-            @input="updateSetting('voiceId', valueFrom($event))"
-          />
-        </label>
-        <label>
-          <span>Mic</span>
-          <input
-            :value="state.settings.microphoneId"
-            autocomplete="off"
-            spellcheck="false"
-            @input="updateSetting('microphoneId', valueFrom($event))"
-          />
-        </label>
-        <label>
-          <span>Character</span>
-          <input
-            :value="state.settings.characterFile"
-            autocomplete="off"
-            spellcheck="false"
-            @input="updateSetting('characterFile', valueFrom($event))"
-          />
-        </label>
-        <label>
-          <span>Live2D</span>
-          <input
-            :value="state.settings.modelPath"
-            autocomplete="off"
-            spellcheck="false"
-            @input="updateSetting('modelPath', valueFrom($event))"
-          />
-        </label>
-        <div class="settings-actions">
-          <button type="button" @click="chooseModel">Choose model</button>
-          <button type="button" @click="resetTransform">Reset transform</button>
-        </div>
-        <label>
-          <span>Scale</span>
-          <input
-            :value="state.settings.modelScale"
-            aria-label="Scale"
-            type="number"
-            min="0.2"
-            max="3"
-            step="0.05"
-            @input="updateNumericSetting('modelScale', valueFrom($event))"
-          />
-        </label>
-        <label>
-          <span>X</span>
-          <input :value="state.settings.modelX" aria-label="Model X" type="number" step="1" @input="updateNumericSetting('modelX', valueFrom($event))" />
-        </label>
-        <label>
-          <span>Y</span>
-          <input :value="state.settings.modelY" aria-label="Model Y" type="number" step="1" @input="updateNumericSetting('modelY', valueFrom($event))" />
-        </label>
-        <label>
-          <span>Bubble</span>
-          <input
-            :checked="state.settings.speechBubbleEnabled"
-            aria-label="Speech Bubble"
-            type="checkbox"
-            @change="updateBooleanSetting('speechBubbleEnabled', checkedFrom($event))"
-          />
-        </label>
-      </section>
-
-      <section v-if="modelInfo" class="model-inspector" aria-label="Live2D model info">
-        <header>
-          <h2>Live2D</h2>
-          <span>{{ modelInfo.expressions.length }} exp / {{ motionCount }} mot</span>
-        </header>
-        <div v-if="modelInfo.expressions.length > 0" class="chip-group" aria-label="Expressions">
-          <button
-            v-for="expression in modelInfo.expressions"
-            :key="expression"
-            type="button"
-            @click="previewExpression(expression)"
-          >
-            {{ expression }}
-          </button>
-        </div>
-        <div v-if="Object.keys(modelInfo.motions).length > 0" class="chip-group" aria-label="Motions">
-          <button
-            v-for="(count, group) in modelInfo.motions"
-            :key="group"
-            type="button"
-            @click="previewMotion(group)"
-          >
-            {{ group }} {{ count }}
-          </button>
-        </div>
-      </section>
-
-      <div class="toggles">
-        <label>
-          <input v-model="modelPassThrough" type="checkbox" />
-          Model Pass Through
-        </label>
-        <label>
-          <input v-model="locked" type="checkbox" />
-          Lock
-        </label>
-      </div>
-
-      <div class="audio-strip">
-        <span v-for="(item, index) in state.audioQueue" :key="index">{{ item }}</span>
-      </div>
-    </aside>
-  </main>
+  <PetWindow
+    v-if="isPetWindow"
+    :state="state"
+    :stage-status="stageStatus"
+    :visible-bubble-text="visibleBubbleText"
+    :bubble-placement="bubblePlacement"
+    @hit-test="handlePetHitTest"
+    @drag-start="handlePetDragStart"
+    @drag-move="handlePetDragMove"
+    @drag-end="handlePetDragEnd"
+    @model-wheel="handlePetWheel"
+    @model-context-menu="handlePetContextMenu"
+    @model-bounds="updateModelBounds"
+    @model-shape="updateModelShape"
+  />
+  <ChatWindow
+    v-else-if="isChatWindow"
+    :state="state"
+    v-model:draft="draft"
+    @send="send"
+    @interrupt="interrupt"
+    @open-settings="openSettings"
+  />
+  <SettingsWindow
+    v-else
+    :state="state"
+    :stage-status="stageStatus"
+    :model-info="modelInfo"
+    :model-pass-through="modelPassThrough"
+    :locked="locked"
+    @update-setting="updateSetting"
+    @update-numeric-setting="updateNumericSetting"
+    @update-boolean-setting="updateBooleanSetting"
+    @update:model-pass-through="setModelPassThrough"
+    @update:locked="setLocked"
+    @choose-model="chooseModel"
+    @reset-transform="resetTransform"
+    @test-llm="testLLM"
+    @preview-expression="previewExpression"
+    @preview-motion="previewMotion"
+    @open-chat="openChat"
+  />
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
+import ChatWindow from "./ChatWindow.vue";
 import { createDesktopRuntimeBridge } from "./desktop-runtime-bridge";
 import type { DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
-import Live2DStageView from "./Live2DStageView.vue";
+import PetWindow from "./PetWindow.vue";
+import SettingsWindow from "./SettingsWindow.vue";
 import { beginPetDrag, continuePetDrag, endPetDrag, reducePetWheelScale, resolvePetHitTest, type PetDragState } from "./pet-interaction";
 import { createPetWindowShape } from "./pet-window-shape";
 import { placeSpeechBubble, type Rect } from "./speech-bubble-placement";
@@ -290,24 +101,10 @@ const bubbleShapeRect = computed<Rect | null>(() => {
   }
   return { x: bubblePlacement.value.x, y: bubblePlacement.value.y, ...speechBubbleSize };
 });
-const motionCount = computed(() =>
-  Object.values(modelInfo.value?.motions ?? {}).reduce((total, count) => total + count, 0)
-);
-
 detachHostListeners.push(bridge.onStateChange((nextState) => syncState(nextState)));
 
-const modelPassThrough = computed({
-  get: () => state.window.modelPassThrough,
-  set: (value: boolean) => {
-    syncState(bridge.setWindowState({ modelPassThrough: value }));
-    window.greyfield?.send("settings:update", { window: { modelPassThrough: value } });
-  }
-});
-
-const locked = computed({
-  get: () => state.window.locked,
-  set: (value: boolean) => syncState(bridge.setWindowState({ locked: value }))
-});
+const modelPassThrough = computed(() => state.window.modelPassThrough);
+const locked = computed(() => state.window.locked);
 
 if (typeof window !== "undefined") {
   const detachWindowState = window.greyfield?.on("window:state", (windowState) => {
@@ -376,12 +173,25 @@ function updateBooleanSetting(key: "speechBubbleEnabled", value: boolean): void 
   syncState(bridge.updateSettings({ [key]: value }));
 }
 
+function setModelPassThrough(value: boolean): void {
+  syncState(bridge.setWindowState({ modelPassThrough: value }));
+  window.greyfield?.send("settings:update", { window: { modelPassThrough: value } });
+}
+
+function setLocked(value: boolean): void {
+  syncState(bridge.setWindowState({ locked: value }));
+}
+
 function chooseModel(): void {
   window.greyfield?.send("stage:choose-model", {});
 }
 
 function resetTransform(): void {
   syncState(bridge.updateSettings({ modelScale: 1, modelX: 0, modelY: 0 }));
+}
+
+function testLLM(): void {
+  syncState(bridge.testLLMProvider());
 }
 
 function previewExpression(expression: string): void {
@@ -488,14 +298,6 @@ function openSettings(): void {
 
 function openChat(): void {
   window.greyfield?.send("window:open-chat", {});
-}
-
-function valueFrom(event: Event): string {
-  return event.target instanceof HTMLInputElement ? event.target.value : "";
-}
-
-function checkedFrom(event: Event): boolean {
-  return event.target instanceof HTMLInputElement ? event.target.checked : false;
 }
 
 watch([bubbleShapeRect, () => state.window.modelPassThrough], () => syncPetWindowShape());

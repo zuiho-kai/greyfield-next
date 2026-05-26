@@ -110,6 +110,10 @@ function registerIpc(): void {
     handleRuntimeInput(payload);
   });
 
+  ipcMain.on("provider:test-llm", () => {
+    void testLLMProvider();
+  });
+
   ipcMain.on("window:set-click-through", (_event, payload: { enabled: boolean }) => {
     setModelPassThrough(payload.enabled);
   });
@@ -173,6 +177,13 @@ function registerIpc(): void {
 
 function handleRuntimeInput(payload: Parameters<NonNullable<typeof runtimeService>["handle"]>[0]): void {
   void runtimeIpcController?.handleRuntimeInput(payload);
+}
+
+async function testLLMProvider(): Promise<void> {
+  const result = await runtimeService?.testLLM();
+  if (result) {
+    broadcastProviderTestResult(result);
+  }
 }
 
 async function setModelPassThrough(enabled: boolean): Promise<void> {
@@ -259,6 +270,12 @@ function broadcastLog(level: "debug" | "info" | "warn" | "error", message: strin
 function broadcastRuntimeEvent(event: Parameters<Parameters<RuntimeService["handle"]>[1]>[0]): void {
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send("runtime:event", event);
+  }
+}
+
+function broadcastProviderTestResult(result: Awaited<ReturnType<RuntimeService["testLLM"]>>): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send("provider:test-llm-result", result);
   }
 }
 
