@@ -32,7 +32,7 @@ Project state:
 
 - `README.md`: V1 goal, command list, workspace map.
 - `docs/progress.md`: current status and QA bar.
-- `docs/plans/2026-05-25-v1-next-checkpoint-plan.md`: current checkpoint order.
+- `docs/plans/v1-product-plan.md`: Chinese product-facing V1 plan, current capability, and remaining work.
 - `packages/dev-harness/v1-features.json`: feature status, acceptance, package owner, QA script.
 
 Product and QA guardrails:

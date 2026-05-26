@@ -19,7 +19,7 @@
 | Repo/PR flow | Private repo active; PR #1 and stacked PR #2 merged | Private GitHub repo `zuiho-kai/greyfield-next`; `feature/settings-test-llm` and `feature/desktop-persistent-context` merged to `main` on 2026-05-26 | `.github/workflows/ci.yml` is still not in the repo because current GitHub token lacks `workflow` scope. |
 | Dev/CI loop speed | Improved, policy documented | `dev:live2d:fast` reaches Electron PID in about 2.2s; `harness:pet:quick` about 6-8s; `harness:electron:quick` reuses built artifacts at about 7-8s locally; `docs/development-speed-policy.md` defines fast-loop vs checkpoint verification | Hosted CI Electron GUI may still need tuning; full harness must stay checkpoint-only. |
 
-Current next-step plan: [2026-05-25 V1 Next Checkpoint Plan](plans/2026-05-25-v1-next-checkpoint-plan.md).
+Current product plan: [Greyfield Next V1 产品计划](plans/v1-product-plan.md).
 
 ## 2026-05-23
 
@@ -80,7 +80,7 @@ Current next-step plan: [2026-05-25 V1 Next Checkpoint Plan](plans/2026-05-25-v1
 - Added `pnpm dev:live2d:fast`, `pnpm dev:live2d:rebuild`, and `pnpm dev:live2d:stop`. The dev launcher writes `.cache/greyfield-live2d-dev-pids.json` so restart no longer scans all Windows processes.
 - Added `pnpm harness:pet:quick` for high-frequency pet interaction checks. Full `pnpm harness:electron` remains the checkpoint harness for settings/chat/runtime shell behavior.
 - Reworked Electron harness input paths where Playwright conflicts with `setIgnoreMouseEvents`, using smoke hit-test and direct wheel dispatch for deterministic validation while keeping real drag coverage.
-- Added `docs/plans/2026-05-25-v1-next-checkpoint-plan.md` to reset the next work order: preserve pet stability, finish bubble/chat UX, move runtime/LLM into Electron main, then make OpenAI-compatible provider genuinely usable with abort/error handling.
+- Added a checkpoint plan to reset the next work order: preserve pet stability, finish bubble/chat UX, move runtime/LLM into Electron main, then make OpenAI-compatible provider genuinely usable with abort/error handling. This has since been replaced by the Chinese product plan in `docs/plans/v1-product-plan.md`.
 - Added `apps/desktop/src/main/runtime-service.ts` and moved the Electron desktop chat path onto main-process runtime IPC. Renderer now sends `runtime:input` when a preload host exists and updates UI from broadcast `runtime:event`.
 - Added `AbortSignal` support to `OpenAICompatibleLLMProvider.stream`, core runtime LLM streaming, and main `RuntimeService` interrupt routing so Stop can abort the active provider request path instead of only changing UI state.
 - Added layered GitHub Actions CI in `.github/workflows/ci.yml`: fast type/unit/acceptance checks, a desktop-pet quick harness job, and a manual/main-branch checkpoint harness. Added `test:unit`, `build:desktop`, and quick harness scripts so CI does not rebuild Electron more than necessary.
