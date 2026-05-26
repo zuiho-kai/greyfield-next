@@ -139,6 +139,9 @@ try {
 
   const beforeDragBounds = await getPetBounds();
   const dragScale = afterWheelConfig.live2d.scale;
+  await petWindow.evaluate(() =>
+    window.greyfield?.send("window:set-hit-test", { passthrough: false, reason: "model-hit" })
+  );
   await petWindow.mouse.move(modelPoint.x, modelPoint.y);
   await petWindow.mouse.down({ button: "left" });
   await dispatchStageWheel(petWindow, modelPoint, -240);
