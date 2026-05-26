@@ -155,6 +155,9 @@ async function interrupt(): Promise<void> {
 }
 
 function syncState(nextState: DesktopRendererState): void {
+  if (nextState.inputDraft !== state.inputDraft) {
+    draft.value = nextState.inputDraft;
+  }
   Object.assign(state, nextState);
 }
 

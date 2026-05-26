@@ -41,6 +41,29 @@ export async function readConfig(path: string): Promise<typeof defaultGreyfieldC
   return JSON.parse(await readFile(path, "utf8")) as typeof defaultGreyfieldConfig;
 }
 
+export function chooseStagePointFromAlpha(input: {
+  width: number;
+  height: number;
+  wantHit: boolean;
+  alphaAt: (x: number, y: number) => number;
+  toPoint: (x: number, y: number) => { x: number; y: number };
+}): { x: number; y: number } | null {
+  let best: { x: number; y: number; alpha: number } | null = null;
+  for (let y = 0; y < input.height; y += 4) {
+    for (let x = 0; x < input.width; x += 4) {
+      const alpha = input.alphaAt(x, y);
+      const matches = input.wantHit ? alpha >= 16 : alpha < 16;
+      if (!matches) {
+        continue;
+      }
+      if (!best || (input.wantHit ? alpha > best.alpha : alpha < best.alpha)) {
+        best = { x, y, alpha };
+      }
+    }
+  }
+  return best ? input.toPoint(best.x, best.y) : null;
+}
+
 export async function findStagePoint(page: Page, hit: boolean): Promise<{ x: number; y: number }> {
   return page.evaluate((wantHit) => {
     const smoke = (window as typeof window & {
@@ -59,21 +82,26 @@ export async function findStagePoint(page: Page, hit: boolean): Promise<{ x: num
       }
       const rect = canvas.getBoundingClientRect();
       const getAlpha = createAlphaReader(canvas);
+      let best: { x: number; y: number; alpha: number } | null = null;
       for (let y = 0; y < canvas.height; y += 4) {
         for (let x = 0; x < canvas.width; x += 4) {
           const alpha = getAlpha(x, y);
           if (alpha > strongest.alpha) {
             strongest = { x, y, alpha, canvas: canvas.className };
           }
-          if ((alpha >= 16) === wantHit) {
-            const point = {
-              x: rect.left + (x / canvas.width) * rect.width,
-              y: rect.top + (y / canvas.height) * rect.height
-            };
-            if (!smoke || smoke.sampleModelHit(point.x, point.y) === wantHit) {
-              return point;
-            }
+          const matches = wantHit ? alpha >= 16 : alpha < 16;
+          if (matches && (!best || (wantHit ? alpha > best.alpha : alpha < best.alpha))) {
+            best = { x, y, alpha };
           }
+        }
+      }
+      if (best) {
+        const point = {
+          x: rect.left + (best.x / canvas.width) * rect.width,
+          y: rect.top + (best.y / canvas.height) * rect.height
+        };
+        if (!smoke || smoke.sampleModelHit(point.x, point.y) === wantHit) {
+          return point;
         }
       }
     }

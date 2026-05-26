@@ -21,10 +21,12 @@ export function reduceRuntimeEvent(
   }
 
   if (event.type === "error") {
+    const lastUserMessage = [...state.messages].reverse().find((message) => message.role === "user")?.text ?? state.inputDraft;
     return {
       ...state,
       status: "error",
       errorMessage: event.message,
+      inputDraft: lastUserMessage,
       assistantDraft: "",
       audioQueue: [],
       stage: {

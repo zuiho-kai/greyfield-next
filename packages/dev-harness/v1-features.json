@@ -136,7 +136,7 @@
         "Speech bubble is enabled by default and can be disabled from settings.",
         "Bubble anchors to the model mask region, not the whole window rectangle.",
         "Default placement is upper-right of the model.",
-        "Bubble flips to the left when the model is near the right edge and clamps vertically inside the viewport.",
+        "Bubble flips to the left when the model is near the right edge and clamps horizontally and vertically inside the pet window and available screen viewport.",
         "Bubble text normalizes whitespace and caps long replies so the pet bubble remains a short surface while full history stays in chat.",
         "Bubble hit/shape rect stays stable while text is capped."
       ],
@@ -156,6 +156,7 @@
         "Hosted Electron renderer never constructs real LLM providers; it sends runtime input to Electron main.",
         "A newer text input interrupts the active main-process runtime before starting a new provider stream.",
         "OpenAI-compatible provider timeouts and malformed stream data become readable runtime error state instead of crashing the renderer.",
+        "Runtime errors restore the failed user text into the chat draft so the user can retry without retyping.",
         "Settings can send a small LLM test request through Electron main and report first-token success or a readable failure."
       ],
       "qa": {

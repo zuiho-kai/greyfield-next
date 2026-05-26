@@ -7,12 +7,12 @@ describe("placeSpeechBubble", () => {
   it("places the bubble at the model upper right when screen space allows", () => {
     expect(
       placeSpeechBubble({
-        modelBounds: { x: 100, y: 180, width: 160, height: 320 },
+        modelBounds: { x: 12, y: 180, width: 120, height: 320 },
         windowBounds: { x: 200, y: 120, width: 420, height: 620 },
         screenBounds: { x: 0, y: 0, width: 1440, height: 900 },
         bubbleSize: bubble
       })
-    ).toMatchObject({ side: "right", x: 276, y: 164 });
+    ).toMatchObject({ side: "right", x: 148, y: 164 });
   });
 
   it("flips to the upper left when the model is near the right desktop edge", () => {
@@ -23,7 +23,7 @@ describe("placeSpeechBubble", () => {
         screenBounds: { x: 0, y: 0, width: 1440, height: 900 },
         bubbleSize: bubble
       })
-    ).toMatchObject({ side: "left", x: 0, y: 164 });
+    ).toMatchObject({ side: "left", x: 8, y: 164 });
   });
 
   it("clamps vertically inside the screen", () => {
@@ -35,5 +35,28 @@ describe("placeSpeechBubble", () => {
         bubbleSize: bubble
       }).y
     ).toBe(8);
+  });
+
+  it("keeps the bubble fully inside the pet window viewport", () => {
+    const placement = placeSpeechBubble({
+      modelBounds: { x: 120, y: 180, width: 180, height: 320 },
+      windowBounds: { x: 200, y: 120, width: 420, height: 620 },
+      screenBounds: { x: 0, y: 0, width: 1440, height: 900 },
+      bubbleSize: { width: 220, height: 124 }
+    });
+
+    expect(placement.x).toBeGreaterThanOrEqual(8);
+    expect(placement.x + 220).toBeLessThanOrEqual(412);
+  });
+
+  it("clamps vertically inside the pet window viewport even when the screen is taller", () => {
+    const placement = placeSpeechBubble({
+      modelBounds: { x: 90, y: 590, width: 160, height: 80 },
+      windowBounds: { x: 200, y: 120, width: 420, height: 620 },
+      screenBounds: { x: 0, y: 0, width: 1440, height: 1200 },
+      bubbleSize: { width: 220, height: 124 }
+    });
+
+    expect(placement.y + 124).toBeLessThanOrEqual(612);
   });
 });

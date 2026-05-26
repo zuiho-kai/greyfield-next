@@ -262,6 +262,27 @@ describe("createDesktopRuntimeBridge", () => {
     expect(sent).toContainEqual(["runtime:input", { type: "text.input", text: "重试一下" }]);
   });
 
+  it("restores the failed user text as draft when a runtime error happens", async () => {
+    let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: () => undefined,
+      on: (channel, handler) => {
+        if (channel === "runtime:event") {
+          runtimeEvent = handler as typeof runtimeEvent;
+        }
+        return () => undefined;
+      }
+    });
+
+    await bridge.sendText("帮我继续");
+    runtimeEvent?.({ type: "error", message: "provider timed out" });
+
+    expect(bridge.getState()).toMatchObject({
+      errorMessage: "provider timed out",
+      inputDraft: "帮我继续"
+    });
+  });
+
   it("keeps renderer preview fake-only even when OpenAI-compatible settings are present", async () => {
     vi.stubGlobal(
       "fetch",
