@@ -29,7 +29,7 @@ What already works:
 - `docs/product-shape.md` is a hard product constraint for the desktop-pet surface.
 - `docs/qa-retro.md` captures the real QA misses: Live2D rendering alone is not pet acceptance, native shape can visually damage the model, and drag/input/window geometry need separate checks.
 - `docs/technical-reference-projects.md` and `docs/reference-solutions.md` already say "copy constraints, not whole projects."
-- `docs/plans/2026-05-25-v1-next-checkpoint-plan.md` gives a current order of work and maps each phase to exit criteria and commands.
+- `docs/plans/v1-product-plan.md` gives the current Chinese product-facing V1 plan, capability snapshot, remaining work, and completion criteria.
 - The command ladder is real, not ceremonial: unit tests, typecheck, acceptance harness, Live2D harness, pet quick harness, and Electron harness each guard a different risk.
 
 What is weaker:
@@ -199,7 +199,7 @@ For small fixes:
 
 For checkpoint-level work:
 
-1. Start from `docs/plans/2026-05-25-v1-next-checkpoint-plan.md`.
+1. Start from `docs/plans/v1-product-plan.md`.
 2. Freeze the current phase and non-goals.
 3. Add or update acceptance in `packages/dev-harness/v1-features.json`.
 4. Implement behind existing package boundaries.
