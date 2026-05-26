@@ -14,18 +14,18 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 | Live2D 展示 | 已能加载真实 `.model3.json`，有非 fallback 渲染、表情、动作、触摸反应。 | 可以作为 V1 的模型展示底座。 |
 | 模型交互 | 支持模型像素命中、拖动窗口、滚轮缩放、穿透模式；拖动不会改变模型缩放或窗口尺寸。 | 桌宠基础交互可用。 |
 | 文字输入 | Chat 窗口可以输入文本，消息经 renderer -> preload IPC -> Electron main -> runtime；runtime 报错后会把上一条用户输入恢复到草稿，方便重试。 | 主链路已打通，基础失败恢复已可用。 |
-| 文字输出 | 支持流式输出、最终回复、错误提示；默认 fake provider 稳定回复，OpenAI-compatible provider 已在 main process 接入；已用用户提供的 OpenAI-compatible endpoint 做过一次真实 Test LLM smoke。 | 可做文字聊天演示；真实模型还需要完整聊天链路 QA 和更完整的 provider 重试体验。 |
+| 文字输出 | 支持流式输出、最终回复、错误提示；默认 fake provider 稳定回复，OpenAI-compatible provider 已在 main process 接入；已用用户提供的 OpenAI-compatible endpoint 跑通过真实 Electron 聊天 harness。 | 真实文字链路已可演示；还需要更完整的 provider 错误恢复和视觉/设置 polish。 |
 | 最近上下文 | 已接入角色 YAML、`data/memory.md`、JSONL session；重启后能把上一轮 user/assistant turn 带入下一次 prompt。 | V1 的“最近上下文连续性”已成立。 |
 | 设置页 | 已有 provider/model/key、角色文件、模型路径、语音/麦克风等设置入口；Test LLM 走 main process。 | 功能骨架可用，但产品手感还不够。 |
 | 聊天窗口 | 已从宠物窗口拆出，能显示消息、状态、错误，Stop 按钮能打断当前回复。 | 可用，但还需要视觉和交互 polish。 |
-| 气泡 | 宠物旁有短回复气泡，支持文本压缩、长度上限，并会在窗口/屏幕边缘内水平和垂直夹紧。 | 基础可用，边缘溢出风险已降低；还需要真实长 streaming 回复的视觉验收。 |
+| 气泡 | 宠物旁有短回复气泡，支持文本压缩、长度上限；位置固定在宠物窗口上方稳定槽位，不跟随模型移动，只在窗口/屏幕边缘内水平和垂直夹紧。 | 基础可用，躁动感已降低；还需要真实长 streaming 回复的视觉验收。 |
 | 语音输出 | runtime 有句子级 TTS 队列和假 TTS，嘴型可被假音频驱动。 | 还不是产品可用的真实语音。 |
 | 语音输入 | 只有 VAD/音频边界基础。 | V1 后段任务，不能先做。 |
 | CI | 本地验证链路可跑；GitHub workflow 文件因 token 缺 `workflow` scope 还没入仓。 | 需要优先补，不然后续 PR 缺自动保护。 |
 
 ## 现在不能宣称什么
 
-- 不能宣称“真实 LLM 已完成”：OpenAI-compatible provider 已接入，真实 Test LLM smoke 已通过一次，但还缺真实聊天全链路 QA、Stop/abort 验证、session 写入验证，以及 401/403、超时、base URL 错误等完整 provider 恢复路径。
+- 不能宣称“真实 LLM 已完成”：OpenAI-compatible provider 已接入，真实 Electron 聊天 harness 已通过一次，但还缺 401/403、超时、base URL 错误等完整 provider 恢复路径，以及更清晰的用户可见 retry UX。
 - 不能宣称“语音伴侣已完成”：真实 TTS、播放队列、interrupt 停止播放、ASR 都还没达到产品验收。
 - 不能宣称“设置页完成”：现在是功能骨架，模型管理、provider 状态、错误恢复和视觉体验还需要打磨。
 - 不能宣称“气泡完成”：短文本路径和基础边缘 clamp 有了，但还缺真实长 streaming 回复、不同模型位置、不同屏幕位置下的视觉验收。
@@ -51,6 +51,7 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 1. 气泡位置会被夹在宠物窗口和屏幕可用区域内，不再只按右侧理想位置摆放。
 2. runtime 报错后，Chat 会把刚失败的用户文本恢复成草稿，用户可以直接修改或重发。
 3. pet quick harness 的模型命中点改为选择稳定的内部 alpha 点，避免取到 fallback 动画边缘导致误判。
+4. 气泡改为窗口内稳定槽位，不跟随模型动画、缩放或位移细节，避免视觉上一直晃。
 
 还需要继续补：
 
@@ -82,22 +83,26 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
    - 带 `/v1` 的 base URL 测试成功；
    - `RuntimeService.testLLM()` 路径成功收到首 token；
    - API key 不写入 Markdown、不写入仓库配置。
+2. 新增 env 驱动的真实 Electron harness：
+   - `GREYFIELD_REAL_LLM_BASE_URL` / `GREYFIELD_REAL_LLM_API_KEY` / `GREYFIELD_REAL_LLM_MODEL` 注入 provider；
+   - Chat 首轮真实回复可显示；
+   - 成功 user/assistant turn 会写入 JSONL session；
+   - 第二轮真实回复开始后，Stop 能把 UI 切到 interrupted；
+   - harness 输出会 redacts API key。
 
 还需要继续补：
 
-1. 做 OpenAI-compatible 真实网络手动 QA。
-2. 补 provider retry UX：
+1. 补 provider retry UX：
    - 超时；
    - 401/403；
    - base URL 错误；
    - malformed stream；
    - 无 key；
    - chat 正在回复时 Test LLM 被拒绝。
-3. 确认真实 provider 下：
-   - 首 token 能显示到 Chat/气泡；
-   - Stop 能 abort；
+2. 确认真实 provider 下：
+   - 首 token 能显示到气泡；
+   - Stop 确认 abort 到 provider 层，而不只是 UI interrupted；
    - 错误不会污染 session；
-   - 成功回复会写入 JSONL session；
    - 重启后能带入最近上下文。
 
 验收标准：
@@ -137,7 +142,7 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 
 如果现在有 GitHub token 权限，先做 P0 CI。
 
-如果没有权限，直接做 P2 的真实文字聊天全链路 QA：用已验证的 `/v1` base URL 和 `mimo-v2.5`，确认 Chat 首 token、Stop、错误恢复、JSONL session 写入和重启 recent context。
+如果没有权限，继续做 P2 provider retry UX：用错误 key、错误 base URL、慢响应/超时和 malformed stream 把失败路径做成用户能看懂、能重试的状态。
 
 P1 的气泡视觉 QA 和设置页 polish 继续保留，但不阻塞真实文字链路验证。
 
