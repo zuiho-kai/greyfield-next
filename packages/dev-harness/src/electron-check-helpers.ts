@@ -188,23 +188,50 @@ export async function dispatchStageMove(page: Page, point: { x: number; y: numbe
   }, point);
 }
 
-export async function dispatchStageWheel(page: Page, point: { x: number; y: number }, deltaY: number): Promise<void> {
-  await page.evaluate(({ x, y, wheelDeltaY }) => {
-    const target = document.querySelector(".live2d-stage-view") ?? document.elementFromPoint(x, y);
+interface StageWheelDispatchProbe {
+  dispatched: boolean;
+  defaultPrevented: boolean;
+  elementClass: string | null;
+  smokeHit: boolean | null;
+  stageHitBefore: string | null;
+  targetClass: string | null;
+}
+
+export async function dispatchStageWheel(
+  page: Page,
+  point: { x: number; y: number },
+  deltaY: number
+): Promise<StageWheelDispatchProbe> {
+  await page.mouse.move(point.x, point.y);
+  await page.mouse.wheel(0, deltaY);
+  return page.evaluate(({ x, y, wheelDeltaY }) => {
+    const stage = document.querySelector<HTMLElement>(".live2d-stage-view");
+    const element = document.elementFromPoint(x, y);
+    const target = stage ?? element;
     if (!target) {
       throw new Error(`No element at ${x},${y}`);
     }
-    target.dispatchEvent(
-      new WheelEvent("wheel", {
-        bubbles: true,
-        cancelable: true,
-        clientX: x,
-        clientY: y,
-        screenX: window.screenX + x,
-        screenY: window.screenY + y,
-        deltaY: wheelDeltaY
-      })
-    );
+    const event = new WheelEvent("wheel", {
+      bubbles: true,
+      cancelable: true,
+      clientX: x,
+      clientY: y,
+      screenX: window.screenX + x,
+      screenY: window.screenY + y,
+      deltaY: wheelDeltaY
+    });
+    const dispatched = target.dispatchEvent(event);
+    return {
+      dispatched,
+      defaultPrevented: event.defaultPrevented,
+      elementClass: element instanceof HTMLElement ? String(element.className) : null,
+      smokeHit:
+        (window as typeof window & {
+          __greyfieldStageSmoke?: { sampleModelHit(clientX: number, clientY: number): boolean };
+        }).__greyfieldStageSmoke?.sampleModelHit(x, y) ?? null,
+      stageHitBefore: stage?.dataset.modelHit ?? null,
+      targetClass: target instanceof HTMLElement ? String(target.className) : null
+    };
   }, { ...point, wheelDeltaY: deltaY });
 }
 
@@ -216,15 +243,24 @@ export async function dispatchStageWheelUntilScaleChange(
   previousScale: number
 ): Promise<typeof defaultGreyfieldConfig> {
   const started = Date.now();
-  while (Date.now() - started < 5_000) {
-    await dispatchStageWheel(page, point, deltaY);
+  let attempts = 0;
+  let lastConfig: typeof defaultGreyfieldConfig | null = null;
+  let lastProbe: StageWheelDispatchProbe | null = null;
+  while (Date.now() - started < 10_000) {
+    attempts += 1;
+    lastProbe = await dispatchStageWheel(page, point, deltaY);
+    await new Promise((resolve) => setTimeout(resolve, 150));
     const config = await readConfig(path).catch(() => null);
+    lastConfig = config;
     if (config && config.live2d.scale !== previousScale) {
       return config;
     }
-    await new Promise((resolve) => setTimeout(resolve, 120));
   }
-  throw new Error(`Timed out waiting for model scale to change from ${previousScale}`);
+  throw new Error(
+    `Timed out waiting for model scale to change from ${previousScale}; attempts=${attempts}; lastConfig=${JSON.stringify(
+      lastConfig?.live2d ?? null
+    )}; lastProbe=${JSON.stringify(lastProbe)}`
+  );
 }
 
 export async function waitForWindowPosition(

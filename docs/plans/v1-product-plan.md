@@ -21,7 +21,7 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 | 气泡 | 宠物旁有短回复气泡，支持文本压缩、长度上限；位置固定在宠物窗口上方稳定槽位，不跟随模型移动，只在窗口/屏幕边缘内水平和垂直夹紧；长 streaming 回复会进气泡首 token、保持短文本，完整内容留在 Chat。 | 基础可用，躁动感已降低；还需要屏幕边缘截图和开关/点击穿透视觉复核。 |
 | 语音输出 | runtime 有句子级 TTS 队列和假 TTS，嘴型可被假音频驱动。 | 还不是产品可用的真实语音。 |
 | 语音输入 | 只有 VAD/音频边界基础。 | V1 后段任务，不能先做。 |
-| CI | 本地验证链路可跑；GitHub workflow 文件因 token 缺 `workflow` scope 还没入仓。 | 需要优先补，不然后续 PR 缺自动保护。 |
+| CI | GitHub Actions workflow 已入仓；PR 跑 Fast checks 和 Desktop pet quick harness；main / manual dispatch 额外跑 Full checkpoint harness。 | 自动保护已恢复，后续风险点是继续控制 Electron harness 的耗时和稳定性。 |
 
 ## 现在不能宣称什么
 
@@ -35,13 +35,17 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 
 ### P0：先恢复工程保护
 
-1. 解决 GitHub token `workflow` scope。
-2. 把 `.github/workflows/ci.yml` 正式入仓。
-3. CI 至少覆盖 typecheck、unit test、acceptance、pet quick harness。
+已完成：
+
+1. `.github/workflows/ci.yml` 已正式入仓。
+2. CI 覆盖 typecheck、unit test、acceptance、pet quick harness。
+3. main / manual dispatch 会额外跑 Full Electron checkpoint harness。
+4. CI Electron jobs 会显式执行 `install-electron` 并检查 `electron/path.txt`，避免 fresh runner 缺 Electron binary。
 
 验收标准：
 
 - 新 PR 自动跑基础检查。
+- main 分支自动跑 checkpoint。
 - 不再只依赖本地口头验证。
 
 ### P1：补齐当前最明显的产品缺口
@@ -154,7 +158,7 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 
 ## 推荐下一步
 
-如果现在有 GitHub token 权限，先做 P0 CI。
+P0 CI 已恢复，后续 V1 缺口继续按 P1 / P2 / P3 顺序推进。
 
 如果没有权限，继续做 P2 provider retry UX：用错误 key、错误 base URL、慢响应/超时和 malformed stream 把失败路径做成用户能看懂、能重试的状态。
 
