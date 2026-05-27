@@ -245,10 +245,20 @@ export class DesktopRuntimeBridge {
 }
 
 function formatProviderTestMessage(message: string, ok: boolean): string {
-  if (ok || !isProviderConfigurationFailure(message)) {
+  if (ok) {
+    return message;
+  }
+  if (isActiveChatTestRejection(message)) {
+    return `${message} Stop the current reply or wait for it to finish, then retry.`;
+  }
+  if (!isProviderConfigurationFailure(message)) {
     return message;
   }
   return `${message}. Check API key, Base URL, and Model, then retry.`;
+}
+
+function isActiveChatTestRejection(message: string): boolean {
+  return message.includes("LLM test is unavailable while a chat response is running.");
 }
 
 function isProviderConfigurationFailure(message: string): boolean {

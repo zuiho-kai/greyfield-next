@@ -16,7 +16,7 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 | 文字输入 | Chat 窗口可以输入文本，消息经 renderer -> preload IPC -> Electron main -> runtime；runtime 报错后会把上一条用户输入恢复到草稿，方便重试。 | 主链路已打通，基础失败恢复已可用。 |
 | 文字输出 | 支持流式输出、最终回复、错误提示；默认 fake provider 稳定回复，OpenAI-compatible provider 已在 main process 接入；已用用户提供的 OpenAI-compatible endpoint 跑通过真实 Electron 聊天 harness；provider 失败会显示错误、恢复草稿且不写半截 session；Stop 已证明会关闭 active provider HTTP 请求。 | 真实文字链路已可演示；还需要补设置页视觉 polish。 |
 | 最近上下文 | 已接入角色 YAML、`data/memory.md`、JSONL session；重启后能把上一轮 user/assistant turn 带入下一次 prompt。 | V1 的“最近上下文连续性”已成立。 |
-| 设置页 | 已有 provider/model/key、角色文件、模型路径、语音/麦克风等设置入口；Test LLM 走 main process。 | 功能骨架可用，但产品手感还不够。 |
+| 设置页 | 已有 provider/model/key、角色文件、模型路径、语音/麦克风等设置入口；Test LLM 走 main process；聊天回复中 Test LLM 会显示先 Stop 或等待的可操作提示。 | 功能骨架可用，但整体视觉和模型管理手感还不够。 |
 | 聊天窗口 | 已从宠物窗口拆出，能显示消息、状态、错误，Stop 按钮能打断当前回复。 | 可用，但还需要视觉和交互 polish。 |
 | 气泡 | 宠物旁有短回复气泡，支持文本压缩、长度上限；位置固定在宠物窗口上方稳定槽位，不跟随模型移动，只在窗口/屏幕边缘内水平和垂直夹紧；长 streaming 回复会进气泡首 token、保持短文本，完整内容留在 Chat。 | 基础可用，躁动感已降低；还需要屏幕边缘截图和开关/点击穿透视觉复核。 |
 | 语音输出 | runtime 有句子级 TTS 队列和假 TTS，嘴型可被假音频驱动。 | 还不是产品可用的真实语音。 |
@@ -107,12 +107,13 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
    - 真实 streaming 首 token 能显示到宠物气泡；
    - 长回复在宠物气泡内保持短文本；
    - 完整长回复仍保留在 Chat 历史。
+7. 新增 settings active-chat Electron harness：
+   - chat 正在 streaming 时点击 Test LLM 会显示先 Stop 或等待当前回复结束；
+   - 拒绝期间不会向 provider 发送第二个测试请求。
 
 还需要继续补：
 
-1. 补 provider retry UX：
-   - chat 正在回复时 Test LLM 被拒绝的设置页视觉提示。
-2. 确认真实 provider 下：
+1. 确认真实 provider 下：
    - 重启后能带入最近上下文。
 
 验收标准：
