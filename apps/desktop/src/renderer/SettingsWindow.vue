@@ -65,6 +65,10 @@
             @input="$emit('update-setting', 'providerModel', valueFrom($event))"
           />
         </label>
+        <div class="provider-status" :class="`provider-status--${providerStatus.tone}`" role="status">
+          <strong>{{ providerStatus.label }}</strong>
+          <span>{{ providerStatus.detail }}</span>
+        </div>
         <label>
           <span>Voice</span>
           <input
@@ -208,6 +212,7 @@
 import { computed } from "vue";
 import type { DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
 import Live2DStageView from "./Live2DStageView.vue";
+import { describeProviderStatus } from "./settings-provider-status";
 
 const props = defineProps<{
   state: DesktopRendererState;
@@ -234,6 +239,7 @@ defineEmits<{
 const motionCount = computed(() =>
   Object.values(props.modelInfo?.motions ?? {}).reduce((total, count) => total + count, 0)
 );
+const providerStatus = computed(() => describeProviderStatus(props.state));
 
 function valueFrom(event: Event): string {
   return event.target instanceof HTMLInputElement ? event.target.value : "";

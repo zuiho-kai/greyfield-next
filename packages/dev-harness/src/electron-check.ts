@@ -230,6 +230,7 @@ try {
   if (settingsBounds.hasChatComposer || !settingsBounds.hasSettingsNav) {
     throw new Error(`Settings window is not isolated from chat: ${JSON.stringify(settingsBounds)}`);
   }
+  await settingsWindow.locator(".provider-status--preview", { hasText: "Fake provider is active" }).waitFor();
   await settingsWindow.getByRole("button", { name: "Choose model" }).waitFor();
   await settingsWindow.getByLabel("Scale").fill("1.36");
   await settingsWindow.getByLabel("Model X").fill("42");
