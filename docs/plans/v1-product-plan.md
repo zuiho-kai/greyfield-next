@@ -1,6 +1,6 @@
 # Greyfield Next V1 产品计划
 
-更新时间：2026-05-26
+更新时间：2026-05-27
 
 ## 一句话目标
 
@@ -14,21 +14,21 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 | Live2D 展示 | 已能加载真实 `.model3.json`，有非 fallback 渲染、表情、动作、触摸反应。 | 可以作为 V1 的模型展示底座。 |
 | 模型交互 | 支持模型像素命中、拖动窗口、滚轮缩放、穿透模式；拖动不会改变模型缩放或窗口尺寸。 | 桌宠基础交互可用。 |
 | 文字输入 | Chat 窗口可以输入文本，消息经 renderer -> preload IPC -> Electron main -> runtime；runtime 报错后会把上一条用户输入恢复到草稿，方便重试。 | 主链路已打通，基础失败恢复已可用。 |
-| 文字输出 | 支持流式输出、最终回复、错误提示；默认 fake provider 稳定回复，OpenAI-compatible provider 已在 main process 接入；已用用户提供的 OpenAI-compatible endpoint 跑通过真实 Electron 聊天 harness；provider 失败会显示错误、恢复草稿且不写半截 session。 | 真实文字链路已可演示；还需要补超时类 UX 和视觉/设置 polish。 |
+| 文字输出 | 支持流式输出、最终回复、错误提示；默认 fake provider 稳定回复，OpenAI-compatible provider 已在 main process 接入；已用用户提供的 OpenAI-compatible endpoint 跑通过真实 Electron 聊天 harness；provider 失败会显示错误、恢复草稿且不写半截 session；Stop 已证明会关闭 active provider HTTP 请求。 | 真实文字链路已可演示；还需要补设置页视觉 polish。 |
 | 最近上下文 | 已接入角色 YAML、`data/memory.md`、JSONL session；重启后能把上一轮 user/assistant turn 带入下一次 prompt。 | V1 的“最近上下文连续性”已成立。 |
 | 设置页 | 已有 provider/model/key、角色文件、模型路径、语音/麦克风等设置入口；Test LLM 走 main process。 | 功能骨架可用，但产品手感还不够。 |
 | 聊天窗口 | 已从宠物窗口拆出，能显示消息、状态、错误，Stop 按钮能打断当前回复。 | 可用，但还需要视觉和交互 polish。 |
-| 气泡 | 宠物旁有短回复气泡，支持文本压缩、长度上限；位置固定在宠物窗口上方稳定槽位，不跟随模型移动，只在窗口/屏幕边缘内水平和垂直夹紧。 | 基础可用，躁动感已降低；还需要真实长 streaming 回复的视觉验收。 |
+| 气泡 | 宠物旁有短回复气泡，支持文本压缩、长度上限；位置固定在宠物窗口上方稳定槽位，不跟随模型移动，只在窗口/屏幕边缘内水平和垂直夹紧；长 streaming 回复会进气泡首 token、保持短文本，完整内容留在 Chat。 | 基础可用，躁动感已降低；还需要屏幕边缘截图和开关/点击穿透视觉复核。 |
 | 语音输出 | runtime 有句子级 TTS 队列和假 TTS，嘴型可被假音频驱动。 | 还不是产品可用的真实语音。 |
 | 语音输入 | 只有 VAD/音频边界基础。 | V1 后段任务，不能先做。 |
 | CI | 本地验证链路可跑；GitHub workflow 文件因 token 缺 `workflow` scope 还没入仓。 | 需要优先补，不然后续 PR 缺自动保护。 |
 
 ## 现在不能宣称什么
 
-- 不能宣称“真实 LLM 已完成”：OpenAI-compatible provider 已接入，真实 Electron 聊天 harness 已通过一次，missing-key/401/403/404/timeout/malformed-stream 已有 Electron 失败验收，Stop 已证明会关闭 active provider HTTP 请求；但还缺更完整的设置页视觉 polish 和真实长回复气泡视觉验收。
+- 不能宣称“真实 LLM 已完成”：OpenAI-compatible provider 已接入，真实 Electron 聊天 harness 已通过一次，missing-key/401/403/404/timeout/malformed-stream 已有 Electron 失败验收，Stop 已证明会关闭 active provider HTTP 请求，长回复气泡已有 Electron 验收；但还缺更完整的设置页视觉 polish。
 - 不能宣称“语音伴侣已完成”：真实 TTS、播放队列、interrupt 停止播放、ASR 都还没达到产品验收。
 - 不能宣称“设置页完成”：现在是功能骨架，模型管理、provider 状态、错误恢复和视觉体验还需要打磨。
-- 不能宣称“气泡完成”：短文本路径和基础边缘 clamp 有了，但还缺真实长 streaming 回复、不同模型位置、不同屏幕位置下的视觉验收。
+- 不能宣称“气泡完成”：短文本路径、长 streaming 回复、基础边缘 clamp 有了，但还缺不同模型位置、不同屏幕位置下的截图复核和点击穿透复核。
 - 不能把桌面控制、浏览器控制、屏幕读取、长期任务、多智能体、直播、VRM/Godot 放进 V1。
 
 ## V1 剩余工作
@@ -52,14 +52,17 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 2. runtime 报错后，Chat 会把刚失败的用户文本恢复成草稿，用户可以直接修改或重发。
 3. pet quick harness 的模型命中点改为选择稳定的内部 alpha 点，避免取到 fallback 动画边缘导致误判。
 4. 气泡改为窗口内稳定槽位，不跟随模型动画、缩放或位移细节，避免视觉上一直晃。
+5. 新增长回复气泡 Electron harness：
+   - 首个 streaming token 会进入宠物气泡；
+   - 长回复不会撑爆气泡，气泡文本会压到短文本；
+   - streaming 过程中气泡位置保持稳定；
+   - Chat 保留完整 assistant 回复。
 
 还需要继续补：
 
 1. 完成气泡视觉 QA：
    - 靠近屏幕边缘时翻转和 clamp 的真实窗口截图正常；
-   - 长回复不会盖住模型或撑爆窗口；
    - 气泡开关不破坏点击穿透；
-   - Chat 保留完整历史，气泡只显示短回复。
 2. 打磨聊天窗口：
    - Stop 始终可见；
    - thinking / speaking / error 状态清晰；
@@ -100,13 +103,16 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 5. 新增 provider abort Electron harness：
    - Stop 后服务端能观测到 active provider HTTP request close；
    - Stop 不在 Chat UI 显示错误。
+6. 新增长回复气泡 Electron harness：
+   - 真实 streaming 首 token 能显示到宠物气泡；
+   - 长回复在宠物气泡内保持短文本；
+   - 完整长回复仍保留在 Chat 历史。
 
 还需要继续补：
 
 1. 补 provider retry UX：
    - chat 正在回复时 Test LLM 被拒绝的设置页视觉提示。
 2. 确认真实 provider 下：
-   - 首 token 能显示到气泡；
    - 重启后能带入最近上下文。
 
 验收标准：
