@@ -237,6 +237,7 @@
         "Electron main runtime loads local memory from data/memory.md.",
         "Electron main runtime appends user and assistant turns to a JSONL SessionStore instead of an in-memory session only.",
         "A restart harness proves recent conversation context is available after app restart.",
+        "Successful turns are persisted before the final assistant message is emitted to the renderer, so app shutdown after final UI does not drop the assistant turn.",
         "Recent context remains capped and inspectable so prompt growth is bounded."
       ],
       "qa": {
