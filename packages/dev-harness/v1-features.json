@@ -220,10 +220,11 @@
         "Settings state exposes provider model, voice, microphone, character file, and model path.",
         "Settings edits do not mutate conversation history.",
         "Settings persist to greyfield.config.json through Electron IPC.",
-        "Settings exposes a Test LLM action and renders first-token success or a readable failure without writing chat history."
+        "Settings exposes a Test LLM action and renders first-token success or a readable failure without writing chat history.",
+        "Electron settings-active-chat harness proves Test LLM is rejected with visible Stop-or-wait guidance while chat is actively streaming and does not send an extra provider request."
       ],
       "qa": {
-        "script": "vitest desktop-runtime-bridge config settings-controller runtime-service; pnpm harness:electron"
+        "script": "vitest desktop-runtime-bridge config settings-controller runtime-service; pnpm harness:electron; pnpm harness:electron:settings-active-chat-test"
       }
     },
     {
