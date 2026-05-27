@@ -25,7 +25,7 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 
 ## 现在不能宣称什么
 
-- 不能宣称“真实 LLM 已完成”：OpenAI-compatible provider 已接入，真实 Electron 聊天 harness 已通过一次，missing-key/401/403/404/timeout/malformed-stream 已有 Electron 失败验收；但还缺真实 provider abort 到底层的可观测证明，以及更完整的设置页视觉 polish。
+- 不能宣称“真实 LLM 已完成”：OpenAI-compatible provider 已接入，真实 Electron 聊天 harness 已通过一次，missing-key/401/403/404/timeout/malformed-stream 已有 Electron 失败验收，Stop 已证明会关闭 active provider HTTP 请求；但还缺更完整的设置页视觉 polish 和真实长回复气泡视觉验收。
 - 不能宣称“语音伴侣已完成”：真实 TTS、播放队列、interrupt 停止播放、ASR 都还没达到产品验收。
 - 不能宣称“设置页完成”：现在是功能骨架，模型管理、provider 状态、错误恢复和视觉体验还需要打磨。
 - 不能宣称“气泡完成”：短文本路径和基础边缘 clamp 有了，但还缺真实长 streaming 回复、不同模型位置、不同屏幕位置下的视觉验收。
@@ -97,6 +97,9 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
    - provider timeout 显示可读错误，恢复失败输入草稿，不写 JSONL session；
    - malformed SSE 显示可读错误，恢复失败输入草稿，不写 JSONL session。
 4. Settings 的 Test LLM 失败会附加“检查 API key / Base URL / Model 后重试”的操作提示。
+5. 新增 provider abort Electron harness：
+   - Stop 后服务端能观测到 active provider HTTP request close；
+   - Stop 不在 Chat UI 显示错误。
 
 还需要继续补：
 
@@ -104,7 +107,6 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
    - chat 正在回复时 Test LLM 被拒绝的设置页视觉提示。
 2. 确认真实 provider 下：
    - 首 token 能显示到气泡；
-   - Stop 确认 abort 到 provider 层，而不只是 UI interrupted；
    - 重启后能带入最近上下文。
 
 验收标准：
