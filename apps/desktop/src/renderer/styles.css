@@ -320,6 +320,43 @@ h1 {
   gap: 8px;
 }
 
+.provider-status {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid rgba(31, 41, 51, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.74);
+  line-height: 1.35;
+}
+
+.provider-status strong {
+  color: #1f2933;
+  font-size: 12px;
+}
+
+.provider-status span {
+  color: #465463;
+  font-size: 12px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.provider-status--ready {
+  border-color: rgba(31, 122, 107, 0.28);
+  background: rgba(31, 122, 107, 0.1);
+}
+
+.provider-status--blocked {
+  border-color: rgba(143, 49, 80, 0.26);
+  background: rgba(143, 49, 80, 0.1);
+}
+
+.provider-status--preview {
+  border-color: rgba(37, 56, 88, 0.18);
+  background: rgba(37, 56, 88, 0.08);
+}
+
 .settings-actions button,
 .model-inspector button {
   min-height: 34px;
