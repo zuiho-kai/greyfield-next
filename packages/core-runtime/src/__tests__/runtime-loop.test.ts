@@ -52,6 +52,7 @@ describe("GreyfieldRuntime", () => {
 
   it("stops later model chunks after an interrupt", async () => {
     let runtime: GreyfieldRuntime;
+    const sessionStore = new InMemorySessionStore("session-a");
     const llm: LLMProvider = {
       stream: async function* () {
         yield "First sentence. ";
@@ -66,7 +67,7 @@ describe("GreyfieldRuntime", () => {
       llm,
       tts,
       memoryStore,
-      sessionStore: new InMemorySessionStore("session-a"),
+      sessionStore,
       persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
       voice: "default"
     });
@@ -79,6 +80,29 @@ describe("GreyfieldRuntime", () => {
     expect(events).toContainEqual({ type: "runtime.status", status: "interrupted" });
     expect(events).toContainEqual({ type: "assistant.text.final", text: "First sentence." });
     expect(events.map((event) => JSON.stringify(event)).join("\n")).not.toContain("Second sentence");
+    expect(await sessionStore.getRecent(2)).toEqual([]);
+  });
+
+  it("does not append a half turn when the provider fails", async () => {
+    const sessionStore = new InMemorySessionStore("session-provider-failure");
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* () {
+          throw new Error("provider rejected");
+        }
+      },
+      tts: {
+        synthesize: async (text) => new Uint8Array([text.length])
+      },
+      memoryStore,
+      sessionStore,
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default"
+    });
+
+    await expect(runtime.handle({ type: "text.input", text: "请重试" }, () => undefined)).rejects.toThrow("provider rejected");
+
+    expect(await sessionStore.getRecent(2)).toEqual([]);
   });
 
   it("passes an abort signal to the LLM provider and aborts it on interrupt", async () => {
