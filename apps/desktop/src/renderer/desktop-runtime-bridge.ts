@@ -106,7 +106,7 @@ export class DesktopRuntimeBridge {
         ...this.state,
         providerTest: {
           status: result.ok ? "success" : "error",
-          message: result.message,
+          message: formatProviderTestMessage(result.message, result.ok),
           ...(result.firstToken ? { firstToken: result.firstToken } : {})
         }
       };
@@ -242,6 +242,22 @@ export class DesktopRuntimeBridge {
       handler(snapshot);
     }
   }
+}
+
+function formatProviderTestMessage(message: string, ok: boolean): string {
+  if (ok || !isProviderConfigurationFailure(message)) {
+    return message;
+  }
+  return `${message}. Check API key, Base URL, and Model, then retry.`;
+}
+
+function isProviderConfigurationFailure(message: string): boolean {
+  return (
+    message.includes("OpenAI-compatible provider needs an API key") ||
+    message.includes("OpenAI-compatible LLM request failed:") ||
+    message.includes("OpenAI-compatible LLM request timed out") ||
+    message.includes("OpenAI-compatible LLM stream returned malformed SSE data")
+  );
 }
 
 export function createDesktopRuntimeBridge(host?: DesktopHostApi): DesktopRuntimeBridge {

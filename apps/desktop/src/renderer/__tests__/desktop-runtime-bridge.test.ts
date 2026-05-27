@@ -187,6 +187,28 @@ describe("createDesktopRuntimeBridge", () => {
     });
   });
 
+  it("adds retry guidance to provider configuration test failures", () => {
+    let providerTestResult:
+      | ((event: { ok: boolean; message: string; firstToken?: string }) => void)
+      | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: () => undefined,
+      on: (channel, handler) => {
+        if (channel === "provider:test-llm-result") {
+          providerTestResult = handler as typeof providerTestResult;
+        }
+        return () => undefined;
+      }
+    });
+
+    providerTestResult?.({ ok: false, message: "OpenAI-compatible LLM request failed: 401 Unauthorized" });
+
+    expect(bridge.getState().providerTest).toEqual({
+      status: "error",
+      message: "OpenAI-compatible LLM request failed: 401 Unauthorized. Check API key, Base URL, and Model, then retry."
+    });
+  });
+
   it("sends runtime input to Electron main when a host API is available", async () => {
     const sent: Array<[string, unknown]> = [];
     let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
