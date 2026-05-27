@@ -50,6 +50,8 @@ jobs:
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Install Electron binary
+        run: pnpm --filter @greyfield/desktop rebuild electron
       - name: Build desktop once
         run: pnpm build:desktop
       - name: Pet quick harness
@@ -72,6 +74,8 @@ jobs:
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Install Electron binary
+        run: pnpm --filter @greyfield/desktop rebuild electron
       - name: Build desktop once
         run: pnpm build:desktop
       - name: Full Electron harness
