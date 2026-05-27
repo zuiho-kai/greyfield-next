@@ -19,6 +19,7 @@
     "harness:electron:real-llm": "pnpm build:desktop && tsx packages/dev-harness/src/electron-real-llm-check.ts",
     "harness:electron:provider-failure": "pnpm build:desktop && tsx packages/dev-harness/src/electron-provider-failure-check.ts",
     "harness:electron:provider-abort": "pnpm build:desktop && tsx packages/dev-harness/src/electron-provider-abort-check.ts",
+    "harness:electron:bubble-long-reply": "pnpm build:desktop && tsx packages/dev-harness/src/electron-bubble-long-reply-check.ts",
     "harness:pet:quick": "tsx packages/dev-harness/src/electron-check.ts --quick",
     "dev:live2d": "node apps/desktop/scripts/dev-live2d-electron.mjs",
     "dev:live2d:fast": "node apps/desktop/scripts/dev-live2d-electron.mjs --skip-build",

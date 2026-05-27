@@ -138,10 +138,11 @@
         "Default placement uses a stable upper window slot instead of following model animation or transform movement.",
         "Bubble flips to the left when the model is near the right edge and clamps horizontally and vertically inside the pet window and available screen viewport.",
         "Bubble text normalizes whitespace and caps long replies so the pet bubble remains a short surface while full history stays in chat.",
-        "Bubble hit/shape rect stays stable while text is capped."
+        "Bubble hit/shape rect stays stable while text is capped.",
+        "Electron long-reply harness proves first streaming token reaches the pet bubble, long text stays capped, the bubble remains in place, and Chat keeps the full assistant reply."
       ],
       "qa": {
-        "script": "vitest speech-bubble-placement speech-bubble-text pet-window-shape; pnpm harness:electron"
+        "script": "vitest speech-bubble-placement speech-bubble-text pet-window-shape; pnpm harness:electron; pnpm harness:electron:bubble-long-reply"
       }
     },
     {
