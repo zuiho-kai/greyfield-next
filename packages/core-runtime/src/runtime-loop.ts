@@ -71,8 +71,6 @@ export class GreyfieldRuntime {
       threadId: this.threadId
     });
 
-    await this.options.sessionStore.append({ role: "user", content: text });
-
     let fullText = "";
     let sentenceBuffer = "";
 
@@ -108,7 +106,8 @@ export class GreyfieldRuntime {
     await emit({ type: "assistant.text.final", text: finalText });
     await emit({ type: "assistant.audio.end" });
 
-    if (finalText.length > 0) {
+    if (!this.interrupted && finalText.length > 0) {
+      await this.options.sessionStore.append({ role: "user", content: text });
       await this.options.sessionStore.append({ role: "assistant", content: finalText });
     }
 

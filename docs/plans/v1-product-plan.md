@@ -14,7 +14,7 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 | Live2D 展示 | 已能加载真实 `.model3.json`，有非 fallback 渲染、表情、动作、触摸反应。 | 可以作为 V1 的模型展示底座。 |
 | 模型交互 | 支持模型像素命中、拖动窗口、滚轮缩放、穿透模式；拖动不会改变模型缩放或窗口尺寸。 | 桌宠基础交互可用。 |
 | 文字输入 | Chat 窗口可以输入文本，消息经 renderer -> preload IPC -> Electron main -> runtime；runtime 报错后会把上一条用户输入恢复到草稿，方便重试。 | 主链路已打通，基础失败恢复已可用。 |
-| 文字输出 | 支持流式输出、最终回复、错误提示；默认 fake provider 稳定回复，OpenAI-compatible provider 已在 main process 接入；已用用户提供的 OpenAI-compatible endpoint 跑通过真实 Electron 聊天 harness。 | 真实文字链路已可演示；还需要更完整的 provider 错误恢复和视觉/设置 polish。 |
+| 文字输出 | 支持流式输出、最终回复、错误提示；默认 fake provider 稳定回复，OpenAI-compatible provider 已在 main process 接入；已用用户提供的 OpenAI-compatible endpoint 跑通过真实 Electron 聊天 harness；provider 失败会显示错误、恢复草稿且不写半截 session。 | 真实文字链路已可演示；还需要补超时类 UX 和视觉/设置 polish。 |
 | 最近上下文 | 已接入角色 YAML、`data/memory.md`、JSONL session；重启后能把上一轮 user/assistant turn 带入下一次 prompt。 | V1 的“最近上下文连续性”已成立。 |
 | 设置页 | 已有 provider/model/key、角色文件、模型路径、语音/麦克风等设置入口；Test LLM 走 main process。 | 功能骨架可用，但产品手感还不够。 |
 | 聊天窗口 | 已从宠物窗口拆出，能显示消息、状态、错误，Stop 按钮能打断当前回复。 | 可用，但还需要视觉和交互 polish。 |
@@ -25,7 +25,7 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 
 ## 现在不能宣称什么
 
-- 不能宣称“真实 LLM 已完成”：OpenAI-compatible provider 已接入，真实 Electron 聊天 harness 已通过一次，但还缺 401/403、超时、base URL 错误等完整 provider 恢复路径，以及更清晰的用户可见 retry UX。
+- 不能宣称“真实 LLM 已完成”：OpenAI-compatible provider 已接入，真实 Electron 聊天 harness 已通过一次，401/404/malformed-stream 已有 Electron 失败验收；但还缺超时类 UX、真实 provider abort 到底层的可观测证明，以及更清晰的设置页 retry 引导。
 - 不能宣称“语音伴侣已完成”：真实 TTS、播放队列、interrupt 停止播放、ASR 都还没达到产品验收。
 - 不能宣称“设置页完成”：现在是功能骨架，模型管理、provider 状态、错误恢复和视觉体验还需要打磨。
 - 不能宣称“气泡完成”：短文本路径和基础边缘 clamp 有了，但还缺真实长 streaming 回复、不同模型位置、不同屏幕位置下的视觉验收。
@@ -89,20 +89,21 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
    - 成功 user/assistant turn 会写入 JSONL session；
    - 第二轮真实回复开始后，Stop 能把 UI 切到 interrupted；
    - harness 输出会 redacts API key。
+3. 新增 provider failure Electron harness：
+   - 401 unauthorized 显示可读错误，恢复失败输入草稿，不写 JSONL session；
+   - 404 not found 显示可读错误，恢复失败输入草稿，不写 JSONL session；
+   - malformed SSE 显示可读错误，恢复失败输入草稿，不写 JSONL session。
 
 还需要继续补：
 
 1. 补 provider retry UX：
    - 超时；
-   - 401/403；
-   - base URL 错误；
-   - malformed stream；
+   - 403；
    - 无 key；
    - chat 正在回复时 Test LLM 被拒绝。
 2. 确认真实 provider 下：
    - 首 token 能显示到气泡；
    - Stop 确认 abort 到 provider 层，而不只是 UI interrupted；
-   - 错误不会污染 session；
    - 重启后能带入最近上下文。
 
 验收标准：
