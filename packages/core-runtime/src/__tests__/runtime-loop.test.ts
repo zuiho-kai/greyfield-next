@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { GreyfieldRuntime } from "../runtime-loop";
 import { InMemorySessionStore } from "../session-store";
+import type { AppendSessionTurn, SessionHandoff, SessionStore, SessionTurn } from "../session-store";
 import type { LLMProvider, MemoryStore, TTSProvider } from "../providers";
 import type { RuntimeOutputEvent } from "../events";
 
@@ -103,6 +104,51 @@ describe("GreyfieldRuntime", () => {
     await expect(runtime.handle({ type: "text.input", text: "请重试" }, () => undefined)).rejects.toThrow("provider rejected");
 
     expect(await sessionStore.getRecent(2)).toEqual([]);
+  });
+
+  it("persists the successful turn before emitting the final assistant text", async () => {
+    const order: string[] = [];
+    const sessionStore: SessionStore = {
+      sessionId: "session-order",
+      append: async (turn: AppendSessionTurn) => {
+        order.push(`append:${turn.role}`);
+        return {
+          id: `session-order-${order.length}`,
+          role: turn.role,
+          content: turn.content,
+          createdAt: "2026-05-27T00:00:00.000Z",
+          meta: turn.meta
+        };
+      },
+      getRecent: async () => [],
+      createHandoff: async (): Promise<SessionHandoff> => ({
+        sessionId: "session-order",
+        turns: [] satisfies SessionTurn[],
+        summary: ""
+      })
+    };
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* () {
+          yield "Persist me.";
+        }
+      },
+      tts: {
+        synthesize: async (text) => new Uint8Array([text.length])
+      },
+      memoryStore,
+      sessionStore,
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default"
+    });
+
+    await runtime.handle({ type: "text.input", text: "record this" }, async (event) => {
+      if (event.type === "assistant.text.final") {
+        order.push("emit:final");
+      }
+    });
+
+    expect(order).toEqual(["append:user", "append:assistant", "emit:final"]);
   });
 
   it("passes an abort signal to the LLM provider and aborts it on interrupt", async () => {

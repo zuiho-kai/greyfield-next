@@ -51,7 +51,7 @@ try {
   try {
     const firstChat = await waitForRoleWindow(firstApp, "chat");
     await sendMessage(firstChat, "第一轮重启上下文");
-    await firstChat.locator(".message-list .assistant", { hasText: "first persisted reply." }).waitFor();
+    await firstChat.locator(".message-list .assistant:not(.draft)", { hasText: "first persisted reply." }).waitFor();
   } finally {
     await firstApp.close();
   }
@@ -60,7 +60,7 @@ try {
   try {
     const secondChat = await waitForRoleWindow(secondApp, "chat");
     await sendMessage(secondChat, "第二轮读取上下文");
-    await secondChat.locator(".message-list .assistant", { hasText: "second restart reply." }).waitFor();
+    await secondChat.locator(".message-list .assistant:not(.draft)", { hasText: "second restart reply." }).waitFor();
   } finally {
     await secondApp.close();
   }

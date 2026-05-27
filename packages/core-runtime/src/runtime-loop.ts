@@ -103,13 +103,13 @@ export class GreyfieldRuntime {
       await this.options.stage?.setMouthOpen(0);
     }
 
-    await emit({ type: "assistant.text.final", text: finalText });
-    await emit({ type: "assistant.audio.end" });
-
     if (!this.interrupted && finalText.length > 0) {
       await this.options.sessionStore.append({ role: "user", content: text });
       await this.options.sessionStore.append({ role: "assistant", content: finalText });
     }
+
+    await emit({ type: "assistant.text.final", text: finalText });
+    await emit({ type: "assistant.audio.end" });
 
     await emit({ type: "runtime.status", status: "idle" });
     this.activeAbortController = undefined;

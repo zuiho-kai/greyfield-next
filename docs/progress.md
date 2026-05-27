@@ -121,6 +121,7 @@ Current product plan: [Greyfield Next V1 产品计划](plans/v1-product-plan.md)
 - Added `pnpm harness:electron:provider-abort`, which uses a local SSE endpoint to prove Stop closes the active OpenAI-compatible provider HTTP request instead of only changing renderer UI state.
 - Added `pnpm harness:electron:bubble-long-reply`, which uses a local streaming provider to prove first-token bubble display, capped long bubble text, stable bubble placement, and full Chat history retention.
 - Added `pnpm harness:electron:settings-active-chat-test`, which proves settings Test LLM shows Stop-or-wait guidance during an active chat stream and does not send a second provider request.
+- Tightened restart-context verification so it waits for the final non-draft assistant message before closing Electron; core runtime now persists a successful turn before emitting the final assistant text, preventing UI-final/session-write races.
 
 ## QA Bar
 

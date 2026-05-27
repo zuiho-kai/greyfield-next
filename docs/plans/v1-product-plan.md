@@ -110,11 +110,10 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 7. 新增 settings active-chat Electron harness：
    - chat 正在 streaming 时点击 Test LLM 会显示先 Stop 或等待当前回复结束；
    - 拒绝期间不会向 provider 发送第二个测试请求。
-
-还需要继续补：
-
-1. 确认真实 provider 下：
-   - 重启后能带入最近上下文。
+8. restart-context Electron harness 已收紧：
+   - 等待最终非 draft assistant 消息后才关闭第一轮应用；
+   - 第二次启动 prompt 会带入上一轮 user 和 assistant turn；
+   - 成功 turn 在 final 事件发给 UI 前先完成持久化。
 
 验收标准：
 
