@@ -20,6 +20,7 @@ export interface RuntimeServiceOptions {
   memoryStore?: MemoryStore;
   sessionStore?: SessionStore;
   recentTurnLimit?: number;
+  llmTimeoutMs?: number;
 }
 
 export interface LLMTestResult {
@@ -161,12 +162,16 @@ export class RuntimeService {
   }
 
   private createLLMProvider(): LLMProvider {
-    if (this.config.provider.llm === "openai-compatible" && this.config.provider.apiKey.trim().length > 0) {
+    if (this.config.provider.llm === "openai-compatible") {
+      if (this.config.provider.apiKey.trim().length === 0) {
+        throw new Error("OpenAI-compatible provider needs an API key before chatting.");
+      }
       return new OpenAICompatibleLLMProvider({
         baseUrl: this.config.provider.baseUrl,
         apiKey: this.config.provider.apiKey,
         model: this.config.provider.model,
-        fetch: this.options.fetch
+        fetch: this.options.fetch,
+        timeoutMs: this.options.llmTimeoutMs
       });
     }
     return new MainFakeLLMProvider();

@@ -25,7 +25,7 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 
 ## 现在不能宣称什么
 
-- 不能宣称“真实 LLM 已完成”：OpenAI-compatible provider 已接入，真实 Electron 聊天 harness 已通过一次，401/404/malformed-stream 已有 Electron 失败验收；但还缺超时类 UX、真实 provider abort 到底层的可观测证明，以及更清晰的设置页 retry 引导。
+- 不能宣称“真实 LLM 已完成”：OpenAI-compatible provider 已接入，真实 Electron 聊天 harness 已通过一次，missing-key/401/404/timeout/malformed-stream 已有 Electron 失败验收；但还缺 403 覆盖、真实 provider abort 到底层的可观测证明，以及更清晰的设置页 retry 引导。
 - 不能宣称“语音伴侣已完成”：真实 TTS、播放队列、interrupt 停止播放、ASR 都还没达到产品验收。
 - 不能宣称“设置页完成”：现在是功能骨架，模型管理、provider 状态、错误恢复和视觉体验还需要打磨。
 - 不能宣称“气泡完成”：短文本路径和基础边缘 clamp 有了，但还缺真实长 streaming 回复、不同模型位置、不同屏幕位置下的视觉验收。
@@ -90,16 +90,16 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
    - 第二轮真实回复开始后，Stop 能把 UI 切到 interrupted；
    - harness 输出会 redacts API key。
 3. 新增 provider failure Electron harness：
+   - 缺 API key 显示可读错误，不发 provider 请求，恢复失败输入草稿，不写 JSONL session；
    - 401 unauthorized 显示可读错误，恢复失败输入草稿，不写 JSONL session；
    - 404 not found 显示可读错误，恢复失败输入草稿，不写 JSONL session；
+   - provider timeout 显示可读错误，恢复失败输入草稿，不写 JSONL session；
    - malformed SSE 显示可读错误，恢复失败输入草稿，不写 JSONL session。
 
 还需要继续补：
 
 1. 补 provider retry UX：
-   - 超时；
    - 403；
-   - 无 key；
    - chat 正在回复时 Test LLM 被拒绝。
 2. 确认真实 provider 下：
    - 首 token 能显示到气泡；

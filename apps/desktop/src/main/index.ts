@@ -28,7 +28,10 @@ let live2DModelController: Live2DModelController | undefined;
 
 async function createWindows(): Promise<void> {
   const config = await loadGreyfieldConfig(resolveConfigPath());
-  runtimeService = new RuntimeService(config, createDesktopRuntimeStoreOptions(resolveRuntimeStorePaths()));
+  runtimeService = new RuntimeService(config, {
+    ...createDesktopRuntimeStoreOptions(resolveRuntimeStorePaths()),
+    llmTimeoutMs: resolveLLMTimeoutMs()
+  });
   runtimeIpcController = new RuntimeIpcController({
     service: runtimeService,
     broadcast: broadcastRuntimeEvent
@@ -296,6 +299,15 @@ function resolveRuntimeStorePaths(): { userDataPath: string; projectRoot: string
     userDataPath: process.env.GREYFIELD_USER_DATA_PATH ?? app.getPath("userData"),
     projectRoot: process.env.GREYFIELD_PROJECT_ROOT ?? join(currentDir, "..", "..", "..")
   };
+}
+
+function resolveLLMTimeoutMs(): number | undefined {
+  const raw = process.env.GREYFIELD_LLM_TIMEOUT_MS;
+  if (!raw) {
+    return undefined;
+  }
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 app.whenReady().then(createWindows).catch((error) => {

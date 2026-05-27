@@ -11,9 +11,22 @@ const workspaceRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const desktopRoot = join(workspaceRoot, "apps", "desktop");
 const scenarios = [
   {
+    name: "missing-key",
+    userText: "缺 key 重试",
+    expectedError: "OpenAI-compatible provider needs an API key before chatting.",
+    apiKey: "",
+    expectedRequests: 0,
+    respond(_request: IncomingMessage, response: ServerResponse) {
+      response.writeHead(500);
+      response.end();
+    }
+  },
+  {
     name: "unauthorized",
     userText: "错误 key 重试",
     expectedError: "OpenAI-compatible LLM request failed: 401 Unauthorized",
+    apiKey: "local-failure-key",
+    expectedRequests: 1,
     respond(_request: IncomingMessage, response: ServerResponse) {
       response.writeHead(401, { "content-type": "application/json", "statusText": "Unauthorized" });
       response.end(JSON.stringify({ error: "bad key" }));
@@ -23,6 +36,8 @@ const scenarios = [
     name: "malformed-sse",
     userText: "坏流重试",
     expectedError: "OpenAI-compatible LLM stream returned malformed SSE data",
+    apiKey: "local-failure-key",
+    expectedRequests: 1,
     respond(_request: IncomingMessage, response: ServerResponse) {
       response.writeHead(200, {
         "content-type": "text/event-stream",
@@ -35,9 +50,21 @@ const scenarios = [
     name: "not-found",
     userText: "错误地址重试",
     expectedError: "OpenAI-compatible LLM request failed: 404 Not Found",
+    apiKey: "local-failure-key",
+    expectedRequests: 1,
     respond(_request: IncomingMessage, response: ServerResponse) {
       response.writeHead(404, { "content-type": "application/json" });
       response.end(JSON.stringify({ error: "wrong path" }));
+    }
+  },
+  {
+    name: "timeout",
+    userText: "超时重试",
+    expectedError: "OpenAI-compatible LLM request timed out after 100ms",
+    apiKey: "local-failure-key",
+    expectedRequests: 1,
+    respond(_request: IncomingMessage, _response: ServerResponse) {
+      // Keep the response open until the provider timeout aborts the request.
     }
   }
 ];
@@ -64,7 +91,7 @@ for (const scenario of scenarios) {
           ...defaultGreyfieldConfig.provider,
           llm: "openai-compatible",
           baseUrl: `http://127.0.0.1:${port}/v1`,
-          apiKey: "local-failure-key",
+          apiKey: scenario.apiKey,
           model: `provider-failure-${scenario.name}`
         }
       },
@@ -88,11 +115,15 @@ for (const scenario of scenarios) {
       if (sessionJsonl.trim().length > 0) {
         throw new Error(`${scenario.name} polluted session JSONL: ${sessionJsonl}`);
       }
+      if (requestCount !== scenario.expectedRequests) {
+        throw new Error(`${scenario.name} made ${requestCount} requests, expected ${scenario.expectedRequests}`);
+      }
       results.push({ name: scenario.name, requestCount, draftRestored: true, sessionClean: true });
     } finally {
       await app.close();
     }
   } finally {
+    server.closeAllConnections?.();
     server.close();
     await rm(tempDir, { recursive: true, force: true });
   }
@@ -109,7 +140,8 @@ async function launchApp(configPath: string, userDataPath: string): Promise<Elec
       ...process.env,
       GREYFIELD_CONFIG_PATH: configPath,
       GREYFIELD_PROJECT_ROOT: workspaceRoot,
-      GREYFIELD_USER_DATA_PATH: userDataPath
+      GREYFIELD_USER_DATA_PATH: userDataPath,
+      GREYFIELD_LLM_TIMEOUT_MS: "100"
     }
   });
   app.process().stdout?.on("data", (chunk) => output.push(String(chunk)));

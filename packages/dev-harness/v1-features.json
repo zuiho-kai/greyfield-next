@@ -158,7 +158,7 @@
         "OpenAI-compatible provider timeouts and malformed stream data become readable runtime error state instead of crashing the renderer.",
         "Runtime errors restore the failed user text into the chat draft so the user can retry without retyping.",
         "Provider failures do not append half turns to the JSONL session.",
-        "Electron provider-failure harness covers unauthorized, not-found, and malformed-stream failures with visible chat errors and restored retry drafts.",
+        "Electron provider-failure harness covers missing-key, unauthorized, not-found, timeout, and malformed-stream failures with visible chat errors and restored retry drafts.",
         "Settings can send a small LLM test request through Electron main and report first-token success or a readable failure."
       ],
       "qa": {

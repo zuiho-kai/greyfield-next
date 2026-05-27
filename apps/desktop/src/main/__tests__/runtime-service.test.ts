@@ -132,6 +132,56 @@ describe("RuntimeService", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("fails chat with a readable error when OpenAI-compatible provider is missing an API key", async () => {
+    const fetch = vi.fn();
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "",
+          model: "remote-model"
+        }
+      },
+      { fetch }
+    );
+
+    await expect(service.handle({ type: "text.input", text: "别回退 fake" }, () => undefined)).rejects.toThrow(
+      "OpenAI-compatible provider needs an API key before chatting."
+    );
+    expect(fetch).not.toHaveBeenCalled();
+    expect(await service.getRecentTurns(2)).toEqual([]);
+  });
+
+  it("passes the configured LLM timeout into chat provider requests", async () => {
+    const fetch = vi.fn(async (_url, init) => {
+      await new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+      });
+      return new Response(null, { status: 500 });
+    });
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "secret",
+          model: "remote-model"
+        }
+      },
+      { fetch, llmTimeoutMs: 20 }
+    );
+
+    await expect(service.handle({ type: "text.input", text: "会超时" }, () => undefined)).rejects.toThrow(
+      "OpenAI-compatible LLM request timed out after 20ms"
+    );
+    expect(await service.getRecentTurns(2)).toEqual([]);
+  });
+
   it("rejects provider testing while a chat response is active", async () => {
     let requestStarted: (() => void) | undefined;
     const started = new Promise<void>((resolve) => {
