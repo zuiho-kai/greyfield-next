@@ -33,6 +33,17 @@ const scenarios = [
     }
   },
   {
+    name: "forbidden",
+    userText: "无权限重试",
+    expectedError: "OpenAI-compatible LLM request failed: 403 Forbidden",
+    apiKey: "local-failure-key",
+    expectedRequests: 1,
+    respond(_request: IncomingMessage, response: ServerResponse) {
+      response.writeHead(403, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "forbidden" }));
+    }
+  },
+  {
     name: "malformed-sse",
     userText: "坏流重试",
     expectedError: "OpenAI-compatible LLM stream returned malformed SSE data",
