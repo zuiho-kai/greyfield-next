@@ -14,8 +14,14 @@ const electronPackageDir = dirname(electronPackageJson);
 const pathFile = join(electronPackageDir, "path.txt");
 const distDir = join(electronPackageDir, "dist");
 
+const keepAlive = setInterval(() => {}, 1_000);
+
 main()
+  .then(() => {
+    clearInterval(keepAlive);
+  })
   .catch((error) => {
+    clearInterval(keepAlive);
     console.error(error);
     process.exitCode = 1;
   });
