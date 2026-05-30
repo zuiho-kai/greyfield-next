@@ -1,5 +1,5 @@
 import { existsSync, realpathSync } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { platform as currentPlatform, arch as currentArch } from "node:os";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
@@ -15,12 +15,9 @@ const pathFile = join(electronPackageDir, "path.txt");
 const distDir = join(electronPackageDir, "dist");
 
 main()
-  .then(() => {
-    process.exit(0);
-  })
   .catch((error) => {
     console.error(error);
-    process.exit(1);
+    process.exitCode = 1;
   });
 
 async function main() {
@@ -28,6 +25,8 @@ async function main() {
 }
 
 async function ensureElectronInstalled() {
+  console.log(`[ensure-electron] packageDir=${electronPackageDir}`);
+  console.log(`[ensure-electron] expected=${join(distDir, getPlatformPath())}`);
   if (!(await hasElectronExecutable())) {
     await runInstall(false);
   }
@@ -39,6 +38,7 @@ async function ensureElectronInstalled() {
       `Electron binary is still missing after install; packageDir=${electronPackageDir}; expected=${join(distDir, getPlatformPath())}`
     );
   }
+  console.log(`[ensure-electron] ready=${join(distDir, getPlatformPath())}`);
 }
 
 async function hasElectronExecutable() {
@@ -69,8 +69,11 @@ async function runInstall(forceNoCache) {
     platform: process.env.ELECTRON_INSTALL_PLATFORM || process.env.npm_config_platform || currentPlatform(),
     arch: process.env.ELECTRON_INSTALL_ARCH || process.env.npm_config_arch || currentArch()
   });
+  console.log(`[ensure-electron] zip=${zipPath}`);
   await extract(zipPath, { dir: distDir });
   await writeFile(pathFile, getPlatformPath());
+  const entries = await readdir(distDir).catch(() => []);
+  console.log(`[ensure-electron] dist=${entries.slice(0, 8).join(",")}`);
 }
 
 function getPlatformPath() {
