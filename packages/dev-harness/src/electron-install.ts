@@ -1,12 +1,12 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 
 export async function ensureElectronBinary(desktopRoot: string): Promise<void> {
   const desktopRequire = createRequire(join(desktopRoot, "package.json"));
-  const electronPackageJson = desktopRequire.resolve("electron/package.json");
+  const electronPackageJson = realpathSync(desktopRequire.resolve("electron/package.json"));
   const electronPackageDir = dirname(electronPackageJson);
   const pathFile = join(electronPackageDir, "path.txt");
   const installScript = join(desktopRoot, "scripts", "ensure-electron-binary.mjs");
