@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
-import { ensureElectronBinary } from "./electron-install";
+import { getElectronExecutablePath } from "./electron-install";
 import {
   dispatchStageMove,
   dispatchStageWheel,
@@ -21,13 +21,14 @@ import {
 
 const workspaceRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const desktopRoot = join(workspaceRoot, "apps", "desktop");
-await ensureElectronBinary(desktopRoot);
+const executablePath = await getElectronExecutablePath(desktopRoot);
 const quickMode = process.argv.includes("--quick");
 const tempDir = await mkdtemp(join(tmpdir(), "greyfield-electron-"));
 const configPath = join(tempDir, "greyfield.config.json");
 await writeFile(configPath, `${JSON.stringify(defaultGreyfieldConfig, null, 2)}\n`, "utf8");
 
 const app = await electron.launch({
+  executablePath,
   cwd: desktopRoot,
   args: [join(desktopRoot, "dist-main", "index.mjs")],
   env: {
