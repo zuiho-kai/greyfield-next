@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { platform as currentPlatform, arch as currentArch } from "node:os";
@@ -76,10 +77,44 @@ async function runInstall(forceNoCache) {
     arch: process.env.ELECTRON_INSTALL_ARCH || process.env.npm_config_arch || currentArch()
   });
   console.log(`[ensure-electron] zip=${zipPath}`);
-  await extract(zipPath, { dir: distDir });
+  if (currentPlatform() === "win32") {
+    await expandArchiveWithPowerShell(zipPath, distDir);
+  } else {
+    await extract(zipPath, { dir: distDir });
+  }
   await writeFile(pathFile, getPlatformPath());
   const entries = await readdir(distDir).catch(() => []);
   console.log(`[ensure-electron] dist=${entries.slice(0, 8).join(",")}`);
+}
+
+async function expandArchiveWithPowerShell(zipPath, destinationPath) {
+  await new Promise((resolve, reject) => {
+    const command = [
+      "$ProgressPreference = 'SilentlyContinue'",
+      `Expand-Archive -LiteralPath ${quotePowerShellLiteral(zipPath)} -DestinationPath ${quotePowerShellLiteral(destinationPath)} -Force`
+    ].join("; ");
+    const child = spawn(
+      "powershell",
+      [
+        "-NoProfile",
+        "-Command",
+        command
+      ],
+      { stdio: "inherit" }
+    );
+    child.on("error", reject);
+    child.on("exit", (code, signal) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`Expand-Archive failed with code=${code} signal=${signal ?? ""}`));
+    });
+  });
+}
+
+function quotePowerShellLiteral(value) {
+  return `'${value.replace(/'/g, "''")}'`;
 }
 
 function getPlatformPath() {
