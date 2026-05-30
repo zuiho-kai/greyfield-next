@@ -36,7 +36,7 @@ jobs:
 
   desktop-pet:
     name: Desktop pet quick harness
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 10
     needs: fast
     steps:
@@ -53,7 +53,9 @@ jobs:
       - name: Install Electron binary
         run: |
           pnpm --dir apps/desktop exec install-electron
-          if (!(Test-Path apps/desktop/node_modules/electron/path.txt)) { throw "Electron path.txt was not created" }
+          $electronPackageJson = pnpm --dir apps/desktop exec node -p 'require.resolve("electron/package.json")'
+          $electronPathTxt = Join-Path (Split-Path $electronPackageJson) "path.txt"
+          if (!(Test-Path $electronPathTxt)) { throw "Electron path.txt was not created at $electronPathTxt" }
       - name: Build desktop once
         run: pnpm build:desktop
       - name: Pet quick harness
@@ -61,7 +63,7 @@ jobs:
 
   checkpoint:
     name: Full checkpoint harness
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 15
     needs: fast
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
@@ -79,7 +81,9 @@ jobs:
       - name: Install Electron binary
         run: |
           pnpm --dir apps/desktop exec install-electron
-          if (!(Test-Path apps/desktop/node_modules/electron/path.txt)) { throw "Electron path.txt was not created" }
+          $electronPackageJson = pnpm --dir apps/desktop exec node -p 'require.resolve("electron/package.json")'
+          $electronPathTxt = Join-Path (Split-Path $electronPackageJson) "path.txt"
+          if (!(Test-Path $electronPathTxt)) { throw "Electron path.txt was not created at $electronPathTxt" }
       - name: Build desktop once
         run: pnpm build:desktop
       - name: Full Electron harness
