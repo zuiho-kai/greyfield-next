@@ -14,7 +14,18 @@ const electronPackageDir = dirname(electronPackageJson);
 const pathFile = join(electronPackageDir, "path.txt");
 const distDir = join(electronPackageDir, "dist");
 
-await ensureElectronInstalled();
+main()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+
+async function main() {
+  await ensureElectronInstalled();
+}
 
 async function ensureElectronInstalled() {
   if (!(await hasElectronExecutable())) {
