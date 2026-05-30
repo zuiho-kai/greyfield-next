@@ -108,12 +108,19 @@
         <div class="settings-actions">
           <button type="button" @click="$emit('choose-model')">Choose model</button>
           <button type="button" @click="$emit('reset-transform')">Reset transform</button>
-          <button type="button" :disabled="state.providerTest.status === 'testing'" @click="$emit('test-llm')">
+          <button type="button" :disabled="testLlmAction.disabled" @click="$emit('test-llm')">
             Test LLM
           </button>
         </div>
         <p
-          v-if="state.providerTest.message"
+          v-if="testLlmAction.disableReason"
+          class="provider-test-result provider-test-result--error"
+          role="status"
+        >
+          {{ testLlmAction.disableReason }}
+        </p>
+        <p
+          v-else-if="state.providerTest.message"
           class="provider-test-result"
           :class="`provider-test-result--${state.providerTest.status}`"
           role="status"
@@ -213,6 +220,7 @@ import { computed } from "vue";
 import type { DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
 import Live2DStageView from "./Live2DStageView.vue";
 import { describeProviderStatus } from "./settings-provider-status";
+import { describeTestLlmAction } from "./settings-test-llm";
 
 const props = defineProps<{
   state: DesktopRendererState;
@@ -240,6 +248,7 @@ const motionCount = computed(() =>
   Object.values(props.modelInfo?.motions ?? {}).reduce((total, count) => total + count, 0)
 );
 const providerStatus = computed(() => describeProviderStatus(props.state));
+const testLlmAction = computed(() => describeTestLlmAction(props.stageStatus, props.state.providerTest.status));
 
 function valueFrom(event: Event): string {
   return event.target instanceof HTMLInputElement ? event.target.value : "";
