@@ -12,6 +12,7 @@
     "build:main": "node scripts/build-main.mjs",
     "build:preload": "node scripts/build-preload.mjs",
     "build:all": "pnpm build && pnpm build:preload && pnpm build:main",
+    "ensure:electron": "node scripts/ensure-electron-binary.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
