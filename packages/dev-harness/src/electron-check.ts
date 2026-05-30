@@ -40,7 +40,7 @@ const app = await electron.launch({
 });
 
 try {
-  const petWindow = await app.firstWindow();
+  const petWindow = await waitForRoleWindow("pet");
   await petWindow.waitForSelector(".pet-shell canvas.live2d-stage-canvas, .pet-shell canvas.fallback-stage-canvas");
   await petWindow.waitForFunction(() => {
     const canvases = Array.from(
@@ -292,7 +292,7 @@ async function waitForSettingsWindow(): Promise<Page> {
   return waitForRoleWindow("settings");
 }
 
-async function waitForRoleWindow(roleName: "settings" | "chat"): Promise<Page> {
+async function waitForRoleWindow(roleName: "pet" | "settings" | "chat"): Promise<Page> {
   const started = Date.now();
   while (Date.now() - started < 5_000) {
     for (const page of app.windows()) {
