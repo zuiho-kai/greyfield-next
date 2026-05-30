@@ -1,14 +1,18 @@
-import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { platform as currentPlatform, arch as currentArch } from "node:os";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const electronPackageJson = require.resolve("electron/package.json");
+const electronRequire = createRequire(electronPackageJson);
+const { version } = require(electronPackageJson);
+const { downloadArtifact } = electronRequire("@electron/get");
+const extract = electronRequire("extract-zip");
 const electronPackageDir = dirname(electronPackageJson);
-const installScript = join(electronPackageDir, "install.js");
 const pathFile = join(electronPackageDir, "path.txt");
+const distDir = join(electronPackageDir, "dist");
 
 await ensureElectronInstalled();
 
@@ -20,7 +24,9 @@ async function ensureElectronInstalled() {
     await runInstall(true);
   }
   if (!(await hasElectronExecutable())) {
-    throw new Error(`Electron binary is still missing after install; packageDir=${electronPackageDir}`);
+    throw new Error(
+      `Electron binary is still missing after install; packageDir=${electronPackageDir}; expected=${join(distDir, getPlatformPath())}`
+    );
   }
 }
 
@@ -36,22 +42,40 @@ async function hasElectronExecutable() {
 }
 
 async function runInstall(forceNoCache) {
-  await new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [installScript], {
-      cwd: electronPackageDir,
-      env: {
-        ...process.env,
-        ...(forceNoCache ? { force_no_cache: "true" } : {})
-      },
-      stdio: "inherit"
-    });
-    child.on("error", reject);
-    child.on("exit", (code, signal) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(new Error(`Electron install failed with code=${code} signal=${signal ?? ""}`));
-    });
+  if (forceNoCache) {
+    await rm(distDir, { recursive: true, force: true });
+  }
+  await mkdir(distDir, { recursive: true });
+  const zipPath = await downloadArtifact({
+    version,
+    artifactName: "electron",
+    force: forceNoCache,
+    cacheRoot: process.env.electron_config_cache,
+    checksums:
+      process.env.electron_use_remote_checksums || process.env.npm_config_electron_use_remote_checksums
+        ? undefined
+        : require(join(electronPackageDir, "checksums.json")),
+    platform: process.env.ELECTRON_INSTALL_PLATFORM || process.env.npm_config_platform || currentPlatform(),
+    arch: process.env.ELECTRON_INSTALL_ARCH || process.env.npm_config_arch || currentArch()
   });
+  await extract(zipPath, { dir: distDir });
+  await writeFile(pathFile, getPlatformPath());
+}
+
+function getPlatformPath() {
+  const targetPlatform = process.env.ELECTRON_INSTALL_PLATFORM || process.env.npm_config_platform || currentPlatform();
+
+  switch (targetPlatform) {
+    case "mas":
+    case "darwin":
+      return "Electron.app/Contents/MacOS/Electron";
+    case "freebsd":
+    case "openbsd":
+    case "linux":
+      return "electron";
+    case "win32":
+      return "electron.exe";
+    default:
+      throw new Error(`Electron builds are not available on platform: ${targetPlatform}`);
+  }
 }
