@@ -1,11 +1,11 @@
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { platform as currentPlatform, arch as currentArch } from "node:os";
 import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const electronPackageJson = require.resolve("electron/package.json");
+const electronPackageJson = realpathSync(require.resolve("electron/package.json"));
 const electronRequire = createRequire(electronPackageJson);
 const { version } = require(electronPackageJson);
 const { downloadArtifact } = electronRequire("@electron/get");
