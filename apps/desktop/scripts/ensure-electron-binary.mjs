@@ -1,0 +1,136 @@
+import { spawn } from "node:child_process";
+import { existsSync, realpathSync } from "node:fs";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { platform as currentPlatform, arch as currentArch } from "node:os";
+import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const electronPackageJson = realpathSync(require.resolve("electron/package.json"));
+const electronRequire = createRequire(electronPackageJson);
+const { version } = require(electronPackageJson);
+const { downloadArtifact } = electronRequire("@electron/get");
+const extract = electronRequire("extract-zip");
+const electronPackageDir = dirname(electronPackageJson);
+const pathFile = join(electronPackageDir, "path.txt");
+const distDir = join(electronPackageDir, "dist");
+
+const keepAlive = setInterval(() => {}, 1_000);
+
+main()
+  .then(() => {
+    clearInterval(keepAlive);
+  })
+  .catch((error) => {
+    clearInterval(keepAlive);
+    console.error(error);
+    process.exitCode = 1;
+  });
+
+async function main() {
+  await ensureElectronInstalled();
+}
+
+async function ensureElectronInstalled() {
+  console.log(`[ensure-electron] packageDir=${electronPackageDir}`);
+  console.log(`[ensure-electron] expected=${join(distDir, getPlatformPath())}`);
+  if (!(await hasElectronExecutable())) {
+    await runInstall(false);
+  }
+  if (!(await hasElectronExecutable())) {
+    await runInstall(true);
+  }
+  if (!(await hasElectronExecutable())) {
+    throw new Error(
+      `Electron binary is still missing after install; packageDir=${electronPackageDir}; expected=${join(distDir, getPlatformPath())}`
+    );
+  }
+  console.log(`[ensure-electron] ready=${join(distDir, getPlatformPath())}`);
+}
+
+async function hasElectronExecutable() {
+  if (!existsSync(pathFile)) {
+    return false;
+  }
+  const relativeExecutable = (await readFile(pathFile, "utf8")).trim();
+  if (!relativeExecutable) {
+    return false;
+  }
+  return existsSync(join(electronPackageDir, "dist", relativeExecutable));
+}
+
+async function runInstall(forceNoCache) {
+  if (forceNoCache) {
+    await rm(distDir, { recursive: true, force: true });
+  }
+  await mkdir(distDir, { recursive: true });
+  const zipPath = await downloadArtifact({
+    version,
+    artifactName: "electron",
+    force: forceNoCache,
+    cacheRoot: process.env.electron_config_cache,
+    checksums:
+      process.env.electron_use_remote_checksums || process.env.npm_config_electron_use_remote_checksums
+        ? undefined
+        : require(join(electronPackageDir, "checksums.json")),
+    platform: process.env.ELECTRON_INSTALL_PLATFORM || process.env.npm_config_platform || currentPlatform(),
+    arch: process.env.ELECTRON_INSTALL_ARCH || process.env.npm_config_arch || currentArch()
+  });
+  console.log(`[ensure-electron] zip=${zipPath}`);
+  if (currentPlatform() === "win32") {
+    await expandArchiveWithPowerShell(zipPath, distDir);
+  } else {
+    await extract(zipPath, { dir: distDir });
+  }
+  await writeFile(pathFile, getPlatformPath());
+  const entries = await readdir(distDir).catch(() => []);
+  console.log(`[ensure-electron] dist=${entries.slice(0, 8).join(",")}`);
+}
+
+async function expandArchiveWithPowerShell(zipPath, destinationPath) {
+  await new Promise((resolve, reject) => {
+    const command = [
+      "$ProgressPreference = 'SilentlyContinue'",
+      `Expand-Archive -LiteralPath ${quotePowerShellLiteral(zipPath)} -DestinationPath ${quotePowerShellLiteral(destinationPath)} -Force`
+    ].join("; ");
+    const child = spawn(
+      "powershell",
+      [
+        "-NoProfile",
+        "-Command",
+        command
+      ],
+      { stdio: "inherit" }
+    );
+    child.on("error", reject);
+    child.on("exit", (code, signal) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`Expand-Archive failed with code=${code} signal=${signal ?? ""}`));
+    });
+  });
+}
+
+function quotePowerShellLiteral(value) {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+function getPlatformPath() {
+  const targetPlatform = process.env.ELECTRON_INSTALL_PLATFORM || process.env.npm_config_platform || currentPlatform();
+
+  switch (targetPlatform) {
+    case "mas":
+    case "darwin":
+      return "Electron.app/Contents/MacOS/Electron";
+    case "freebsd":
+    case "openbsd":
+    case "linux":
+      return "electron";
+    case "win32":
+      return "electron.exe";
+    default:
+      throw new Error(`Electron builds are not available on platform: ${targetPlatform}`);
+  }
+}

@@ -51,9 +51,7 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Install Electron binary
-        run: |
-          pnpm --dir apps/desktop exec install-electron
-          if (!(Test-Path apps/desktop/node_modules/electron/path.txt)) { throw "Electron path.txt was not created" }
+        run: pnpm --dir apps/desktop ensure:electron
       - name: Build desktop once
         run: pnpm build:desktop
       - name: Pet quick harness
@@ -77,9 +75,7 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Install Electron binary
-        run: |
-          pnpm --dir apps/desktop exec install-electron
-          if (!(Test-Path apps/desktop/node_modules/electron/path.txt)) { throw "Electron path.txt was not created" }
+        run: pnpm --dir apps/desktop ensure:electron
       - name: Build desktop once
         run: pnpm build:desktop
       - name: Full Electron harness
