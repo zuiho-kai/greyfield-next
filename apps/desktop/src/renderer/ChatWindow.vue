@@ -15,7 +15,7 @@
       <p>{{ state.errorMessage }}</p>
     </div>
 
-    <div class="message-list-container" aria-live="polite">
+    <div class="message-list-container message-list" aria-live="polite">
       <div
         v-for="(message, index) in state.messages"
         :key="index"
