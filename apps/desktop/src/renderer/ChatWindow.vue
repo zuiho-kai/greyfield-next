@@ -1,31 +1,61 @@
 <template>
   <main class="chat-shell">
-    <header class="window-titlebar">
-      <div class="chat-heading">
-        <span>Chat</span>
-        <span class="status-pill">{{ state.status }}</span>
+    <header class="chat-window-header">
+      <div class="chat-header-title">
+        <h1>Chat</h1>
+        <span class="status-badge" :class="state.status">{{ state.status }}</span>
       </div>
-      <button type="button" @click="$emit('open-settings')">Settings</button>
+      <button type="button" class="settings-btn" @click="$emit('open-settings')">
+        <span>⚙️</span> Settings
+      </button>
     </header>
-    <div v-if="state.errorMessage" class="chat-error" role="alert">
-      {{ state.errorMessage }}
+
+    <div v-if="state.errorMessage" class="chat-error-box" role="alert">
+      <span class="error-icon">⚠️</span>
+      <p>{{ state.errorMessage }}</p>
     </div>
-    <div class="message-list" aria-live="polite">
-      <p v-for="(message, index) in state.messages" :key="index" :class="message.role">
-        {{ message.text }}
-      </p>
-      <p v-if="state.assistantDraft" class="assistant draft">{{ state.assistantDraft }}</p>
+
+    <div class="message-list-container" aria-live="polite">
+      <div
+        v-for="(message, index) in state.messages"
+        :key="index"
+        :class="['message-item', message.role]"
+      >
+        <div class="message-content">
+          <div class="message-bubble">{{ message.text }}</div>
+          <span class="message-time">just now</span>
+        </div>
+      </div>
+
+      <div v-if="state.assistantDraft" class="message-item assistant draft">
+        <div class="message-content">
+          <div class="message-bubble">{{ state.assistantDraft }}</div>
+          <span class="message-time">typing...</span>
+        </div>
+      </div>
     </div>
-    <form class="composer" @submit.prevent="$emit('send')">
-      <input
-        :value="draft"
-        aria-label="Message"
-        autocomplete="off"
-        spellcheck="false"
-        @input="$emit('update:draft', valueFrom($event))"
-      />
-      <button type="submit">Send</button>
-      <button type="button" class="interrupt-button" @click="$emit('interrupt')">Stop</button>
+
+    <form class="message-composer" @submit.prevent="$emit('send')">
+      <div class="input-wrapper">
+        <input
+          :value="draft"
+          aria-label="Message"
+          placeholder="Type your message..."
+          autocomplete="off"
+          spellcheck="false"
+          class="message-input"
+          @input="$emit('update:draft', valueFrom($event))"
+        />
+        <span v-if="draft" class="input-char-count">{{ draft.length }}</span>
+      </div>
+      <div class="action-buttons">
+        <button type="submit" class="send-button" :disabled="!draft.trim()">
+          <span>📤</span> Send
+        </button>
+        <button type="button" class="stop-button" @click="$emit('interrupt')">
+          <span>⏹️</span> Stop
+        </button>
+      </div>
     </form>
   </main>
 </template>
