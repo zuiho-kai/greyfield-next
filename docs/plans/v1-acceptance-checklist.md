@@ -1,20 +1,57 @@
 # Greyfield Next V1 验收证据台账
 
-更新时间：2026-06-07
+更新时间：2026-06-08
 
 这份文档服务于 GitHub issue `#31`。它不是 V1 完成声明，而是完成前的证据台账：把每条用户可见路径、已有自动验收、仍缺的截图或命令输出登记清楚，避免把“文档写过”误当成“产品验过”。
 
 ## 本 PR 的交付范围
 
-本 PR 只做证据盘点和验收台账整理，不新增产品功能，不替代自动测试，也不把未验证路径写成已完成。
+本 PR 实现一个可运行的 V1 验收证据工具，并用文档记录运行结果。它不新增产品功能，不替代自动测试，也不把未验证路径写成已完成。
 
 | 项目 | 本 PR 状态 |
 | --- | --- |
-| 新增 V1 验收证据台账 | 已完成 |
+| 新增可运行证据工具 `pnpm harness:v1-acceptance-evidence` | 已完成 |
+| 新增工具测试 `packages/dev-harness/src/__tests__/v1-acceptance-evidence.test.ts` | 已完成 |
+| 新增 V1 验收证据台账 | 已更新 |
 | 链接到 `docs/plans/v1-product-plan.md` | 已完成 |
-| 重新运行全部 harness | 未执行 |
+| 重新运行全部 harness | 未执行；本轮只跑与 #31 和基础工程保护相关的检查 |
 | 补真实桌面截图或录屏 | 未执行 |
 | 宣称 V1 完成 | 不宣称 |
+
+## 可运行交付物
+
+本轮新增 `packages/dev-harness/src/v1-acceptance-evidence.ts`，对应命令：
+
+```bash
+pnpm harness:v1-acceptance-evidence
+```
+
+这个工具读取 `packages/dev-harness/v1-features.json`，把全部 V1 feature 映射到完成前必须验收的用户路径，并输出：
+
+- 每条用户路径绑定的 `GFN-V1-*` feature。
+- 每条路径对应的自动证据命令和手动截图/录屏要求。
+- 哪些路径可以依赖本轮命令证据继续复核。
+- 哪些路径仍不能宣称完成，以及不能宣称完成的原因。
+- manifest 中是否存在未被用户路径覆盖的 V1 feature。
+
+新增测试会保证：
+
+- `v1-features.json` 中所有 V1 feature 都被 #31 用户路径覆盖。
+- in-progress 路径不会因为写了文档就被标成完成。
+- 工具能渲染可用于 PR handoff 的 Markdown 报告。
+
+## 本轮实际运行证据
+
+| 命令 | 结果 | 关键输出 | 证明什么 |
+| --- | --- | --- | --- |
+| `pnpm vitest run packages/dev-harness/src/__tests__/v1-acceptance-evidence.test.ts` | 通过 | 1 file / 3 tests passed | 新增 #31 证据工具有测试保护 |
+| `pnpm harness:v1-acceptance-evidence` | 通过 | 8 user paths; completed features 10; in-progress features 5; missing feature coverage none; unknown referenced features none | 全部 V1 manifest 功能都进入完成前验收路径，没有漏项 |
+| `pnpm typecheck` | 通过 | `tsc -p tsconfig.typecheck.json --noEmit` 无错误 | 新增 TypeScript 代码类型正确 |
+| `pnpm test` | 通过 | 44 files / 138 tests passed | 项目单元测试通过 |
+| `pnpm harness:acceptance` | 通过 | `ok: true`; runtime/status/text/audio events present | fake provider 基础 acceptance 链路通过 |
+| `pnpm build:desktop` | 通过 | renderer/main/preload build completed | 桌面构建产物可生成 |
+| `pnpm harness:pet:quick` | 通过 | `ok: true`; transparent pet snapshot; hit-test/wheel/drag checks passed | 桌宠核心透明、命中、拖动、缩放快检通过 |
+| `pnpm harness:live2d` | 未完成 | 曾因 Playwright 浏览器缺失失败；安装浏览器后本轮被人工中止 | 本 PR 不宣称 Live2D fresh run 通过 |
 
 ## 证据等级说明
 
@@ -57,11 +94,12 @@
 
 | 证据 | 证明什么 | 本 PR 是否提供 |
 | --- | --- | --- |
-| `pnpm typecheck` 输出 | TypeScript 工程结构没有类型错误 | 未提供 |
-| `pnpm test` 输出 | 单元测试通过 | 未提供 |
-| `pnpm harness:acceptance` 输出 | fake provider 文本到语音/舞台基础链路通过 | 未提供 |
-| `pnpm harness:live2d` 输出 | 真实 Live2D 非 fallback 渲染通过 | 未提供 |
-| `pnpm harness:pet:quick` 输出 | 桌宠透明、命中、拖动、缩放等核心交互通过 | 未提供 |
+| `pnpm harness:v1-acceptance-evidence` 输出 | 全部 V1 feature 都绑定到 #31 用户路径，且未完成路径不会被误标完成 | 已提供 |
+| `pnpm typecheck` 输出 | TypeScript 工程结构没有类型错误 | 已提供 |
+| `pnpm test` 输出 | 单元测试通过 | 已提供 |
+| `pnpm harness:acceptance` 输出 | fake provider 文本到语音/舞台基础链路通过 | 已提供 |
+| `pnpm harness:live2d` 输出 | 真实 Live2D 非 fallback 渲染通过 | 未提供；本轮被人工中止，不宣称 fresh pass |
+| `pnpm harness:pet:quick` 输出 | 桌宠透明、命中、拖动、缩放等核心交互通过 | 已提供 |
 | `pnpm harness:electron:provider-failure` 输出 | provider 错误不会静默失败或污染 session | 未提供 |
 | `pnpm harness:electron:provider-abort` 输出 | Stop 会关闭 active provider request | 未提供 |
 | `pnpm harness:electron:bubble-long-reply` 输出 | 长回复气泡不撑爆且 Chat 保留完整内容 | 未提供 |
