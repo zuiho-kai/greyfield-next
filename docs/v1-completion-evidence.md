@@ -26,11 +26,16 @@ Local #41 integration verification has been run on `codex/v1-integration-audit`:
 
 - `pnpm install --frozen-lockfile`
 - `pnpm typecheck`
+- `pnpm test` -> 47 files / 162 tests passed
 - `pnpm test:backend` -> 22 files / 70 tests passed
 - `pnpm test:frontend` -> 25 files / 92 tests passed
 - `pnpm harness:acceptance`
 - `pnpm harness:live2d`
 - `pnpm harness:v1-visual`
+- `pnpm harness:pet:quick`
+- `pnpm harness:electron:provider-failure`
+- `pnpm harness:electron:restart-context`
+- `pnpm harness:electron:bubble-long-reply`
 - `pnpm harness:electron:settings-provider-test`
 - `pnpm harness:electron:settings-active-chat-test`
 - `pnpm harness:electron:provider-abort`
@@ -50,6 +55,8 @@ Visual review artifacts from `pnpm harness:v1-visual` were inspected from `.cach
 - `pet-after-chat.png`: readable short speech bubble; not a full chat transcript.
 - `chat-after-reply.png`: Chat retains the complete assistant reply.
 - `settings-provider-preview.png`: Settings shows product-facing fake provider Preview state.
+
+`pnpm harness:electron:real-llm` was not rerun for #41 because `GREYFIELD_REAL_LLM_BASE_URL`, `GREYFIELD_REAL_LLM_API_KEY`, and `GREYFIELD_REAL_LLM_MODEL` are not present in the current environment. Real-provider evidence therefore remains an explicit release-branch rerun requirement when credentials are available.
 
 ## User Paths
 
@@ -75,6 +82,7 @@ Visual review artifacts from `pnpm harness:v1-visual` were inspected from `.cach
 
 - Real TTS playback has PR-local proof in #39 and combined proof in #41, but it is not release-claimable until merged and rerun on the release branch.
 - Stop-audio behavior has PR-local proof in stacked PR #40 and combined proof in #41, but it is not release-claimable until the combined behavior is merged and rerun on the release branch.
+- Real OpenAI-compatible provider evidence is not current on #41 because the required `GREYFIELD_REAL_LLM_*` env vars were unavailable. The fake provider path, provider failure path, Test LLM product states, and provider abort path are covered; real-provider chat still needs an env-backed rerun before any release claim.
 - ASR and microphone conversation are not V1-complete.
 - #26, #27, #28, #29, #30, and #31 evidence is currently in draft PRs #35, #36, #37, #38, #39, #40, and #41. Their evidence must be merged or rerun on the final release branch before V1 can be called complete.
 - A final V1 release claim still needs one current-head checkpoint run covering `pnpm typecheck`, `pnpm test`, `pnpm harness:acceptance`, `pnpm harness:live2d`, `pnpm harness:pet:quick`, `pnpm harness:electron`, and the feature-specific harnesses listed above.
