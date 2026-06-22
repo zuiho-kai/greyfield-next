@@ -12,6 +12,8 @@ export function settingsFromConfig(config: RendererGreyfieldConfig | GreyfieldCo
     providerHasApiKey: hasApiKey,
     providerModel: config.provider.model,
     voiceId: config.voice.id,
+    voiceVolume: config.voice.volume,
+    voiceSpeechEnabled: config.voice.speechEnabled,
     microphoneId: config.audio.microphoneId,
     characterFile: config.characterFile,
     modelPath: config.live2d.modelPath,
@@ -34,7 +36,9 @@ export function configFromSettings(settings: DesktopSettingsState): GreyfieldCon
     },
     voice: {
       ...defaultGreyfieldConfig.voice,
-      id: settings.voiceId
+      id: settings.voiceId,
+      volume: settings.voiceVolume,
+      speechEnabled: settings.voiceSpeechEnabled
     },
     audio: {
       ...defaultGreyfieldConfig.audio,
@@ -70,7 +74,13 @@ export function settingsPatchToConfigPatch(patch: DesktopSettingsPatch): Greyfie
     configPatch.provider = { ...configPatch.provider, apiKey: patch.providerApiKey };
   }
   if (patch.voiceId !== undefined) {
-    configPatch.voice = { id: patch.voiceId };
+    configPatch.voice = { ...configPatch.voice, id: patch.voiceId };
+  }
+  if (patch.voiceVolume !== undefined) {
+    configPatch.voice = { ...configPatch.voice, volume: patch.voiceVolume };
+  }
+  if (patch.voiceSpeechEnabled !== undefined) {
+    configPatch.voice = { ...configPatch.voice, speechEnabled: patch.voiceSpeechEnabled };
   }
   if (patch.microphoneId !== undefined) {
     configPatch.audio = { microphoneId: patch.microphoneId };

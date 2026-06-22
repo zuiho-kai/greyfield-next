@@ -1,4 +1,5 @@
 import { defaultGreyfieldConfig, type GreyfieldConfig } from "@greyfield/persistence/config-schema";
+import type { SpeechOutput } from "@greyfield/audio-runtime";
 import type { DesktopIpcEventChannel, DesktopIpcEventMap, DesktopIpcRequestChannel, DesktopIpcRequestMap } from "../shared/ipc";
 import { isMaskedApiKey } from "../shared/secrets";
 import { createDefaultInteractionProfile } from "@greyfield/stage-live2d";
@@ -14,6 +15,7 @@ export interface DesktopMessage {
 export interface DesktopRendererState {
   status: string;
   errorMessage: string;
+  voiceErrorMessage: string;
   providerTest: {
     status: "idle" | "testing" | "success" | "error";
     message: string;
@@ -45,6 +47,8 @@ export interface DesktopSettingsState {
   providerHasApiKey: boolean;
   providerModel: string;
   voiceId: string;
+  voiceVolume: number;
+  voiceSpeechEnabled: boolean;
   microphoneId: string;
   characterFile: string;
   modelPath: string;
@@ -75,7 +79,7 @@ export class DesktopRuntimeBridge {
   private readonly stateChangeHandlers = new Set<DesktopStateChangeHandler>();
   private readonly interactionProfile = createDefaultInteractionProfile();
 
-  constructor(private readonly host?: DesktopHostApi) {
+  constructor(private readonly host?: DesktopHostApi, private readonly speechOutput?: SpeechOutput) {
     this.host?.on("settings:changed", (config) => {
       this.state = {
         ...this.state,
@@ -99,6 +103,9 @@ export class DesktopRuntimeBridge {
     });
     this.host?.on("runtime:event", (event) => {
       this.state = reduceRuntimeEvent(this.state, event, this.interactionProfile);
+      if (event.type === "assistant.audio.chunk") {
+        this.playSpeech(event.text);
+      }
       this.emitStateChange();
     });
     this.host?.on("provider:test-llm-result", (result) => {
@@ -129,6 +136,7 @@ export class DesktopRuntimeBridge {
       ...this.state,
       status: "thinking",
       errorMessage: "",
+      voiceErrorMessage: "",
       inputDraft: "",
       assistantDraft: "",
       messages: [...this.state.messages, { role: "user", text: trimmed }]
@@ -149,10 +157,12 @@ export class DesktopRuntimeBridge {
   async interrupt(): Promise<DesktopRendererState> {
     if (this.host) {
       this.host.send("runtime:input", { type: "runtime.interrupt" });
+      this.speechOutput?.cancel();
       this.state = {
         ...this.state,
         status: "interrupted",
         errorMessage: "",
+        voiceErrorMessage: "",
         assistantDraft: "",
         audioQueue: [],
         stage: {
@@ -167,6 +177,7 @@ export class DesktopRuntimeBridge {
       ...this.state,
       status: "interrupted",
       errorMessage: "",
+      voiceErrorMessage: "",
       assistantDraft: "",
       audioQueue: [],
       stage: {
@@ -238,6 +249,24 @@ export class DesktopRuntimeBridge {
     return configFromSettings(this.state.settings);
   }
 
+  private playSpeech(text: string): void {
+    if (!this.speechOutput || !this.state.settings.voiceSpeechEnabled) {
+      return;
+    }
+    void this.speechOutput
+      .speak(text, {
+        voiceId: this.state.settings.voiceId,
+        volume: this.state.settings.voiceVolume
+      })
+      .catch((error) => {
+        this.state = {
+          ...this.state,
+          voiceErrorMessage: `Voice playback failed: ${error instanceof Error ? error.message : String(error)}`
+        };
+        this.emitStateChange();
+      });
+  }
+
   private emitStateChange(): void {
     const snapshot = this.getState();
     for (const handler of this.stateChangeHandlers) {
@@ -276,10 +305,15 @@ export function createDesktopRuntimeBridge(host?: DesktopHostApi): DesktopRuntim
   return new DesktopRuntimeBridge(host);
 }
 
+export function createDesktopRuntimeBridgeWithSpeech(host: DesktopHostApi | undefined, speechOutput: SpeechOutput | undefined): DesktopRuntimeBridge {
+  return new DesktopRuntimeBridge(host, speechOutput);
+}
+
 export function createInitialDesktopRendererState(): DesktopRendererState {
   return {
     status: "idle",
     errorMessage: "",
+    voiceErrorMessage: "",
     providerTest: {
       status: "idle",
       message: ""
@@ -295,6 +329,8 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       providerHasApiKey: defaultGreyfieldConfig.provider.apiKey.length > 0,
       providerModel: defaultGreyfieldConfig.provider.model,
       voiceId: defaultGreyfieldConfig.voice.id,
+      voiceVolume: defaultGreyfieldConfig.voice.volume,
+      voiceSpeechEnabled: defaultGreyfieldConfig.voice.speechEnabled,
       microphoneId: defaultGreyfieldConfig.audio.microphoneId,
       characterFile: defaultGreyfieldConfig.characterFile,
       modelPath: defaultGreyfieldConfig.live2d.modelPath,

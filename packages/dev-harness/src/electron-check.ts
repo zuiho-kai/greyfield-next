@@ -265,6 +265,8 @@ try {
   const resetConfig = await waitForLive2DTransform(configPath, { scale: 1, x: 0, y: 0 });
   await settingsWindow.getByRole("button", { name: "Test LLM" }).click();
   await settingsWindow.locator(".provider-test-result--success", { hasText: "Test succeeded" }).waitFor();
+  await settingsWindow.getByLabel("Speak replies").check();
+  const savedVoiceConfig = await waitForVoiceSpeech(configPath, true);
   await settingsWindow.getByRole("textbox", { name: "Model", exact: true }).fill("electron-harness-model");
   const savedConfig = await waitForSavedModel(configPath, "electron-harness-model");
   await settingsWindow.getByLabel("Speech Bubble").uncheck();
@@ -290,6 +292,7 @@ try {
         petSnapshot,
         settingsBounds,
         resetTransform: resetConfig.live2d,
+        savedVoiceSpeech: savedVoiceConfig.voice.speechEnabled,
         savedModel: savedConfig.provider.model,
         savedSpeechBubble: savedBubbleConfig.ui.speechBubbleEnabled,
         hitTestWorked: true,
@@ -376,4 +379,17 @@ async function waitForSessionJsonl(expectedTexts: string[]): Promise<string> {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Desktop session JSONL did not persist the chat turn: ${lastJsonl}`);
+}
+
+async function waitForVoiceSpeech(path: string, enabled: boolean): Promise<typeof defaultGreyfieldConfig> {
+  const started = Date.now();
+  let config = await readConfig(path);
+  while (Date.now() - started < 5_000) {
+    config = await readConfig(path);
+    if (config.voice.speechEnabled === enabled) {
+      return config;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Voice speech setting did not become ${enabled}: ${JSON.stringify(config.voice)}`);
 }

@@ -26,6 +26,7 @@ export function reduceRuntimeEvent(
       ...state,
       status: "error",
       errorMessage: event.message,
+      voiceErrorMessage: "",
       inputDraft: lastUserMessage,
       assistantDraft: "",
       audioQueue: [],
@@ -42,6 +43,7 @@ export function reduceRuntimeEvent(
     }
     return {
       ...state,
+      voiceErrorMessage: "",
       assistantDraft: `${state.assistantDraft}${event.text}`
     };
   }
@@ -63,11 +65,19 @@ export function reduceRuntimeEvent(
   if (event.type === "assistant.audio.chunk") {
     return {
       ...state,
+      voiceErrorMessage: "",
       audioQueue: [...state.audioQueue, event.text],
       stage: {
         ...state.stage,
         mouthOpen: 0
       }
+    };
+  }
+
+  if (event.type === "assistant.audio.error") {
+    return {
+      ...state,
+      voiceErrorMessage: event.message
     };
   }
 

@@ -79,6 +79,27 @@
           />
         </label>
         <label>
+          <span>Speak</span>
+          <input
+            :checked="state.settings.voiceSpeechEnabled"
+            aria-label="Speak replies"
+            type="checkbox"
+            @change="$emit('update-boolean-setting', 'voiceSpeechEnabled', checkedFrom($event))"
+          />
+        </label>
+        <label>
+          <span>Volume</span>
+          <input
+            :value="state.settings.voiceVolume"
+            aria-label="Voice volume"
+            type="number"
+            min="0"
+            max="1"
+            step="0.05"
+            @input="$emit('update-numeric-setting', 'voiceVolume', valueFrom($event))"
+          />
+        </label>
+        <label>
           <span>Mic</span>
           <input
             :value="state.settings.microphoneId"
@@ -175,6 +196,9 @@
             @change="$emit('update-boolean-setting', 'speechBubbleEnabled', checkedFrom($event))"
           />
         </label>
+        <p v-if="state.voiceErrorMessage" class="provider-test-result provider-test-result--error" role="status">
+          {{ state.voiceErrorMessage }}
+        </p>
       </section>
 
       <section v-if="modelInfo" class="model-inspector" aria-label="Live2D model info">
@@ -239,8 +263,8 @@ const props = defineProps<{
 
 defineEmits<{
   "update-setting": [key: keyof DesktopSettingsState, value: string];
-  "update-numeric-setting": [key: "modelScale" | "modelX" | "modelY", value: string];
-  "update-boolean-setting": [key: "speechBubbleEnabled", value: boolean];
+  "update-numeric-setting": [key: "modelScale" | "modelX" | "modelY" | "voiceVolume", value: string];
+  "update-boolean-setting": [key: "speechBubbleEnabled" | "voiceSpeechEnabled", value: boolean];
   "update:model-pass-through": [value: boolean];
   "update:locked": [value: boolean];
   "choose-model": [];

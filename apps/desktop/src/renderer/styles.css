@@ -230,6 +230,12 @@ button {
   margin: 0;
 }
 
+.voice-error-box {
+  border-color: rgba(143, 49, 80, 0.22);
+  background: rgba(255, 248, 232, 0.95);
+  color: #7a4a16;
+}
+
 @keyframes slideIn {
   from {
     opacity: 0;

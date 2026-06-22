@@ -10,6 +10,7 @@ export interface GreyfieldConfig {
   voice: {
     id: string;
     volume: number;
+    speechEnabled: boolean;
   };
   audio: {
     microphoneId: string;
@@ -56,7 +57,8 @@ export const defaultGreyfieldConfig: GreyfieldConfig = {
   },
   voice: {
     id: "default",
-    volume: 0.85
+    volume: 0.85,
+    speechEnabled: false
   },
   audio: {
     microphoneId: "default"
