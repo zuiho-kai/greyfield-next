@@ -67,6 +67,8 @@ async function createWindows(): Promise<void> {
   await loadRenderer(petWindow, "pet");
   await loadRenderer(settingsWindow, "settings");
   await loadRenderer(chatWindow, "chat");
+  broadcastSettings(config);
+  broadcastWindowState();
   applyHitTest({ passthrough: true, reason: "transparent-area" });
   createTray();
 }

@@ -22,6 +22,7 @@
     "harness:electron:real-llm": "pnpm build:desktop && tsx packages/dev-harness/src/electron-real-llm-check.ts",
     "harness:electron:provider-failure": "pnpm build:desktop && tsx packages/dev-harness/src/electron-provider-failure-check.ts",
     "harness:electron:provider-abort": "pnpm build:desktop && tsx packages/dev-harness/src/electron-provider-abort-check.ts",
+    "harness:electron:stop-audio": "pnpm build:desktop && tsx packages/dev-harness/src/electron-stop-audio-check.ts",
     "harness:electron:bubble-long-reply": "pnpm build:desktop && tsx packages/dev-harness/src/electron-bubble-long-reply-check.ts",
     "harness:electron:bubble-edge-clickthrough": "pnpm build:desktop && tsx packages/dev-harness/src/electron-bubble-edge-clickthrough-check.ts",
     "harness:electron:settings-provider-test": "pnpm build:desktop && tsx packages/dev-harness/src/electron-settings-provider-test-check.ts",

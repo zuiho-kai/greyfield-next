@@ -182,10 +182,11 @@
         "When enabled, assistant audio chunks are played through the renderer speech output.",
         "TTS or speech playback failure reports a voice-only error and does not remove the assistant text reply or session turn.",
         "Long replies are capped by a per-turn TTS character budget so playback cannot run unbounded.",
+        "Stop cancels active renderer speech playback and clears queued speech UI state.",
         "Audio runtime exposes a pure RMS VAD boundary before microphone integration."
       ],
       "qa": {
-        "script": "vitest sentence-splitter vad tts-text-budget speech-synthesis-output runtime-loop runtime-service desktop-runtime-bridge config"
+        "script": "vitest sentence-splitter vad tts-text-budget speech-synthesis-output runtime-loop runtime-service desktop-runtime-bridge config; pnpm harness:electron:stop-audio"
       }
     },
     {
@@ -199,10 +200,11 @@
         "Desktop bridge clears pending assistant draft, TTS queue, and mouth-open state.",
         "Electron renderer Stop button drives the interrupt path.",
         "Main-process runtime aborts the active OpenAI-compatible request signal.",
-        "Concurrent text inputs do not leave older provider streams alive."
+        "Concurrent text inputs do not leave older provider streams alive.",
+        "Electron stop-audio harness proves Stop cancels active speech playback, clears the speech queue, and resets mouth-open state."
       ],
       "qa": {
-        "script": "vitest runtime-loop desktop-runtime-bridge runtime-service interrupt"
+        "script": "vitest runtime-loop desktop-runtime-bridge runtime-service interrupt; pnpm harness:electron:provider-abort; pnpm harness:electron:stop-audio"
       }
     },
     {

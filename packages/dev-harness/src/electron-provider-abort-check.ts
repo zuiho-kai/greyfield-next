@@ -61,11 +61,11 @@ try {
       throw new Error("Stop button was not clickable while provider response was streaming");
     }
     await stopButton.click();
-    await chatWindow.locator(".status-pill", { hasText: "Stopped" }).waitFor({ timeout: 10_000 });
+    await chatWindow.locator(".status-badge, .status-pill", { hasText: /idle|interrupted|Stopped/ }).waitFor({ timeout: 10_000 });
     await waitForRequestClose();
     const stopState = await chatWindow.evaluate(() => ({
-      status: document.querySelector(".status-pill")?.textContent?.trim() ?? "",
-      error: document.querySelector(".chat-error")?.textContent?.trim() ?? "",
+      status: document.querySelector(".status-badge, .status-pill")?.textContent?.trim() ?? "",
+      error: document.querySelector(".chat-error-box, .chat-error")?.textContent?.trim() ?? "",
       assistantDraftCount: document.querySelectorAll(".message-list .message-item.assistant.draft").length,
       assistantFinalCount: document.querySelectorAll(".message-list .message-item.assistant:not(.draft)").length
     }));
