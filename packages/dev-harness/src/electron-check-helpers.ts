@@ -47,8 +47,9 @@ export function chooseStagePointFromAlpha(input: {
   wantHit: boolean;
   alphaAt: (x: number, y: number) => number;
   toPoint: (x: number, y: number) => { x: number; y: number };
+  acceptPoint?: (point: { x: number; y: number }, sample: { x: number; y: number; alpha: number }) => boolean;
 }): { x: number; y: number } | null {
-  let best: { x: number; y: number; alpha: number } | null = null;
+  const candidates: Array<{ x: number; y: number; alpha: number }> = [];
   for (let y = 0; y < input.height; y += 4) {
     for (let x = 0; x < input.width; x += 4) {
       const alpha = input.alphaAt(x, y);
@@ -56,12 +57,17 @@ export function chooseStagePointFromAlpha(input: {
       if (!matches) {
         continue;
       }
-      if (!best || (input.wantHit ? alpha > best.alpha : alpha < best.alpha)) {
-        best = { x, y, alpha };
-      }
+      candidates.push({ x, y, alpha });
     }
   }
-  return best ? input.toPoint(best.x, best.y) : null;
+  candidates.sort((left, right) => (input.wantHit ? right.alpha - left.alpha : left.alpha - right.alpha));
+  for (const candidate of candidates) {
+    const point = input.toPoint(candidate.x, candidate.y);
+    if (!input.acceptPoint || input.acceptPoint(point, candidate)) {
+      return point;
+    }
+  }
+  return null;
 }
 
 export async function findStagePoint(page: Page, hit: boolean): Promise<{ x: number; y: number }> {
@@ -82,7 +88,7 @@ export async function findStagePoint(page: Page, hit: boolean): Promise<{ x: num
       }
       const rect = canvas.getBoundingClientRect();
       const getAlpha = createAlphaReader(canvas);
-      let best: { x: number; y: number; alpha: number } | null = null;
+      const candidates: Array<{ x: number; y: number; alpha: number }> = [];
       for (let y = 0; y < canvas.height; y += 4) {
         for (let x = 0; x < canvas.width; x += 4) {
           const alpha = getAlpha(x, y);
@@ -90,15 +96,16 @@ export async function findStagePoint(page: Page, hit: boolean): Promise<{ x: num
             strongest = { x, y, alpha, canvas: canvas.className };
           }
           const matches = wantHit ? alpha >= 16 : alpha < 16;
-          if (matches && (!best || (wantHit ? alpha > best.alpha : alpha < best.alpha))) {
-            best = { x, y, alpha };
+          if (matches) {
+            candidates.push({ x, y, alpha });
           }
         }
       }
-      if (best) {
+      candidates.sort((left, right) => (wantHit ? right.alpha - left.alpha : left.alpha - right.alpha));
+      for (const candidate of candidates.slice(0, 256)) {
         const point = {
-          x: rect.left + (best.x / canvas.width) * rect.width,
-          y: rect.top + (best.y / canvas.height) * rect.height
+          x: rect.left + (candidate.x / canvas.width) * rect.width,
+          y: rect.top + (candidate.y / canvas.height) * rect.height
         };
         if (!smoke || smoke.sampleModelHit(point.x, point.y) === wantHit) {
           return point;

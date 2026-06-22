@@ -14,6 +14,19 @@ describe("electron check helpers", () => {
     expect(result).toEqual({ x: 40, y: 0 });
   });
 
+  it("falls back to the next strongest model pixel when a smoke check rejects the strongest point", () => {
+    const result = chooseStagePointFromAlpha({
+      width: 16,
+      height: 1,
+      wantHit: true,
+      alphaAt: (x) => [20, 255, 180, 0][x / 4] ?? 0,
+      toPoint: (x, y) => ({ x: x * 10, y: y * 10 }),
+      acceptPoint: (point) => point.x !== 40
+    });
+
+    expect(result).toEqual({ x: 80, y: 0 });
+  });
+
   it("keeps transparent point selection away from model pixels", () => {
     const result = chooseStagePointFromAlpha({
       width: 16,
