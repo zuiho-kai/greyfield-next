@@ -706,17 +706,37 @@ h1 {
 }
 
 .settings-actions button:disabled {
-  cursor: wait;
   opacity: 0.62;
 }
 
+.settings-actions button.test-llm-button--testing:disabled {
+  cursor: wait;
+}
+
+.settings-actions button.test-llm-button--blocked:disabled,
+.settings-actions button.test-llm-button--active-chat:disabled {
+  cursor: not-allowed;
+}
+
 .provider-test-result {
+  display: grid;
+  gap: 3px;
   margin: 0;
   padding: 8px 10px;
   border-radius: 8px;
   font-size: 12px;
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.provider-test-result strong {
+  color: inherit;
+  font-size: 12px;
+}
+
+.provider-test-result span {
+  color: inherit;
+  font-size: 12px;
 }
 
 .provider-test-result--testing {

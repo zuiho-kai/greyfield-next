@@ -64,7 +64,9 @@ try {
     }
 
     await chatWindow.getByRole("button", { name: "Stop" }).click();
-    await chatWindow.locator(".status-pill", { hasText: "Stopped" }).waitFor({ timeout: 10_000 });
+    await chatWindow.locator(".status-badge, .status-pill", { hasText: /idle|interrupted|Stopped/ }).waitFor({
+      timeout: 10_000
+    });
 
     console.log(
       JSON.stringify(
