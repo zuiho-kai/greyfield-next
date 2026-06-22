@@ -9,7 +9,7 @@ Last updated: 2026-06-22.
 - `packages/dev-harness/v1-features.json` remains the source of truth for feature acceptance.
 - PR-local evidence counts for review of that PR, but V1 release evidence only counts after the PR is merged or the command is rerun on the release branch.
 - Screenshot artifacts are review evidence, not a replacement for executable harnesses.
-- Do not mark voice, TTS playback, ASR, or Stop-audio behavior complete until #29 and #30 have their own executable proof.
+- Do not mark voice, TTS playback, or Stop-audio behavior release-complete until #29 and #30 are merged and rerun on the release branch. Draft PR evidence is review evidence only.
 
 ## User Paths
 
@@ -28,13 +28,15 @@ Last updated: 2026-06-22.
 | Keep recent context across restart | `pnpm harness:electron:restart-context`; unit tests `runtime-service`, `jsonl-session-store`, `prompt-assembler` | Claimable after rerun on release branch |
 | Show short assistant text in pet bubble while full history stays in Chat | `pnpm harness:electron:bubble-long-reply`; `pnpm harness:v1-visual` screenshots | Claimable after rerun on release branch |
 | Keep bubble inside right edge and remove bubble hit area when disabled | #26 draft PR [#35](https://github.com/zuiho-kai/greyfield-next/pull/35) adds `pnpm harness:electron:bubble-edge-clickthrough` and screenshots under `.cache/greyfield-bubble-edge-clickthrough/latest/`. | Not release-claimable until #35 is merged and rerun |
+| Enable real assistant speech output without sudden default audio | #29 draft PR [#39](https://github.com/zuiho-kai/greyfield-next/pull/39) adds Settings `Speak replies`, renderer Web Speech playback, default-quiet behavior, TTS failure isolation, long-reply speech budget, and Electron proof that `savedVoiceSpeech: true`. | Not release-claimable until #39 is merged and rerun |
+| Stop active speech playback, queued speech UI, and mouth-open state | #30 stacked draft PR [#40](https://github.com/zuiho-kai/greyfield-next/pull/40) adds `pnpm harness:electron:stop-audio`, keeps `pnpm harness:electron:provider-abort` passing, and proves `speechCanceled`, `audioQueueCleared`, and `mouthOpenReset`. | Not release-claimable until #39 and #40 are merged or #40 is retargeted and rerun |
 
 ## Current Non-Claimable Paths
 
-- Real TTS playback is not complete. #29 still needs sentence-level real TTS output and executable proof.
-- Stop does not yet cover real audio playback, TTS queue, or mouth/lip-sync queue. #30 owns that proof.
+- Real TTS playback has PR-local proof in #39, but it is not release-claimable until merged and rerun on the release branch.
+- Stop-audio behavior has PR-local proof in stacked PR #40, but it is not release-claimable until #39 and #40 are merged or #40 is retargeted to the release branch and rerun.
 - ASR and microphone conversation are not V1-complete.
-- #26, #27, and #28 evidence is currently in draft PRs #35, #36, and #37. Their evidence must be merged or rerun on the final release branch before V1 can be called complete.
+- #26, #27, #28, #29, and #30 evidence is currently in draft PRs #35, #36, #37, #39, and #40. Their evidence must be merged or rerun on the final release branch before V1 can be called complete.
 - A final V1 release claim still needs one current-head checkpoint run covering `pnpm typecheck`, `pnpm test`, `pnpm harness:acceptance`, `pnpm harness:live2d`, `pnpm harness:pet:quick`, `pnpm harness:electron`, and the feature-specific harnesses listed above.
 
 ## Release Audit Steps
