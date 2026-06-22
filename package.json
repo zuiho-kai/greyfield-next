@@ -23,6 +23,7 @@
     "harness:electron:provider-failure": "pnpm build:desktop && tsx packages/dev-harness/src/electron-provider-failure-check.ts",
     "harness:electron:provider-abort": "pnpm build:desktop && tsx packages/dev-harness/src/electron-provider-abort-check.ts",
     "harness:electron:bubble-long-reply": "pnpm build:desktop && tsx packages/dev-harness/src/electron-bubble-long-reply-check.ts",
+    "harness:electron:settings-provider-test": "pnpm build:desktop && tsx packages/dev-harness/src/electron-settings-provider-test-check.ts",
     "harness:electron:settings-active-chat-test": "pnpm build:desktop && tsx packages/dev-harness/src/electron-settings-active-chat-test-check.ts",
     "harness:pet:quick": "tsx packages/dev-harness/src/electron-check.ts --quick",
     "dev:live2d": "node apps/desktop/scripts/dev-live2d-electron.mjs",

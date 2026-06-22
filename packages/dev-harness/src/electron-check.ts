@@ -264,7 +264,7 @@ try {
   await settingsWindow.getByRole("button", { name: "Reset transform" }).click();
   const resetConfig = await waitForLive2DTransform(configPath, { scale: 1, x: 0, y: 0 });
   await settingsWindow.getByRole("button", { name: "Test LLM" }).click();
-  await settingsWindow.locator(".provider-test-result", { hasText: "LLM test succeeded" }).waitFor();
+  await settingsWindow.locator(".provider-test-result--success", { hasText: "Test succeeded" }).waitFor();
   await settingsWindow.getByRole("textbox", { name: "Model", exact: true }).fill("electron-harness-model");
   const savedConfig = await waitForSavedModel(configPath, "electron-harness-model");
   await settingsWindow.getByLabel("Speech Bubble").uncheck();
