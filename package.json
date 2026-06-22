@@ -7,10 +7,13 @@
   "scripts": {
     "test": "vitest run",
     "test:unit": "vitest run --exclude \"packages/dev-harness/src/**\"",
+    "test:backend": "vitest run packages/core-runtime packages/audio-runtime packages/persistence apps/desktop/src/main",
+    "test:frontend": "vitest run apps/desktop/src/renderer apps/desktop/src/preload packages/stage-live2d packages/dev-harness",
     "test:changed": "vitest related --run",
     "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
     "build:desktop": "pnpm --filter @greyfield/desktop build:all",
     "harness:acceptance": "tsx packages/dev-harness/src/acceptance.ts",
+    "harness:v1-visual": "pnpm build:desktop && tsx packages/dev-harness/src/v1-visual-acceptance-check.ts",
     "harness:fallback": "tsx packages/dev-harness/src/fallback-check.ts",
     "harness:live2d": "tsx packages/dev-harness/src/live2d-check.ts",
     "harness:electron": "pnpm build:desktop && tsx packages/dev-harness/src/electron-check.ts",

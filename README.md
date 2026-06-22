@@ -107,10 +107,13 @@ flowchart TB
 ```bash
 pnpm install
 pnpm test
+pnpm test:backend
+pnpm test:frontend
 pnpm test:unit
 pnpm typecheck
 pnpm build:desktop
 pnpm harness:acceptance
+pnpm harness:v1-visual
 pnpm harness:live2d
 pnpm harness:pet:quick
 pnpm harness:electron
@@ -133,5 +136,7 @@ CI is split into layers:
 - fast checks: `pnpm typecheck`, `pnpm test`, `pnpm harness:acceptance`
 - desktop pet quick: one desktop build plus `pnpm harness:pet:quick`
 - checkpoint: one desktop build plus `pnpm harness:electron:quick`, run on main or manual dispatch
+
+Use `pnpm test:backend` for runtime, persistence, audio, and Electron main regressions. Use `pnpm test:frontend` for renderer, preload, stage, and dev-harness regressions. Use `pnpm harness:v1-visual` when a change needs human-verifiable desktop-pet artifacts; it writes screenshots and `summary.json` to `.cache/greyfield-v1-visual-acceptance/latest` unless `GREYFIELD_ACCEPTANCE_ARTIFACT_DIR` is set.
 
 Before adding new V1 behavior, read [docs/failure-retro.md](docs/failure-retro.md), [docs/desktop-pet-product-commonsense.md](docs/desktop-pet-product-commonsense.md), and [docs/technical-reference-projects.md](docs/technical-reference-projects.md). The previous Greyfield failed by mixing too many systems into the first spine; Greyfield Next keeps the alive desktop companion loop separate from later control/agent modules.

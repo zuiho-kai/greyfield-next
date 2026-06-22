@@ -7,6 +7,7 @@ apps/desktop/dist-renderer/
 coverage/
 .vite/
 .cache/
+artifacts/
 *.tsbuildinfo
 *.log
 data/sessions/*.jsonl
