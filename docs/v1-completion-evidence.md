@@ -10,6 +10,46 @@ Last updated: 2026-06-22.
 - PR-local evidence counts for review of that PR, but V1 release evidence only counts after the PR is merged or the command is rerun on the release branch.
 - Screenshot artifacts are review evidence, not a replacement for executable harnesses.
 - Do not mark voice, TTS playback, or Stop-audio behavior release-complete until #29 and #30 are merged and rerun on the release branch. Draft PR evidence is review evidence only.
+- Draft integration PR [#41](https://github.com/zuiho-kai/greyfield-next/pull/41) combines #35, #36, #37, #38, #39, and #40. Its evidence is stronger than isolated PR evidence because it proves the branches can coexist, but it is still not release evidence until merged or rerun on the release branch.
+- Old PR [#32](https://github.com/zuiho-kai/greyfield-next/pull/32) is closed as superseded by #38 and #41.
+
+## Current Integration Evidence
+
+Draft PR [#41](https://github.com/zuiho-kai/greyfield-next/pull/41) is the current V1 integration/audit branch. It is mergeable and its GitHub checks passed:
+
+- Fast checks: success.
+- Desktop pet quick harness: success.
+- GitGuardian Security Checks: success.
+- Full checkpoint harness: skipped by workflow conditions.
+
+Local #41 integration verification has been run on `codex/v1-integration-audit`:
+
+- `pnpm install --frozen-lockfile`
+- `pnpm typecheck`
+- `pnpm test:backend` -> 22 files / 70 tests passed
+- `pnpm test:frontend` -> 25 files / 92 tests passed
+- `pnpm harness:acceptance`
+- `pnpm harness:live2d`
+- `pnpm harness:v1-visual`
+- `pnpm harness:electron:settings-provider-test`
+- `pnpm harness:electron:settings-active-chat-test`
+- `pnpm harness:electron:provider-abort`
+- `pnpm harness:electron:stop-audio`
+- `pnpm harness:electron:bubble-edge-clickthrough`
+- `pnpm harness:electron`
+- `git diff --check`
+
+The #41 integration run found one cross-branch regression: #27 made Stop availability follow only text generation state, while #29/#30 can leave voice output queued after text has already completed. #41 fixes this by keeping Stop enabled while enabled voice output is still queued or mouth-open state is active. The evidence is:
+
+- `pnpm harness:electron:stop-audio` -> `speechCanceled: true`, `audioQueueCleared: true`, `mouthOpenReset: true`.
+- `pnpm harness:electron` -> `voiceQueueKeepsStopEnabled: true`.
+
+Visual review artifacts from `pnpm harness:v1-visual` were inspected from `.cache/greyfield-v1-visual-acceptance/latest/`:
+
+- `pet-initial.png`: transparent, unframed pet shell with no control panel.
+- `pet-after-chat.png`: readable short speech bubble; not a full chat transcript.
+- `chat-after-reply.png`: Chat retains the complete assistant reply.
+- `settings-provider-preview.png`: Settings shows product-facing fake provider Preview state.
 
 ## User Paths
 
@@ -29,14 +69,14 @@ Last updated: 2026-06-22.
 | Show short assistant text in pet bubble while full history stays in Chat | `pnpm harness:electron:bubble-long-reply`; `pnpm harness:v1-visual` screenshots | Claimable after rerun on release branch |
 | Keep bubble inside right edge and remove bubble hit area when disabled | #26 draft PR [#35](https://github.com/zuiho-kai/greyfield-next/pull/35) adds `pnpm harness:electron:bubble-edge-clickthrough` and screenshots under `.cache/greyfield-bubble-edge-clickthrough/latest/`. | Not release-claimable until #35 is merged and rerun |
 | Enable real assistant speech output without sudden default audio | #29 draft PR [#39](https://github.com/zuiho-kai/greyfield-next/pull/39) adds Settings `Speak replies`, renderer Web Speech playback, default-quiet behavior, TTS failure isolation, long-reply speech budget, and Electron proof that `savedVoiceSpeech: true`. | Not release-claimable until #39 is merged and rerun |
-| Stop active speech playback, queued speech UI, and mouth-open state | #30 stacked draft PR [#40](https://github.com/zuiho-kai/greyfield-next/pull/40) adds `pnpm harness:electron:stop-audio`, keeps `pnpm harness:electron:provider-abort` passing, and proves `speechCanceled`, `audioQueueCleared`, and `mouthOpenReset`. | Not release-claimable until #39 and #40 are merged or #40 is retargeted and rerun |
+| Stop active speech playback, queued speech UI, and mouth-open state | #30 stacked draft PR [#40](https://github.com/zuiho-kai/greyfield-next/pull/40) adds `pnpm harness:electron:stop-audio`, keeps `pnpm harness:electron:provider-abort` passing, and proves `speechCanceled`, `audioQueueCleared`, and `mouthOpenReset`. #41 adds the integration fix proving Stop remains enabled while enabled voice output is still queued after text completion. | Not release-claimable until #39/#40/#41 are merged or the same combined behavior is rerun on the release branch |
 
 ## Current Non-Claimable Paths
 
-- Real TTS playback has PR-local proof in #39, but it is not release-claimable until merged and rerun on the release branch.
-- Stop-audio behavior has PR-local proof in stacked PR #40, but it is not release-claimable until #39 and #40 are merged or #40 is retargeted to the release branch and rerun.
+- Real TTS playback has PR-local proof in #39 and combined proof in #41, but it is not release-claimable until merged and rerun on the release branch.
+- Stop-audio behavior has PR-local proof in stacked PR #40 and combined proof in #41, but it is not release-claimable until the combined behavior is merged and rerun on the release branch.
 - ASR and microphone conversation are not V1-complete.
-- #26, #27, #28, #29, and #30 evidence is currently in draft PRs #35, #36, #37, #39, and #40. Their evidence must be merged or rerun on the final release branch before V1 can be called complete.
+- #26, #27, #28, #29, #30, and #31 evidence is currently in draft PRs #35, #36, #37, #38, #39, #40, and #41. Their evidence must be merged or rerun on the final release branch before V1 can be called complete.
 - A final V1 release claim still needs one current-head checkpoint run covering `pnpm typecheck`, `pnpm test`, `pnpm harness:acceptance`, `pnpm harness:live2d`, `pnpm harness:pet:quick`, `pnpm harness:electron`, and the feature-specific harnesses listed above.
 
 ## Release Audit Steps
