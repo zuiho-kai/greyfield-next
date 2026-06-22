@@ -10,7 +10,7 @@ export interface ChatStatusView {
 }
 
 export function describeChatStatus(
-  state: Pick<DesktopRendererState, "status" | "errorMessage" | "inputDraft">
+  state: Pick<DesktopRendererState, "status" | "errorMessage" | "inputDraft" | "audioQueue" | "settings" | "stage">
 ): ChatStatusView {
   if (state.status === "thinking") {
     return {
@@ -27,6 +27,19 @@ export function describeChatStatus(
     return {
       label: "Generating",
       detail: "Greyfield is replying. Stop stays available while this runs.",
+      tone: "generating",
+      canStop: true,
+      sendLabel: "Send",
+      stopLabel: "Stop"
+    };
+  }
+
+  const hasActiveSpeech =
+    state.settings.voiceSpeechEnabled && (state.audioQueue.length > 0 || state.stage.mouthOpen > 0);
+  if (hasActiveSpeech) {
+    return {
+      label: "Generating",
+      detail: "Greyfield is still speaking. Stop will interrupt the current voice playback.",
       tone: "generating",
       canStop: true,
       sendLabel: "Send",
