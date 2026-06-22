@@ -30,7 +30,7 @@
         "The renderer receives a typed preload bridge exposed as window.greyfield."
       ],
       "qa": {
-        "script": "pnpm harness:electron"
+        "script": "pnpm test:frontend; pnpm harness:v1-visual; pnpm harness:electron"
       }
     },
     {
@@ -93,7 +93,7 @@
         "Native BrowserWindow.setShape is not the default Windows V1 path because it visually clips animated Live2D and can drift native bounds."
       ],
       "qa": {
-        "script": "vitest pet-interaction desktop-runtime-bridge; pnpm harness:pet:quick; pnpm harness:electron"
+        "script": "vitest pet-interaction desktop-runtime-bridge; pnpm harness:pet:quick; pnpm harness:v1-visual; pnpm harness:electron"
       }
     },
     {
@@ -142,7 +142,7 @@
         "Electron long-reply harness proves first streaming token reaches the pet bubble, long text stays capped, the bubble remains in place, and Chat keeps the full assistant reply."
       ],
       "qa": {
-        "script": "vitest speech-bubble-placement speech-bubble-text pet-window-shape; pnpm harness:electron; pnpm harness:electron:bubble-long-reply"
+        "script": "vitest speech-bubble-placement speech-bubble-text pet-window-shape; pnpm harness:v1-visual; pnpm harness:electron; pnpm harness:electron:bubble-long-reply"
       }
     },
     {
@@ -164,7 +164,7 @@
         "Settings can send a small LLM test request through Electron main and report first-token success or a readable failure."
       ],
       "qa": {
-        "script": "vitest runtime-loop runtime-service desktop-runtime-bridge openai-compatible-provider; pnpm harness:electron; pnpm harness:electron:provider-failure; pnpm harness:electron:provider-abort"
+        "script": "pnpm test:backend; pnpm test:frontend; pnpm harness:acceptance; pnpm harness:v1-visual; pnpm harness:electron; pnpm harness:electron:provider-failure; pnpm harness:electron:provider-abort"
       }
     },
     {
@@ -225,7 +225,7 @@
         "Electron settings-active-chat harness proves Test LLM is rejected with visible Stop-or-wait guidance while chat is actively streaming and does not send an extra provider request."
       ],
       "qa": {
-        "script": "vitest desktop-runtime-bridge settings-provider-status config settings-controller runtime-service; pnpm harness:electron; pnpm harness:electron:settings-active-chat-test"
+        "script": "vitest desktop-runtime-bridge settings-provider-status config settings-controller runtime-service; pnpm harness:v1-visual; pnpm harness:electron; pnpm harness:electron:settings-active-chat-test"
       }
     },
     {
