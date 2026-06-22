@@ -15,6 +15,7 @@ export type RuntimeOutputEvent =
   | { type: "assistant.text.delta"; text: string }
   | { type: "assistant.text.final"; text: string }
   | { type: "assistant.audio.chunk"; text: string; data: Uint8Array }
+  | { type: "assistant.audio.error"; text: string; message: string }
   | { type: "assistant.audio.end" }
   | { type: "stage.expression"; id: string }
   | { type: "stage.motion"; group: string; index?: number }

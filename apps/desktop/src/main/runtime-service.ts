@@ -139,7 +139,8 @@ export class RuntimeService {
       persona,
       voice: this.config.voice.id,
       stage: this.stage,
-      recentTurnLimit: this.options.recentTurnLimit
+      recentTurnLimit: this.options.recentTurnLimit,
+      ttsEnabled: this.config.voice.speechEnabled
     });
   }
 

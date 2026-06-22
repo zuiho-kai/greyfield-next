@@ -19,6 +19,38 @@ describe("RuntimeService", () => {
     expect(emit).toHaveBeenLastCalledWith({ type: "runtime.status", status: "idle" });
   });
 
+  it("does not emit desktop TTS chunks until voice output is enabled", async () => {
+    const service = new RuntimeService(defaultGreyfieldConfig);
+    const events: unknown[] = [];
+
+    await service.handle({ type: "text.input", text: "静音默认值" }, (event) => {
+      events.push(event);
+    });
+
+    expect(events.some((event) => (event as { type?: string }).type === "assistant.audio.chunk")).toBe(false);
+  });
+
+  it("emits desktop TTS chunks when voice output is enabled", async () => {
+    const service = new RuntimeService({
+      ...defaultGreyfieldConfig,
+      voice: {
+        ...defaultGreyfieldConfig.voice,
+        speechEnabled: true
+      }
+    });
+    const events: unknown[] = [];
+
+    await service.handle({ type: "text.input", text: "朗读打开" }, (event) => {
+      events.push(event);
+    });
+
+    expect(events).toContainEqual({
+      type: "assistant.audio.chunk",
+      text: "你好，我醒着。",
+      data: expect.any(Uint8Array)
+    });
+  });
+
   it("uses the OpenAI-compatible provider when config requests it", async () => {
     const fetch = vi.fn(async () => {
       const body = new ReadableStream<Uint8Array>({

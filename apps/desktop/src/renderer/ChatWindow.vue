@@ -14,6 +14,10 @@
       <span class="error-icon">⚠️</span>
       <p>{{ state.errorMessage }}</p>
     </div>
+    <div v-if="state.voiceErrorMessage" class="chat-error-box voice-error-box" role="status">
+      <span class="error-icon">⚠️</span>
+      <p>{{ state.voiceErrorMessage }}</p>
+    </div>
 
     <div class="message-list-container message-list" aria-live="polite">
       <div

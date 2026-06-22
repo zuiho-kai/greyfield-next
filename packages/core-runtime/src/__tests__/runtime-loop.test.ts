@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { GreyfieldRuntime } from "../runtime-loop";
 import { InMemorySessionStore } from "../session-store";
 import type { AppendSessionTurn, SessionHandoff, SessionStore, SessionTurn } from "../session-store";
@@ -104,6 +104,94 @@ describe("GreyfieldRuntime", () => {
     await expect(runtime.handle({ type: "text.input", text: "请重试" }, () => undefined)).rejects.toThrow("provider rejected");
 
     expect(await sessionStore.getRecent(2)).toEqual([]);
+  });
+
+  it("keeps the text turn when TTS fails and reports a voice-only error", async () => {
+    const sessionStore = new InMemorySessionStore("session-tts-failure");
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* () {
+          yield "Text remains.";
+        }
+      },
+      tts: {
+        synthesize: async () => {
+          throw new Error("speaker unavailable");
+        }
+      },
+      memoryStore,
+      sessionStore,
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default"
+    });
+    const events: RuntimeOutputEvent[] = [];
+
+    await runtime.handle({ type: "text.input", text: "say it" }, (event) => {
+      events.push(event);
+    });
+
+    expect(events).toContainEqual({
+      type: "assistant.audio.error",
+      text: "Text remains.",
+      message: "Voice playback failed: speaker unavailable"
+    });
+    expect(events).toContainEqual({ type: "assistant.text.final", text: "Text remains." });
+    expect(await sessionStore.getRecent(2)).toMatchObject([
+      { role: "user", content: "say it" },
+      { role: "assistant", content: "Text remains." }
+    ]);
+  });
+
+  it("skips TTS when voice output is disabled", async () => {
+    const synthesize = vi.fn(async (text: string) => new Uint8Array([text.length]));
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* () {
+          yield "Quiet response.";
+        }
+      },
+      tts: { synthesize },
+      memoryStore,
+      sessionStore: new InMemorySessionStore("session-tts-disabled"),
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default",
+      ttsEnabled: false
+    });
+    const events: RuntimeOutputEvent[] = [];
+
+    await runtime.handle({ type: "text.input", text: "quiet" }, (event) => {
+      events.push(event);
+    });
+
+    expect(synthesize).not.toHaveBeenCalled();
+    expect(events.some((event) => event.type === "assistant.audio.chunk")).toBe(false);
+    expect(events).toContainEqual({ type: "assistant.text.final", text: "Quiet response." });
+  });
+
+  it("caps spoken text per turn", async () => {
+    const synthesized: string[] = [];
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* () {
+          yield "First long sentence. Second sentence.";
+        }
+      },
+      tts: {
+        synthesize: async (text) => {
+          synthesized.push(text);
+          return new Uint8Array([text.length]);
+        }
+      },
+      memoryStore,
+      sessionStore: new InMemorySessionStore("session-tts-budget"),
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default",
+      ttsMaxCharactersPerTurn: 12
+    });
+
+    await runtime.handle({ type: "text.input", text: "long" }, () => undefined);
+
+    expect(synthesized).toEqual(["First long…"]);
   });
 
   it("persists the successful turn before emitting the final assistant text", async () => {

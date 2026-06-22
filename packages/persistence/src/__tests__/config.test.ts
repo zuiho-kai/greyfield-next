@@ -7,6 +7,7 @@ describe("Greyfield config", () => {
     expect(defaultGreyfieldConfig.provider.baseUrl).toBe("https://api.openai.com/v1");
     expect(defaultGreyfieldConfig.audio.microphoneId).toBe("default");
     expect(defaultGreyfieldConfig.characterFile).toBe("characters/greyfield.yaml");
+    expect(defaultGreyfieldConfig.voice.speechEnabled).toBe(false);
     expect(defaultGreyfieldConfig.live2d.modelPath).toContain(".model3.json");
     expect(defaultGreyfieldConfig.window.modelPassThrough).toBe(false);
     expect(defaultGreyfieldConfig.ui.speechBubbleEnabled).toBe(true);
@@ -15,6 +16,7 @@ describe("Greyfield config", () => {
   it("deep-merges nested settings without dropping defaults", () => {
     const config = mergeConfig({
       provider: { model: "local-test-model" },
+      voice: { speechEnabled: true },
       audio: { microphoneId: "mic-2" },
       live2d: { scale: 1.25 },
       ui: { speechBubbleEnabled: false }
@@ -29,6 +31,11 @@ describe("Greyfield config", () => {
       apiKey: ""
     });
     expect(config.audio.microphoneId).toBe("mic-2");
+    expect(config.voice).toMatchObject({
+      id: "default",
+      volume: 0.85,
+      speechEnabled: true
+    });
     expect(config.live2d).toMatchObject({
       modelPath: defaultGreyfieldConfig.live2d.modelPath,
       scale: 1.25
