@@ -101,14 +101,17 @@ export class GreyfieldRuntime {
     if (this.interrupted) {
       await emit({ type: "runtime.status", status: "interrupted" });
       await this.options.stage?.setMouthOpen(0);
+      await emit({ type: "assistant.audio.end" });
+      this.activeAbortController = undefined;
+      return;
     }
 
-    if (!this.interrupted && finalText.length > 0) {
+    if (finalText.length > 0) {
       await this.options.sessionStore.append({ role: "user", content: text });
       await this.options.sessionStore.append({ role: "assistant", content: finalText });
+      await emit({ type: "assistant.text.final", text: finalText });
     }
 
-    await emit({ type: "assistant.text.final", text: finalText });
     await emit({ type: "assistant.audio.end" });
 
     await emit({ type: "runtime.status", status: "idle" });

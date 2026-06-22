@@ -127,6 +127,7 @@ export class DesktopRuntimeBridge {
 
     this.state = {
       ...this.state,
+      status: "thinking",
       errorMessage: "",
       inputDraft: "",
       assistantDraft: "",
@@ -150,6 +151,7 @@ export class DesktopRuntimeBridge {
       this.host.send("runtime:input", { type: "runtime.interrupt" });
       this.state = {
         ...this.state,
+        status: "interrupted",
         errorMessage: "",
         assistantDraft: "",
         audioQueue: [],

@@ -253,6 +253,7 @@ describe("createDesktopRuntimeBridge", () => {
     runtimeEvent?.({ type: "runtime.status", status: "idle" });
 
     expect(sent).toContainEqual(["runtime:input", { type: "text.input", text: "主进程来接管" }]);
+    expect(initial.status).toBe("thinking");
     expect(initial.messages).toEqual([{ role: "user", text: "主进程来接管" }]);
     expect(bridge.getState().messages).toEqual([
       { role: "user", text: "主进程来接管" },
@@ -425,5 +426,32 @@ describe("createDesktopRuntimeBridge", () => {
     expect(state.assistantDraft).toBe("");
     expect(state.audioQueue).toEqual([]);
     expect(state.stage.mouthOpen).toBe(0);
+  });
+
+  it("shows stopped immediately and ignores late assistant events after interrupt", async () => {
+    let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: () => undefined,
+      on: (channel, handler) => {
+        if (channel === "runtime:event") {
+          runtimeEvent = handler as typeof runtimeEvent;
+        }
+        return () => undefined;
+      }
+    });
+
+    await bridge.sendText("停一下");
+    runtimeEvent?.({ type: "runtime.status", status: "speaking" });
+    runtimeEvent?.({ type: "assistant.text.delta", text: "旧回复" });
+    const stopped = await bridge.interrupt();
+    runtimeEvent?.({ type: "assistant.text.delta", text: "不该出现" });
+    runtimeEvent?.({ type: "assistant.text.final", text: "旧回复不该入历史" });
+
+    expect(stopped.status).toBe("interrupted");
+    expect(bridge.getState()).toMatchObject({
+      status: "interrupted",
+      assistantDraft: "",
+      messages: [{ role: "user", text: "停一下" }]
+    });
   });
 });

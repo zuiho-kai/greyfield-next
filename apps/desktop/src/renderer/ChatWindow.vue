@@ -3,14 +3,18 @@
     <header class="chat-window-header">
       <div class="chat-header-title">
         <h1>Chat</h1>
-        <span class="status-badge" :class="state.status">{{ state.status }}</span>
+        <span class="status-badge status-pill" :class="`status-badge--${chatStatus.tone}`" role="status">
+          {{ chatStatus.label }}
+        </span>
       </div>
       <button type="button" class="settings-btn" @click="$emit('open-settings')">
         <span>⚙️</span> Settings
       </button>
     </header>
 
-    <div v-if="state.errorMessage" class="chat-error-box" role="alert">
+    <p class="chat-status-detail">{{ chatStatus.detail }}</p>
+
+    <div v-if="state.errorMessage" class="chat-error-box chat-error" role="alert">
       <span class="error-icon">⚠️</span>
       <p>{{ state.errorMessage }}</p>
     </div>
@@ -30,7 +34,7 @@
       <div v-if="state.assistantDraft" class="message-item assistant draft">
         <div class="message-content">
           <div class="message-bubble">{{ state.assistantDraft }}</div>
-          <span class="message-time">typing...</span>
+          <span class="message-time">{{ chatStatus.label }}</span>
         </div>
       </div>
     </div>
@@ -50,10 +54,10 @@
       </div>
       <div class="action-buttons">
         <button type="submit" class="send-button" :disabled="!draft.trim()">
-          <span>📤</span> Send
+          <span>📤</span> {{ chatStatus.sendLabel }}
         </button>
-        <button type="button" class="stop-button" @click="$emit('interrupt')">
-          <span>⏹️</span> Stop
+        <button type="button" class="stop-button" :disabled="!chatStatus.canStop" @click="$emit('interrupt')">
+          <span>⏹️</span> {{ chatStatus.stopLabel }}
         </button>
       </div>
     </form>
@@ -61,9 +65,11 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import type { DesktopRendererState } from "./desktop-runtime-bridge";
+import { describeChatStatus } from "./chat-status";
 
-defineProps<{
+const props = defineProps<{
   state: DesktopRendererState;
   draft: string;
 }>();
@@ -78,4 +84,6 @@ defineEmits<{
 function valueFrom(event: Event): string {
   return event.target instanceof HTMLInputElement ? event.target.value : "";
 }
+
+const chatStatus = computed(() => describeChatStatus(props.state));
 </script>
