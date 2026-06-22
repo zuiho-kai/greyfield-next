@@ -56,15 +56,24 @@ try {
     const chatWindow = await waitForRoleWindow(app, "chat");
     await sendMessage(chatWindow, "请开始一段长回复，我会马上停止。");
     await chatWindow.locator(".message-list .assistant.draft", { hasText: "开始长回复。" }).waitFor({ timeout: 10_000 });
-    await chatWindow.getByRole("button", { name: "Stop" }).click();
-    await chatWindow.locator(".status-pill", { hasText: /idle|interrupted/ }).waitFor({ timeout: 10_000 });
+    const stopButton = chatWindow.getByRole("button", { name: "Stop" });
+    if (!(await stopButton.isEnabled())) {
+      throw new Error("Stop button was not clickable while provider response was streaming");
+    }
+    await stopButton.click();
+    await chatWindow.locator(".status-pill", { hasText: "Stopped" }).waitFor({ timeout: 10_000 });
     await waitForRequestClose();
     const stopState = await chatWindow.evaluate(() => ({
       status: document.querySelector(".status-pill")?.textContent?.trim() ?? "",
-      error: document.querySelector(".chat-error")?.textContent?.trim() ?? ""
+      error: document.querySelector(".chat-error")?.textContent?.trim() ?? "",
+      assistantDraftCount: document.querySelectorAll(".message-list .message-item.assistant.draft").length,
+      assistantFinalCount: document.querySelectorAll(".message-list .message-item.assistant:not(.draft)").length
     }));
     if (stopState.error.length > 0) {
       throw new Error(`Stop surfaced an error in chat UI: ${stopState.error}`);
+    }
+    if (stopState.assistantDraftCount !== 0 || stopState.assistantFinalCount !== 0) {
+      throw new Error(`Stop left an old assistant reply in chat UI: ${JSON.stringify(stopState)}`);
     }
     console.log(
       JSON.stringify(
@@ -72,7 +81,9 @@ try {
           ok: true,
           requestCount,
           providerRequestAborted: requestClosed,
-          stopStatus: stopState.status
+          stopButtonClickable: true,
+          stopStatus: stopState.status,
+          stoppedWithoutOldAssistantReply: true
         },
         null,
         2

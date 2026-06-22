@@ -37,6 +37,9 @@ export function reduceRuntimeEvent(
   }
 
   if (event.type === "assistant.text.delta") {
+    if (state.status === "interrupted") {
+      return state;
+    }
     return {
       ...state,
       assistantDraft: `${state.assistantDraft}${event.text}`
@@ -44,6 +47,12 @@ export function reduceRuntimeEvent(
   }
 
   if (event.type === "assistant.text.final") {
+    if (state.status === "interrupted") {
+      return {
+        ...state,
+        assistantDraft: ""
+      };
+    }
     return {
       ...state,
       assistantDraft: "",

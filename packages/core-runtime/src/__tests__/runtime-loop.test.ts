@@ -79,7 +79,8 @@ describe("GreyfieldRuntime", () => {
     });
 
     expect(events).toContainEqual({ type: "runtime.status", status: "interrupted" });
-    expect(events).toContainEqual({ type: "assistant.text.final", text: "First sentence." });
+    expect(events).not.toContainEqual({ type: "assistant.text.final", text: "First sentence." });
+    expect(events).not.toContainEqual({ type: "runtime.status", status: "idle" });
     expect(events.map((event) => JSON.stringify(event)).join("\n")).not.toContain("Second sentence");
     expect(await sessionStore.getRecent(2)).toEqual([]);
   });

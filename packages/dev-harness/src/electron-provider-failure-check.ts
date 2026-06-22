@@ -118,6 +118,8 @@ for (const scenario of scenarios) {
       const chatWindow = await waitForRoleWindow(app, "chat");
       await sendMessage(chatWindow, scenario.userText);
       await chatWindow.locator(".chat-error", { hasText: scenario.expectedError }).waitFor({ timeout: 10_000 });
+      await chatWindow.locator(".status-pill", { hasText: "Retry ready" }).waitFor({ timeout: 10_000 });
+      await chatWindow.getByRole("button", { name: "Retry" }).waitFor({ timeout: 10_000 });
       const draft = await chatWindow.getByLabel("Message").inputValue();
       const sessionJsonl = await readFile(join(tempDir, "sessions", "desktop-main-session.jsonl"), "utf8").catch(() => "");
       if (draft !== scenario.userText) {

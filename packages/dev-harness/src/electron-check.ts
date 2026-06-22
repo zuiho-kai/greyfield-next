@@ -276,7 +276,11 @@ try {
   await chatWindow.getByRole("button", { name: "Send" }).click();
   await chatWindow.locator(".message-list .assistant", { hasText: "你好，我醒着。现在可以继续做桌宠了。" }).waitFor();
   await waitForSessionJsonl(["醒了吗？", "你好，我醒着。现在可以继续做桌宠了。"]);
-  await chatWindow.getByRole("button", { name: "Stop" }).click();
+  await chatWindow.locator(".status-pill", { hasText: "Waiting" }).waitFor();
+  const stopDisabledAfterComplete = await chatWindow.getByRole("button", { name: "Stop" }).isDisabled();
+  if (!stopDisabledAfterComplete) {
+    throw new Error("Stop stayed clickable after the fake chat response completed");
+  }
 
   console.log(
     JSON.stringify(
@@ -303,6 +307,8 @@ try {
         providerTestWorked: true,
         persistentSessionWorked: true,
         repliedToText: true,
+        completedChatShowsWaiting: true,
+        stopDisabledAfterComplete,
         chatWindowWorked: true
       },
       null,

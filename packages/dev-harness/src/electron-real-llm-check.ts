@@ -43,7 +43,7 @@ try {
     await sendMessage(chatWindow, "请写一段较长的中文说明，至少八句，用于测试停止按钮。");
     await chatWindow.locator(".message-list .assistant.draft").waitFor({ timeout: 30_000 });
     await chatWindow.getByRole("button", { name: "Stop" }).click();
-    await chatWindow.locator(".status-pill", { hasText: /idle|interrupted/ }).waitFor({ timeout: 10_000 });
+    await chatWindow.locator(".status-pill", { hasText: "Stopped" }).waitFor({ timeout: 10_000 });
     const stopState = await chatWindow.evaluate(() => ({
       status: document.querySelector(".status-pill")?.textContent?.trim() ?? "",
       error: document.querySelector(".chat-error")?.textContent?.trim() ?? ""
