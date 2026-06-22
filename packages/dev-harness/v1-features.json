@@ -139,10 +139,11 @@
         "Bubble flips to the left when the model is near the right edge and clamps horizontally and vertically inside the pet window and available screen viewport.",
         "Bubble text normalizes whitespace and caps long replies so the pet bubble remains a short surface while full history stays in chat.",
         "Bubble hit/shape rect stays stable while text is capped.",
-        "Electron long-reply harness proves first streaming token reaches the pet bubble, long text stays capped, the bubble remains in place, and Chat keeps the full assistant reply."
+        "Electron long-reply harness proves first streaming token reaches the pet bubble, long text stays capped, the bubble remains in place, and Chat keeps the full assistant reply.",
+        "Electron edge/click-through harness proves a right-edge bubble remains inside the viewport/screen, transparent stage points stay outside native shape while the bubble is visible, and disabling the bubble removes its native shape rect."
       ],
       "qa": {
-        "script": "vitest speech-bubble-placement speech-bubble-text pet-window-shape; pnpm harness:v1-visual; pnpm harness:electron; pnpm harness:electron:bubble-long-reply"
+        "script": "vitest speech-bubble-placement speech-bubble-text pet-window-shape electron-check-helpers; pnpm harness:v1-visual; pnpm harness:electron; pnpm harness:electron:bubble-long-reply; pnpm harness:electron:bubble-edge-clickthrough"
       }
     },
     {

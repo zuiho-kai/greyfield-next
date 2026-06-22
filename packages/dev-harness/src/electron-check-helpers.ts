@@ -71,7 +71,15 @@ export function chooseStagePointFromAlpha(input: {
 }
 
 export async function findStagePoint(page: Page, hit: boolean): Promise<{ x: number; y: number }> {
-  return page.evaluate((wantHit) => {
+  return findStagePointOutsideRects(page, hit, []);
+}
+
+export async function findStagePointOutsideRects(
+  page: Page,
+  hit: boolean,
+  rejectRects: Array<{ x: number; y: number; width: number; height: number }>
+): Promise<{ x: number; y: number }> {
+  return page.evaluate(({ wantHit, rejectRects }) => {
     const smoke = (window as typeof window & {
       __greyfieldStageSmoke?: { sampleModelHit(clientX: number, clientY: number): boolean };
     }).__greyfieldStageSmoke;
@@ -107,6 +115,9 @@ export async function findStagePoint(page: Page, hit: boolean): Promise<{ x: num
           x: rect.left + (candidate.x / canvas.width) * rect.width,
           y: rect.top + (candidate.y / canvas.height) * rect.height
         };
+        if (rejectRects.some((rejectRect) => pointInRect(point, rejectRect))) {
+          continue;
+        }
         if (!smoke || smoke.sampleModelHit(point.x, point.y) === wantHit) {
           return point;
         }
@@ -132,7 +143,14 @@ export async function findStagePoint(page: Page, hit: boolean): Promise<{ x: num
       gl.readPixels(0, 0, target.width, target.height, gl.RGBA, gl.UNSIGNED_BYTE, image);
       return (x, y) => image[((target.height - 1 - y) * target.width + x) * 4 + 3];
     }
-  }, hit);
+
+    function pointInRect(
+      point: { x: number; y: number },
+      rect: { x: number; y: number; width: number; height: number }
+    ): boolean {
+      return point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height;
+    }
+  }, { wantHit: hit, rejectRects });
 }
 
 export async function waitForStageHit(page: Page, hit: boolean, point: { x: number; y: number }): Promise<void> {
