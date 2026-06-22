@@ -106,6 +106,9 @@ export class DesktopRuntimeBridge {
       if (event.type === "assistant.audio.chunk") {
         this.playSpeech(event.text);
       }
+      if (event.type === "runtime.status" && event.status === "interrupted") {
+        this.speechOutput?.cancel();
+      }
       this.emitStateChange();
     });
     this.host?.on("provider:test-llm-result", (result) => {

@@ -10,6 +10,19 @@ export function reduceRuntimeEvent(
   interactionProfile: RendererInteractionProfile
 ): DesktopRendererState {
   if (event.type === "runtime.status") {
+    if (event.status === "interrupted") {
+      return {
+        ...state,
+        status: event.status,
+        assistantDraft: "",
+        audioQueue: [],
+        stage: {
+          ...state.stage,
+          ...stageReactionForStatus(event.status, interactionProfile),
+          mouthOpen: 0
+        }
+      };
+    }
     return {
       ...state,
       status: event.status,

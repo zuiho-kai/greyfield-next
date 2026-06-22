@@ -265,6 +265,46 @@ describe("GreyfieldRuntime", () => {
     expect(capturedSignal?.aborted).toBe(true);
   });
 
+  it("does not emit stale audio when interrupted during TTS synthesis", async () => {
+    let runtime: GreyfieldRuntime;
+    let finishTts: (() => void) | undefined;
+    const ttsStarted = new Promise<void>((resolve) => {
+      const sessionStore = new InMemorySessionStore("session-interrupt-tts");
+      runtime = new GreyfieldRuntime({
+        llm: {
+          stream: async function* () {
+            yield "First sentence.";
+          }
+        },
+        tts: {
+          synthesize: async () => {
+            resolve();
+            await new Promise<void>((finish) => {
+              finishTts = finish;
+            });
+            return new Uint8Array([255, 0, 255, 0]);
+          }
+        },
+        memoryStore,
+        sessionStore,
+        persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+        voice: "default"
+      });
+    });
+    const events: RuntimeOutputEvent[] = [];
+    const running = runtime!.handle({ type: "text.input", text: "stop audio" }, (event) => {
+      events.push(event);
+    });
+    await ttsStarted;
+
+    runtime!.requestInterrupt();
+    finishTts?.();
+    await running;
+
+    expect(events.some((event) => event.type === "assistant.audio.chunk")).toBe(false);
+    expect(events).toContainEqual({ type: "runtime.status", status: "interrupted" });
+  });
+
   it("drives mouth-open from synthesized audio level and resets after playback", async () => {
     const mouthOpenValues: number[] = [];
     const runtime = new GreyfieldRuntime({

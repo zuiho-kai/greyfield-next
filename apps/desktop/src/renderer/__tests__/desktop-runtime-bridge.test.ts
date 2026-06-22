@@ -276,6 +276,37 @@ describe("createDesktopRuntimeBridge", () => {
     expect(speechOutput.speak).not.toHaveBeenCalled();
   });
 
+  it("cancels speech output and clears audio queue when the runtime is interrupted elsewhere", () => {
+    let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
+    const speechOutput = {
+      speak: vi.fn(async () => undefined),
+      cancel: vi.fn()
+    };
+    const bridge = createDesktopRuntimeBridgeWithSpeech(
+      {
+        send: () => undefined,
+        on: (channel, handler) => {
+          if (channel === "runtime:event") {
+            runtimeEvent = handler as typeof runtimeEvent;
+          }
+          return () => undefined;
+        }
+      },
+      speechOutput
+    );
+
+    runtimeEvent?.({ type: "assistant.audio.chunk", text: "Queued speech.", data: new Uint8Array([1]) });
+    runtimeEvent?.({ type: "runtime.status", status: "interrupted" });
+
+    expect(speechOutput.cancel).toHaveBeenCalledOnce();
+    expect(bridge.getState()).toMatchObject({
+      status: "interrupted",
+      assistantDraft: "",
+      audioQueue: [],
+      stage: { mouthOpen: 0 }
+    });
+  });
+
   it("adds retry guidance to provider configuration test failures", () => {
     let providerTestResult:
       | ((event: { ok: boolean; message: string; firstToken?: string }) => void)

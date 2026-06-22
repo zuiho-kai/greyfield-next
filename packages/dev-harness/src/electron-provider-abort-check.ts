@@ -57,11 +57,11 @@ try {
     await sendMessage(chatWindow, "请开始一段长回复，我会马上停止。");
     await chatWindow.locator(".message-list .assistant.draft", { hasText: "开始长回复。" }).waitFor({ timeout: 10_000 });
     await chatWindow.getByRole("button", { name: "Stop" }).click();
-    await chatWindow.locator(".status-pill", { hasText: /idle|interrupted/ }).waitFor({ timeout: 10_000 });
+    await chatWindow.locator(".status-badge, .status-pill", { hasText: /idle|interrupted|Stopped/ }).waitFor({ timeout: 10_000 });
     await waitForRequestClose();
     const stopState = await chatWindow.evaluate(() => ({
-      status: document.querySelector(".status-pill")?.textContent?.trim() ?? "",
-      error: document.querySelector(".chat-error")?.textContent?.trim() ?? ""
+      status: document.querySelector(".status-badge, .status-pill")?.textContent?.trim() ?? "",
+      error: document.querySelector(".chat-error-box")?.textContent?.trim() ?? ""
     }));
     if (stopState.error.length > 0) {
       throw new Error(`Stop surfaced an error in chat UI: ${stopState.error}`);

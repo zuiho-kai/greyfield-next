@@ -136,9 +136,15 @@ export class GreyfieldRuntime {
     await emit({ type: "runtime.status", status: "speaking" });
     try {
       const audio = await this.options.tts.synthesize(text, this.options.voice);
+      if (this.interrupted) {
+        return budget.usedCharacters;
+      }
       await this.options.stage?.setMouthOpen(mapAudioLevelToMouthOpen(measureAudioLevel(audio)));
       await emit({ type: "assistant.audio.chunk", text, data: audio });
     } catch (error) {
+      if (this.interrupted) {
+        return budget.usedCharacters;
+      }
       await emit({ type: "assistant.audio.error", text, message: `Voice playback failed: ${formatError(error)}` });
     } finally {
       await this.options.stage?.setMouthOpen(0);
