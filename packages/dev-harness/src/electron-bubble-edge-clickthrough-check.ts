@@ -98,6 +98,29 @@ try {
     const bubbleOffScreenshot = join(artifactDir, "bubble-disabled.png");
     await petWindow.screenshot({ path: bubbleOffScreenshot });
 
+    await petWindow.evaluate(() => window.greyfield?.send("settings:update", { ui: { speechBubbleEnabled: true } }));
+    await waitForSpeechBubble(configPath, true);
+    await petWindow.locator(".speech-bubble").waitFor({ timeout: 5_000 });
+    const bubbleBeforePassThrough = await readBubbleState(petWindow);
+    await waitForShapeSample(
+      app,
+      (sample) => hasStandaloneBubbleRect(sample, bubbleBeforePassThrough),
+      "native shape containing the re-enabled speech bubble"
+    );
+    await petWindow.evaluate(() => window.greyfield?.send("settings:update", { window: { modelPassThrough: true } }));
+    await petWindow.evaluate(() => window.greyfield?.send("settings:update", { ui: { speechBubbleEnabled: false } }));
+    await waitForSpeechBubble(configPath, false);
+    await petWindow.locator(".speech-bubble").waitFor({ state: "detached", timeout: 5_000 });
+    await petWindow.evaluate(() => window.greyfield?.send("settings:update", { window: { modelPassThrough: false } }));
+    const restoredShapeWithoutBubble = await waitForShapeSample(
+      app,
+      (sample) => !hasStandaloneBubbleRect(sample, bubbleBeforePassThrough),
+      "restored native shape after disabling bubble during model pass-through"
+    );
+    if (hasStandaloneBubbleRect(restoredShapeWithoutBubble, bubbleBeforePassThrough)) {
+      throw new Error(`Restored shape kept a stale bubble rect: ${JSON.stringify(restoredShapeWithoutBubble)}`);
+    }
+
     console.log(
       JSON.stringify(
         {
@@ -116,6 +139,7 @@ try {
           bubbleInsideScreen: true,
           nativeShapeIncludedBubble: true,
           bubbleToggleRemovedNativeShape: true,
+          passThroughBubbleToggleKeptStoredShapeFresh: true,
           transparentPointOutsideNativeShape: true,
           transparentPoint: roundPoint(transparentPoint),
           disabledProbePoint: roundPoint(disabledProbePoint),

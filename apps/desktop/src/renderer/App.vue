@@ -288,7 +288,7 @@ function updateModelShape(rects: Rect[]): void {
 }
 
 function syncPetWindowShape(): void {
-  if (!isPetWindow || state.window.modelPassThrough) {
+  if (!isPetWindow) {
     return;
   }
   const rects = createPetWindowShape({
