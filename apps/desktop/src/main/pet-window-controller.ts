@@ -63,6 +63,10 @@ export class PetWindowController {
     if (!window) {
       return;
     }
+    if (this.activeDrag) {
+      window.setIgnoreMouseEvents(false);
+      return;
+    }
     if (this.canUseWindowShape() && !this.modelPassThrough) {
       window.setIgnoreMouseEvents(false);
       return;

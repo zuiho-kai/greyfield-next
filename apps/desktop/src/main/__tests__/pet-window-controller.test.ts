@@ -12,6 +12,18 @@ describe("PetWindowController", () => {
     expect(window.setBounds).toHaveBeenCalledWith({ x: 40, y: 70, width: 421, height: 620 });
   });
 
+  it("keeps an active drag alive when the pointer crosses transparent model pixels", () => {
+    const window = createFakePetWindow({ x: 10, y: 20, width: 421, height: 620 });
+    const controller = new PetWindowController({ getWindow: () => window });
+
+    controller.startDrag({ screenX: 100, screenY: 200 });
+    controller.applyHitTest({ passthrough: true, reason: "transparent-area" });
+    controller.moveDrag({ screenX: 130, screenY: 250 });
+
+    expect(window.setIgnoreMouseEvents).toHaveBeenLastCalledWith(false);
+    expect(window.setBounds).toHaveBeenCalledWith({ x: 40, y: 70, width: 421, height: 620 });
+  });
+
   it("does not start a drag when locked or model pass-through is enabled", () => {
     const window = createFakePetWindow({ x: 10, y: 20, width: 421, height: 620 });
     const controller = new PetWindowController({ getWindow: () => window });
