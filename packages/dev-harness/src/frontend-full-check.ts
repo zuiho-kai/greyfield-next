@@ -12,6 +12,7 @@ const pnpmCommand = "pnpm";
 
 const checks: Check[] = [
   { name: "frontend unit tests", command: pnpmCommand, args: ["test:frontend"] },
+  { name: "Playwright Chromium install", command: pnpmCommand, args: ["exec", "playwright", "install", "chromium"] },
   { name: "desktop production build", command: pnpmCommand, args: ["build:desktop"] },
   { name: "real Live2D browser harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/live2d-check.ts"] },
   { name: "V1 visual acceptance", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/v1-visual-acceptance-check.ts"] },
