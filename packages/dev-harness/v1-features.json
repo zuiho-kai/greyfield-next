@@ -130,7 +130,7 @@
     {
       "id": "GFN-V1-014",
       "title": "Speech bubble placement",
-      "status": "in-progress",
+      "status": "completed",
       "package": "apps/desktop",
       "acceptance": [
         "Speech bubble is enabled by default and can be disabled from settings.",
@@ -149,7 +149,7 @@
     {
       "id": "GFN-V1-004",
       "title": "Streaming text runtime",
-      "status": "in-progress",
+      "status": "completed",
       "package": "packages/core-runtime",
       "acceptance": [
         "text.input streams assistant.text.delta before final output.",
@@ -172,7 +172,7 @@
     {
       "id": "GFN-V1-005",
       "title": "Sentence-level TTS queue",
-      "status": "in-progress",
+      "status": "completed",
       "package": "packages/audio-runtime",
       "acceptance": [
         "Complete sentences synthesize before the full assistant response is finished.",
@@ -192,7 +192,7 @@
     {
       "id": "GFN-V1-006",
       "title": "Interrupt state machine",
-      "status": "in-progress",
+      "status": "completed",
       "package": "packages/core-runtime",
       "acceptance": [
         "runtime.interrupt stops later LLM chunks.",
@@ -224,7 +224,7 @@
     {
       "id": "GFN-V1-008",
       "title": "Settings shell",
-      "status": "in-progress",
+      "status": "completed",
       "package": "apps/desktop",
       "acceptance": [
         "Settings state exposes provider model, voice, microphone, character file, and model path.",
