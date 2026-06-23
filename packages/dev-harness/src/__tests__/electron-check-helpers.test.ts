@@ -70,19 +70,51 @@ describe("electron check helpers", () => {
 
     expect(point).toEqual({ x: 12, y: 0 });
   });
+
+  it("keeps scanning after the first 256 candidates are rejected", async () => {
+    const page = {
+      evaluate: async (callback: Function, arg: unknown) => {
+        const previousWindow = globalThis.window;
+        const previousDocument = globalThis.document;
+        const canvas = createFakeCanvas(1040);
+        const document = {
+          querySelectorAll: () => [canvas]
+        };
+        Object.defineProperty(globalThis, "window", {
+          configurable: true,
+          value: {
+            __greyfieldStageSmoke: {
+              sampleModelHit: () => false
+            }
+          }
+        });
+        Object.defineProperty(globalThis, "document", { configurable: true, value: document });
+        try {
+          return callback(arg);
+        } finally {
+          Object.defineProperty(globalThis, "window", { configurable: true, value: previousWindow });
+          Object.defineProperty(globalThis, "document", { configurable: true, value: previousDocument });
+        }
+      }
+    };
+
+    const point = await findStagePointOutsideRects(page as never, false, [{ x: 0, y: 0, width: 1020, height: 10 }]);
+
+    expect(point).toEqual({ x: 1024, y: 0 });
+  });
 });
 
-function createFakeCanvas() {
+function createFakeCanvas(width = 16, height = 4) {
   return {
-    width: 16,
-    height: 4,
+    width,
+    height,
     className: "fallback-stage-canvas",
-    getBoundingClientRect: () => ({ left: 0, top: 0, width: 16, height: 4 }),
+    getBoundingClientRect: () => ({ left: 0, top: 0, width, height }),
     getContext: (kind: string) =>
       kind === "2d"
         ? {
             getImageData: () => ({
-              data: new Uint8ClampedArray(16 * 4 * 4)
+              data: new Uint8ClampedArray(width * height * 4)
             })
           }
         : null

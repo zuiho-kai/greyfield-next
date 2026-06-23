@@ -110,7 +110,7 @@ export async function findStagePointOutsideRects(
         }
       }
       candidates.sort((left, right) => (wantHit ? right.alpha - left.alpha : left.alpha - right.alpha));
-      for (const candidate of candidates.slice(0, 256)) {
+      for (const candidate of candidates) {
         const point = {
           x: rect.left + (candidate.x / canvas.width) * rect.width,
           y: rect.top + (candidate.y / canvas.height) * rect.height

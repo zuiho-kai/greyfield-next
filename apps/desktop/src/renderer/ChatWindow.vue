@@ -89,5 +89,5 @@ function valueFrom(event: Event): string {
   return event.target instanceof HTMLInputElement ? event.target.value : "";
 }
 
-const chatStatus = computed(() => describeChatStatus(props.state));
+const chatStatus = computed(() => describeChatStatus(props.state, props.draft));
 </script>

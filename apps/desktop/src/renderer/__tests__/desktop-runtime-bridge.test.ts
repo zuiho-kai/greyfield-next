@@ -682,11 +682,13 @@ describe("createDesktopRuntimeBridge", () => {
     const stopped = await bridge.interrupt();
     runtimeEvent?.({ type: "assistant.text.delta", text: "不该出现" });
     runtimeEvent?.({ type: "assistant.text.final", text: "旧回复不该入历史" });
+    runtimeEvent?.({ type: "assistant.audio.chunk", text: "旧语音不该排队", data: new Uint8Array([1]) });
 
     expect(stopped.status).toBe("interrupted");
     expect(bridge.getState()).toMatchObject({
       status: "interrupted",
       assistantDraft: "",
+      audioQueue: [],
       messages: [{ role: "user", text: "停一下" }]
     });
   });

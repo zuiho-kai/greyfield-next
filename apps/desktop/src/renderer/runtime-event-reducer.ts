@@ -76,6 +76,9 @@ export function reduceRuntimeEvent(
   }
 
   if (event.type === "assistant.audio.chunk") {
+    if (state.status === "interrupted") {
+      return state;
+    }
     return {
       ...state,
       voiceErrorMessage: "",

@@ -10,7 +10,8 @@ export interface ChatStatusView {
 }
 
 export function describeChatStatus(
-  state: Pick<DesktopRendererState, "status" | "errorMessage" | "inputDraft" | "audioQueue" | "settings" | "stage">
+  state: Pick<DesktopRendererState, "status" | "errorMessage" | "inputDraft" | "audioQueue" | "settings" | "stage">,
+  currentDraft = state.inputDraft
 ): ChatStatusView {
   if (state.status === "thinking") {
     return {
@@ -59,7 +60,7 @@ export function describeChatStatus(
   }
 
   if (state.status === "error") {
-    const hasRetryDraft = state.inputDraft.trim().length > 0;
+    const hasRetryDraft = currentDraft.trim().length > 0;
     return {
       label: hasRetryDraft ? "Retry ready" : "Failed",
       detail: hasRetryDraft

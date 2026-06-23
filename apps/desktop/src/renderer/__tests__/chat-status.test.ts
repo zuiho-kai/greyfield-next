@@ -86,4 +86,24 @@ describe("describeChatStatus", () => {
       sendLabel: "Send"
     });
   });
+
+  it("uses the current input draft for retry-ready status", () => {
+    const state = {
+      ...createInitialDesktopRendererState(),
+      status: "error",
+      errorMessage: "provider timed out",
+      inputDraft: "original failed message"
+    };
+
+    expect(describeChatStatus(state, "")).toMatchObject({
+      label: "Failed",
+      tone: "failed",
+      sendLabel: "Send"
+    });
+    expect(describeChatStatus(state, "edited retry")).toMatchObject({
+      label: "Retry ready",
+      tone: "retry",
+      sendLabel: "Retry"
+    });
+  });
 });
