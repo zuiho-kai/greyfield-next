@@ -24,21 +24,23 @@ const scenarios = [
   {
     name: "unauthorized",
     userText: "错误 key 重试",
-    expectedError: "OpenAI-compatible LLM request failed: 401 Unauthorized",
+    expectedError: "OpenAI-compatible LLM request failed: 401",
     apiKey: "local-failure-key",
     expectedRequests: 1,
     respond(_request: IncomingMessage, response: ServerResponse) {
-      response.writeHead(401, { "content-type": "application/json", "statusText": "Unauthorized" });
+      response.statusMessage = "Unauthorized";
+      response.writeHead(401, { "content-type": "application/json" });
       response.end(JSON.stringify({ error: "bad key" }));
     }
   },
   {
     name: "forbidden",
     userText: "无权限重试",
-    expectedError: "OpenAI-compatible LLM request failed: 403 Forbidden",
+    expectedError: "OpenAI-compatible LLM request failed: 403",
     apiKey: "local-failure-key",
     expectedRequests: 1,
     respond(_request: IncomingMessage, response: ServerResponse) {
+      response.statusMessage = "Forbidden";
       response.writeHead(403, { "content-type": "application/json" });
       response.end(JSON.stringify({ error: "forbidden" }));
     }
@@ -60,10 +62,11 @@ const scenarios = [
   {
     name: "not-found",
     userText: "错误地址重试",
-    expectedError: "OpenAI-compatible LLM request failed: 404 Not Found",
+    expectedError: "OpenAI-compatible LLM request failed: 404",
     apiKey: "local-failure-key",
     expectedRequests: 1,
     respond(_request: IncomingMessage, response: ServerResponse) {
+      response.statusMessage = "Not Found";
       response.writeHead(404, { "content-type": "application/json" });
       response.end(JSON.stringify({ error: "wrong path" }));
     }
@@ -74,6 +77,7 @@ const scenarios = [
     expectedError: "OpenAI-compatible LLM request timed out after 100ms",
     apiKey: "local-failure-key",
     expectedRequests: 1,
+    timeoutMs: 100,
     respond(_request: IncomingMessage, _response: ServerResponse) {
       // Keep the response open until the provider timeout aborts the request.
     }
@@ -113,11 +117,11 @@ for (const scenario of scenarios) {
   );
 
   try {
-    const app = await launchApp(configPath, tempDir);
+    const app = await launchApp(configPath, tempDir, scenario.timeoutMs ?? 2_000);
     try {
       const chatWindow = await waitForRoleWindow(app, "chat");
       await sendMessage(chatWindow, scenario.userText);
-      await chatWindow.locator(".chat-error", { hasText: scenario.expectedError }).waitFor({ timeout: 10_000 });
+      await waitForChatError(chatWindow, scenario.expectedError, scenario.name, () => requestCount);
       await chatWindow.locator(".status-pill", { hasText: "Retry ready" }).waitFor({ timeout: 10_000 });
       await chatWindow.getByRole("button", { name: "Retry" }).waitFor({ timeout: 10_000 });
       const draft = await chatWindow.getByLabel("Message").inputValue();
@@ -144,7 +148,7 @@ for (const scenario of scenarios) {
 
 console.log(JSON.stringify({ ok: true, scenarios: results }, null, 2));
 
-async function launchApp(configPath: string, userDataPath: string): Promise<ElectronApplication> {
+async function launchApp(configPath: string, userDataPath: string, llmTimeoutMs: number): Promise<ElectronApplication> {
   const output: string[] = [];
   const app = await electron.launch({
     cwd: desktopRoot,
@@ -154,7 +158,7 @@ async function launchApp(configPath: string, userDataPath: string): Promise<Elec
       GREYFIELD_CONFIG_PATH: configPath,
       GREYFIELD_PROJECT_ROOT: workspaceRoot,
       GREYFIELD_USER_DATA_PATH: userDataPath,
-      GREYFIELD_LLM_TIMEOUT_MS: "100"
+      GREYFIELD_LLM_TIMEOUT_MS: String(llmTimeoutMs)
     }
   });
   app.process().stdout?.on("data", (chunk) => output.push(String(chunk)));
@@ -185,6 +189,29 @@ async function waitForRoleWindow(app: ElectronApplication, roleName: "chat"): Pr
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Timed out waiting for ${roleName} window`);
+}
+
+async function waitForChatError(
+  page: Page,
+  expectedError: string,
+  scenarioName: string,
+  readRequestCount: () => number
+): Promise<void> {
+  try {
+    await page.locator(".chat-error", { hasText: expectedError }).waitFor({ timeout: 10_000 });
+  } catch (error) {
+    const probe = await page.evaluate(() => ({
+      errorText: document.querySelector(".chat-error")?.textContent?.trim() ?? "",
+      statusText: document.querySelector(".status-pill")?.textContent?.trim() ?? "",
+      draft: (document.querySelector('input[aria-label="Message"]') as HTMLInputElement | null)?.value ?? ""
+    }));
+    throw new Error(
+      `${scenarioName} did not show expected chat error ${JSON.stringify(expectedError)}; probe=${JSON.stringify({
+        ...probe,
+        requestCount: readRequestCount()
+      })}; cause=${String(error)}`
+    );
+  }
 }
 
 async function sendMessage(page: Page, text: string): Promise<void> {
