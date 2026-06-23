@@ -120,7 +120,7 @@ if (typeof window !== "undefined") {
       providerModel: config.provider.model,
       providerLLM: config.provider.llm,
       providerBaseUrl: config.provider.baseUrl,
-      providerApiKey: isMaskedApiKey(config.provider.apiKey) ? "" : config.provider.apiKey,
+      providerApiKey: isMaskedApiKey(config.provider.apiKey) ? state.settings.providerApiKey : config.provider.apiKey,
       providerHasApiKey: config.provider.hasApiKey,
       voiceId: config.voice.id,
       voiceVolume: config.voice.volume,

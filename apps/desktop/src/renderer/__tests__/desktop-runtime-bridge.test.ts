@@ -635,6 +635,28 @@ describe("createDesktopRuntimeBridge", () => {
     expect(bridge.getConfigSnapshot().provider.apiKey).toBe("");
   });
 
+  it("keeps the in-progress API key draft when Electron echoes masked saved settings", () => {
+    let settingsChanged: ((config: import("../../shared/renderer-config").RendererGreyfieldConfig) => void) | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: () => undefined,
+      on: (channel, handler) => {
+        if (channel === "settings:changed") {
+          settingsChanged = handler as typeof settingsChanged;
+        }
+        return () => undefined;
+      }
+    });
+
+    bridge.updateSettings({ providerApiKey: "typed-secret" });
+    settingsChanged?.({
+      ...bridge.getConfigSnapshot(),
+      provider: { ...bridge.getConfigSnapshot().provider, apiKey: API_KEY_MASK, hasApiKey: true }
+    });
+
+    expect(bridge.getState().settings.providerApiKey).toBe("typed-secret");
+    expect(bridge.getState().settings.providerHasApiKey).toBe(true);
+  });
+
   it("reduces window:state events from Electron into renderer interaction state", () => {
     let windowStateChanged: ((state: { modelPassThrough: boolean; locked: boolean }) => void) | undefined;
     const bridge = createDesktopRuntimeBridge({
