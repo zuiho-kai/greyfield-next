@@ -25,7 +25,7 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 
 ## 现在不能宣称什么
 
-- 不能宣称“V1 已发布完成”：#41 仍是 draft/release-candidate，必须合入目标分支并在该分支复跑 checkpoint 后才能 claim。
+- 不能宣称“V1 已发布完成”：#41 仍是未合入的 release-candidate integration PR，必须合入目标分支并在该分支复跑 checkpoint 后才能 claim。
 - 不能宣称“真实 LLM release 证据是当前的”：#41 当前环境没有 `GREYFIELD_REAL_LLM_*`，所以 `pnpm harness:electron:real-llm` 没有在 #41 上复跑。
 - 不能宣称“语音伴侣完整完成”：#41 已覆盖真实 TTS 最小闭环和 Stop-audio，但 ASR、麦克风对话、真实音频能量嘴型仍是 V1 后工作。
 - 不能宣称“模型管理 UX 完成”：Settings provider/Test LLM 已产品化，模型管理和更完整设置体验可留到 V1 后。

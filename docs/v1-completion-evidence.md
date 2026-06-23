@@ -9,17 +9,17 @@ Last updated: 2026-06-23.
 - `packages/dev-harness/v1-features.json` remains the source of truth for feature acceptance.
 - PR-local evidence counts for review of that PR, but V1 release evidence only counts after the PR is merged or the command is rerun on the release branch.
 - Screenshot artifacts are review evidence, not a replacement for executable harnesses.
-- Do not mark voice, TTS playback, or Stop-audio behavior release-complete until #29 and #30 are merged and rerun on the release branch. Draft PR evidence is review evidence only.
-- Draft integration PR [#41](https://github.com/zuiho-kai/greyfield-next/pull/41) combines #35, #36, #37, #38, #39, and #40. Its evidence is stronger than isolated PR evidence because it proves the branches can coexist, but it is still not release evidence until merged or rerun on the release branch.
+- Do not mark voice, TTS playback, or Stop-audio behavior release-complete until #29 and #30 are merged and rerun on the release branch. PR-local evidence is review evidence only.
+- Integration PR [#41](https://github.com/zuiho-kai/greyfield-next/pull/41) combines #35, #36, #37, #38, #39, and #40. Its evidence is stronger than isolated PR evidence because it proves the branches can coexist, but it is still not release evidence until merged or rerun on the release branch.
 - Old PR [#32](https://github.com/zuiho-kai/greyfield-next/pull/32) is closed as superseded by #38 and #41.
 
 ## Current Integration Evidence
 
-Draft PR [#41](https://github.com/zuiho-kai/greyfield-next/pull/41) is the current V1 integration/audit branch. It is mergeable and its GitHub checks passed:
+PR [#41](https://github.com/zuiho-kai/greyfield-next/pull/41) is the current V1 integration/audit branch. It is mergeable and its GitHub checks passed:
 
 - Fast checks: success.
 - Desktop pet quick harness: success.
-- CodeRabbit: success (review skipped because the PR is draft).
+- CodeRabbit: success status, but automated review did not run because the review rate limit was reached.
 - GitGuardian Security Checks: success.
 - Full checkpoint harness: skipped by workflow conditions.
 
@@ -92,7 +92,7 @@ Visual review artifacts from `pnpm harness:v1-visual` were inspected from `.cach
 - Stop-audio behavior has combined proof in #41, but it is not release-claimable until the combined behavior is merged and rerun on the release branch.
 - Real OpenAI-compatible provider evidence is not current on #41 because the required `GREYFIELD_REAL_LLM_*` env vars were unavailable. The fake provider path, provider failure path, Test LLM product states, and provider abort path are covered; real-provider chat still needs an env-backed rerun before any release claim.
 - ASR and microphone conversation are not V1-complete.
-- #26, #27, #28, #29, #30, and #31 evidence is currently integrated in draft PR #41, with narrower draft PRs #35, #36, #37, #38, #39, and #40 as historical slices. The combined evidence must be merged or rerun on the final release branch before V1 can be called complete.
+- #26, #27, #28, #29, #30, and #31 evidence is currently integrated in PR #41, with narrower PRs #35, #36, #37, #38, #39, and #40 as historical slices. The combined evidence must be merged or rerun on the final release branch before V1 can be called complete.
 - A final V1 release claim still needs one current-head checkpoint run covering `pnpm typecheck`, `pnpm test`, `pnpm harness:acceptance`, `pnpm harness:live2d`, `pnpm harness:pet:quick`, `pnpm harness:electron`, and the feature-specific harnesses listed above.
 
 ## Release Audit Steps

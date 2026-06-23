@@ -29,7 +29,7 @@ Current product plan: [Greyfield Next V1 产品计划](plans/v1-product-plan.md)
 - Updated `packages/dev-harness/v1-features.json` so the #41-covered V1 paths are marked completed on the release-candidate branch.
 - #41 local evidence now includes `pnpm typecheck`, `pnpm test`, `pnpm test:backend`, `pnpm test:frontend`, `pnpm harness:acceptance`, `pnpm harness:live2d`, `pnpm harness:v1-visual`, `pnpm harness:pet:quick`, `pnpm harness:electron`, and the feature-specific Electron harnesses for provider failure, restart context, bubble long reply, settings provider test, active-chat Test LLM rejection, provider abort, stop-audio, and bubble edge/click-through.
 - `pnpm harness:electron:real-llm` was not rerun on #41 because the current environment does not provide `GREYFIELD_REAL_LLM_BASE_URL`, `GREYFIELD_REAL_LLM_API_KEY`, and `GREYFIELD_REAL_LLM_MODEL`.
-- #41 remains draft and not a V1 release claim. Final release evidence must be rerun on the branch that is actually merged/released.
+- #41 remains an unmerged integration PR and not a V1 release claim. Final release evidence must be rerun on the branch that is actually merged/released.
 
 ## 2026-05-23
 
