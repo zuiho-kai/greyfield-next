@@ -13,6 +13,23 @@
     "message-platform-gateway",
     "self-generating-skills"
   ],
+  "qaProfiles": {
+    "frontend-full": {
+      "tag": "frontend-full",
+      "script": "pnpm harness:frontend-full",
+      "ciTrigger": "Runs on PRs that touch frontend-visible paths; non-frontend PRs keep the frontend-full check visible and pass it with an explicit skip message.",
+      "scope": [
+        "frontend unit logic",
+        "real Live2D rendering",
+        "transparent pet hit-test, drag, wheel, and pass-through",
+        "speech bubble placement and click-through",
+        "Settings editable fields, provider readiness, Test LLM, and active-chat rejection",
+        "Chat waiting/generating/stopped/failed/retry UI through provider failure and abort harnesses",
+        "Stop clearing speech playback, mouth-open state, and audio queue",
+        "restart-visible recent context continuity"
+      ]
+    }
+  },
   "features": [
     {
       "id": "GFN-V1-001",

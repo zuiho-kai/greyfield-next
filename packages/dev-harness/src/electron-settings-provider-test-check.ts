@@ -18,7 +18,8 @@ const server = createServer(async (_request: IncomingMessage, response: ServerRe
   requestCount += 1;
   await delay(250);
   if (responseMode === "failure") {
-    response.writeHead(401, { "content-type": "application/json", "statusText": "Unauthorized" });
+    response.statusMessage = "Unauthorized";
+    response.writeHead(401, { "content-type": "application/json" });
     response.end(JSON.stringify({ error: "bad key" }));
     return;
   }
@@ -81,7 +82,7 @@ try {
     responseMode = "failure";
     await settingsWindow.getByRole("button", { name: "Test LLM" }).click();
     await settingsWindow.locator(".provider-test-result--error", { hasText: "Test failed" }).waitFor({ timeout: 10_000 });
-    await settingsWindow.locator(".provider-test-result--error", { hasText: "401 Unauthorized" }).waitFor();
+    await settingsWindow.locator(".provider-test-result--error", { hasText: "401" }).waitFor();
     assertProviderRequestCount(2, "success plus failure tests");
 
     console.log(

@@ -6,6 +6,7 @@ const manifest = JSON.parse(
 ) as {
   version: string;
   nonGoals: string[];
+  qaProfiles: Record<string, { tag: string; script: string; ciTrigger: string; scope: string[] }>;
   features: Array<{
     id: string;
     title: string;
@@ -33,5 +34,19 @@ describe("v1-features.json", () => {
       expect(feature.acceptance.length).toBeGreaterThan(0);
       expect(feature.qa.script.length).toBeGreaterThan(0);
     }
+
+    expect(manifest.qaProfiles["frontend-full"]).toMatchObject({
+      tag: "frontend-full",
+      script: "pnpm harness:frontend-full"
+    });
+    expect(manifest.qaProfiles["frontend-full"].ciTrigger).toContain("frontend-visible paths");
+    expect(manifest.qaProfiles["frontend-full"].scope).toEqual(
+      expect.arrayContaining([
+        "real Live2D rendering",
+        "transparent pet hit-test, drag, wheel, and pass-through",
+        "Settings editable fields, provider readiness, Test LLM, and active-chat rejection",
+        "Chat waiting/generating/stopped/failed/retry UI through provider failure and abort harnesses"
+      ])
+    );
   });
 });

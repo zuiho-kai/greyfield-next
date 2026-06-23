@@ -57,26 +57,82 @@ jobs:
       - name: Pet quick harness
         run: pnpm harness:pet:quick
 
-  checkpoint:
-    name: Full checkpoint harness
+  changes:
+    name: Change classifier
     runs-on: windows-latest
-    timeout-minutes: 15
-    needs: fast
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    outputs:
+      frontend_full: ${{ steps.filter.outputs.frontend_full }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "pull_request") {
+            $base = "${{ github.event.pull_request.base.sha }}"
+            $head = "${{ github.event.pull_request.head.sha }}"
+          } elseif ("${{ github.event_name }}" -eq "push") {
+            $base = "${{ github.event.before }}"
+            $head = "${{ github.sha }}"
+          } else {
+            "frontend_full=true" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          $files = git diff --name-only $base $head
+          $patterns = @(
+            '^apps/desktop/',
+            '^packages/stage-live2d/',
+            '^packages/audio-runtime/',
+            '^packages/dev-harness/',
+            '^package\.json$',
+            '^pnpm-lock\.yaml$',
+            '^tsconfig',
+            '^\.github/workflows/ci\.yml$'
+          )
+          $matched = $false
+          foreach ($file in $files) {
+            foreach ($pattern in $patterns) {
+              if ($file -match $pattern) {
+                $matched = $true
+                break
+              }
+            }
+            if ($matched) {
+              break
+            }
+          }
+          "frontend_full=$($matched.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+  frontend-full:
+    name: frontend-full
+    runs-on: windows-latest
+    timeout-minutes: 45
+    needs:
+      - fast
+      - changes
+    steps:
+      - name: Skip frontend-full for non-frontend changes
+        if: needs.changes.outputs.frontend_full != 'true'
+        run: echo "frontend-full skipped because this change did not touch frontend-visible paths."
+      - uses: actions/checkout@v4
+        if: needs.changes.outputs.frontend_full == 'true'
       - uses: pnpm/action-setup@v4
+        if: needs.changes.outputs.frontend_full == 'true'
         with:
           version: 9.15.9
       - uses: actions/setup-node@v4
+        if: needs.changes.outputs.frontend_full == 'true'
         with:
           node-version: 24
           cache: pnpm
       - name: Install
+        if: needs.changes.outputs.frontend_full == 'true'
         run: pnpm install --frozen-lockfile
       - name: Install Electron binary
+        if: needs.changes.outputs.frontend_full == 'true'
         run: pnpm --dir apps/desktop ensure:electron
-      - name: Build desktop once
-        run: pnpm build:desktop
-      - name: Full Electron harness
-        run: pnpm harness:electron:quick
+      - name: Run frontend-full guard
+        if: needs.changes.outputs.frontend_full == 'true'
+        run: pnpm harness:frontend-full

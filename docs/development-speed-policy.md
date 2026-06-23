@@ -23,6 +23,12 @@ This project needs two modes: fast feature iteration and slower checkpoint valid
 | Core runtime / provider / interrupt | Targeted runtime/provider tests | `pnpm test && pnpm harness:acceptance` |
 | CI or packaging scripts | Script-specific smoke command | Relevant checkpoint command |
 
+## PR Frontend Gate
+
+`frontend-full` is the CI tag for the user-visible frontend acceptance gate. It runs `pnpm harness:frontend-full` on PRs that touch frontend-visible paths such as `apps/desktop`, Live2D stage rendering, audio playback, dev harnesses, package scripts, TypeScript config, or the CI workflow. Non-frontend PRs still show the `frontend-full` check, but it passes with an explicit skip message instead of running the full Electron suite.
+
+This keeps backend-only or docs-only changes fast while making Settings, Chat, Pet interaction, Live2D rendering, speech bubble, Stop, and provider-error UI changes prove the full frontend path before merge.
+
 ## Fast Loop
 
 Use this while actively editing:

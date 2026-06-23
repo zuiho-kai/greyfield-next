@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
 import { getElectronExecutablePath } from "./electron-install";
 import { dispatchStageMove, findStagePoint, waitForStageHit } from "./electron-check-helpers";
+import { resolveLive2DFixturePath } from "./live2d-fixture";
 
 const workspaceRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const desktopRoot = join(workspaceRoot, "apps", "desktop");
@@ -90,12 +91,26 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
 
   const tempDir = await mkdtemp(join(tmpdir(), "greyfield-v1-visual-"));
   const configPath = join(tempDir, "greyfield.config.json");
-  await writeFile(configPath, `${JSON.stringify(defaultGreyfieldConfig, null, 2)}\n`, "utf8");
+  await writeFile(
+    configPath,
+    `${JSON.stringify(
+      {
+        ...defaultGreyfieldConfig,
+        live2d: {
+          ...defaultGreyfieldConfig.live2d,
+          modelPath: pathToFileURL(resolveLive2DFixturePath()).href
+        }
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
 
   const app = await launchApp(tempDir, configPath);
   try {
     const petWindow = await waitForRoleWindow(app, "pet");
-    await petWindow.waitForSelector(".pet-shell canvas.live2d-stage-canvas, .pet-shell canvas.fallback-stage-canvas");
+    await petWindow.waitForSelector('.pet-shell .live2d-stage-view[data-stage-mode="live2d"] canvas.live2d-stage-canvas');
     await waitForPaintedStage(petWindow);
 
     const pet = await readPetSnapshot(petWindow);

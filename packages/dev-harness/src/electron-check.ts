@@ -404,10 +404,10 @@ async function waitForVoiceSpeech(path: string, enabled: boolean): Promise<typeo
 
 async function waitForProviderApiKey(path: string, apiKey: string): Promise<typeof defaultGreyfieldConfig> {
   const started = Date.now();
-  let config = await readConfig(path);
+  let config: typeof defaultGreyfieldConfig | null = null;
   while (Date.now() - started < 5_000) {
-    config = await readConfig(path);
-    if (config.provider.apiKey === apiKey) {
+    config = await readConfig(path).catch(() => null);
+    if (config?.provider.apiKey === apiKey) {
       return config;
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
