@@ -82,9 +82,13 @@ export class DesktopRuntimeBridge {
 
   constructor(private readonly host?: DesktopHostApi, private readonly speechOutput?: SpeechOutput) {
     this.host?.on("settings:changed", (config) => {
+      const settings = settingsFromConfig(config);
+      if (isMaskedApiKey(config.provider.apiKey) && this.state.settings.providerApiKey.length > 0) {
+        settings.providerApiKey = this.state.settings.providerApiKey;
+      }
       this.state = {
         ...this.state,
-        settings: settingsFromConfig(config),
+        settings,
         window: {
           ...this.state.window,
           modelPassThrough: config.window.modelPassThrough
