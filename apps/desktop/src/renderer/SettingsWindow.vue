@@ -79,6 +79,27 @@
           />
         </label>
         <label>
+          <span>Speak</span>
+          <input
+            :checked="state.settings.voiceSpeechEnabled"
+            aria-label="Speak replies"
+            type="checkbox"
+            @change="$emit('update-boolean-setting', 'voiceSpeechEnabled', checkedFrom($event))"
+          />
+        </label>
+        <label>
+          <span>Volume</span>
+          <input
+            :value="state.settings.voiceVolume"
+            aria-label="Voice volume"
+            type="number"
+            min="0"
+            max="1"
+            step="0.05"
+            @input="$emit('update-numeric-setting', 'voiceVolume', valueFrom($event))"
+          />
+        </label>
+        <label>
           <span>Mic</span>
           <input
             :value="state.settings.microphoneId"
@@ -108,8 +129,14 @@
         <div class="settings-actions">
           <button type="button" @click="$emit('choose-model')">Choose model</button>
           <button type="button" @click="$emit('reset-transform')">Reset transform</button>
-          <button type="button" :disabled="testLlmAction.disabled" @click="$emit('test-llm')">
-            Test LLM
+          <button
+            type="button"
+            class="test-llm-button"
+            :class="`test-llm-button--${testLlmAction.tone}`"
+            :disabled="testLlmAction.disabled"
+            @click="$emit('test-llm')"
+          >
+            {{ testLlmAction.label }}
           </button>
         </div>
         <p
@@ -120,12 +147,13 @@
           {{ testLlmAction.disableReason }}
         </p>
         <p
-          v-else-if="state.providerTest.message"
+          v-else-if="providerTestStatus"
           class="provider-test-result"
-          :class="`provider-test-result--${state.providerTest.status}`"
+          :class="`provider-test-result--${providerTestStatus.tone}`"
           role="status"
         >
-          {{ state.providerTest.message }}
+          <strong>{{ providerTestStatus.label }}</strong>
+          <span>{{ providerTestStatus.detail }}</span>
         </p>
         <label>
           <span>Scale</span>
@@ -168,6 +196,9 @@
             @change="$emit('update-boolean-setting', 'speechBubbleEnabled', checkedFrom($event))"
           />
         </label>
+        <p v-if="state.voiceErrorMessage" class="provider-test-result provider-test-result--error" role="status">
+          {{ state.voiceErrorMessage }}
+        </p>
       </section>
 
       <section v-if="modelInfo" class="model-inspector" aria-label="Live2D model info">
@@ -220,7 +251,7 @@ import { computed } from "vue";
 import type { DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
 import Live2DStageView from "./Live2DStageView.vue";
 import { describeProviderStatus } from "./settings-provider-status";
-import { describeTestLlmAction } from "./settings-test-llm";
+import { describeProviderTestStatus, describeTestLlmAction } from "./settings-test-llm";
 
 const props = defineProps<{
   state: DesktopRendererState;
@@ -232,8 +263,8 @@ const props = defineProps<{
 
 defineEmits<{
   "update-setting": [key: keyof DesktopSettingsState, value: string];
-  "update-numeric-setting": [key: "modelScale" | "modelX" | "modelY", value: string];
-  "update-boolean-setting": [key: "speechBubbleEnabled", value: boolean];
+  "update-numeric-setting": [key: "modelScale" | "modelX" | "modelY" | "voiceVolume", value: string];
+  "update-boolean-setting": [key: "speechBubbleEnabled" | "voiceSpeechEnabled", value: boolean];
   "update:model-pass-through": [value: boolean];
   "update:locked": [value: boolean];
   "choose-model": [];
@@ -248,7 +279,14 @@ const motionCount = computed(() =>
   Object.values(props.modelInfo?.motions ?? {}).reduce((total, count) => total + count, 0)
 );
 const providerStatus = computed(() => describeProviderStatus(props.state));
-const testLlmAction = computed(() => describeTestLlmAction(props.stageStatus, props.state.providerTest.status));
+const testLlmAction = computed(() =>
+  describeTestLlmAction(
+    props.stageStatus,
+    props.state.providerTest.status,
+    providerStatus.value.tone === "blocked" ? providerStatus.value.detail : ""
+  )
+);
+const providerTestStatus = computed(() => describeProviderTestStatus(props.state.providerTest));
 
 function valueFrom(event: Event): string {
   return event.target instanceof HTMLInputElement ? event.target.value : "";

@@ -19,6 +19,38 @@ describe("RuntimeService", () => {
     expect(emit).toHaveBeenLastCalledWith({ type: "runtime.status", status: "idle" });
   });
 
+  it("does not emit desktop TTS chunks until voice output is enabled", async () => {
+    const service = new RuntimeService(defaultGreyfieldConfig);
+    const events: unknown[] = [];
+
+    await service.handle({ type: "text.input", text: "静音默认值" }, (event) => {
+      events.push(event);
+    });
+
+    expect(events.some((event) => (event as { type?: string }).type === "assistant.audio.chunk")).toBe(false);
+  });
+
+  it("emits desktop TTS chunks when voice output is enabled", async () => {
+    const service = new RuntimeService({
+      ...defaultGreyfieldConfig,
+      voice: {
+        ...defaultGreyfieldConfig.voice,
+        speechEnabled: true
+      }
+    });
+    const events: unknown[] = [];
+
+    await service.handle({ type: "text.input", text: "朗读打开" }, (event) => {
+      events.push(event);
+    });
+
+    expect(events).toContainEqual({
+      type: "assistant.audio.chunk",
+      text: "你好，我醒着。",
+      data: expect.any(Uint8Array)
+    });
+  });
+
   it("uses the OpenAI-compatible provider when config requests it", async () => {
     const fetch = vi.fn(async () => {
       const body = new ReadableStream<Uint8Array>({
@@ -132,6 +164,46 @@ describe("RuntimeService", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("reports missing Base URL and model before testing the OpenAI-compatible provider", async () => {
+    const fetch = vi.fn();
+    const missingBaseUrl = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "",
+          apiKey: "secret",
+          model: "remote-model"
+        }
+      },
+      { fetch }
+    );
+    const missingModel = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "secret",
+          model: ""
+        }
+      },
+      { fetch }
+    );
+
+    await expect(missingBaseUrl.testLLM()).resolves.toEqual({
+      ok: false,
+      message: "OpenAI-compatible provider needs a Base URL before testing."
+    });
+    await expect(missingModel.testLLM()).resolves.toEqual({
+      ok: false,
+      message: "OpenAI-compatible provider needs a model before testing."
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("fails chat with a readable error when OpenAI-compatible provider is missing an API key", async () => {
     const fetch = vi.fn();
     const service = new RuntimeService(
@@ -153,6 +225,44 @@ describe("RuntimeService", () => {
     );
     expect(fetch).not.toHaveBeenCalled();
     expect(await service.getRecentTurns(2)).toEqual([]);
+  });
+
+  it("fails chat with readable errors when OpenAI-compatible provider is missing Base URL or model", async () => {
+    const fetch = vi.fn();
+    const missingBaseUrl = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "",
+          apiKey: "secret",
+          model: "remote-model"
+        }
+      },
+      { fetch }
+    );
+    const missingModel = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "secret",
+          model: ""
+        }
+      },
+      { fetch }
+    );
+
+    await expect(missingBaseUrl.handle({ type: "text.input", text: "别发请求" }, () => undefined)).rejects.toThrow(
+      "OpenAI-compatible provider needs a Base URL before chatting."
+    );
+    await expect(missingModel.handle({ type: "text.input", text: "别发请求" }, () => undefined)).rejects.toThrow(
+      "OpenAI-compatible provider needs a model before chatting."
+    );
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("passes the configured LLM timeout into chat provider requests", async () => {

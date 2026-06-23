@@ -67,6 +67,8 @@ async function createWindows(): Promise<void> {
   await loadRenderer(petWindow, "pet");
   await loadRenderer(settingsWindow, "settings");
   await loadRenderer(chatWindow, "chat");
+  broadcastSettings(config);
+  broadcastWindowState();
   applyHitTest({ passthrough: true, reason: "transparent-area" });
   createTray();
 }
@@ -112,6 +114,10 @@ function createTrayIcon(): Electron.NativeImage {
 function registerIpc(): void {
   ipcMain.on("runtime:input", (_event, payload) => {
     handleRuntimeInput(payload);
+  });
+
+  ipcMain.on("runtime:speech-playback", (_event, payload) => {
+    broadcastSpeechPlayback(payload);
   });
 
   ipcMain.on("provider:test-llm", () => {
@@ -274,6 +280,12 @@ function broadcastLog(level: "debug" | "info" | "warn" | "error", message: strin
 function broadcastRuntimeEvent(event: Parameters<Parameters<RuntimeService["handle"]>[1]>[0]): void {
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send("runtime:event", event);
+  }
+}
+
+function broadcastSpeechPlayback(payload: { type: "finished" | "error"; text: string; message?: string }): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send("runtime:speech-playback", payload);
   }
 }
 

@@ -10,6 +10,19 @@ export function reduceRuntimeEvent(
   interactionProfile: RendererInteractionProfile
 ): DesktopRendererState {
   if (event.type === "runtime.status") {
+    if (event.status === "interrupted") {
+      return {
+        ...state,
+        status: event.status,
+        assistantDraft: "",
+        audioQueue: [],
+        stage: {
+          ...state.stage,
+          ...stageReactionForStatus(event.status, interactionProfile),
+          mouthOpen: 0
+        }
+      };
+    }
     return {
       ...state,
       status: event.status,
@@ -26,6 +39,7 @@ export function reduceRuntimeEvent(
       ...state,
       status: "error",
       errorMessage: event.message,
+      voiceErrorMessage: "",
       inputDraft: lastUserMessage,
       assistantDraft: "",
       audioQueue: [],
@@ -37,13 +51,23 @@ export function reduceRuntimeEvent(
   }
 
   if (event.type === "assistant.text.delta") {
+    if (state.status === "interrupted") {
+      return state;
+    }
     return {
       ...state,
+      voiceErrorMessage: "",
       assistantDraft: `${state.assistantDraft}${event.text}`
     };
   }
 
   if (event.type === "assistant.text.final") {
+    if (state.status === "interrupted") {
+      return {
+        ...state,
+        assistantDraft: ""
+      };
+    }
     return {
       ...state,
       assistantDraft: "",
@@ -52,13 +76,24 @@ export function reduceRuntimeEvent(
   }
 
   if (event.type === "assistant.audio.chunk") {
+    if (state.status === "interrupted") {
+      return state;
+    }
     return {
       ...state,
+      voiceErrorMessage: "",
       audioQueue: [...state.audioQueue, event.text],
       stage: {
         ...state.stage,
         mouthOpen: 0
       }
+    };
+  }
+
+  if (event.type === "assistant.audio.error") {
+    return {
+      ...state,
+      voiceErrorMessage: event.message
     };
   }
 

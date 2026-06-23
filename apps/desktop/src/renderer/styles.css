@@ -151,21 +151,33 @@ button {
   color: #1f2933;
 }
 
-.status-badge.Idle {
-  background: rgba(100, 150, 180, 0.2);
-  color: #2c5aa0;
+.status-badge--waiting {
+  background: rgba(82, 121, 140, 0.18);
+  color: #2c5a68;
 }
 
-.status-badge.Thinking {
-  background: rgba(255, 193, 7, 0.2);
-  color: #f57f17;
-  animation: pulse 1.5s infinite;
+.status-badge--generating {
+  background: rgba(31, 122, 107, 0.16);
+  color: #18594f;
+  animation: pulse 1.3s infinite;
 }
 
-.status-badge.Speaking {
-  background: rgba(76, 175, 80, 0.2);
-  color: #2e7d32;
-  animation: pulse 1s infinite;
+.status-badge--stopped {
+  background: rgba(37, 56, 88, 0.14);
+  color: #253858;
+}
+
+.status-badge--failed,
+.status-badge--retry {
+  background: rgba(143, 49, 80, 0.13);
+  color: #7b2442;
+}
+
+.chat-status-detail {
+  margin: -8px 0 0;
+  color: #465463;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 @keyframes pulse {
@@ -216,6 +228,12 @@ button {
 
 .chat-error-box p {
   margin: 0;
+}
+
+.voice-error-box {
+  border-color: rgba(143, 49, 80, 0.22);
+  background: rgba(255, 248, 232, 0.95);
+  color: #7a4a16;
 }
 
 @keyframes slideIn {
@@ -313,6 +331,31 @@ h1 {
   color: #ffffff;
   text-align: center;
   text-transform: capitalize;
+}
+
+.status-badge.status-pill {
+  min-width: 104px;
+}
+
+.status-badge.status-pill.status-badge--waiting {
+  background: rgba(82, 121, 140, 0.18);
+  color: #2c5a68;
+}
+
+.status-badge.status-pill.status-badge--generating {
+  background: rgba(31, 122, 107, 0.16);
+  color: #18594f;
+}
+
+.status-badge.status-pill.status-badge--stopped {
+  background: rgba(37, 56, 88, 0.14);
+  color: #253858;
+}
+
+.status-badge.status-pill.status-badge--failed,
+.status-badge.status-pill.status-badge--retry {
+  background: rgba(143, 49, 80, 0.13);
+  color: #7b2442;
 }
 
 .message-list-container {
@@ -553,6 +596,13 @@ h1 {
   transform: translateY(0);
 }
 
+.stop-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+  transform: none;
+  box-shadow: none;
+}
+
 .composer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -662,17 +712,37 @@ h1 {
 }
 
 .settings-actions button:disabled {
-  cursor: wait;
   opacity: 0.62;
 }
 
+.settings-actions button.test-llm-button--testing:disabled {
+  cursor: wait;
+}
+
+.settings-actions button.test-llm-button--blocked:disabled,
+.settings-actions button.test-llm-button--active-chat:disabled {
+  cursor: not-allowed;
+}
+
 .provider-test-result {
+  display: grid;
+  gap: 3px;
   margin: 0;
   padding: 8px 10px;
   border-radius: 8px;
   font-size: 12px;
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.provider-test-result strong {
+  color: inherit;
+  font-size: 12px;
+}
+
+.provider-test-result span {
+  color: inherit;
+  font-size: 12px;
 }
 
 .provider-test-result--testing {

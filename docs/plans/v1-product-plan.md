@@ -1,6 +1,6 @@
 # Greyfield Next V1 产品计划
 
-更新时间：2026-05-27
+更新时间：2026-06-23
 
 ## 一句话目标
 
@@ -14,21 +14,21 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 | Live2D 展示 | 已能加载真实 `.model3.json`，有非 fallback 渲染、表情、动作、触摸反应。 | 可以作为 V1 的模型展示底座。 |
 | 模型交互 | 支持模型像素命中、拖动窗口、滚轮缩放、穿透模式；拖动不会改变模型缩放或窗口尺寸。 | 桌宠基础交互可用。 |
 | 文字输入 | Chat 窗口可以输入文本，消息经 renderer -> preload IPC -> Electron main -> runtime；runtime 报错后会把上一条用户输入恢复到草稿，方便重试。 | 主链路已打通，基础失败恢复已可用。 |
-| 文字输出 | 支持流式输出、最终回复、错误提示；默认 fake provider 稳定回复，OpenAI-compatible provider 已在 main process 接入；已用用户提供的 OpenAI-compatible endpoint 跑通过真实 Electron 聊天 harness；provider 失败会显示错误、恢复草稿且不写半截 session；Stop 已证明会关闭 active provider HTTP 请求。 | 真实文字链路已可演示；还需要补设置页视觉 polish。 |
+| 文字输出 | 支持流式输出、最终回复、错误提示；默认 fake provider 稳定回复，OpenAI-compatible provider 已在 main process 接入；provider 失败会显示错误、恢复草稿且不写半截 session；Stop 已证明会关闭 active provider HTTP 请求；#41 已补齐 Chat 状态、Stop、失败重试和集成验收。 | 文字链路在 #41 候选分支上可作为 V1 文本能力；真实 provider 仍需带 env 的 release 前复跑。 |
 | 最近上下文 | 已接入角色 YAML、`data/memory.md`、JSONL session；重启后能把上一轮 user/assistant turn 带入下一次 prompt。 | V1 的“最近上下文连续性”已成立。 |
-| 设置页 | 已有 provider/model/key、角色文件、模型路径、语音/麦克风等设置入口；Test LLM 走 main process；provider 配置会显示 Preview / blocked / ready-to-test 状态；聊天回复中 Test LLM 会显示先 Stop 或等待的可操作提示。 | 功能骨架可用，provider 状态更清楚；模型管理和整体视觉手感还不够。 |
-| 聊天窗口 | 已从宠物窗口拆出，能显示消息、状态、错误，Stop 按钮能打断当前回复。 | 可用，但还需要视觉和交互 polish。 |
-| 气泡 | 宠物旁有短回复气泡，支持文本压缩、长度上限；位置固定在宠物窗口上方稳定槽位，不跟随模型移动，只在窗口/屏幕边缘内水平和垂直夹紧；长 streaming 回复会进气泡首 token、保持短文本，完整内容留在 Chat。 | 基础可用，躁动感已降低；还需要屏幕边缘截图和开关/点击穿透视觉复核。 |
-| 语音输出 | runtime 有句子级 TTS 队列和假 TTS，嘴型可被假音频驱动。 | 还不是产品可用的真实语音。 |
+| 设置页 | 已有 provider/model/key、角色文件、模型路径、语音/麦克风等设置入口；Test LLM 走 main process；provider 配置会显示 Preview / blocked / ready-to-test 状态；测试中、成功、失败、active chat 被拒绝均有用户可读 UI 和 harness 证据。 | #41 候选分支已满足 V1 provider/Test LLM 产品化；模型管理 UX 可留到 V1 后。 |
+| 聊天窗口 | 已从宠物窗口拆出，能显示消息、状态、错误；Waiting / Generating / Stopped / Failed / Retry-ready 状态已产品化；Stop 能打断文字流，也能在语音队列仍播放时保持可点击。 | #41 候选分支已满足 V1 Chat polish；release 前需在目标分支复跑证据。 |
+| 气泡 | 宠物旁有短回复气泡，支持文本压缩、长度上限；位置固定在宠物窗口上方稳定槽位，不跟随模型移动，只在窗口/屏幕边缘内水平和垂直夹紧；长 streaming 回复会进气泡首 token、保持短文本，完整内容留在 Chat；右侧边缘和开关/点击穿透已有专门 harness 和截图证据。 | #41 候选分支已满足 V1 气泡 QA；release 前需在目标分支复跑证据。 |
+| 语音输出 | 已有句子级 TTS 队列、默认静音、Settings `Speak replies` 开关、renderer Web Speech 播放、TTS 失败隔离、长回复 TTS budget；Stop 会取消正在播放的语音、清空队列并重置嘴型。 | #41 候选分支已满足 V1 真实 TTS 最小闭环；仍不是完整语音伴侣，ASR 留到 V1 后。 |
 | 语音输入 | 只有 VAD/音频边界基础。 | V1 后段任务，不能先做。 |
 | CI | GitHub Actions workflow 已入仓；PR 跑 Fast checks 和 Desktop pet quick harness；main / manual dispatch 额外跑 Full checkpoint harness。 | 自动保护已恢复，后续风险点是继续控制 Electron harness 的耗时和稳定性。 |
 
 ## 现在不能宣称什么
 
-- 不能宣称“真实 LLM 已完成”：OpenAI-compatible provider 已接入，真实 Electron 聊天 harness 已通过一次，missing-key/401/403/404/timeout/malformed-stream 已有 Electron 失败验收，Stop 已证明会关闭 active provider HTTP 请求，长回复气泡已有 Electron 验收；但还缺更完整的设置页视觉 polish。
-- 不能宣称“语音伴侣已完成”：真实 TTS、播放队列、interrupt 停止播放、ASR 都还没达到产品验收。
-- 不能宣称“设置页完成”：现在是功能骨架，模型管理、provider 状态、错误恢复和视觉体验还需要打磨。
-- 不能宣称“气泡完成”：短文本路径、长 streaming 回复、基础边缘 clamp 有了，但还缺不同模型位置、不同屏幕位置下的截图复核和点击穿透复核。
+- 不能宣称“V1 已发布完成”：#41 仍是未合入的 release-candidate integration PR，必须合入目标分支并在该分支复跑 checkpoint 后才能 claim。
+- 不能宣称“真实 LLM release 证据是当前的”：#41 当前环境没有 `GREYFIELD_REAL_LLM_*`，所以 `pnpm harness:electron:real-llm` 没有在 #41 上复跑。
+- 不能宣称“语音伴侣完整完成”：#41 已覆盖真实 TTS 最小闭环和 Stop-audio，但 ASR、麦克风对话、真实音频能量嘴型仍是 V1 后工作。
+- 不能宣称“模型管理 UX 完成”：Settings provider/Test LLM 已产品化，模型管理和更完整设置体验可留到 V1 后。
 - 不能把桌面控制、浏览器控制、屏幕读取、长期任务、多智能体、直播、VRM/Godot 放进 V1。
 
 ## V1 剩余工作
@@ -62,24 +62,26 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
    - streaming 过程中气泡位置保持稳定；
    - Chat 保留完整 assistant 回复。
 
-还需要继续补：
+已在 #41 候选分支补齐第二段：
 
-1. 完成气泡视觉 QA：
-   - 靠近屏幕边缘时翻转和 clamp 的真实窗口截图正常；
-   - 气泡开关不破坏点击穿透；
-2. 打磨聊天窗口：
-   - Stop 始终可见；
-   - thinking / speaking / error 状态清晰；
-   - 错误后用户能自然重试。
-3. 打磨设置页：
-   - provider 配置状态清晰；
-   - Test LLM 的成功、失败、进行中、被拒绝状态都能看懂；
-   - 模型选择和路径显示不让用户困惑。
+1. 气泡视觉 QA：
+   - 靠近屏幕右侧时翻转和 clamp 的窗口截图正常；
+   - 气泡开关关闭后不保留 native shape rect；
+   - 透明区域仍穿透；
+2. 聊天窗口：
+   - Waiting / Generating / Stopped / Failed / Retry-ready 状态清晰；
+   - Stop 在文字 streaming 和语音队列播放期间都保持可用；
+   - 失败后用户输入恢复到草稿，可自然重试。
+3. 设置页：
+   - fake provider 显示 Preview；
+   - OpenAI-compatible 缺 Base URL / API key / model 时显示 blocked 原因；
+   - Test LLM 的测试中、成功、失败、active chat 被拒绝状态都有用户可读 UI。
 
 验收标准：
 
 - 一个普通用户能打开应用、看到桌宠、发文字、看到回复、停止回复、理解错误。
 - 宠物窗口仍然只像桌宠，不像控制面板。
+- 这些标准目前由 #41 候选分支证据覆盖；release claim 仍需要目标分支复跑。
 
 ### P2：把真实文字聊天做成可用功能
 
@@ -128,14 +130,22 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 - 用真实 OpenAI-compatible endpoint 聊天可以作为 V1 文本能力演示。
 - 失败时用户知道原因和下一步，不需要看日志。
 
-### P3：再进入真实语音
+### P3：真实语音最小闭环
 
-只有 P2 稳定后才做。
+#41 候选分支已完成 V1 最小闭环：
 
-1. 接入真实 TTS provider。
-2. 播放第一句时不等整段回复完成。
-3. Stop 能停止 provider stream、TTS 队列、正在播放的音频和嘴型。
-4. 嘴型来自实际播放或音频能量，不是假字节。
+1. 句子级 TTS 队列会在完整句子形成时发出 audio chunk。
+2. Desktop voice 默认关闭，避免应用突然发声。
+3. Settings `Speak replies` 可启用真实 Web Speech 播放。
+4. TTS 或播放失败只显示 voice-only error，不破坏文字回复和 session turn。
+5. 长回复有 TTS 字符预算，避免播放无限延长。
+6. Stop 能停止 provider stream、TTS 队列、正在播放的语音和嘴型。
+
+不放进 V1 的内容：
+
+- 真实音频能量驱动嘴型；
+- 外部 TTS provider 选择；
+- ASR / 麦克风语音输入。
 
 验收标准：
 
@@ -158,17 +168,18 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 
 ## 推荐下一步
 
-P0 CI 已恢复，后续 V1 缺口继续按 P1 / P2 / P3 顺序推进。
+当前推荐把 #41 当 V1 release-candidate 审核：
 
-如果没有权限，继续做 P2 provider retry UX：用错误 key、错误 base URL、慢响应/超时和 malformed stream 把失败路径做成用户能看懂、能重试的状态。
-
-P1 的气泡视觉 QA 和设置页 polish 继续保留，但不阻塞真实文字链路验证。
-
-不要现在开始 TTS/ASR；先把真实文字聊天和错误恢复做稳。
+1. 决定是否以 #41 这个集成 PR 合入，或改走 #35-#40 的窄 PR 顺序合入。
+2. 如果走窄 PR 顺序，必须保留 #41 里发现的 queued voice Stop 修复。
+3. 提供 `GREYFIELD_REAL_LLM_BASE_URL` / `GREYFIELD_REAL_LLM_API_KEY` / `GREYFIELD_REAL_LLM_MODEL` 后，在候选分支或最终目标分支复跑 `pnpm harness:electron:real-llm`。
+4. 合入目标分支后，按 [V1 Completion Evidence Checklist](../v1-completion-evidence.md) 复跑 checkpoint 并更新 evidence。
 
 ## V1 完成判定
 
 V1 完成不是“代码里有功能”，而是下面这些路径都能被验证：
+
+具体证据清单见 [V1 Completion Evidence Checklist](../v1-completion-evidence.md)。该清单只记录已有命令、harness、截图或明确手动验收步骤，不能替代最终 release 分支重跑。
 
 1. 用户打开应用，看到透明 Live2D 桌宠，不是网页窗口。
 2. 用户能拖动宠物、缩放模型、切换穿透，不破坏桌面交互。

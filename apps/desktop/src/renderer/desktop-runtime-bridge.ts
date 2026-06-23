@@ -1,4 +1,5 @@
 import { defaultGreyfieldConfig, type GreyfieldConfig } from "@greyfield/persistence/config-schema";
+import type { SpeechOutput } from "@greyfield/audio-runtime";
 import type { DesktopIpcEventChannel, DesktopIpcEventMap, DesktopIpcRequestChannel, DesktopIpcRequestMap } from "../shared/ipc";
 import { isMaskedApiKey } from "../shared/secrets";
 import { createDefaultInteractionProfile } from "@greyfield/stage-live2d";
@@ -14,6 +15,7 @@ export interface DesktopMessage {
 export interface DesktopRendererState {
   status: string;
   errorMessage: string;
+  voiceErrorMessage: string;
   providerTest: {
     status: "idle" | "testing" | "success" | "error";
     message: string;
@@ -45,6 +47,8 @@ export interface DesktopSettingsState {
   providerHasApiKey: boolean;
   providerModel: string;
   voiceId: string;
+  voiceVolume: number;
+  voiceSpeechEnabled: boolean;
   microphoneId: string;
   characterFile: string;
   modelPath: string;
@@ -74,8 +78,9 @@ export class DesktopRuntimeBridge {
   private state: DesktopRendererState = createInitialDesktopRendererState();
   private readonly stateChangeHandlers = new Set<DesktopStateChangeHandler>();
   private readonly interactionProfile = createDefaultInteractionProfile();
+  private speechPlaybackEpoch = 0;
 
-  constructor(private readonly host?: DesktopHostApi) {
+  constructor(private readonly host?: DesktopHostApi, private readonly speechOutput?: SpeechOutput) {
     this.host?.on("settings:changed", (config) => {
       this.state = {
         ...this.state,
@@ -99,7 +104,27 @@ export class DesktopRuntimeBridge {
     });
     this.host?.on("runtime:event", (event) => {
       this.state = reduceRuntimeEvent(this.state, event, this.interactionProfile);
+      if (event.type === "assistant.audio.chunk") {
+        this.playSpeech(event.text);
+      }
+      if (event.type === "runtime.status" && event.status === "interrupted") {
+        this.speechOutput?.cancel();
+      }
       this.emitStateChange();
+    });
+    this.host?.on("runtime:speech-playback", (event) => {
+      const removed = this.removeQueuedSpeech(event.text);
+      if (event.type === "error" && event.message) {
+        this.state = {
+          ...this.state,
+          voiceErrorMessage: event.message
+        };
+        this.emitStateChange();
+        return;
+      }
+      if (removed) {
+        this.emitStateChange();
+      }
     });
     this.host?.on("provider:test-llm-result", (result) => {
       this.state = {
@@ -127,7 +152,9 @@ export class DesktopRuntimeBridge {
 
     this.state = {
       ...this.state,
+      status: "thinking",
       errorMessage: "",
+      voiceErrorMessage: "",
       inputDraft: "",
       assistantDraft: "",
       messages: [...this.state.messages, { role: "user", text: trimmed }]
@@ -146,11 +173,15 @@ export class DesktopRuntimeBridge {
   }
 
   async interrupt(): Promise<DesktopRendererState> {
+    this.speechPlaybackEpoch += 1;
+    this.speechOutput?.cancel();
     if (this.host) {
       this.host.send("runtime:input", { type: "runtime.interrupt" });
       this.state = {
         ...this.state,
+        status: "interrupted",
         errorMessage: "",
+        voiceErrorMessage: "",
         assistantDraft: "",
         audioQueue: [],
         stage: {
@@ -165,6 +196,7 @@ export class DesktopRuntimeBridge {
       ...this.state,
       status: "interrupted",
       errorMessage: "",
+      voiceErrorMessage: "",
       assistantDraft: "",
       audioQueue: [],
       stage: {
@@ -236,6 +268,59 @@ export class DesktopRuntimeBridge {
     return configFromSettings(this.state.settings);
   }
 
+  private playSpeech(text: string): void {
+    if (!this.speechOutput || !this.state.settings.voiceSpeechEnabled) {
+      return;
+    }
+    const playbackEpoch = this.speechPlaybackEpoch;
+    void this.speechOutput
+      .speak(text, {
+        voiceId: this.state.settings.voiceId,
+        volume: this.state.settings.voiceVolume
+      })
+      .then(() => {
+        if (this.completeSpeechPlayback(text, playbackEpoch)) {
+          this.host?.send("runtime:speech-playback", { type: "finished", text });
+        }
+      })
+      .catch((error) => {
+        if (playbackEpoch !== this.speechPlaybackEpoch || this.state.status === "interrupted") {
+          return;
+        }
+        this.completeSpeechPlayback(text, playbackEpoch);
+        const message = `Voice playback failed: ${error instanceof Error ? error.message : String(error)}`;
+        this.host?.send("runtime:speech-playback", { type: "error", text, message });
+        this.state = {
+          ...this.state,
+          voiceErrorMessage: message
+        };
+        this.emitStateChange();
+      });
+  }
+
+  private completeSpeechPlayback(text: string, playbackEpoch: number): boolean {
+    if (playbackEpoch !== this.speechPlaybackEpoch) {
+      return false;
+    }
+    const removed = this.removeQueuedSpeech(text);
+    if (removed) {
+      this.emitStateChange();
+    }
+    return removed;
+  }
+
+  private removeQueuedSpeech(text: string): boolean {
+    const index = this.state.audioQueue.indexOf(text);
+    if (index < 0) {
+      return false;
+    }
+    this.state = {
+      ...this.state,
+      audioQueue: [...this.state.audioQueue.slice(0, index), ...this.state.audioQueue.slice(index + 1)]
+    };
+    return true;
+  }
+
   private emitStateChange(): void {
     const snapshot = this.getState();
     for (const handler of this.stateChangeHandlers) {
@@ -254,7 +339,7 @@ function formatProviderTestMessage(message: string, ok: boolean): string {
   if (!isProviderConfigurationFailure(message)) {
     return message;
   }
-  return `${message}. Check API key, Base URL, and Model, then retry.`;
+  return `${message.replace(/[.。]+$/g, "")}. Check API key, Base URL, and Model, then retry.`;
 }
 
 function isActiveChatTestRejection(message: string): boolean {
@@ -263,7 +348,9 @@ function isActiveChatTestRejection(message: string): boolean {
 
 function isProviderConfigurationFailure(message: string): boolean {
   return (
+    message.includes("OpenAI-compatible provider needs a Base URL before testing.") ||
     message.includes("OpenAI-compatible provider needs an API key") ||
+    message.includes("OpenAI-compatible provider needs a model before testing.") ||
     message.includes("OpenAI-compatible LLM request failed:") ||
     message.includes("OpenAI-compatible LLM request timed out") ||
     message.includes("OpenAI-compatible LLM stream returned malformed SSE data")
@@ -274,10 +361,15 @@ export function createDesktopRuntimeBridge(host?: DesktopHostApi): DesktopRuntim
   return new DesktopRuntimeBridge(host);
 }
 
+export function createDesktopRuntimeBridgeWithSpeech(host: DesktopHostApi | undefined, speechOutput: SpeechOutput | undefined): DesktopRuntimeBridge {
+  return new DesktopRuntimeBridge(host, speechOutput);
+}
+
 export function createInitialDesktopRendererState(): DesktopRendererState {
   return {
     status: "idle",
     errorMessage: "",
+    voiceErrorMessage: "",
     providerTest: {
       status: "idle",
       message: ""
@@ -293,6 +385,8 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       providerHasApiKey: defaultGreyfieldConfig.provider.apiKey.length > 0,
       providerModel: defaultGreyfieldConfig.provider.model,
       voiceId: defaultGreyfieldConfig.voice.id,
+      voiceVolume: defaultGreyfieldConfig.voice.volume,
+      voiceSpeechEnabled: defaultGreyfieldConfig.voice.speechEnabled,
       microphoneId: defaultGreyfieldConfig.audio.microphoneId,
       characterFile: defaultGreyfieldConfig.characterFile,
       modelPath: defaultGreyfieldConfig.live2d.modelPath,

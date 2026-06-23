@@ -7,6 +7,7 @@
     :data-current-motion="lastMotion ?? ''"
     :data-model-hit="lastHitModel ? 'true' : 'false'"
     :data-dragging="dragging ? 'true' : 'false'"
+    :data-mouth-open="mouthOpenLabel"
     @pointermove="focusFromPointer"
     @mousemove="focusFromPointer"
     @mouseover="focusFromPointer"
@@ -87,6 +88,7 @@ const transform = computed(() => ({
   x: props.modelX,
   y: props.modelY
 }));
+const mouthOpenLabel = computed(() => props.mouthOpen.toFixed(3));
 
 async function ensureRenderer(): Promise<Live2DStageDriver> {
   if (driver.value) {

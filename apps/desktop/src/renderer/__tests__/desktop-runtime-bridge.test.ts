@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createDesktopRuntimeBridge } from "../desktop-runtime-bridge";
+import { createDesktopRuntimeBridge, createDesktopRuntimeBridgeWithSpeech } from "../desktop-runtime-bridge";
 import { API_KEY_MASK } from "../../shared/secrets";
 
 afterEach(() => {
@@ -48,6 +48,8 @@ describe("createDesktopRuntimeBridge", () => {
       providerBaseUrl: "https://llm.local/v1",
       providerApiKey: "local-key",
       voiceId: "voice-greyfield",
+      voiceVolume: 0.45,
+      voiceSpeechEnabled: true,
       microphoneId: "mic-array",
       characterFile: "characters/night.yaml",
       modelPath: "assets/live2d/night/night.model3.json",
@@ -63,6 +65,8 @@ describe("createDesktopRuntimeBridge", () => {
       providerBaseUrl: "https://llm.local/v1",
       providerApiKey: "local-key",
       voiceId: "voice-greyfield",
+      voiceVolume: 0.45,
+      voiceSpeechEnabled: true,
       microphoneId: "mic-array",
       characterFile: "characters/night.yaml",
       modelPath: "assets/live2d/night/night.model3.json",
@@ -86,6 +90,8 @@ describe("createDesktopRuntimeBridge", () => {
       providerLLM: "openai-compatible",
       providerBaseUrl: "https://llm.example/v1",
       providerApiKey: "secret",
+      voiceSpeechEnabled: true,
+      voiceVolume: 0.5,
       microphoneId: "mic-front",
       modelPath: "assets/live2d/front/front.model3.json",
       modelScale: 1.4,
@@ -104,6 +110,7 @@ describe("createDesktopRuntimeBridge", () => {
             baseUrl: "https://llm.example/v1",
             apiKey: "secret"
           },
+          voice: { speechEnabled: true, volume: 0.5 },
           audio: { microphoneId: "mic-front" },
           live2d: {
             modelPath: "assets/live2d/front/front.model3.json",
@@ -187,6 +194,210 @@ describe("createDesktopRuntimeBridge", () => {
     });
   });
 
+  it("plays assistant audio chunks through the configured speech output when enabled", async () => {
+    let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
+    const speechOutput = {
+      speak: vi.fn(async () => undefined),
+      cancel: vi.fn()
+    };
+    const bridge = createDesktopRuntimeBridgeWithSpeech(
+      {
+        send: () => undefined,
+        on: (channel, handler) => {
+          if (channel === "runtime:event") {
+            runtimeEvent = handler as typeof runtimeEvent;
+          }
+          return () => undefined;
+        }
+      },
+      speechOutput
+    );
+    bridge.updateSettings({ voiceSpeechEnabled: true, voiceId: "voice-greyfield", voiceVolume: 0.5 });
+
+    runtimeEvent?.({ type: "assistant.audio.chunk", text: "Speak this.", data: new Uint8Array([1]) });
+    await Promise.resolve();
+
+    expect(speechOutput.speak).toHaveBeenCalledWith("Speak this.", {
+      voiceId: "voice-greyfield",
+      volume: 0.5
+    });
+  });
+
+  it("removes speech items from the queue after playback finishes", async () => {
+    let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
+    let finishSpeech: (() => void) | undefined;
+    const sent: Array<[string, unknown]> = [];
+    const bridge = createDesktopRuntimeBridgeWithSpeech(
+      {
+        send: (channel, payload) => sent.push([channel, payload]),
+        on: (channel, handler) => {
+          if (channel === "runtime:event") {
+            runtimeEvent = handler as typeof runtimeEvent;
+          }
+          return () => undefined;
+        }
+      },
+      {
+        speak: vi.fn(() => new Promise<void>((resolve) => (finishSpeech = resolve))),
+        cancel: vi.fn()
+      }
+    );
+    bridge.updateSettings({ voiceSpeechEnabled: true });
+
+    runtimeEvent?.({ type: "assistant.audio.chunk", text: "Speak this.", data: new Uint8Array([1]) });
+    expect(bridge.getState().audioQueue).toEqual(["Speak this."]);
+
+    finishSpeech?.();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(bridge.getState().audioQueue).toEqual([]);
+    expect(sent).toContainEqual(["runtime:speech-playback", { type: "finished", text: "Speak this." }]);
+  });
+
+  it("removes speech items when another window reports playback finished", () => {
+    let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
+    let playbackEvent: ((event: import("../../shared/ipc").DesktopSpeechPlaybackEvent) => void) | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: () => undefined,
+      on: (channel, handler) => {
+        if (channel === "runtime:event") {
+          runtimeEvent = handler as typeof runtimeEvent;
+        }
+        if (channel === "runtime:speech-playback") {
+          playbackEvent = handler as typeof playbackEvent;
+        }
+        return () => undefined;
+      }
+    });
+
+    runtimeEvent?.({ type: "assistant.audio.chunk", text: "Shared speech.", data: new Uint8Array([1]) });
+    expect(bridge.getState().audioQueue).toEqual(["Shared speech."]);
+
+    playbackEvent?.({ type: "finished", text: "Shared speech." });
+
+    expect(bridge.getState().audioQueue).toEqual([]);
+  });
+
+  it("keeps text state and shows a voice-only error when speech output fails", async () => {
+    let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
+    const bridge = createDesktopRuntimeBridgeWithSpeech(
+      {
+        send: () => undefined,
+        on: (channel, handler) => {
+          if (channel === "runtime:event") {
+            runtimeEvent = handler as typeof runtimeEvent;
+          }
+          return () => undefined;
+        }
+      },
+      {
+        speak: vi.fn(async () => {
+          throw new Error("speaker blocked");
+        }),
+        cancel: vi.fn()
+      }
+    );
+    bridge.updateSettings({ voiceSpeechEnabled: true });
+
+    runtimeEvent?.({ type: "assistant.text.final", text: "Text stays visible." });
+    runtimeEvent?.({ type: "assistant.audio.chunk", text: "Text stays visible.", data: new Uint8Array([1]) });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(bridge.getState().messages.at(-1)).toEqual({ role: "assistant", text: "Text stays visible." });
+    expect(bridge.getState().voiceErrorMessage).toBe("Voice playback failed: speaker blocked");
+    expect(bridge.getState().audioQueue).toEqual([]);
+  });
+
+  it("ignores late speech playback failures after interrupt", async () => {
+    let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
+    let failSpeech: ((error: Error) => void) | undefined;
+    const speechOutput = {
+      speak: vi.fn(() => new Promise<void>((_resolve, reject) => (failSpeech = reject))),
+      cancel: vi.fn()
+    };
+    const bridge = createDesktopRuntimeBridgeWithSpeech(
+      {
+        send: () => undefined,
+        on: (channel, handler) => {
+          if (channel === "runtime:event") {
+            runtimeEvent = handler as typeof runtimeEvent;
+          }
+          return () => undefined;
+        }
+      },
+      speechOutput
+    );
+    bridge.updateSettings({ voiceSpeechEnabled: true });
+
+    runtimeEvent?.({ type: "assistant.audio.chunk", text: "Queued speech.", data: new Uint8Array([1]) });
+    await bridge.interrupt();
+    failSpeech?.(new Error("late speaker failure"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(speechOutput.cancel).toHaveBeenCalledOnce();
+    expect(bridge.getState()).toMatchObject({
+      status: "interrupted",
+      voiceErrorMessage: "",
+      audioQueue: []
+    });
+  });
+
+  it("does not speak assistant audio chunks when voice output is disabled", () => {
+    let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
+    const speechOutput = {
+      speak: vi.fn(async () => undefined),
+      cancel: vi.fn()
+    };
+    const bridge = createDesktopRuntimeBridgeWithSpeech(
+      {
+        send: () => undefined,
+        on: (channel, handler) => {
+          if (channel === "runtime:event") {
+            runtimeEvent = handler as typeof runtimeEvent;
+          }
+          return () => undefined;
+        }
+      },
+      speechOutput
+    );
+
+    runtimeEvent?.({ type: "assistant.audio.chunk", text: "Stay quiet.", data: new Uint8Array([1]) });
+
+    expect(speechOutput.speak).not.toHaveBeenCalled();
+  });
+
+  it("cancels speech output and clears audio queue when the runtime is interrupted elsewhere", () => {
+    let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
+    const speechOutput = {
+      speak: vi.fn(async () => undefined),
+      cancel: vi.fn()
+    };
+    const bridge = createDesktopRuntimeBridgeWithSpeech(
+      {
+        send: () => undefined,
+        on: (channel, handler) => {
+          if (channel === "runtime:event") {
+            runtimeEvent = handler as typeof runtimeEvent;
+          }
+          return () => undefined;
+        }
+      },
+      speechOutput
+    );
+
+    runtimeEvent?.({ type: "assistant.audio.chunk", text: "Queued speech.", data: new Uint8Array([1]) });
+    runtimeEvent?.({ type: "runtime.status", status: "interrupted" });
+
+    expect(speechOutput.cancel).toHaveBeenCalledOnce();
+    expect(bridge.getState()).toMatchObject({
+      status: "interrupted",
+      assistantDraft: "",
+      audioQueue: [],
+      stage: { mouthOpen: 0 }
+    });
+  });
+
   it("adds retry guidance to provider configuration test failures", () => {
     let providerTestResult:
       | ((event: { ok: boolean; message: string; firstToken?: string }) => void)
@@ -207,6 +418,31 @@ describe("createDesktopRuntimeBridge", () => {
       status: "error",
       message: "OpenAI-compatible LLM request failed: 401 Unauthorized. Check API key, Base URL, and Model, then retry."
     });
+  });
+
+  it("adds retry guidance to main-process provider readiness test failures", () => {
+    let providerTestResult:
+      | ((event: { ok: boolean; message: string; firstToken?: string }) => void)
+      | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: () => undefined,
+      on: (channel, handler) => {
+        if (channel === "provider:test-llm-result") {
+          providerTestResult = handler as typeof providerTestResult;
+        }
+        return () => undefined;
+      }
+    });
+
+    providerTestResult?.({ ok: false, message: "OpenAI-compatible provider needs a Base URL before testing." });
+    expect(bridge.getState().providerTest.message).toBe(
+      "OpenAI-compatible provider needs a Base URL before testing. Check API key, Base URL, and Model, then retry."
+    );
+
+    providerTestResult?.({ ok: false, message: "OpenAI-compatible provider needs a model before testing." });
+    expect(bridge.getState().providerTest.message).toBe(
+      "OpenAI-compatible provider needs a model before testing. Check API key, Base URL, and Model, then retry."
+    );
   });
 
   it("adds active-chat guidance when provider testing is rejected during a response", () => {
@@ -253,6 +489,7 @@ describe("createDesktopRuntimeBridge", () => {
     runtimeEvent?.({ type: "runtime.status", status: "idle" });
 
     expect(sent).toContainEqual(["runtime:input", { type: "text.input", text: "主进程来接管" }]);
+    expect(initial.status).toBe("thinking");
     expect(initial.messages).toEqual([{ role: "user", text: "主进程来接管" }]);
     expect(bridge.getState().messages).toEqual([
       { role: "user", text: "主进程来接管" },
@@ -425,5 +662,34 @@ describe("createDesktopRuntimeBridge", () => {
     expect(state.assistantDraft).toBe("");
     expect(state.audioQueue).toEqual([]);
     expect(state.stage.mouthOpen).toBe(0);
+  });
+
+  it("shows stopped immediately and ignores late assistant events after interrupt", async () => {
+    let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: () => undefined,
+      on: (channel, handler) => {
+        if (channel === "runtime:event") {
+          runtimeEvent = handler as typeof runtimeEvent;
+        }
+        return () => undefined;
+      }
+    });
+
+    await bridge.sendText("停一下");
+    runtimeEvent?.({ type: "runtime.status", status: "speaking" });
+    runtimeEvent?.({ type: "assistant.text.delta", text: "旧回复" });
+    const stopped = await bridge.interrupt();
+    runtimeEvent?.({ type: "assistant.text.delta", text: "不该出现" });
+    runtimeEvent?.({ type: "assistant.text.final", text: "旧回复不该入历史" });
+    runtimeEvent?.({ type: "assistant.audio.chunk", text: "旧语音不该排队", data: new Uint8Array([1]) });
+
+    expect(stopped.status).toBe("interrupted");
+    expect(bridge.getState()).toMatchObject({
+      status: "interrupted",
+      assistantDraft: "",
+      audioQueue: [],
+      messages: [{ role: "user", text: "停一下" }]
+    });
   });
 });

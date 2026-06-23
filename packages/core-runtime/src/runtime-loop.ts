@@ -1,4 +1,4 @@
-import { mapAudioLevelToMouthOpen, measureAudioLevel, splitCompleteSentences } from "@greyfield/audio-runtime";
+import { mapAudioLevelToMouthOpen, measureAudioLevel, splitCompleteSentences, takeTtsTextWithinBudget } from "@greyfield/audio-runtime";
 import type { RuntimeEventHandler, RuntimeInputEvent } from "./events";
 import { assemblePrompt } from "./prompt-assembler";
 import type { LLMProvider, MemoryStore, TTSProvider } from "./providers";
@@ -16,7 +16,11 @@ export interface GreyfieldRuntimeOptions {
   stage?: StageDriver;
   threadId?: string;
   recentTurnLimit?: number;
+  ttsEnabled?: boolean;
+  ttsMaxCharactersPerTurn?: number;
 }
+
+const defaultTtsMaxCharactersPerTurn = 600;
 
 export class GreyfieldRuntime {
   private interrupted = false;
@@ -73,6 +77,7 @@ export class GreyfieldRuntime {
 
     let fullText = "";
     let sentenceBuffer = "";
+    let usedTtsCharacters = 0;
 
     for await (const chunk of this.options.llm.stream(messages, undefined, { signal: this.activeAbortController.signal })) {
       if (this.interrupted) {
@@ -89,45 +94,72 @@ export class GreyfieldRuntime {
         if (this.interrupted) {
           break;
         }
-        await this.synthesizeSentence(sentence, emit);
+        usedTtsCharacters = await this.synthesizeSentence(sentence, usedTtsCharacters, emit);
       }
     }
 
     if (!this.interrupted && sentenceBuffer.trim().length > 0) {
-      await this.synthesizeSentence(sentenceBuffer.trim(), emit);
+      usedTtsCharacters = await this.synthesizeSentence(sentenceBuffer.trim(), usedTtsCharacters, emit);
     }
 
     const finalText = normalizeAssistantText(fullText);
     if (this.interrupted) {
       await emit({ type: "runtime.status", status: "interrupted" });
       await this.options.stage?.setMouthOpen(0);
+      await emit({ type: "assistant.audio.end" });
+      this.activeAbortController = undefined;
+      return;
     }
 
-    if (!this.interrupted && finalText.length > 0) {
+    if (finalText.length > 0) {
       await this.options.sessionStore.append({ role: "user", content: text });
       await this.options.sessionStore.append({ role: "assistant", content: finalText });
+      await emit({ type: "assistant.text.final", text: finalText });
     }
 
-    await emit({ type: "assistant.text.final", text: finalText });
     await emit({ type: "assistant.audio.end" });
 
     await emit({ type: "runtime.status", status: "idle" });
     this.activeAbortController = undefined;
   }
 
-  private async synthesizeSentence(sentence: string, emit: RuntimeEventHandler): Promise<void> {
-    const text = sentence.trim();
+  private async synthesizeSentence(sentence: string, usedCharacters: number, emit: RuntimeEventHandler): Promise<number> {
+    if (this.options.ttsEnabled === false) {
+      return usedCharacters;
+    }
+    const budget = takeTtsTextWithinBudget(
+      sentence,
+      usedCharacters,
+      this.options.ttsMaxCharactersPerTurn ?? defaultTtsMaxCharactersPerTurn
+    );
+    const text = budget.text;
     if (text.length === 0) {
-      return;
+      return budget.usedCharacters;
     }
     await emit({ type: "runtime.status", status: "speaking" });
-    const audio = await this.options.tts.synthesize(text, this.options.voice);
-    await this.options.stage?.setMouthOpen(mapAudioLevelToMouthOpen(measureAudioLevel(audio)));
-    await emit({ type: "assistant.audio.chunk", text, data: audio });
-    await this.options.stage?.setMouthOpen(0);
+    try {
+      const audio = await this.options.tts.synthesize(text, this.options.voice);
+      if (this.interrupted) {
+        return budget.usedCharacters;
+      }
+      await this.options.stage?.setMouthOpen(mapAudioLevelToMouthOpen(measureAudioLevel(audio)));
+      await emit({ type: "assistant.audio.chunk", text, data: audio });
+    } catch (error) {
+      if (this.interrupted) {
+        return budget.usedCharacters;
+      }
+      await emit({ type: "assistant.audio.error", text, message: `Voice playback failed: ${formatError(error)}` });
+    } finally {
+      await this.options.stage?.setMouthOpen(0);
+    }
+    return budget.usedCharacters;
   }
 }
 
 function normalizeAssistantText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

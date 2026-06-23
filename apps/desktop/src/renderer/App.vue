@@ -45,8 +45,9 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
+import { BrowserSpeechSynthesisOutput } from "@greyfield/audio-runtime";
 import ChatWindow from "./ChatWindow.vue";
-import { createDesktopRuntimeBridge } from "./desktop-runtime-bridge";
+import { createDesktopRuntimeBridgeWithSpeech } from "./desktop-runtime-bridge";
 import type { DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
 import PetWindow from "./PetWindow.vue";
 import SettingsWindow from "./SettingsWindow.vue";
@@ -56,14 +57,17 @@ import { placeSpeechBubble, type Rect } from "./speech-bubble-placement";
 import { formatSpeechBubbleText } from "./speech-bubble-text";
 import { isMaskedApiKey } from "../shared/secrets";
 
-const bridge = createDesktopRuntimeBridge(typeof window !== "undefined" ? window.greyfield : undefined);
-const initialState = bridge.getState();
 const queryModelPath =
   typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("live2dModel") : null;
 const windowRole =
   typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("window") : null;
 const isPetWindow = windowRole === "pet";
 const isChatWindow = windowRole === "chat";
+const bridge = createDesktopRuntimeBridgeWithSpeech(
+  typeof window !== "undefined" ? window.greyfield : undefined,
+  isPetWindow ? new BrowserSpeechSynthesisOutput() : undefined
+);
+const initialState = bridge.getState();
 
 if (typeof document !== "undefined") {
   document.body.classList.toggle("pet-window", isPetWindow);
@@ -119,6 +123,8 @@ if (typeof window !== "undefined") {
       providerApiKey: isMaskedApiKey(config.provider.apiKey) ? "" : config.provider.apiKey,
       providerHasApiKey: config.provider.hasApiKey,
       voiceId: config.voice.id,
+      voiceVolume: config.voice.volume,
+      voiceSpeechEnabled: config.voice.speechEnabled,
       microphoneId: config.audio.microphoneId,
       characterFile: config.characterFile,
       modelPath: config.live2d.modelPath,
@@ -165,14 +171,14 @@ function updateSetting(key: keyof DesktopSettingsState, value: string): void {
   syncState(bridge.updateSettings({ [key]: value }));
 }
 
-function updateNumericSetting(key: "modelScale" | "modelX" | "modelY", value: string): void {
+function updateNumericSetting(key: "modelScale" | "modelX" | "modelY" | "voiceVolume", value: string): void {
   const parsed = Number(value);
   if (Number.isFinite(parsed)) {
     syncState(bridge.updateSettings({ [key]: parsed }));
   }
 }
 
-function updateBooleanSetting(key: "speechBubbleEnabled", value: boolean): void {
+function updateBooleanSetting(key: "speechBubbleEnabled" | "voiceSpeechEnabled", value: boolean): void {
   syncState(bridge.updateSettings({ [key]: value }));
 }
 
@@ -282,7 +288,7 @@ function updateModelShape(rects: Rect[]): void {
 }
 
 function syncPetWindowShape(): void {
-  if (!isPetWindow || state.window.modelPassThrough) {
+  if (!isPetWindow) {
     return;
   }
   const rects = createPetWindowShape({
