@@ -420,6 +420,31 @@ describe("createDesktopRuntimeBridge", () => {
     });
   });
 
+  it("adds retry guidance to main-process provider readiness test failures", () => {
+    let providerTestResult:
+      | ((event: { ok: boolean; message: string; firstToken?: string }) => void)
+      | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: () => undefined,
+      on: (channel, handler) => {
+        if (channel === "provider:test-llm-result") {
+          providerTestResult = handler as typeof providerTestResult;
+        }
+        return () => undefined;
+      }
+    });
+
+    providerTestResult?.({ ok: false, message: "OpenAI-compatible provider needs a Base URL before testing." });
+    expect(bridge.getState().providerTest.message).toBe(
+      "OpenAI-compatible provider needs a Base URL before testing. Check API key, Base URL, and Model, then retry."
+    );
+
+    providerTestResult?.({ ok: false, message: "OpenAI-compatible provider needs a model before testing." });
+    expect(bridge.getState().providerTest.message).toBe(
+      "OpenAI-compatible provider needs a model before testing. Check API key, Base URL, and Model, then retry."
+    );
+  });
+
   it("adds active-chat guidance when provider testing is rejected during a response", () => {
     let providerTestResult:
       | ((event: { ok: boolean; message: string; firstToken?: string }) => void)

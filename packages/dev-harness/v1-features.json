@@ -233,7 +233,7 @@
         "Settings persist to greyfield.config.json through Electron IPC.",
         "Settings shows provider readiness as Preview, blocked, or ready-to-test before users run Test LLM.",
         "Settings exposes a Test LLM action and renders first-token success or a readable failure without writing chat history.",
-        "Settings provider/Test LLM harness proves fake Preview, missing Base URL/API key/model reasons, testing, success, and failure states.",
+        "Settings provider/Test LLM harness proves fake Preview, missing Base URL/API key/model reasons, blocked states send no provider requests, testing, success, and failure states.",
         "Electron settings-active-chat harness proves Test LLM is rejected with visible Stop-or-wait guidance while chat is actively streaming and does not send an extra provider request."
       ],
       "qa": {

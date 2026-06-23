@@ -339,7 +339,7 @@ function formatProviderTestMessage(message: string, ok: boolean): string {
   if (!isProviderConfigurationFailure(message)) {
     return message;
   }
-  return `${message}. Check API key, Base URL, and Model, then retry.`;
+  return `${message.replace(/[.。]+$/g, "")}. Check API key, Base URL, and Model, then retry.`;
 }
 
 function isActiveChatTestRejection(message: string): boolean {
@@ -348,7 +348,9 @@ function isActiveChatTestRejection(message: string): boolean {
 
 function isProviderConfigurationFailure(message: string): boolean {
   return (
+    message.includes("OpenAI-compatible provider needs a Base URL before testing.") ||
     message.includes("OpenAI-compatible provider needs an API key") ||
+    message.includes("OpenAI-compatible provider needs a model before testing.") ||
     message.includes("OpenAI-compatible LLM request failed:") ||
     message.includes("OpenAI-compatible LLM request timed out") ||
     message.includes("OpenAI-compatible LLM stream returned malformed SSE data")

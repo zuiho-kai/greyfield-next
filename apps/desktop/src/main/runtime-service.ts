@@ -91,11 +91,9 @@ export class RuntimeService {
         message: "LLM test is already running."
       };
     }
-    if (this.config.provider.llm === "openai-compatible" && this.config.provider.apiKey.trim().length === 0) {
-      return {
-        ok: false,
-        message: "OpenAI-compatible provider needs an API key before testing."
-      };
+    const providerConfigError = this.validateOpenAICompatibleProviderConfig("testing");
+    if (providerConfigError) {
+      return { ok: false, message: providerConfigError };
     }
 
     this.testingLLM = true;
@@ -164,8 +162,9 @@ export class RuntimeService {
 
   private createLLMProvider(): LLMProvider {
     if (this.config.provider.llm === "openai-compatible") {
-      if (this.config.provider.apiKey.trim().length === 0) {
-        throw new Error("OpenAI-compatible provider needs an API key before chatting.");
+      const providerConfigError = this.validateOpenAICompatibleProviderConfig("chatting");
+      if (providerConfigError) {
+        throw new Error(providerConfigError);
       }
       return new OpenAICompatibleLLMProvider({
         baseUrl: this.config.provider.baseUrl,
@@ -176,6 +175,22 @@ export class RuntimeService {
       });
     }
     return new MainFakeLLMProvider();
+  }
+
+  private validateOpenAICompatibleProviderConfig(action: "testing" | "chatting"): string {
+    if (this.config.provider.llm !== "openai-compatible") {
+      return "";
+    }
+    if (this.config.provider.baseUrl.trim().length === 0) {
+      return `OpenAI-compatible provider needs a Base URL before ${action}.`;
+    }
+    if (this.config.provider.apiKey.trim().length === 0) {
+      return `OpenAI-compatible provider needs an API key before ${action}.`;
+    }
+    if (this.config.provider.model.trim().length === 0) {
+      return `OpenAI-compatible provider needs a model before ${action}.`;
+    }
+    return "";
   }
 }
 

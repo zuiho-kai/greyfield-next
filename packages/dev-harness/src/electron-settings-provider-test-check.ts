@@ -51,14 +51,17 @@ try {
     await settingsWindow.getByLabel("Model", { exact: true }).fill("");
     await settingsWindow.locator(".provider-status--blocked", { hasText: "Needs Base URL" }).waitFor();
     await expectTestLlmBlocked(settingsWindow, "OpenAI-compatible chat needs a Base URL");
+    assertProviderRequestCount(0, "missing Base URL");
 
     await settingsWindow.getByLabel("Base URL").fill(`http://127.0.0.1:${port}/v1`);
     await settingsWindow.locator(".provider-status--blocked", { hasText: "Needs API key" }).waitFor();
     await expectTestLlmBlocked(settingsWindow, "Add an API key before testing");
+    assertProviderRequestCount(0, "missing API key");
 
     await settingsWindow.getByLabel("API Key").fill("local-settings-key");
     await settingsWindow.locator(".provider-status--blocked", { hasText: "Needs model" }).waitFor();
     await expectTestLlmBlocked(settingsWindow, "Choose the provider model name");
+    assertProviderRequestCount(0, "missing model");
 
     await settingsWindow.getByLabel("Model", { exact: true }).fill("settings-provider-test-model");
     await settingsWindow.locator(".provider-status--ready", { hasText: "Ready to test" }).waitFor();
@@ -79,6 +82,7 @@ try {
     await settingsWindow.getByRole("button", { name: "Test LLM" }).click();
     await settingsWindow.locator(".provider-test-result--error", { hasText: "Test failed" }).waitFor({ timeout: 10_000 });
     await settingsWindow.locator(".provider-test-result--error", { hasText: "401 Unauthorized" }).waitFor();
+    assertProviderRequestCount(2, "success plus failure tests");
 
     console.log(
       JSON.stringify(
@@ -91,6 +95,7 @@ try {
           testLlmTestingVisible: true,
           testLlmSuccessVisible: true,
           testLlmFailureVisible: true,
+          blockedStatesSentNoProviderRequests: true,
           providerRequests: requestCount
         },
         null,
@@ -156,6 +161,12 @@ async function expectTestLlmBlocked(page: Page, message: string): Promise<void> 
     throw new Error(`Test LLM was not disabled for blocked provider state: ${message}`);
   }
   await page.locator(".provider-test-result--error", { hasText: message }).waitFor({ timeout: 10_000 });
+}
+
+function assertProviderRequestCount(expected: number, label: string): void {
+  if (requestCount !== expected) {
+    throw new Error(`Unexpected provider request count for ${label}; expected=${expected}, actual=${requestCount}`);
+  }
 }
 
 function delay(ms: number): Promise<void> {
