@@ -31,7 +31,10 @@ describe("V1 visual acceptance summary", () => {
       },
       settings: {
         providerPreviewVisible: true,
-        settingsShellVisible: true
+        settingsShellVisible: true,
+        noHorizontalOverflow: true,
+        viewportWidth: 820,
+        scrollWidth: 820
       },
       artifacts: [
         { name: "pet-initial.png", path: "artifact-root/pet-initial.png", review: "Pet shell" },

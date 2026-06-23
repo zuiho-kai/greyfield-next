@@ -43,6 +43,9 @@ type VisualAcceptanceSummaryInput = {
   settings: {
     providerPreviewVisible: boolean;
     settingsShellVisible: boolean;
+    noHorizontalOverflow: boolean;
+    viewportWidth: number;
+    scrollWidth: number;
   };
   artifacts: Artifact[];
 };
@@ -152,6 +155,17 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     const settingsWindow = await waitForRoleWindow(app, "settings");
     await settingsWindow.waitForSelector(".greyfield-shell");
     await settingsWindow.locator(".provider-status--preview", { hasText: "Fake provider is active" }).waitFor();
+    const settingsLayout = await settingsWindow.evaluate(() => {
+      const scrollWidth = document.scrollingElement?.scrollWidth ?? document.documentElement.scrollWidth;
+      return {
+        viewportWidth: window.innerWidth,
+        scrollWidth,
+        noHorizontalOverflow: scrollWidth <= window.innerWidth
+      };
+    });
+    if (!settingsLayout.noHorizontalOverflow) {
+      throw new Error(`Settings window has horizontal overflow: ${JSON.stringify(settingsLayout)}`);
+    }
     artifacts.push(
       await screenshot(settingsWindow, artifactDir, "settings-provider-preview.png", "Settings provider preview state.")
     );
@@ -172,7 +186,8 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
       },
       settings: {
         providerPreviewVisible: true,
-        settingsShellVisible: true
+        settingsShellVisible: true,
+        ...settingsLayout
       },
       artifacts
     });
