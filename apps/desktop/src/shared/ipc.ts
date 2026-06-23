@@ -2,8 +2,15 @@ import type { RuntimeInputEvent, RuntimeOutputEvent } from "@greyfield/core-runt
 import type { GreyfieldConfig, GreyfieldConfigPatch } from "@greyfield/persistence/config-schema";
 import type { RendererGreyfieldConfig } from "./renderer-config";
 
+export interface DesktopSpeechPlaybackEvent {
+  type: "finished" | "error";
+  text: string;
+  message?: string;
+}
+
 export interface DesktopIpcRequestMap {
   "runtime:input": RuntimeInputEvent;
+  "runtime:speech-playback": DesktopSpeechPlaybackEvent;
   "provider:test-llm": {};
   "settings:update": GreyfieldConfigPatch;
   "window:set-click-through": { enabled: boolean };
@@ -25,6 +32,7 @@ export interface DesktopIpcRequestMap {
 
 export interface DesktopIpcEventMap {
   "runtime:event": RuntimeOutputEvent;
+  "runtime:speech-playback": DesktopSpeechPlaybackEvent;
   "provider:test-llm-result": {
     ok: boolean;
     message: string;

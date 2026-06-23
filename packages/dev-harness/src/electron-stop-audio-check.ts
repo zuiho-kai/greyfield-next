@@ -36,6 +36,16 @@ try {
 
     await chatWindow.getByLabel("Message").fill("请说一句话，然后我会停止。");
     await chatWindow.getByRole("button", { name: "Send" }).click();
+    await settingsWindow.waitForFunction(() => document.querySelectorAll(".audio-strip span").length >= 2);
+    await finishAllSpeech(petWindow);
+    await settingsWindow.waitForFunction(() => document.querySelectorAll(".audio-strip span").length === 0);
+    const stopDisabledAfterPlayback = await chatWindow.getByRole("button", { name: "Stop" }).isDisabled();
+    if (!stopDisabledAfterPlayback) {
+      throw new Error("Stop remained enabled after speech playback finished and the shared queue was cleared");
+    }
+
+    await chatWindow.getByLabel("Message").fill("请再说一句话，然后我会停止。");
+    await chatWindow.getByRole("button", { name: "Send" }).click();
     await waitForSpeechEvent(petWindow, "speak");
     await settingsWindow.locator(".audio-strip span", { hasText: "你好，我醒着。" }).waitFor({ timeout: 10_000 });
 
@@ -56,6 +66,7 @@ try {
         {
           ok: true,
           speechEvents,
+          playbackFinishClearedQueue: stopDisabledAfterPlayback,
           speechCanceled: speechEvents.includes("cancel"),
           audioQueueCleared: true,
           mouthOpenReset: true
@@ -124,12 +135,27 @@ async function installSpeechProbe(page: Page): Promise<void> {
       throw new Error("speechSynthesis is unavailable in the pet window");
     }
     const speechEvents: string[] = [];
+    const utterances: SpeechSynthesisUtterance[] = [];
     (window as typeof window & { __greyfieldSpeechEvents?: string[] }).__greyfieldSpeechEvents = speechEvents;
+    (window as typeof window & { __greyfieldFinishSpeech?: () => number }).__greyfieldFinishSpeech = () => {
+      const pending = [...utterances];
+      utterances.length = 0;
+      for (const utterance of pending) {
+        utterance.onend?.(new Event("end") as SpeechSynthesisEvent);
+      }
+      return pending.length;
+    };
     synthesis.speak = (utterance: SpeechSynthesisUtterance) => {
       speechEvents.push(`speak:${utterance.text}`);
+      utterances.push(utterance);
     };
     synthesis.cancel = () => {
       speechEvents.push("cancel");
+      const pending = [...utterances];
+      utterances.length = 0;
+      for (const utterance of pending) {
+        utterance.onerror?.({ error: "canceled" } as SpeechSynthesisErrorEvent);
+      }
     };
   });
 }
@@ -148,5 +174,12 @@ async function waitForSpeechEvent(page: Page, eventName: "speak" | "cancel"): Pr
 async function readSpeechEvents(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     return [...((window as typeof window & { __greyfieldSpeechEvents?: string[] }).__greyfieldSpeechEvents ?? [])];
+  });
+}
+
+async function finishAllSpeech(page: Page): Promise<void> {
+  await page.waitForFunction(() => {
+    const finish = (window as typeof window & { __greyfieldFinishSpeech?: () => number }).__greyfieldFinishSpeech;
+    return typeof finish === "function" && finish() > 0;
   });
 }

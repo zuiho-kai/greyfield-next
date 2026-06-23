@@ -54,6 +54,7 @@ After aligning the V1 manifest and planning docs on #41 head `280f520`, these ch
 The #41 integration run found one cross-branch regression: #27 made Stop availability follow only text generation state, while #29/#30 can leave voice output queued after text has already completed. #41 fixes this by keeping Stop enabled while enabled voice output is still queued or mouth-open state is active. The evidence is:
 
 - `pnpm harness:electron:stop-audio` -> `speechCanceled: true`, `audioQueueCleared: true`, `mouthOpenReset: true`.
+- Latest `pnpm harness:electron:stop-audio` also proves `playbackFinishClearedQueue: true`, so natural speech completion clears queued speech UI before the Stop path is exercised.
 - `pnpm harness:electron` -> `voiceQueueKeepsStopEnabled: true`.
 
 Visual review artifacts from `pnpm harness:v1-visual` were inspected from `.cache/greyfield-v1-visual-acceptance/latest/`:
@@ -82,8 +83,8 @@ Visual review artifacts from `pnpm harness:v1-visual` were inspected from `.cach
 | Keep recent context across restart | `pnpm harness:electron:restart-context`; unit tests `runtime-service`, `jsonl-session-store`, `prompt-assembler` | Claimable after rerun on release branch |
 | Show short assistant text in pet bubble while full history stays in Chat | `pnpm harness:electron:bubble-long-reply`; `pnpm harness:v1-visual` screenshots | Claimable after rerun on release branch |
 | Keep bubble inside right edge and remove bubble hit area when disabled | #41 includes #26 `pnpm harness:electron:bubble-edge-clickthrough` and screenshots under `.cache/greyfield-bubble-edge-clickthrough/latest/`. | Candidate evidence exists on #41; release-claimable only after merge or rerun on release branch |
-| Enable real assistant speech output without sudden default audio | #41 includes #29 Settings `Speak replies`, renderer Web Speech playback, default-quiet behavior, TTS failure isolation, long-reply speech budget, and Electron proof that `savedVoiceSpeech: true`. | Candidate evidence exists on #41; release-claimable only after merge or rerun on release branch |
-| Stop active speech playback, queued speech UI, and mouth-open state | #41 includes `pnpm harness:electron:stop-audio`, keeps `pnpm harness:electron:provider-abort` passing, proves `speechCanceled`, `audioQueueCleared`, and `mouthOpenReset`, and adds the integration fix proving Stop remains enabled while enabled voice output is still queued after text completion. | Candidate evidence exists on #41; release-claimable only after merge or rerun on release branch |
+| Enable real assistant speech output without sudden default audio | #41 includes #29 Settings `Speak replies`, renderer Web Speech playback, default-quiet behavior, TTS failure isolation, long-reply speech budget, natural playback queue cleanup, and Electron proof that `savedVoiceSpeech: true`. | Candidate evidence exists on #41; release-claimable only after merge or rerun on release branch |
+| Stop active speech playback, queued speech UI, and mouth-open state | #41 includes `pnpm harness:electron:stop-audio`, keeps `pnpm harness:electron:provider-abort` passing, proves `playbackFinishClearedQueue`, `speechCanceled`, `audioQueueCleared`, and `mouthOpenReset`, and adds the integration fix proving Stop remains enabled while enabled voice output is still queued after text completion. | Candidate evidence exists on #41; release-claimable only after merge or rerun on release branch |
 
 ## Current Non-Claimable Paths
 

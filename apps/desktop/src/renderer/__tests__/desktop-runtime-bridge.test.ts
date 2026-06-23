@@ -223,6 +223,62 @@ describe("createDesktopRuntimeBridge", () => {
     });
   });
 
+  it("removes speech items from the queue after playback finishes", async () => {
+    let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
+    let finishSpeech: (() => void) | undefined;
+    const sent: Array<[string, unknown]> = [];
+    const bridge = createDesktopRuntimeBridgeWithSpeech(
+      {
+        send: (channel, payload) => sent.push([channel, payload]),
+        on: (channel, handler) => {
+          if (channel === "runtime:event") {
+            runtimeEvent = handler as typeof runtimeEvent;
+          }
+          return () => undefined;
+        }
+      },
+      {
+        speak: vi.fn(() => new Promise<void>((resolve) => (finishSpeech = resolve))),
+        cancel: vi.fn()
+      }
+    );
+    bridge.updateSettings({ voiceSpeechEnabled: true });
+
+    runtimeEvent?.({ type: "assistant.audio.chunk", text: "Speak this.", data: new Uint8Array([1]) });
+    expect(bridge.getState().audioQueue).toEqual(["Speak this."]);
+
+    finishSpeech?.();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(bridge.getState().audioQueue).toEqual([]);
+    expect(sent).toContainEqual(["runtime:speech-playback", { type: "finished", text: "Speak this." }]);
+  });
+
+  it("removes speech items when another window reports playback finished", () => {
+    let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
+    let playbackEvent: ((event: import("../../shared/ipc").DesktopSpeechPlaybackEvent) => void) | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: () => undefined,
+      on: (channel, handler) => {
+        if (channel === "runtime:event") {
+          runtimeEvent = handler as typeof runtimeEvent;
+        }
+        if (channel === "runtime:speech-playback") {
+          playbackEvent = handler as typeof playbackEvent;
+        }
+        return () => undefined;
+      }
+    });
+
+    runtimeEvent?.({ type: "assistant.audio.chunk", text: "Shared speech.", data: new Uint8Array([1]) });
+    expect(bridge.getState().audioQueue).toEqual(["Shared speech."]);
+
+    playbackEvent?.({ type: "finished", text: "Shared speech." });
+
+    expect(bridge.getState().audioQueue).toEqual([]);
+  });
+
   it("keeps text state and shows a voice-only error when speech output fails", async () => {
     let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
     const bridge = createDesktopRuntimeBridgeWithSpeech(
@@ -250,6 +306,41 @@ describe("createDesktopRuntimeBridge", () => {
 
     expect(bridge.getState().messages.at(-1)).toEqual({ role: "assistant", text: "Text stays visible." });
     expect(bridge.getState().voiceErrorMessage).toBe("Voice playback failed: speaker blocked");
+    expect(bridge.getState().audioQueue).toEqual([]);
+  });
+
+  it("ignores late speech playback failures after interrupt", async () => {
+    let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
+    let failSpeech: ((error: Error) => void) | undefined;
+    const speechOutput = {
+      speak: vi.fn(() => new Promise<void>((_resolve, reject) => (failSpeech = reject))),
+      cancel: vi.fn()
+    };
+    const bridge = createDesktopRuntimeBridgeWithSpeech(
+      {
+        send: () => undefined,
+        on: (channel, handler) => {
+          if (channel === "runtime:event") {
+            runtimeEvent = handler as typeof runtimeEvent;
+          }
+          return () => undefined;
+        }
+      },
+      speechOutput
+    );
+    bridge.updateSettings({ voiceSpeechEnabled: true });
+
+    runtimeEvent?.({ type: "assistant.audio.chunk", text: "Queued speech.", data: new Uint8Array([1]) });
+    await bridge.interrupt();
+    failSpeech?.(new Error("late speaker failure"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(speechOutput.cancel).toHaveBeenCalledOnce();
+    expect(bridge.getState()).toMatchObject({
+      status: "interrupted",
+      voiceErrorMessage: "",
+      audioQueue: []
+    });
   });
 
   it("does not speak assistant audio chunks when voice output is disabled", () => {

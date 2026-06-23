@@ -78,6 +78,7 @@ export class DesktopRuntimeBridge {
   private state: DesktopRendererState = createInitialDesktopRendererState();
   private readonly stateChangeHandlers = new Set<DesktopStateChangeHandler>();
   private readonly interactionProfile = createDefaultInteractionProfile();
+  private speechPlaybackEpoch = 0;
 
   constructor(private readonly host?: DesktopHostApi, private readonly speechOutput?: SpeechOutput) {
     this.host?.on("settings:changed", (config) => {
@@ -110,6 +111,20 @@ export class DesktopRuntimeBridge {
         this.speechOutput?.cancel();
       }
       this.emitStateChange();
+    });
+    this.host?.on("runtime:speech-playback", (event) => {
+      const removed = this.removeQueuedSpeech(event.text);
+      if (event.type === "error" && event.message) {
+        this.state = {
+          ...this.state,
+          voiceErrorMessage: event.message
+        };
+        this.emitStateChange();
+        return;
+      }
+      if (removed) {
+        this.emitStateChange();
+      }
     });
     this.host?.on("provider:test-llm-result", (result) => {
       this.state = {
@@ -158,9 +173,10 @@ export class DesktopRuntimeBridge {
   }
 
   async interrupt(): Promise<DesktopRendererState> {
+    this.speechPlaybackEpoch += 1;
+    this.speechOutput?.cancel();
     if (this.host) {
       this.host.send("runtime:input", { type: "runtime.interrupt" });
-      this.speechOutput?.cancel();
       this.state = {
         ...this.state,
         status: "interrupted",
@@ -256,18 +272,53 @@ export class DesktopRuntimeBridge {
     if (!this.speechOutput || !this.state.settings.voiceSpeechEnabled) {
       return;
     }
+    const playbackEpoch = this.speechPlaybackEpoch;
     void this.speechOutput
       .speak(text, {
         voiceId: this.state.settings.voiceId,
         volume: this.state.settings.voiceVolume
       })
+      .then(() => {
+        if (this.completeSpeechPlayback(text, playbackEpoch)) {
+          this.host?.send("runtime:speech-playback", { type: "finished", text });
+        }
+      })
       .catch((error) => {
+        if (playbackEpoch !== this.speechPlaybackEpoch || this.state.status === "interrupted") {
+          return;
+        }
+        this.completeSpeechPlayback(text, playbackEpoch);
+        const message = `Voice playback failed: ${error instanceof Error ? error.message : String(error)}`;
+        this.host?.send("runtime:speech-playback", { type: "error", text, message });
         this.state = {
           ...this.state,
-          voiceErrorMessage: `Voice playback failed: ${error instanceof Error ? error.message : String(error)}`
+          voiceErrorMessage: message
         };
         this.emitStateChange();
       });
+  }
+
+  private completeSpeechPlayback(text: string, playbackEpoch: number): boolean {
+    if (playbackEpoch !== this.speechPlaybackEpoch) {
+      return false;
+    }
+    const removed = this.removeQueuedSpeech(text);
+    if (removed) {
+      this.emitStateChange();
+    }
+    return removed;
+  }
+
+  private removeQueuedSpeech(text: string): boolean {
+    const index = this.state.audioQueue.indexOf(text);
+    if (index < 0) {
+      return false;
+    }
+    this.state = {
+      ...this.state,
+      audioQueue: [...this.state.audioQueue.slice(0, index), ...this.state.audioQueue.slice(index + 1)]
+    };
+    return true;
   }
 
   private emitStateChange(): void {
