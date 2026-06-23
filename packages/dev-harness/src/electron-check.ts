@@ -256,6 +256,8 @@ try {
   if (settingsBounds.hasChatComposer || !settingsBounds.hasSettingsNav) {
     throw new Error(`Settings window is not isolated from chat: ${JSON.stringify(settingsBounds)}`);
   }
+  const auxiliaryWindowCloseRecovery = await verifyAuxiliaryWindowCloseRecovery();
+  await settingsWindow.waitForSelector(".greyfield-shell");
   await settingsWindow.locator(".provider-status--preview", { hasText: "Fake provider is active" }).waitFor();
   await settingsWindow.getByRole("button", { name: "Choose model" }).waitFor();
   await settingsWindow.getByLabel("Scale").fill("1.36");
@@ -304,6 +306,7 @@ try {
         savedApiKey: savedApiKeyConfig.provider.apiKey.length > 0,
         savedModel: savedConfig.provider.model,
         savedSpeechBubble: savedBubbleConfig.ui.speechBubbleEnabled,
+        auxiliaryWindowCloseRecovery,
         hitTestWorked: true,
         wheelScaleWorked: true,
         dragMovedWindow: dragResult.verified
@@ -348,6 +351,90 @@ async function waitForRoleWindow(roleName: "pet" | "settings" | "chat"): Promise
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Timed out waiting for ${roleName} window`);
+}
+
+async function verifyAuxiliaryWindowCloseRecovery(): Promise<{
+  settingsStayedAlive: boolean;
+  chatStayedAlive: boolean;
+  settingsHiddenAfterClose: boolean;
+  chatHiddenAfterClose: boolean;
+  settingsReopened: boolean;
+  chatReopened: boolean;
+}> {
+  await app.evaluate(({ BrowserWindow }) => {
+    let foundSettings = false;
+    let foundChat = false;
+    for (const browserWindow of BrowserWindow.getAllWindows()) {
+      const url = browserWindow.webContents.getURL();
+      if (url.includes("window=settings")) {
+        foundSettings = true;
+        browserWindow.close();
+      }
+      if (url.includes("window=chat")) {
+        foundChat = true;
+        browserWindow.close();
+      }
+    }
+    if (!foundSettings || !foundChat) {
+      throw new Error("Missing auxiliary windows before close recovery check");
+    }
+  });
+  await new Promise((resolve) => setTimeout(resolve, 120));
+
+  const afterClose = await app.evaluate(({ BrowserWindow }) => {
+    let settingsStayedAlive = false;
+    let chatStayedAlive = false;
+    let settingsHiddenAfterClose = false;
+    let chatHiddenAfterClose = false;
+    for (const browserWindow of BrowserWindow.getAllWindows()) {
+      const url = browserWindow.webContents.getURL();
+      if (url.includes("window=settings")) {
+        settingsStayedAlive = !browserWindow.isDestroyed();
+        settingsHiddenAfterClose = !browserWindow.isVisible();
+      }
+      if (url.includes("window=chat")) {
+        chatStayedAlive = !browserWindow.isDestroyed();
+        chatHiddenAfterClose = !browserWindow.isVisible();
+      }
+    }
+    return { settingsStayedAlive, chatStayedAlive, settingsHiddenAfterClose, chatHiddenAfterClose };
+  });
+
+  const afterShow = await app.evaluate(({ BrowserWindow }) => {
+    for (const browserWindow of BrowserWindow.getAllWindows()) {
+      const url = browserWindow.webContents.getURL();
+      if (url.includes("window=settings") || url.includes("window=chat")) {
+        browserWindow.show();
+      }
+    }
+    let settingsReopened = false;
+    let chatReopened = false;
+    for (const browserWindow of BrowserWindow.getAllWindows()) {
+      const url = browserWindow.webContents.getURL();
+      if (url.includes("window=settings")) {
+        settingsReopened = browserWindow.isVisible();
+      }
+      if (url.includes("window=chat")) {
+        chatReopened = browserWindow.isVisible();
+      }
+    }
+    return { settingsReopened, chatReopened };
+  });
+  await new Promise((resolve) => setTimeout(resolve, 120));
+
+  const result = { ...afterClose, ...afterShow };
+
+  if (
+    !result.settingsStayedAlive ||
+    !result.chatStayedAlive ||
+    !result.settingsHiddenAfterClose ||
+    !result.chatHiddenAfterClose ||
+    !result.settingsReopened ||
+    !result.chatReopened
+  ) {
+    throw new Error(`Auxiliary window close recovery failed: ${JSON.stringify(result)}`);
+  }
+  return result;
 }
 
 async function getPetBounds(): Promise<{ x: number; y: number; width: number; height: number }> {

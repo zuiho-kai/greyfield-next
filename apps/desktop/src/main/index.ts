@@ -14,6 +14,7 @@ import { RuntimeIpcController } from "./runtime-ipc-controller";
 import { RuntimeService } from "./runtime-service";
 import { redactConfigForRenderer } from "./settings-redaction";
 import { SettingsController } from "./settings-controller";
+import { getUsableWindow, hideWindowIfUsable, showWindowIfUsable } from "./window-lifecycle";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 let petWindow: BrowserWindow | undefined;
@@ -25,6 +26,7 @@ let runtimeService: RuntimeService | undefined;
 let runtimeIpcController: RuntimeIpcController | undefined;
 let petWindowController: PetWindowController | undefined;
 let live2DModelController: Live2DModelController | undefined;
+let isQuitting = false;
 
 async function createWindows(): Promise<void> {
   const config = await loadGreyfieldConfig(resolveConfigPath());
@@ -56,12 +58,13 @@ async function createWindows(): Promise<void> {
   const preload = resolvePreloadPath(currentDir);
   petWindow = new BrowserWindow(createPetWindowOptions(config, preload));
   petWindowController = new PetWindowController({
-    getWindow: () => petWindow,
+    getWindow: () => getUsableWindow(petWindow),
     nativeShapeEnabled: canUseWindowShape()
   });
   petWindowController.setModelPassThrough(config.window.modelPassThrough);
   settingsWindow = new BrowserWindow(createSettingsWindowOptions(preload));
   chatWindow = new BrowserWindow(createChatWindowOptions(preload));
+  attachWindowLifecycle();
 
   registerIpc();
   await loadRenderer(petWindow, "pet");
@@ -95,8 +98,8 @@ function createTray(): void {
   tray.setToolTip("Greyfield Next");
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: "Show Settings", click: () => settingsWindow?.show() },
-      { label: "Open Chat", click: () => chatWindow?.show() },
+      { label: "Show Settings", click: () => showWindowIfUsable(settingsWindow) },
+      { label: "Open Chat", click: () => showWindowIfUsable(chatWindow) },
       { label: "Model Pass Through", type: "checkbox", checked: petWindowController?.isModelPassThrough(), click: () => setModelPassThrough(!petWindowController?.isModelPassThrough()) },
       { label: "Interrupt", click: () => handleRuntimeInput({ type: "runtime.interrupt" }) },
       { type: "separator" },
@@ -178,11 +181,38 @@ function registerIpc(): void {
     showPetMenu(payload);
   });
 
-  ipcMain.on("window:open-settings", () => settingsWindow?.show());
-  ipcMain.on("window:open-chat", () => chatWindow?.show());
+  ipcMain.on("window:open-settings", () => showWindowIfUsable(settingsWindow));
+  ipcMain.on("window:open-chat", () => showWindowIfUsable(chatWindow));
   ipcMain.on("stage:choose-model", () => {
     void live2DModelController?.chooseModel();
   });
+}
+
+function attachWindowLifecycle(): void {
+  const currentPetWindow = petWindow;
+  currentPetWindow?.on("closed", () => {
+    if (petWindow === currentPetWindow) {
+      petWindow = undefined;
+      petWindowController = undefined;
+    }
+  });
+  attachHideOnClose(settingsWindow, () => {
+    settingsWindow = undefined;
+  });
+  attachHideOnClose(chatWindow, () => {
+    chatWindow = undefined;
+  });
+}
+
+function attachHideOnClose(window: BrowserWindow | undefined, markDestroyed: () => void): void {
+  window?.on("close", (event) => {
+    if (isQuitting || window.isDestroyed()) {
+      return;
+    }
+    event.preventDefault();
+    window.hide();
+  });
+  window?.on("closed", markDestroyed);
 }
 
 function handleRuntimeInput(payload: Parameters<NonNullable<typeof runtimeService>["handle"]>[0]): void {
@@ -223,9 +253,13 @@ function canUseWindowShape(): boolean {
 }
 
 function showPetMenu(point: { screenX: number; screenY: number }): void {
+  const owner = getUsableWindow(petWindow);
+  if (!owner) {
+    return;
+  }
   const menu = Menu.buildFromTemplate([
-    { label: "Open Chat", click: () => chatWindow?.show() },
-    { label: "Settings", click: () => settingsWindow?.show() },
+    { label: "Open Chat", click: () => showWindowIfUsable(chatWindow) },
+    { label: "Settings", click: () => showWindowIfUsable(settingsWindow) },
     { type: "separator" },
     { label: "Model Pass Through", type: "checkbox", checked: petWindowController?.isModelPassThrough(), click: () => setModelPassThrough(!petWindowController?.isModelPassThrough()) },
     { label: "Lock Position", type: "checkbox", checked: petWindowController?.isLocked(), click: () => {
@@ -233,12 +267,12 @@ function showPetMenu(point: { screenX: number; screenY: number }): void {
       broadcastWindowState();
     } },
     { type: "separator" },
-    { label: "Hide Model", click: () => petWindow?.hide() },
+    { label: "Hide Model", click: () => hideWindowIfUsable(petWindow) },
     { label: "Quit", click: () => app.quit() }
   ]);
-  const bounds = petWindow?.getBounds();
+  const bounds = owner.getBounds();
   const popupPoint = bounds ? toWindowMenuPoint(point, bounds) : { x: 0, y: 0 };
-  menu.popup({ window: petWindow, x: popupPoint.x, y: popupPoint.y });
+  menu.popup({ window: owner, x: popupPoint.x, y: popupPoint.y });
 }
 
 async function showLive2DModelDialog(): Promise<{ canceled: boolean; filePaths: string[] }> {
@@ -250,7 +284,7 @@ async function showLive2DModelDialog(): Promise<{ canceled: boolean; filePaths: 
       { name: "All files", extensions: ["*"] }
     ]
   } satisfies Electron.OpenDialogOptions;
-  const owner = settingsWindow ?? petWindow;
+  const owner = getUsableWindow(settingsWindow) ?? getUsableWindow(petWindow);
   return owner ? dialog.showOpenDialog(owner, dialogOptions) : dialog.showOpenDialog(dialogOptions);
 }
 
@@ -265,7 +299,7 @@ function broadcastModelInfo(selection: Live2DModelInfo): void {
 }
 
 function broadcastWindowState(): void {
-  petWindow?.webContents.send("window:state", {
+  getUsableWindow(petWindow)?.webContents.send("window:state", {
     modelPassThrough: petWindowController?.isModelPassThrough() ?? false,
     locked: petWindowController?.isLocked() ?? false
   });
@@ -325,6 +359,10 @@ function resolveLLMTimeoutMs(): number | undefined {
 app.whenReady().then(createWindows).catch((error) => {
   console.error("Greyfield failed to create windows:", error);
   app.quit();
+});
+
+app.on("before-quit", () => {
+  isQuitting = true;
 });
 
 app.on("activate", () => {

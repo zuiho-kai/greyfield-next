@@ -7,23 +7,38 @@ Last updated: 2026-06-23.
 ## Evidence Rules
 
 - `packages/dev-harness/v1-features.json` remains the source of truth for feature acceptance.
-- PR-local evidence counts for review of that PR, but V1 release evidence only counts after the PR is merged or the command is rerun on the release branch.
+- PR-local evidence counts for review of that PR, but V1 release evidence only counts after the PR is merged and the affected path has current-head evidence.
 - Screenshot artifacts are review evidence, not a replacement for executable harnesses.
-- Do not mark voice, TTS playback, or Stop-audio behavior release-complete until #29 and #30 are merged and rerun on the release branch. PR-local evidence is review evidence only.
-- Integration PR [#41](https://github.com/zuiho-kai/greyfield-next/pull/41) combines #35, #36, #37, #38, #39, and #40. Its evidence is stronger than isolated PR evidence because it proves the branches can coexist, but it is still not release evidence until merged or rerun on the release branch.
+- Integration PR [#41](https://github.com/zuiho-kai/greyfield-next/pull/41) combined #35, #36, #37, #38, #39, and #40 and is now merged into `main`.
+- PRs [#42](https://github.com/zuiho-kai/greyfield-next/pull/42), [#43](https://github.com/zuiho-kai/greyfield-next/pull/43), and [#44](https://github.com/zuiho-kai/greyfield-next/pull/44) are also merged into `main`.
 - Old PR [#32](https://github.com/zuiho-kai/greyfield-next/pull/32) is closed as superseded by #38 and #41.
 
-## Current Integration Evidence
+## Current Main Evidence
 
-PR [#41](https://github.com/zuiho-kai/greyfield-next/pull/41) is the current V1 integration/audit branch. It is mergeable and its GitHub checks passed:
+Main head `f571bedcec5509294a218af3dc8789e1b37c1c58` includes #41, #42, #43, and #44. GitHub Actions run `28014602753` passed on that head:
 
 - Fast checks: success.
 - Desktop pet quick harness: success.
-- CodeRabbit: success status, but automated review did not run because the review rate limit was reached.
-- GitGuardian Security Checks: success.
-- Full checkpoint harness: skipped by workflow conditions.
+- `frontend-full`: success.
 
-Local #41 integration verification has been run on `codex/v1-integration-audit`:
+The `frontend-full` profile runs the frontend-visible V1 guard:
+
+- `pnpm test:frontend`
+- Playwright Chromium install
+- `pnpm build:desktop`
+- real Live2D browser harness
+- `pnpm harness:v1-visual`
+- full Electron Settings/Chat/Pet harness
+- speech bubble long reply
+- speech bubble edge click-through
+- Settings provider test
+- Settings active-chat Test LLM rejection
+- Chat provider failure
+- Chat provider abort
+- Stop audio
+- restart context
+
+Historical local #41 integration verification was run on `codex/v1-integration-audit` before merge and remains useful as the integration audit trail:
 
 - `pnpm install --frozen-lockfile`
 - `pnpm typecheck`
@@ -45,13 +60,13 @@ Local #41 integration verification has been run on `codex/v1-integration-audit`:
 - `pnpm harness:electron`
 - `git diff --check`
 
-After aligning the V1 manifest and planning docs on #41 head `280f520`, these checks were rerun:
+After aligning the V1 manifest and planning docs on #41 head `280f520`, these checks were rerun before merge:
 
 - `pnpm test` -> 47 files / 162 tests passed
 - `pnpm harness:acceptance`
 - `git diff --check`
 
-The #41 integration run found one cross-branch regression: #27 made Stop availability follow only text generation state, while #29/#30 can leave voice output queued after text has already completed. #41 fixes this by keeping Stop enabled while enabled voice output is still queued or mouth-open state is active. The evidence is:
+The #41 integration run found one cross-branch regression: #27 made Stop availability follow only text generation state, while #29/#30 can leave voice output queued after text has already completed. The merged fix keeps Stop enabled while enabled voice output is still queued or mouth-open state is active. The evidence is:
 
 - `pnpm harness:electron:stop-audio` -> `speechCanceled: true`, `audioQueueCleared: true`, `mouthOpenReset: true`.
 - Latest `pnpm harness:electron:stop-audio` also proves `playbackFinishClearedQueue: true`, so natural speech completion clears queued speech UI before the Stop path is exercised.
@@ -64,36 +79,34 @@ Visual review artifacts from `pnpm harness:v1-visual` were inspected from `.cach
 - `chat-after-reply.png`: Chat retains the complete assistant reply.
 - `settings-provider-preview.png`: Settings shows product-facing fake provider Preview state.
 
-`pnpm harness:electron:real-llm` was not rerun for #41 because `GREYFIELD_REAL_LLM_BASE_URL`, `GREYFIELD_REAL_LLM_API_KEY`, and `GREYFIELD_REAL_LLM_MODEL` are not present in the current environment. Real-provider evidence therefore remains an explicit release-branch rerun requirement when credentials are available.
+`pnpm harness:electron:real-llm` has not been rerun with current `GREYFIELD_REAL_LLM_BASE_URL`, `GREYFIELD_REAL_LLM_API_KEY`, and `GREYFIELD_REAL_LLM_MODEL` values in this environment. Real-provider evidence therefore remains an explicit credentialed release-check requirement when credentials are available.
 
 ## User Paths
 
 | User path | Current evidence | Claim status |
 | --- | --- | --- |
-| Open app and see a transparent desktop pet, not a webpage | `pnpm harness:v1-visual`; `pnpm harness:electron`; `pnpm harness:pet:quick`; screenshots in `.cache/greyfield-v1-visual-acceptance/latest/` | Claimable after rerun on release branch |
-| Interact with the pet model pixels while transparent areas pass through | `pnpm harness:pet:quick`; `pnpm harness:electron`; unit tests `pet-interaction`, `desktop-runtime-bridge` | Claimable after rerun on release branch |
-| Drag pet window without resizing or changing model scale | `pnpm harness:pet:quick`; `pnpm harness:electron`; unit tests `pet-interaction`, `pet-window-controller` | Claimable after rerun on release branch |
-| Wheel-scale only on model pixels and within bounds | `pnpm harness:pet:quick`; unit tests `pet-interaction` | Claimable after rerun on release branch |
-| Load a real Live2D `.model3.json` without counting fallback as acceptance | `pnpm harness:live2d`; unit tests `model-manifest`, `model3-parser`, `live2d-deps` | Claimable after rerun on release branch |
-| Send a text message and receive streamed/final Chat output | `pnpm harness:electron`; `pnpm harness:acceptance`; `pnpm harness:electron:real-llm` when real provider env is supplied | Claimable for fake path on release branch; real provider requires env rerun |
-| Stop a running text reply | Main evidence: `pnpm harness:electron:provider-abort`. #41 includes #27 proof that Stop is clickable during streaming, shows Stopped, aborts the provider request, and does not append the old partial reply. | Candidate evidence exists on #41; release-claimable only after merge or rerun on release branch |
-| Understand Chat state and retry after provider failure | Main evidence: `pnpm harness:electron:provider-failure`. #41 includes #27 Waiting / Generating / Stopped / Failed / Retry-ready UI and retry-button proof. | Candidate evidence exists on #41; release-claimable only after merge or rerun on release branch |
-| Configure provider and understand whether Test LLM can run | Main evidence: `settings-provider-status` tests, `pnpm harness:electron:settings-provider-test`, and `pnpm harness:electron:settings-active-chat-test`. #41 includes fake Preview, missing Base URL, missing API key, missing model, testing, success, and failure states; latest settings-provider harness also proves `blockedStatesSentNoProviderRequests: true`. | Candidate evidence exists on #41; release-claimable only after merge or rerun on release branch |
-| Reject Test LLM during active chat without sending another provider request | `pnpm harness:electron:settings-active-chat-test`; #41 keeps this aligned with provider UI | Candidate evidence exists on #41; release-claimable only after merge or rerun on release branch |
-| Keep recent context across restart | `pnpm harness:electron:restart-context`; unit tests `runtime-service`, `jsonl-session-store`, `prompt-assembler` | Claimable after rerun on release branch |
-| Show short assistant text in pet bubble while full history stays in Chat | `pnpm harness:electron:bubble-long-reply`; `pnpm harness:v1-visual` screenshots | Claimable after rerun on release branch |
-| Keep bubble inside right edge and remove bubble hit area when disabled | #41 includes #26 `pnpm harness:electron:bubble-edge-clickthrough` and screenshots under `.cache/greyfield-bubble-edge-clickthrough/latest/`; latest output also proves `passThroughBubbleToggleKeptStoredShapeFresh: true` when the bubble is disabled during Model Pass Through. | Candidate evidence exists on #41; release-claimable only after merge or rerun on release branch |
-| Enable real assistant speech output without sudden default audio | #41 includes #29 Settings `Speak replies`, renderer Web Speech playback, default-quiet behavior, TTS failure isolation, long-reply speech budget, natural playback queue cleanup, and Electron proof that `savedVoiceSpeech: true`. | Candidate evidence exists on #41; release-claimable only after merge or rerun on release branch |
-| Stop active speech playback, queued speech UI, and mouth-open state | #41 includes `pnpm harness:electron:stop-audio`, keeps `pnpm harness:electron:provider-abort` passing, proves `playbackFinishClearedQueue`, `speechCanceled`, `audioQueueCleared`, and `mouthOpenReset`, and adds the integration fix proving Stop remains enabled while enabled voice output is still queued after text completion. | Candidate evidence exists on #41; release-claimable only after merge or rerun on release branch |
+| Open app and see a transparent desktop pet, not a webpage | `pnpm harness:v1-visual`; `pnpm harness:electron`; `pnpm harness:pet:quick`; screenshots in `.cache/greyfield-v1-visual-acceptance/latest/`; `frontend-full` on main `f571bed` | Current on main through #44; rerun after closeout UI changes |
+| Interact with the pet model pixels while transparent areas pass through | `pnpm harness:pet:quick`; `pnpm harness:electron`; unit tests `pet-interaction`, `desktop-runtime-bridge`; `frontend-full` on main `f571bed` | Current on main through #44; rerun after pet/window changes |
+| Drag pet window without resizing or changing model scale | `pnpm harness:pet:quick`; `pnpm harness:electron`; unit tests `pet-interaction`, `pet-window-controller`; #42 drag guard | Current on main through #44; rerun after pet/window changes |
+| Wheel-scale only on model pixels and within bounds | `pnpm harness:pet:quick`; unit tests `pet-interaction`; `frontend-full` on main `f571bed` | Current on main through #44; rerun after pet/window changes |
+| Load a real Live2D `.model3.json` without counting fallback as acceptance | `pnpm harness:live2d`; unit tests `model-manifest`, `model3-parser`, `live2d-deps`; `frontend-full` on main `f571bed` | Current on main through #44 |
+| Send a text message and receive streamed/final Chat output | `pnpm harness:electron`; `pnpm harness:acceptance`; `frontend-full` on main `f571bed`; `pnpm harness:electron:real-llm` when real provider env is supplied | Fake/failure/abort paths current on main; real provider requires env rerun |
+| Stop a running text reply | Main evidence: `pnpm harness:electron:provider-abort`; merged #41 proof that Stop is clickable during streaming, shows Stopped, aborts the provider request, and does not append the old partial reply; `frontend-full` on main `f571bed` | Current on main through #44 |
+| Understand Chat state and retry after provider failure | Main evidence: `pnpm harness:electron:provider-failure`; merged #41 Waiting / Generating / Stopped / Failed / Retry-ready UI and retry-button proof; `frontend-full` on main `f571bed` | Current on main through #44 |
+| Configure provider and understand whether Test LLM can run | Main evidence: `settings-provider-status` tests, `pnpm harness:electron:settings-provider-test`, and `pnpm harness:electron:settings-active-chat-test`; #43 API-key input fix; `frontend-full` on main `f571bed` | Current on main through #44; rerun after Settings UI/lifecycle changes |
+| Reject Test LLM during active chat without sending another provider request | `pnpm harness:electron:settings-active-chat-test`; merged #41 alignment with provider UI; `frontend-full` on main `f571bed` | Current on main through #44 |
+| Keep recent context across restart | `pnpm harness:electron:restart-context`; unit tests `runtime-service`, `jsonl-session-store`, `prompt-assembler`; `frontend-full` on main `f571bed` | Current on main through #44 |
+| Show short assistant text in pet bubble while full history stays in Chat | `pnpm harness:electron:bubble-long-reply`; `pnpm harness:v1-visual` screenshots; `frontend-full` on main `f571bed` | Current on main through #44 |
+| Keep bubble inside right edge and remove bubble hit area when disabled | Merged #41 includes #26 `pnpm harness:electron:bubble-edge-clickthrough` and screenshots under `.cache/greyfield-bubble-edge-clickthrough/latest/`; latest output also proves `passThroughBubbleToggleKeptStoredShapeFresh: true` when the bubble is disabled during Model Pass Through; `frontend-full` on main `f571bed` | Current on main through #44 |
+| Enable real assistant speech output without sudden default audio | Merged #41 includes #29 Settings `Speak replies`, renderer Web Speech playback, default-quiet behavior, TTS failure isolation, long-reply speech budget, natural playback queue cleanup, and Electron proof that `savedVoiceSpeech: true`; `frontend-full` on main `f571bed` | Current on main through #44 |
+| Stop active speech playback, queued speech UI, and mouth-open state | Merged #41 includes `pnpm harness:electron:stop-audio`, keeps `pnpm harness:electron:provider-abort` passing, proves `playbackFinishClearedQueue`, `speechCanceled`, `audioQueueCleared`, and `mouthOpenReset`, and adds the integration fix proving Stop remains enabled while enabled voice output is still queued after text completion; `frontend-full` on main `f571bed` | Current on main through #44 |
 
 ## Current Non-Claimable Paths
 
-- Real TTS playback has combined proof in #41, but it is not release-claimable until merged and rerun on the release branch.
-- Stop-audio behavior has combined proof in #41, but it is not release-claimable until the combined behavior is merged and rerun on the release branch.
-- Real OpenAI-compatible provider evidence is not current on #41 because the required `GREYFIELD_REAL_LLM_*` env vars were unavailable. The fake provider path, provider failure path, Test LLM product states, and provider abort path are covered; real-provider chat still needs an env-backed rerun before any release claim.
+- Real OpenAI-compatible provider evidence is not current because the required `GREYFIELD_REAL_LLM_*` env vars were unavailable. The fake provider path, provider failure path, Test LLM product states, and provider abort path are covered; real-provider chat still needs an env-backed rerun before any real endpoint release claim.
 - ASR and microphone conversation are not V1-complete.
-- #26, #27, #28, #29, #30, and #31 evidence is currently integrated in PR #41, with narrower PRs #35, #36, #37, #38, #39, and #40 as historical slices. The combined evidence must be merged or rerun on the final release branch before V1 can be called complete.
-- A final V1 release claim still needs one current-head checkpoint run covering `pnpm typecheck`, `pnpm test`, `pnpm harness:acceptance`, `pnpm harness:live2d`, `pnpm harness:pet:quick`, `pnpm harness:electron`, and the feature-specific harnesses listed above.
+- Current closeout PRs that touch Settings UI, Chat UI, Pet UI, Electron main lifecycle, or harness behavior must rerun the affected current-head evidence before merge. For frontend-visible changes, `pnpm harness:frontend-full` is the preferred aggregate gate.
+- A final V1 release claim still needs one current-head checkpoint record after the last closeout PR, covering `pnpm typecheck`, `pnpm test`, `pnpm harness:acceptance`, `pnpm harness:live2d`, `pnpm harness:pet:quick`, `pnpm harness:electron`, and the feature-specific harnesses listed above or `pnpm harness:frontend-full` when it covers the touched frontend surface.
 
 ## Release Audit Steps
 
