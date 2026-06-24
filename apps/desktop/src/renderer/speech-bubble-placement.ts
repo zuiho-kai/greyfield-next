@@ -13,7 +13,7 @@ export interface Size {
 export interface SpeechBubblePlacement {
   x: number;
   y: number;
-  side: "left" | "right";
+  side: "left" | "right" | "top";
 }
 
 export function placeSpeechBubble(input: {
@@ -34,15 +34,12 @@ export function placeSpeechBubble(input: {
     screenRight - input.windowBounds.x - input.bubbleSize.width
   );
   const safeMaxLocalX = Math.max(minLocalX, maxLocalX);
-  const stableRightX = input.windowBounds.width - input.bubbleSize.width - margin;
-  const stableLeftX = margin;
-  const canUseRight = stableRightX >= minLocalX && stableRightX <= safeMaxLocalX;
-  const rawX = canUseRight ? stableRightX : stableLeftX;
-  const side = canUseRight ? "right" : "left";
+  const side = "top";
+  const rawX = input.windowBounds.width / 2 - input.bubbleSize.width / 2;
 
   const screenTop = input.screenBounds.y + margin;
   const screenBottom = input.screenBounds.y + input.screenBounds.height - margin;
-  const rawY = margin + gap;
+  const rawY = margin;
   const minLocalY = Math.max(margin, screenTop - input.windowBounds.y);
   const maxLocalY = Math.min(
     input.windowBounds.height - input.bubbleSize.height - margin,

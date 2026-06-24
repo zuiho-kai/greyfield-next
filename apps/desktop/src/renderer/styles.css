@@ -59,7 +59,7 @@ button {
   border: 1px solid rgba(31, 41, 51, 0.16);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 12px 28px rgba(18, 24, 38, 0.18);
+  box-shadow: 0 8px 18px rgba(18, 24, 38, 0.14);
   color: #1f2933;
   font-size: 13px;
   line-height: 1.45;
@@ -67,6 +67,8 @@ button {
   pointer-events: none;
   overflow-wrap: anywhere;
   word-break: break-word;
+  animation: speechBubbleIn 180ms ease-out;
+  transition: opacity 450ms ease, transform 450ms ease;
 }
 
 .speech-bubble__text {
@@ -77,9 +79,9 @@ button {
 }
 
 .speech-bubble--left::after,
-.speech-bubble--right::after {
+.speech-bubble--right::after,
+.speech-bubble--top::after {
   position: absolute;
-  top: 18px;
   width: 12px;
   height: 12px;
   border: inherit;
@@ -89,15 +91,40 @@ button {
 }
 
 .speech-bubble--left::after {
+  top: 18px;
   right: -7px;
   border-bottom: 0;
   border-left: 0;
 }
 
 .speech-bubble--right::after {
+  top: 18px;
   left: -7px;
   border-top: 0;
   border-right: 0;
+}
+
+.speech-bubble--top::after {
+  bottom: -7px;
+  left: calc(50% - 6px);
+  border-left: 0;
+  border-top: 0;
+}
+
+.speech-bubble--fading {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+}
+
+@keyframes speechBubbleIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .greyfield-shell {
@@ -117,9 +144,11 @@ body.settings-window .greyfield-shell {
 
 .chat-shell {
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 16px;
-  min-height: 100vh;
+  box-sizing: border-box;
+  height: 100vh;
+  min-height: 0;
   padding: 20px;
   background: linear-gradient(135deg, rgba(240, 250, 255, 0.95) 0%, rgba(250, 245, 255, 0.95) 100%);
 }
@@ -394,7 +423,7 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-height: 320px;
+  min-height: 0;
   overflow-y: auto;
   padding-right: 8px;
 }
@@ -504,23 +533,6 @@ h1 {
   gap: 8px;
   min-height: 0;
   overflow: auto;
-}
-
-.message-list p {
-  margin: 0;
-  padding: 9px 11px;
-  line-height: 1.45;
-  border-radius: 8px;
-}
-
-.message-list .user {
-  align-self: flex-end;
-  background: #d9f0ff;
-}
-
-.message-list .assistant {
-  align-self: flex-start;
-  background: #ffffff;
 }
 
 .message-list .draft {
@@ -633,33 +645,6 @@ h1 {
   opacity: 0.52;
   transform: none;
   box-shadow: none;
-}
-
-.composer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 8px;
-}
-
-.composer input {
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid rgba(31, 41, 51, 0.24);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.composer button {
-  padding: 10px 14px;
-  border: 0;
-  border-radius: 8px;
-  background: #1f7a6b;
-  color: #ffffff;
-  cursor: pointer;
-}
-
-.composer .interrupt-button {
-  background: #8f3150;
 }
 
 .settings-panel {

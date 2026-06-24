@@ -5,6 +5,7 @@ export type EmitSettingsChanged = (config: GreyfieldConfig) => void;
 
 export class SettingsController {
   private config: GreyfieldConfig;
+  private pendingUpdate: Promise<void> = Promise.resolve();
 
   constructor(
     initialConfig: GreyfieldConfig,
@@ -19,18 +20,26 @@ export class SettingsController {
   }
 
   async update(patch: GreyfieldConfigPatch): Promise<GreyfieldConfig> {
-    this.config = mergeConfig({
-      ...this.config,
-      ...patch,
-      provider: { ...this.config.provider, ...patch.provider },
-      voice: { ...this.config.voice, ...patch.voice },
-      audio: { ...this.config.audio, ...patch.audio },
-      window: { ...this.config.window, ...patch.window },
-      live2d: { ...this.config.live2d, ...patch.live2d },
-      hotkeys: { ...this.config.hotkeys, ...patch.hotkeys }
+    const update = this.pendingUpdate.then(async () => {
+      this.config = mergeConfig({
+        ...this.config,
+        ...patch,
+        provider: { ...this.config.provider, ...patch.provider },
+        voice: { ...this.config.voice, ...patch.voice },
+        audio: { ...this.config.audio, ...patch.audio },
+        window: { ...this.config.window, ...patch.window },
+        live2d: { ...this.config.live2d, ...patch.live2d },
+        hotkeys: { ...this.config.hotkeys, ...patch.hotkeys }
+      });
+      await this.save(this.config);
+      const next = this.getCurrent();
+      this.emitChanged(next);
+      return next;
     });
-    await this.save(this.config);
-    this.emitChanged(this.getCurrent());
-    return this.getCurrent();
+    this.pendingUpdate = update.then(
+      () => undefined,
+      () => undefined
+    );
+    return update;
   }
 }

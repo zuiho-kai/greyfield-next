@@ -15,7 +15,7 @@ const firstChunk = "首句进入气泡。";
 const finalTail = "这是 Chat 窗口必须保留而宠物气泡不应该完整展示的末尾标记。";
 const longChunks = [
   firstChunk,
-  "这是一段用于测试桌宠气泡的长回复，内容会持续追加，气泡应该保持在稳定的窗口上方槽位。",
+  "这是一段用于测试桌宠气泡的长回复，内容会持续追加，气泡应该保持在稳定的短提示位置。",
   "它不能跟随模型动画来回移动，也不能因为文字变长就撑爆宠物窗口。",
   "完整回复仍然应该留在 Chat 历史里，方便用户回看，而桌面上的宠物气泡只承担短提示职责。",
   finalTail
@@ -70,6 +70,7 @@ try {
     await sendMessage(chatWindow, "请输出一段长回复，用于检查宠物气泡。");
 
     await petWindow.locator(".speech-bubble", { hasText: firstChunk }).waitFor({ timeout: 10_000 });
+    await delay(250);
     const firstBubble = await readBubbleState(petWindow);
     if (!firstBubble.text.includes(firstChunk)) {
       throw new Error(`First token did not reach speech bubble: ${JSON.stringify(firstBubble)}`);
@@ -93,6 +94,7 @@ try {
     if (!chatText?.includes(firstChunk) || !chatText.includes(finalTail)) {
       throw new Error(`Chat did not keep full assistant reply: ${JSON.stringify(chatText)}`);
     }
+    await petWindow.locator(".speech-bubble").waitFor({ state: "detached", timeout: 10_000 });
 
     console.log(
       JSON.stringify(
@@ -103,6 +105,7 @@ try {
           bubbleTextLength: finalBubble.text.length,
           bubbleStable: true,
           bubbleInsideViewport: true,
+          bubbleFadedAfterReply: true,
           chatKeptFullReply: true
         },
         null,

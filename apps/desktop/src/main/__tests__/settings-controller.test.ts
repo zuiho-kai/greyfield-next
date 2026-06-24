@@ -23,4 +23,32 @@ describe("SettingsController", () => {
     expect(save).toHaveBeenCalledWith(next);
     expect(emit).toHaveBeenCalledWith(next);
   });
+
+  it("serializes async saves so older settings writes cannot land after newer input", async () => {
+    let firstSaveFinished = false;
+    const save = vi.fn(async (config) => {
+      if (config.provider.apiKey === "") {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        firstSaveFinished = true;
+        return;
+      }
+      expect(firstSaveFinished).toBe(true);
+    });
+    const emit = vi.fn();
+    const controller = new SettingsController(
+      {
+        ...defaultGreyfieldConfig,
+        provider: { ...defaultGreyfieldConfig.provider, apiKey: "old-key" }
+      },
+      save,
+      emit
+    );
+
+    const cleared = controller.update({ provider: { apiKey: "" } });
+    const typed = controller.update({ provider: { apiKey: "new-key" } });
+    const [, finalConfig] = await Promise.all([cleared, typed]);
+
+    expect(finalConfig.provider.apiKey).toBe("new-key");
+    expect(save).toHaveBeenLastCalledWith(expect.objectContaining({ provider: expect.objectContaining({ apiKey: "new-key" }) }));
+  });
 });
