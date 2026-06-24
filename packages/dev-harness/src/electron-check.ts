@@ -281,6 +281,10 @@ try {
   const savedApiKeyConfig = await waitForProviderApiKey(configPath, "greyfield-test-key");
   await settingsWindow.getByRole("textbox", { name: "Model", exact: true }).fill("electron-harness-model");
   const savedConfig = await waitForSavedModel(configPath, "electron-harness-model");
+  const providerSelect = settingsWindow.getByLabel("Provider");
+  await providerSelect.selectOption("fake");
+  await settingsWindow.locator(".provider-status--preview", { hasText: "Fake provider is active" }).waitFor();
+  const savedFakeProviderConfig = await waitForProviderLLM(configPath, "fake");
   await settingsWindow.getByLabel("Speech Bubble").uncheck();
   const savedBubbleConfig = await waitForSpeechBubble(configPath, false);
 
@@ -307,6 +311,7 @@ try {
         savedVoiceSpeech: savedVoiceConfig.voice.speechEnabled,
         savedApiKey: savedApiKeyConfig.provider.apiKey.length > 0,
         savedModel: savedConfig.provider.model,
+        savedProviderLLM: savedFakeProviderConfig.provider.llm,
         savedSpeechBubble: savedBubbleConfig.ui.speechBubbleEnabled,
         auxiliaryWindowCloseRecovery,
         hitTestWorked: true,
@@ -510,4 +515,17 @@ async function waitForProviderApiKey(path: string, apiKey: string): Promise<type
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error("Provider API key did not persist from the settings input");
+}
+
+async function waitForProviderLLM(path: string, llm: typeof defaultGreyfieldConfig.provider.llm): Promise<typeof defaultGreyfieldConfig> {
+  const started = Date.now();
+  let config: typeof defaultGreyfieldConfig | null = null;
+  while (Date.now() - started < 5_000) {
+    config = await readConfig(path).catch(() => null);
+    if (config?.provider.llm === llm) {
+      return config;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Provider LLM did not become ${llm}`);
 }

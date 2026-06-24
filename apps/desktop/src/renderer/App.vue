@@ -168,7 +168,15 @@ function syncState(nextState: DesktopRendererState): void {
 }
 
 function updateSetting(key: keyof DesktopSettingsState, value: string): void {
-  syncState(bridge.updateSettings({ [key]: value }));
+  const patch: Partial<DesktopSettingsState> = { [key]: value };
+  if (
+    state.settings.providerLLM !== "openai-compatible" &&
+    value.trim().length > 0 &&
+    (key === "providerBaseUrl" || key === "providerApiKey" || key === "providerModel")
+  ) {
+    patch.providerLLM = "openai-compatible";
+  }
+  syncState(bridge.updateSettings(patch));
 }
 
 function updateNumericSetting(key: "modelScale" | "modelX" | "modelY" | "voiceVolume", value: string): void {
