@@ -40,6 +40,7 @@ Current product plan: [Greyfield Next V1 产品计划](plans/v1-product-plan.md)
 - Diagnosed the Stop audio failure as a harness synchronization race: the script waited for Settings to show two queued speech items before proving the Pet window speech probe had queued both utterances.
 - Stabilized two additional `frontend-full` timing edges found during local reruns: provider timeout now gives the local server enough time to record the expected request before abort, and the full Electron drag check waits for renderer `data-dragging=true` before testing drag-time wheel blocking and movement.
 - Local follow-up evidence: `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm harness:electron:stop-audio`, `pnpm exec tsx packages/dev-harness/src/electron-provider-failure-check.ts`, `pnpm harness:electron`, and `pnpm harness:frontend-full` all passed. The `frontend-full` run passed 14 checks in 2m 11s.
+- Merged #46 to main. The #46 acceptance code head `c53b70916ef67543ff80387a2e9af1edaeb26ec3` passed GitHub Actions run `28072461072`: Fast checks, Desktop pet quick harness, and `frontend-full` all succeeded.
 
 ## 2026-05-23
 

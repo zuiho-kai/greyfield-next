@@ -21,11 +21,10 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 | 气泡 | 宠物旁有短回复气泡，支持文本压缩、长度上限；位置固定在宠物窗口上方稳定槽位，不跟随模型移动，只在窗口/屏幕边缘内水平和垂直夹紧；长 streaming 回复会进气泡首 token、保持短文本，完整内容留在 Chat；右侧边缘和开关/点击穿透已有专门 harness 和截图证据。 | V1 气泡 QA 已在 main；继续靠 `frontend-full` 和截图看护。 |
 | 语音输出 | 已有句子级 TTS 队列、默认静音、Settings `Speak replies` 开关、renderer Web Speech 播放、TTS 失败隔离、长回复 TTS budget；Stop 会取消正在播放的语音、清空队列并重置嘴型。 | V1 真实 TTS 最小闭环已在 main；仍不是完整语音伴侣，ASR 留到 V1 后。 |
 | 语音输入 | 只有 VAD/音频边界基础。 | V1 后段任务，不能先做。 |
-| CI | GitHub Actions workflow 已入仓；PR 跑 Fast checks 和 Desktop pet quick harness；main / manual dispatch 额外跑 Full checkpoint harness；#45 PR 检查为绿，但合入后的 main push 在 Stop audio harness 暴露同步 race。 | 自动保护已恢复；当前收尾风险是修复并复跑 Stop audio / `frontend-full` 的当前 head 证据。 |
+| CI | GitHub Actions workflow 已入仓；PR 跑 Fast checks、Desktop pet quick harness 和前端可见改动的 `frontend-full`；main / manual dispatch 额外跑 Full checkpoint harness；#46 已修复 #45 合入后暴露的 Stop audio harness 同步 race，并且 main run `28072461072` 已通过 Fast checks、Desktop pet quick 和 `frontend-full`。 | 自动保护已恢复；继续控制 Electron harness 耗时和稳定性。 |
 
 ## 现在不能宣称什么
 
-- 不能宣称“V1 已发布完成”：#41/#42/#43/#44/#45 已合入 main，但 #45 合入后的 main push `frontend-full` 在 Stop audio harness 暴露同步 race；需要该收尾修复合入并获得当前 head 通过证据后，才可写最终完成口径。
 - 不能宣称“真实 LLM release 证据是当前的”：当前环境没有 `GREYFIELD_REAL_LLM_*`，所以 `pnpm harness:electron:real-llm` 仍需在有凭据时复跑。
 - 不能宣称“语音伴侣完整完成”：main 已覆盖真实 TTS 最小闭环和 Stop-audio，但 ASR、麦克风对话、真实音频能量嘴型仍是 V1 后工作。
 - 不能宣称“模型管理 UX 完成”：Settings provider/Test LLM 已产品化，模型管理和更完整设置体验可留到 V1 后。
@@ -168,12 +167,12 @@ main 已完成 V1 最小闭环：
 
 ## 推荐下一步
 
-当前推荐完成 V1 closeout 证据收口：
+当前推荐完成 V1 release 证据收口：
 
-1. 修复 #45 合入后 main push 暴露的 Stop audio harness 同步 race，并复跑 `frontend-full`。
-2. 不再新增 V1 后功能，例如 ASR、桌面控制、浏览器控制、长期任务代理或完整模型管理。
-3. 提供 `GREYFIELD_REAL_LLM_BASE_URL` / `GREYFIELD_REAL_LLM_API_KEY` / `GREYFIELD_REAL_LLM_MODEL` 后，在最终目标分支复跑 `pnpm harness:electron:real-llm`。
-4. 每个 closeout PR 合入前，按 [V1 Completion Evidence Checklist](../v1-completion-evidence.md) 跑它触及路径的 harness；前端可见改动必须跑 `pnpm harness:frontend-full` 或等同 CI 证据。
+1. 提供 `GREYFIELD_REAL_LLM_BASE_URL` / `GREYFIELD_REAL_LLM_API_KEY` / `GREYFIELD_REAL_LLM_MODEL` 后，在最终目标分支复跑 `pnpm harness:electron:real-llm`。
+2. 打开最新 `pnpm harness:v1-visual` / `frontend-full` 产物截图做一次人工视觉确认。
+3. 不再新增 V1 后功能，例如 ASR、桌面控制、浏览器控制、长期任务代理或完整模型管理。
+4. 每个后续 closeout PR 合入前，按 [V1 Completion Evidence Checklist](../v1-completion-evidence.md) 跑它触及路径的 harness；前端可见改动必须跑 `pnpm harness:frontend-full` 或等同 CI 证据。
 
 ## V1 完成判定
 
