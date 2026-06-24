@@ -28,13 +28,15 @@
 
       <section class="settings-panel" aria-label="Settings">
         <label>
-          <span>LLM</span>
-          <input
+          <span>Provider</span>
+          <select
             :value="state.settings.providerLLM"
             autocomplete="off"
-            spellcheck="false"
-            @input="$emit('update-setting', 'providerLLM', valueFrom($event))"
-          />
+            @change="$emit('update-setting', 'providerLLM', valueFrom($event))"
+          >
+            <option value="fake">Fake preview</option>
+            <option value="openai-compatible">OpenAI-compatible</option>
+          </select>
         </label>
         <label>
           <span>Base URL</span>
@@ -289,7 +291,7 @@ const testLlmAction = computed(() =>
 const providerTestStatus = computed(() => describeProviderTestStatus(props.state.providerTest));
 
 function valueFrom(event: Event): string {
-  return event.target instanceof HTMLInputElement ? event.target.value : "";
+  return event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement ? event.target.value : "";
 }
 
 function checkedFrom(event: Event): boolean {

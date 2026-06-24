@@ -43,18 +43,28 @@ try {
     const settingsWindow = await waitForRoleWindow(app, "settings");
     await settingsWindow.locator(".provider-status--preview", { hasText: "Preview" }).waitFor({ timeout: 10_000 });
     await settingsWindow.locator(".provider-status--preview", { hasText: "Fake provider is active" }).waitFor();
+    const providerSelect = settingsWindow.getByLabel("Provider");
+    if ((await providerSelect.inputValue()) !== "fake") {
+      throw new Error("Settings did not start in fake provider preview mode");
+    }
     await settingsWindow.getByRole("button", { name: "Test LLM" }).click();
     await settingsWindow.locator(".provider-test-result--success", { hasText: "Test succeeded" }).waitFor({ timeout: 10_000 });
 
-    await settingsWindow.getByLabel("LLM").fill("openai-compatible");
     await settingsWindow.getByLabel("Base URL").fill("");
     await settingsWindow.getByLabel("API Key").fill("");
     await settingsWindow.getByLabel("Model", { exact: true }).fill("");
+    await providerSelect.selectOption("openai-compatible");
     await settingsWindow.locator(".provider-status--blocked", { hasText: "Needs Base URL" }).waitFor();
     await expectTestLlmBlocked(settingsWindow, "OpenAI-compatible chat needs a Base URL");
     assertProviderRequestCount(0, "missing Base URL");
 
+    await providerSelect.selectOption("fake");
+    await settingsWindow.locator(".provider-status--preview", { hasText: "Preview" }).waitFor();
     await settingsWindow.getByLabel("Base URL").fill(`http://127.0.0.1:${port}/v1`);
+    await settingsWindow.waitForFunction(() => {
+      const select = document.querySelector<HTMLSelectElement>('select[autocomplete="off"]');
+      return select?.value === "openai-compatible";
+    });
     await settingsWindow.locator(".provider-status--blocked", { hasText: "Needs API key" }).waitFor();
     await expectTestLlmBlocked(settingsWindow, "Add an API key before testing");
     assertProviderRequestCount(0, "missing API key");
@@ -96,6 +106,7 @@ try {
           testLlmTestingVisible: true,
           testLlmSuccessVisible: true,
           testLlmFailureVisible: true,
+          realConfigFieldsSwitchProviderMode: true,
           blockedStatesSentNoProviderRequests: true,
           providerRequests: requestCount
         },

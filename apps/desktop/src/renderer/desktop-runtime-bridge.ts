@@ -85,6 +85,8 @@ export class DesktopRuntimeBridge {
       const settings = settingsFromConfig(config);
       if (isMaskedApiKey(config.provider.apiKey) && this.state.settings.providerApiKey.length > 0) {
         settings.providerApiKey = this.state.settings.providerApiKey;
+      } else if (config.provider.apiKey.length === 0 && this.state.settings.providerApiKey.length > 0) {
+        settings.providerApiKey = this.state.settings.providerApiKey;
       }
       this.state = {
         ...this.state,
