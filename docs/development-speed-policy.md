@@ -29,6 +29,14 @@ This project needs two modes: fast feature iteration and slower checkpoint valid
 
 This keeps backend-only or docs-only changes fast while making Settings, Chat, Pet interaction, Live2D rendering, speech bubble, Stop, and provider-error UI changes prove the full frontend path before merge.
 
+For frontend-visible PRs, green CI is necessary but not sufficient. Before opening or merging the PR, the author must:
+
+- Define the user-path acceptance before implementation, using normal UI actions rather than internal strings, test hooks, or direct IPC shortcuts.
+- Run targeted tests while editing, then run `pnpm harness:frontend-full` before claiming the frontend behavior is ready.
+- Inspect current visual artifacts from `.cache/greyfield-v1-visual-acceptance/latest/`, especially `pet-after-chat.png`, `chat-after-reply.png`, and `settings-provider-preview.png`.
+- Check product-shape assertions that automation can miss: no stale background blocks, no text/control overflow, no permanent desktop obstruction, no pet-face/body occlusion by speech bubbles, and no mismatch between Settings state and the path an ordinary user takes.
+- If the PR fixes a missed frontend behavior, add or update a harness assertion in the same branch so the next agent does not rely on the user as first-pass QA.
+
 ## Fast Loop
 
 Use this while actively editing:

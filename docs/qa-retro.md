@@ -55,6 +55,31 @@ Agent C: regression stress. Repeatedly drag, wheel, interrupt, hide/show, and to
 - `speech-bubble-placement`
 - `pet-context-menu-recovery`
 
+## 2026-06-24 Regression: Frontend Green But Manual QA Found Product Misses
+
+This round exposed a third QA miss: frontend harnesses proved that elements existed and did not overflow the viewport, but they did not prove that the ordinary user path or visual product shape was acceptable.
+
+What happened:
+
+- Settings provider tests used an internal mode path, so a normal user could fill Base URL/API key/model while the provider still behaved like fake preview.
+- Chat message markup had stale CSS selectors from an older structure. The DOM existed, but visible user and assistant messages showed large unwanted background blocks.
+- The pet speech bubble stayed visible indefinitely and was placed like a web tooltip instead of a transient desktop-pet reply.
+- Visual artifacts existed, but the author did not inspect them as a pre-merge gate before handing the build to the user.
+
+How we avoid repeating it:
+
+- Frontend acceptance starts from the ordinary user path. If a user would click or type it, the harness should click or type it too.
+- Visual harnesses must include product assertions, not just existence assertions: no stale style collisions, no text/control overflow, no permanent obstruction, no bubble occluding the pet face/body, and expected fade/detach lifecycle.
+- The author must open current screenshots before asking the user to manually verify a frontend PR.
+- When the user catches a frontend miss, add or update the nearest harness assertion in the same fix branch.
+
+Current command split:
+
+- Frontend aggregate gate: `pnpm harness:frontend-full`
+- Visual artifacts: `.cache/greyfield-v1-visual-acceptance/latest/`
+- Speech bubble lifecycle: `pnpm harness:electron:bubble-long-reply`
+- Settings provider user path: `pnpm harness:electron:settings-provider-test`
+
 ## 2026-05-25 Regression: Native Shape, Drag Growth, Slow Harness
 
 This round exposed a second QA miss: the tests verified that the pet could receive input, but not that the native masking strategy preserved visual quality and window geometry.

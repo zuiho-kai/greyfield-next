@@ -86,6 +86,13 @@ Required before opening or merging a feature PR.
 - Verification commands/results are in the PR body.
 - P0/P1 findings are fixed. P2 findings are fixed or explicitly deferred with rationale.
 
+For frontend-visible PRs, also required:
+
+- The ordinary user path was tested, not only an internal state shortcut.
+- Current screenshots were opened and inspected by the author before asking for user verification.
+- The PR body names the visual/harness evidence used for Settings, Chat, Pet, speech bubble, Stop, or provider UI changes.
+- Product-shape regressions are treated as blockers even if DOM-level assertions pass.
+
 ## Reviewer-Lens Audits
 
 For risky PRs, run these four audits explicitly. A sub-agent must return findings or `none found` for each one.
