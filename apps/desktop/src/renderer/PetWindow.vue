@@ -21,7 +21,7 @@
     <div
       v-if="state.settings.speechBubbleEnabled && visibleBubbleText"
       class="speech-bubble"
-      :class="`speech-bubble--${bubblePlacement.side}`"
+      :class="[`speech-bubble--${bubblePlacement.side}`, { 'speech-bubble--fading': speechBubbleFading }]"
       :style="{ left: `${bubblePlacement.x}px`, top: `${bubblePlacement.y}px` }"
     >
       <span class="speech-bubble__text">{{ visibleBubbleText }}</span>
@@ -38,6 +38,7 @@ defineProps<{
   state: DesktopRendererState;
   stageStatus: "idle" | "listening" | "thinking" | "speaking" | "interrupted" | "error";
   visibleBubbleText: string;
+  speechBubbleFading: boolean;
   bubblePlacement: SpeechBubblePlacement;
 }>();
 

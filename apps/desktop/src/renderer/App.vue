@@ -4,6 +4,7 @@
     :state="state"
     :stage-status="stageStatus"
     :visible-bubble-text="visibleBubbleText"
+    :speech-bubble-fading="speechBubbleFading"
     :bubble-placement="bubblePlacement"
     @hit-test="handlePetHitTest"
     @drag-start="handlePetDragStart"
@@ -88,9 +89,14 @@ const modelInfo = ref<{ modelPath: string; expressions: string[]; motions: Recor
 const dragState = ref<PetDragState>(endPetDrag({ active: false, startScreenX: 0, startScreenY: 0, startWindowX: 0, startWindowY: 0, modelScale: 1 }));
 const lastWheelScaleAt = ref(0);
 const speechBubbleSize = { width: 220, height: 124 } as const;
+const speechBubbleHoldMs = 6500;
+const speechBubbleFadeMs = 450;
 const stageStatus = computed(() => state.status as "idle" | "listening" | "thinking" | "speaking" | "interrupted" | "error");
 const bubbleText = computed(() => state.assistantDraft || [...state.messages].reverse().find((message) => message.role === "assistant")?.text || "");
-const visibleBubbleText = computed(() => formatSpeechBubbleText(bubbleText.value));
+const visibleBubbleText = ref("");
+const speechBubbleFading = ref(false);
+let speechBubbleHoldTimer: ReturnType<typeof setTimeout> | null = null;
+let speechBubbleFadeTimer: ReturnType<typeof setTimeout> | null = null;
 const bubblePlacement = computed(() =>
   placeSpeechBubble({
     modelBounds: lastModelBounds.value ?? { x: 120, y: 120, width: 180, height: 360 },
@@ -317,11 +323,55 @@ function openChat(): void {
   window.greyfield?.send("window:open-chat", {});
 }
 
+watch(
+  [bubbleText, () => state.status],
+  () => {
+    updateSpeechBubbleLifecycle();
+  },
+  { immediate: true }
+);
 watch([bubbleShapeRect, () => state.window.modelPassThrough], () => syncPetWindowShape());
 
 onBeforeUnmount(() => {
+  clearSpeechBubbleTimers();
   for (const detach of detachHostListeners) {
     detach();
   }
 });
+
+function updateSpeechBubbleLifecycle(): void {
+  const nextText = formatSpeechBubbleText(bubbleText.value);
+  clearSpeechBubbleTimers();
+  if (!nextText) {
+    visibleBubbleText.value = "";
+    speechBubbleFading.value = false;
+    return;
+  }
+
+  visibleBubbleText.value = nextText;
+  speechBubbleFading.value = false;
+  if (state.assistantDraft || state.status === "generating") {
+    return;
+  }
+
+  speechBubbleHoldTimer = setTimeout(() => {
+    speechBubbleFading.value = true;
+    speechBubbleFadeTimer = setTimeout(() => {
+      visibleBubbleText.value = "";
+      speechBubbleFading.value = false;
+      syncPetWindowShape();
+    }, speechBubbleFadeMs);
+  }, speechBubbleHoldMs);
+}
+
+function clearSpeechBubbleTimers(): void {
+  if (speechBubbleHoldTimer) {
+    clearTimeout(speechBubbleHoldTimer);
+    speechBubbleHoldTimer = null;
+  }
+  if (speechBubbleFadeTimer) {
+    clearTimeout(speechBubbleFadeTimer);
+    speechBubbleFadeTimer = null;
+  }
+}
 </script>

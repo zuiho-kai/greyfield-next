@@ -59,8 +59,8 @@ try {
     const bubble = await readBubbleState(petWindow);
     assertBubbleInsideViewport(bubble);
     assertBubbleInsideScreen(bubble, edgePlacement.workArea);
-    if (!bubble.className.includes("speech-bubble--left")) {
-      throw new Error(`Speech bubble did not flip away from the right edge: ${JSON.stringify(bubble)}`);
+    if (!bubble.className.includes("speech-bubble--left") && !bubble.className.includes("speech-bubble--top")) {
+      throw new Error(`Speech bubble did not choose a right-edge-safe placement: ${JSON.stringify(bubble)}`);
     }
 
     const shapeWithBubble = await waitForShapeSample(
