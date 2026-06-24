@@ -1,6 +1,6 @@
 # Greyfield Next V1 产品计划
 
-更新时间：2026-06-23
+更新时间：2026-06-24
 
 ## 一句话目标
 
@@ -16,16 +16,16 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 | 文字输入 | Chat 窗口可以输入文本，消息经 renderer -> preload IPC -> Electron main -> runtime；runtime 报错后会把上一条用户输入恢复到草稿，方便重试。 | 主链路已打通，基础失败恢复已可用。 |
 | 文字输出 | 支持流式输出、最终回复、错误提示；默认 fake provider 稳定回复，OpenAI-compatible provider 已在 main process 接入；provider 失败会显示错误、恢复草稿且不写半截 session；Stop 已证明会关闭 active provider HTTP 请求；Chat 状态、Stop、失败重试和集成验收已随 #41 合入 main。 | 文字链路可作为 V1 文本能力；真实 provider 仍需带 env 的 release 前复跑。 |
 | 最近上下文 | 已接入角色 YAML、`data/memory.md`、JSONL session；重启后能把上一轮 user/assistant turn 带入下一次 prompt。 | V1 的“最近上下文连续性”已成立。 |
-| 设置页 | 已有 provider/model/key、角色文件、模型路径、语音/麦克风等设置入口；Test LLM 走 main process；provider 配置会显示 Preview / blocked / ready-to-test 状态；测试中、成功、失败、active chat 被拒绝均有用户可读 UI 和 harness 证据。 | V1 provider/Test LLM 产品化已在 main；Settings 视觉和关闭/恢复稳定性属于 V1 closeout polish；模型管理 UX 可留到 V1 后。 |
+| 设置页 | 已有 provider/model/key、角色文件、模型路径、语音/麦克风等设置入口；Test LLM 走 main process；provider 配置会显示 Preview / blocked / ready-to-test 状态；测试中、成功、失败、active chat 被拒绝均有用户可读 UI 和 harness 证据；#45 已修 Settings 视觉可读性和关闭/恢复稳定性。 | V1 provider/Test LLM 产品化已在 main；模型管理 UX 可留到 V1 后。 |
 | 聊天窗口 | 已从宠物窗口拆出，能显示消息、状态、错误；Waiting / Generating / Stopped / Failed / Retry-ready 状态已产品化；Stop 能打断文字流，也能在语音队列仍播放时保持可点击。 | V1 Chat polish 已在 main；后续只做缺陷修复，不再扩功能。 |
 | 气泡 | 宠物旁有短回复气泡，支持文本压缩、长度上限；位置固定在宠物窗口上方稳定槽位，不跟随模型移动，只在窗口/屏幕边缘内水平和垂直夹紧；长 streaming 回复会进气泡首 token、保持短文本，完整内容留在 Chat；右侧边缘和开关/点击穿透已有专门 harness 和截图证据。 | V1 气泡 QA 已在 main；继续靠 `frontend-full` 和截图看护。 |
 | 语音输出 | 已有句子级 TTS 队列、默认静音、Settings `Speak replies` 开关、renderer Web Speech 播放、TTS 失败隔离、长回复 TTS budget；Stop 会取消正在播放的语音、清空队列并重置嘴型。 | V1 真实 TTS 最小闭环已在 main；仍不是完整语音伴侣，ASR 留到 V1 后。 |
 | 语音输入 | 只有 VAD/音频边界基础。 | V1 后段任务，不能先做。 |
-| CI | GitHub Actions workflow 已入仓；PR 跑 Fast checks 和 Desktop pet quick harness；main / manual dispatch 额外跑 Full checkpoint harness。 | 自动保护已恢复，后续风险点是继续控制 Electron harness 的耗时和稳定性。 |
+| CI | GitHub Actions workflow 已入仓；PR 跑 Fast checks 和 Desktop pet quick harness；main / manual dispatch 额外跑 Full checkpoint harness；#45 PR 检查为绿，但合入后的 main push 在 Stop audio harness 暴露同步 race。 | 自动保护已恢复；当前收尾风险是修复并复跑 Stop audio / `frontend-full` 的当前 head 证据。 |
 
 ## 现在不能宣称什么
 
-- 不能宣称“V1 已发布完成”：#41/#42/#43/#44 已合入 main，但当前仍有 Settings UI closeout 和关闭/恢复稳定性修复在进行；这些修复合入前后都需要重新跑对应证据。
+- 不能宣称“V1 已发布完成”：#41/#42/#43/#44/#45 已合入 main，但 #45 合入后的 main push `frontend-full` 在 Stop audio harness 暴露同步 race；需要该收尾修复合入并获得当前 head 通过证据后，才可写最终完成口径。
 - 不能宣称“真实 LLM release 证据是当前的”：当前环境没有 `GREYFIELD_REAL_LLM_*`，所以 `pnpm harness:electron:real-llm` 仍需在有凭据时复跑。
 - 不能宣称“语音伴侣完整完成”：main 已覆盖真实 TTS 最小闭环和 Stop-audio，但 ASR、麦克风对话、真实音频能量嘴型仍是 V1 后工作。
 - 不能宣称“模型管理 UX 完成”：Settings provider/Test LLM 已产品化，模型管理和更完整设置体验可留到 V1 后。
@@ -168,9 +168,9 @@ main 已完成 V1 最小闭环：
 
 ## 推荐下一步
 
-当前推荐进入 V1 closeout：
+当前推荐完成 V1 closeout 证据收口：
 
-1. 只修影响 V1 体验可信度的问题：Settings UI 可读性、窗口关闭/恢复稳定性、文档证据口径。
+1. 修复 #45 合入后 main push 暴露的 Stop audio harness 同步 race，并复跑 `frontend-full`。
 2. 不再新增 V1 后功能，例如 ASR、桌面控制、浏览器控制、长期任务代理或完整模型管理。
 3. 提供 `GREYFIELD_REAL_LLM_BASE_URL` / `GREYFIELD_REAL_LLM_API_KEY` / `GREYFIELD_REAL_LLM_MODEL` 后，在最终目标分支复跑 `pnpm harness:electron:real-llm`。
 4. 每个 closeout PR 合入前，按 [V1 Completion Evidence Checklist](../v1-completion-evidence.md) 跑它触及路径的 harness；前端可见改动必须跑 `pnpm harness:frontend-full` 或等同 CI 证据。

@@ -36,9 +36,10 @@ try {
 
     await chatWindow.getByLabel("Message").fill("请说一句话，然后我会停止。");
     await chatWindow.getByRole("button", { name: "Send" }).click();
-    await settingsWindow.waitForFunction(() => document.querySelectorAll(".audio-strip span").length >= 2);
+    await waitForAudioStripCount(settingsWindow, 2, "initial playback queue");
+    await waitForSpeechSpeakCount(petWindow, 2);
     await finishAllSpeech(petWindow);
-    await settingsWindow.waitForFunction(() => document.querySelectorAll(".audio-strip span").length === 0);
+    await waitForAudioStripCount(settingsWindow, 0, "natural playback completion");
     const stopDisabledAfterPlayback = await chatWindow.getByRole("button", { name: "Stop" }).isDisabled();
     if (!stopDisabledAfterPlayback) {
       throw new Error("Stop remained enabled after speech playback finished and the shared queue was cleared");
@@ -54,7 +55,7 @@ try {
     await chatWindow.locator(".status-badge, .status-pill", { hasText: /idle|interrupted|Stopped/ }).waitFor({
       timeout: 10_000
     });
-    await settingsWindow.waitForFunction(() => document.querySelectorAll(".audio-strip span").length === 0);
+    await waitForAudioStripCount(settingsWindow, 0, "interrupted playback");
     await petWindow.waitForFunction(() => {
       const stage = document.querySelector<HTMLElement>(".live2d-stage-view");
       return Number(stage?.dataset.mouthOpen ?? "1") === 0;
@@ -171,10 +172,42 @@ async function waitForSpeechEvent(page: Page, eventName: "speak" | "cancel"): Pr
   );
 }
 
+async function waitForSpeechSpeakCount(page: Page, expectedCount: number): Promise<void> {
+  await page.waitForFunction(
+    (expected) => {
+      const events = (window as typeof window & { __greyfieldSpeechEvents?: string[] }).__greyfieldSpeechEvents ?? [];
+      return events.filter((event) => event.startsWith("speak:")).length >= expected;
+    },
+    expectedCount,
+    { timeout: 10_000 }
+  );
+}
+
 async function readSpeechEvents(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     return [...((window as typeof window & { __greyfieldSpeechEvents?: string[] }).__greyfieldSpeechEvents ?? [])];
   });
+}
+
+async function waitForAudioStripCount(page: Page, expectedCount: number, label: string): Promise<void> {
+  try {
+    await page.waitForFunction(
+      (expected) => document.querySelectorAll(".audio-strip span").length === expected,
+      expectedCount,
+      { timeout: 10_000 }
+    );
+  } catch (error) {
+    const snapshot = await page
+      .evaluate(() => ({
+        audioStripTexts: Array.from(document.querySelectorAll(".audio-strip span")).map((item) => item.textContent ?? ""),
+        statusText: document.querySelector(".status-pill")?.textContent?.trim() ?? "",
+        bodyText: document.body.textContent?.replace(/\s+/g, " ").trim().slice(0, 800) ?? ""
+      }))
+      .catch((snapshotError) => ({ snapshotError: String(snapshotError) }));
+    throw new Error(
+      `${label}: expected Settings audio queue length ${expectedCount}; snapshot=${JSON.stringify(snapshot)}; cause=${String(error)}`
+    );
+  }
 }
 
 async function finishAllSpeech(page: Page): Promise<void> {

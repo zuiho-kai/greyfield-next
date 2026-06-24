@@ -74,10 +74,10 @@ const scenarios = [
   {
     name: "timeout",
     userText: "超时重试",
-    expectedError: "OpenAI-compatible LLM request timed out after 100ms",
+    expectedError: "OpenAI-compatible LLM request timed out after 500ms",
     apiKey: "local-failure-key",
     expectedRequests: 1,
-    timeoutMs: 100,
+    timeoutMs: 500,
     respond(_request: IncomingMessage, _response: ServerResponse) {
       // Keep the response open until the provider timeout aborts the request.
     }
