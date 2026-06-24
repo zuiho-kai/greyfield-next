@@ -24,6 +24,7 @@ Greyfield Next is a TypeScript monorepo for a Live2D desktop companion. This fil
 - New features, checkpoint phases, risky refactors, and multi-agent work use a dedicated git worktree and feature branch when the project is inside a git repo.
 - New feature work should end as a pull request, not an untracked local patch. Do not push directly to `main`.
 - Never use vague "code check this" review framing. Use module-owner and project-owner review levels plus explicit audit dimensions.
+- Frontend-visible PRs are not mergeable on green tests alone. The agent must exercise the ordinary user path, inspect current screenshots, and run the relevant harness gate before asking the user to verify manually.
 - Prefer appending to existing knowledge docs over creating tiny one-off rule files.
 
 ## Required Reading Index
