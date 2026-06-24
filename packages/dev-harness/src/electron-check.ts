@@ -148,6 +148,7 @@ try {
   );
   await petWindow.mouse.move(modelPoint.x, modelPoint.y);
   await petWindow.mouse.down({ button: "left" });
+  await waitForStageDragging(petWindow, true);
   await dispatchStageWheel(petWindow, modelPoint, -240);
   await new Promise((resolve) => setTimeout(resolve, 250));
   const duringDragWheelConfig = await readConfig(configPath);
@@ -158,6 +159,7 @@ try {
   }
   await petWindow.mouse.move(modelPoint.x + 90, modelPoint.y + 60, { steps: 8 });
   await petWindow.mouse.up({ button: "left" });
+  await waitForStageDragging(petWindow, false);
   const dragResult = await waitForPetBoundsChange(beforeDragBounds).then(
     (bounds) => ({ bounds, verified: true }),
     (error: unknown) => {
@@ -460,6 +462,14 @@ async function waitForPetBoundsChange(before: { x: number; y: number }): Promise
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Timed out waiting for pet window drag from ${JSON.stringify(before)}`);
+}
+
+async function waitForStageDragging(page: Page, dragging: boolean): Promise<void> {
+  await page.waitForFunction(
+    (expected) => document.querySelector<HTMLElement>(".live2d-stage-view")?.dataset.dragging === String(expected),
+    dragging,
+    { timeout: 5_000 }
+  );
 }
 
 async function waitForSessionJsonl(expectedTexts: string[]): Promise<string> {
