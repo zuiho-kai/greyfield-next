@@ -4,6 +4,7 @@ export interface GreyfieldConfig {
     asr: string;
     tts: string;
     model: string;
+    ttsModel: string;
     baseUrl: string;
     apiKey: string;
   };
@@ -50,13 +51,14 @@ export const defaultGreyfieldConfig: GreyfieldConfig = {
   provider: {
     llm: "fake",
     asr: "fake",
-    tts: "fake",
+    tts: "openai-compatible",
     model: "greyfield-fake-v1",
+    ttsModel: "FunAudioLLM/CosyVoice2-0.5B",
     baseUrl: "https://api.openai.com/v1",
     apiKey: ""
   },
   voice: {
-    id: "default",
+    id: "FunAudioLLM/CosyVoice2-0.5B:anna",
     volume: 0.85,
     speechEnabled: false
   },

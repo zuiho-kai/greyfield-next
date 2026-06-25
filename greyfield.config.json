@@ -2,12 +2,16 @@
   "provider": {
     "llm": "fake",
     "asr": "fake",
-    "tts": "fake",
-    "model": "greyfield-fake-v1"
+    "tts": "openai-compatible",
+    "model": "greyfield-fake-v1",
+    "ttsModel": "FunAudioLLM/CosyVoice2-0.5B",
+    "baseUrl": "https://api.openai.com/v1",
+    "apiKey": ""
   },
   "voice": {
-    "id": "default",
-    "volume": 0.85
+    "id": "FunAudioLLM/CosyVoice2-0.5B:anna",
+    "volume": 0.85,
+    "speechEnabled": false
   },
   "audio": {
     "microphoneId": "default"
@@ -15,6 +19,7 @@
   "window": {
     "alwaysOnTop": true,
     "clickThrough": false,
+    "modelPassThrough": false,
     "width": 420,
     "height": 620
   },
@@ -27,6 +32,9 @@
   "hotkeys": {
     "interrupt": "CommandOrControl+Shift+Space",
     "toggleClickThrough": "CommandOrControl+Shift+P"
+  },
+  "ui": {
+    "speechBubbleEnabled": true
   },
   "characterFile": "characters/greyfield.yaml"
 }

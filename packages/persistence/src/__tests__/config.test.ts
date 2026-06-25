@@ -28,14 +28,15 @@ describe("Greyfield config", () => {
     expect(config.provider).toMatchObject({
       llm: "fake",
       asr: "fake",
-      tts: "fake",
+      tts: "openai-compatible",
       model: "local-test-model",
+      ttsModel: "FunAudioLLM/CosyVoice2-0.5B",
       baseUrl: "https://api.openai.com/v1",
       apiKey: ""
     });
     expect(config.audio.microphoneId).toBe("mic-2");
     expect(config.voice).toMatchObject({
-      id: "default",
+      id: "FunAudioLLM/CosyVoice2-0.5B:anna",
       volume: 0.85,
       speechEnabled: true
     });

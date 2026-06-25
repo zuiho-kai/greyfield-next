@@ -196,7 +196,8 @@
         "Partial sentence text remains buffered until punctuation or final flush.",
         "Desktop voice output is disabled by default so the app does not suddenly speak.",
         "Users can enable or disable assistant reply speech from settings.",
-        "When enabled, assistant audio chunks are played through the renderer speech output.",
+        "When enabled with OpenAI-compatible TTS settings, sentence audio is synthesized through /audio/speech and played as real audio bytes.",
+        "Fake TTS bytes still fall back to local renderer speech output for offline harness coverage.",
         "Finished renderer speech playback clears queued speech UI state across desktop windows.",
         "TTS or speech playback failure reports a voice-only error and does not remove the assistant text reply or session turn.",
         "Long replies are capped by a per-turn TTS character budget so playback cannot run unbounded.",
@@ -204,7 +205,7 @@
         "Audio runtime exposes a pure RMS VAD boundary before microphone integration."
       ],
       "qa": {
-        "script": "vitest sentence-splitter vad tts-text-budget speech-synthesis-output runtime-loop runtime-service desktop-runtime-bridge config; pnpm harness:electron:stop-audio"
+        "script": "vitest sentence-splitter vad tts-text-budget speech-synthesis-output openai-compatible-tts-provider runtime-loop runtime-service desktop-runtime-bridge config; pnpm harness:electron:stop-audio; optional provider proof: pnpm harness:real-tts"
       }
     },
     {

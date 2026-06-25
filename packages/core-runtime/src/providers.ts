@@ -23,8 +23,12 @@ export interface ASRProvider {
   transcribe(audio: Uint8Array): Promise<string>;
 }
 
+export interface TTSStreamOptions {
+  signal?: AbortSignal;
+}
+
 export interface TTSProvider {
-  synthesize(text: string, voice: string): Promise<Uint8Array>;
+  synthesize(text: string, voice: string, options?: TTSStreamOptions): Promise<Uint8Array>;
 }
 
 export interface MemoryStore {

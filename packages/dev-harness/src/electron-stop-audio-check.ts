@@ -15,6 +15,10 @@ await writeFile(
   `${JSON.stringify(
     {
       ...defaultGreyfieldConfig,
+      provider: {
+        ...defaultGreyfieldConfig.provider,
+        tts: "fake"
+      },
       voice: {
         ...defaultGreyfieldConfig.voice,
         speechEnabled: true

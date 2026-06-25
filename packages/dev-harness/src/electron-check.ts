@@ -27,7 +27,21 @@ const quickMode = process.argv.includes("--quick");
 const runningInGitHubActions = process.env.GITHUB_ACTIONS === "true";
 const tempDir = await mkdtemp(join(tmpdir(), "greyfield-electron-"));
 const configPath = join(tempDir, "greyfield.config.json");
-await writeFile(configPath, `${JSON.stringify(defaultGreyfieldConfig, null, 2)}\n`, "utf8");
+await writeFile(
+  configPath,
+  `${JSON.stringify(
+    {
+      ...defaultGreyfieldConfig,
+      provider: {
+        ...defaultGreyfieldConfig.provider,
+        tts: "fake"
+      }
+    },
+    null,
+    2
+  )}\n`,
+  "utf8"
+);
 
 const app = await electron.launch({
   executablePath,

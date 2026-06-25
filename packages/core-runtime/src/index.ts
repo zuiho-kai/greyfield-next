@@ -1,5 +1,6 @@
 export * from "./events";
 export * from "./openai-compatible-provider";
+export * from "./openai-compatible-tts-provider";
 export * from "./persona";
 export * from "./prompt-assembler";
 export * from "./providers";

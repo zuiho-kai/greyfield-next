@@ -11,6 +11,8 @@ export function settingsFromConfig(config: RendererGreyfieldConfig | GreyfieldCo
     providerApiKey: isMaskedApiKey(config.provider.apiKey) ? "" : config.provider.apiKey,
     providerHasApiKey: hasApiKey,
     providerModel: config.provider.model,
+    providerTTS: config.provider.tts,
+    providerTTSModel: config.provider.ttsModel,
     voiceId: config.voice.id,
     voiceVolume: config.voice.volume,
     voiceSpeechEnabled: config.voice.speechEnabled,
@@ -32,7 +34,9 @@ export function configFromSettings(settings: DesktopSettingsState): GreyfieldCon
       llm: settings.providerLLM,
       baseUrl: settings.providerBaseUrl,
       apiKey: settings.providerApiKey,
-      model: settings.providerModel
+      model: settings.providerModel,
+      tts: settings.providerTTS,
+      ttsModel: settings.providerTTSModel
     },
     voice: {
       ...defaultGreyfieldConfig.voice,
@@ -63,6 +67,12 @@ export function settingsPatchToConfigPatch(patch: DesktopSettingsPatch): Greyfie
   const configPatch: GreyfieldConfigPatch = {};
   if (patch.providerModel !== undefined) {
     configPatch.provider = { ...configPatch.provider, model: patch.providerModel };
+  }
+  if (patch.providerTTS !== undefined) {
+    configPatch.provider = { ...configPatch.provider, tts: patch.providerTTS };
+  }
+  if (patch.providerTTSModel !== undefined) {
+    configPatch.provider = { ...configPatch.provider, ttsModel: patch.providerTTSModel };
   }
   if (patch.providerLLM !== undefined) {
     configPatch.provider = { ...configPatch.provider, llm: patch.providerLLM };

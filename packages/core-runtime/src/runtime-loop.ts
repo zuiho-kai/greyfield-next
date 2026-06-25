@@ -138,7 +138,9 @@ export class GreyfieldRuntime {
     }
     await emit({ type: "runtime.status", status: "speaking" });
     try {
-      const audio = await this.options.tts.synthesize(text, this.options.voice);
+      const audio = await this.options.tts.synthesize(text, this.options.voice, {
+        signal: this.activeAbortController?.signal
+      });
       if (this.interrupted) {
         return budget.usedCharacters;
       }
