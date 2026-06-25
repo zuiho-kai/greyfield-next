@@ -84,28 +84,15 @@ async function newestMtimeMs(paths) {
   return newest;
 }
 
-function resolveLive2DFixturePath() {
+function resolveConfiguredLive2DFixturePath() {
   const configured = process.env.GREYFIELD_LIVE2D_FIXTURE;
   if (configured && existsSync(configured)) {
     return configured;
   }
-
-  const packageFixture = join(
-    workspaceRoot,
-    "packages",
-    "stage-live2d",
-    "node_modules",
-    "live2dcubismcore",
-    "characters",
-    "haru_greeter_pro_jp",
-    "runtime",
-    "haru_greeter_t03.model3.json"
-  );
-  if (existsSync(packageFixture)) {
-    return packageFixture;
+  if (configured) {
+    throw new Error(`GREYFIELD_LIVE2D_FIXTURE does not exist: ${configured}`);
   }
-
-  throw new Error("No Live2D fixture found. Set GREYFIELD_LIVE2D_FIXTURE to a .model3.json file.");
+  return undefined;
 }
 
 function toViteFsModelUrl(modelPath) {
@@ -114,7 +101,10 @@ function toViteFsModelUrl(modelPath) {
 
 function createRendererUrl(baseUrl) {
   const url = new URL(baseUrl);
-  url.searchParams.set("live2dModel", toViteFsModelUrl(resolveLive2DFixturePath()));
+  const configuredFixture = resolveConfiguredLive2DFixturePath();
+  if (configuredFixture) {
+    url.searchParams.set("live2dModel", toViteFsModelUrl(configuredFixture));
+  }
   return url.toString();
 }
 
