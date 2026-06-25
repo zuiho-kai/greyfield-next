@@ -25,7 +25,7 @@ flowchart LR
 - `apps/desktop`: Electron/Vite/Vue shell, transparent pet window, settings shell, tray, logs, typed IPC.
 - `packages/stage-live2d`: Pixi/Live2D loading, `.model3.json` resolution, expression/motion/touch/mouth driver.
 - `packages/core-runtime`: event protocol, prompt assembly, provider abstraction, persona and session loop.
-- `packages/audio-runtime`: sentence splitting, playback queue, future VAD/ASR/TTS adapters.
+- `packages/audio-runtime`: sentence splitting, playback queue, browser microphone recording, VAD, playback audio-level/mouth timeline helpers.
 - `packages/persistence`: config, character files, memory Markdown, session JSONL.
 - `packages/dev-harness`: V1 feature manifest, fake provider acceptance, future Playwright Electron checks.
 
@@ -71,6 +71,7 @@ Outputs:
 2. Assemble prompt from persona, boundaries, handoff, memory, and recent turns.
 3. Stream LLM deltas.
 4. Split complete sentences for TTS.
-5. Emit audio chunks and stage mouth-open events.
-6. Stop cleanly on `runtime.interrupt`.
-7. Append user and assistant turns to the session store.
+5. For `audio.chunk` / `audio.end`, buffer microphone bytes, transcribe through ASR, emit `transcript.final`, and route the transcript into the same text loop.
+6. Emit TTS audio chunks; renderer playback decodes real audio and drives mouth-open from the PCM energy timeline.
+7. Stop cleanly on `runtime.interrupt`, including microphone/ASR, provider stream, TTS playback queue, and mouth-open state.
+8. Append user and assistant turns to the session store.

@@ -1,13 +1,14 @@
-import { mapAudioLevelToMouthOpen, measureAudioLevel, splitCompleteSentences, takeTtsTextWithinBudget } from "@greyfield/audio-runtime";
+import { splitCompleteSentences, takeTtsTextWithinBudget } from "@greyfield/audio-runtime";
 import type { RuntimeEventHandler, RuntimeInputEvent } from "./events";
 import { assemblePrompt } from "./prompt-assembler";
-import type { LLMProvider, MemoryStore, TTSProvider } from "./providers";
+import type { ASRProvider, LLMProvider, MemoryStore, TTSProvider } from "./providers";
 import type { CharacterPersona } from "./persona";
 import type { SessionStore } from "./session-store";
 import type { StageDriver } from "./stage-driver";
 
 export interface GreyfieldRuntimeOptions {
   llm: LLMProvider;
+  asr?: ASRProvider;
   tts: TTSProvider;
   memoryStore: MemoryStore;
   sessionStore: SessionStore;
@@ -25,6 +26,7 @@ const defaultTtsMaxCharactersPerTurn = 600;
 export class GreyfieldRuntime {
   private interrupted = false;
   private activeAbortController: AbortController | undefined;
+  private audioInputChunks: Uint8Array[] = [];
   private readonly recentTurnLimit: number;
   private readonly threadId: string;
 
@@ -42,16 +44,83 @@ export class GreyfieldRuntime {
     if (input.type === "runtime.interrupt") {
       this.requestInterrupt();
       await emit({ type: "runtime.status", status: "interrupted" });
-      await this.options.stage?.setMouthOpen(0);
       return;
     }
 
     if (input.type !== "text.input") {
+      if (input.type === "audio.chunk") {
+        await this.handleAudioChunk(input.data, emit);
+        return;
+      }
+      if (input.type === "audio.end") {
+        await this.handleAudioEnd(emit);
+        return;
+      }
       await emit({ type: "error", message: `Unhandled input event: ${input.type}` });
       return;
     }
 
     await this.handleTextInput(input.text, emit);
+  }
+
+  private async handleAudioChunk(data: Uint8Array, emit: RuntimeEventHandler): Promise<void> {
+    if (this.interrupted) {
+      return;
+    }
+    if (!this.activeAbortController) {
+      this.activeAbortController = new AbortController();
+    }
+    if (this.audioInputChunks.length === 0) {
+      await emit({ type: "runtime.status", status: "listening" });
+    }
+    if (data.length > 0) {
+      this.audioInputChunks.push(data.slice());
+    }
+  }
+
+  private async handleAudioEnd(emit: RuntimeEventHandler): Promise<void> {
+    if (!this.activeAbortController) {
+      this.activeAbortController = new AbortController();
+    }
+    const audio = concatAudioChunks(this.audioInputChunks);
+    this.audioInputChunks = [];
+    if (audio.length === 0) {
+      await emit({ type: "error", message: "No microphone audio was captured. Check microphone permission and try again." });
+      this.activeAbortController = undefined;
+      return;
+    }
+    await emit({ type: "runtime.status", status: "listening" });
+    try {
+      const transcript = normalizeTranscript(
+        await this.requireASRProvider().transcribe(audio, {
+          signal: this.activeAbortController.signal
+        })
+      );
+      if (this.interrupted) {
+        await emit({ type: "runtime.status", status: "interrupted" });
+        await emit({ type: "assistant.audio.end" });
+        this.activeAbortController = undefined;
+        return;
+      }
+      if (transcript.length === 0) {
+        await emit({ type: "error", message: "Voice input was empty. Try speaking again." });
+        this.activeAbortController = undefined;
+        return;
+      }
+      await emit({ type: "transcript.final", text: transcript });
+      await this.handleTextInput(transcript, emit);
+    } catch (error) {
+      if (this.interrupted) {
+        await emit({ type: "runtime.status", status: "interrupted" });
+        await emit({ type: "assistant.audio.end" });
+        return;
+      }
+      await emit({ type: "error", message: `Voice input failed: ${formatError(error)}` });
+    } finally {
+      if (this.audioInputChunks.length === 0) {
+        this.activeAbortController = undefined;
+      }
+    }
   }
 
   private async handleTextInput(text: string, emit: RuntimeEventHandler): Promise<void> {
@@ -105,7 +174,6 @@ export class GreyfieldRuntime {
     const finalText = normalizeAssistantText(fullText);
     if (this.interrupted) {
       await emit({ type: "runtime.status", status: "interrupted" });
-      await this.options.stage?.setMouthOpen(0);
       await emit({ type: "assistant.audio.end" });
       this.activeAbortController = undefined;
       return;
@@ -144,22 +212,41 @@ export class GreyfieldRuntime {
       if (this.interrupted) {
         return budget.usedCharacters;
       }
-      await this.options.stage?.setMouthOpen(mapAudioLevelToMouthOpen(measureAudioLevel(audio)));
       await emit({ type: "assistant.audio.chunk", text, data: audio });
     } catch (error) {
       if (this.interrupted) {
         return budget.usedCharacters;
       }
       await emit({ type: "assistant.audio.error", text, message: `Voice playback failed: ${formatError(error)}` });
-    } finally {
-      await this.options.stage?.setMouthOpen(0);
     }
     return budget.usedCharacters;
+  }
+
+  private requireASRProvider(): ASRProvider {
+    if (!this.options.asr) {
+      throw new Error("Voice input is not configured.");
+    }
+    return this.options.asr;
   }
 }
 
 function normalizeAssistantText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+function normalizeTranscript(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function concatAudioChunks(chunks: Uint8Array[]): Uint8Array {
+  const byteLength = chunks.reduce((total, chunk) => total + chunk.length, 0);
+  const result = new Uint8Array(byteLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
 }
 
 function formatError(error: unknown): string {

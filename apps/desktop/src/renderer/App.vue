@@ -21,6 +21,8 @@
     v-model:draft="draft"
     @send="send"
     @interrupt="interrupt"
+    @start-voice-input="startVoiceInput"
+    @stop-voice-input="stopVoiceInput"
     @open-settings="openSettings"
   />
   <SettingsWindow
@@ -47,7 +49,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
-import { BrowserSpeechSynthesisOutput } from "@greyfield/audio-runtime";
+import { BrowserMicrophoneRecorder, BrowserSpeechSynthesisOutput } from "@greyfield/audio-runtime";
 import ChatWindow from "./ChatWindow.vue";
 import { createDesktopRuntimeBridgeWithSpeech } from "./desktop-runtime-bridge";
 import type { DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
@@ -69,6 +71,7 @@ const bridge = createDesktopRuntimeBridgeWithSpeech(
   typeof window !== "undefined" ? window.greyfield : undefined,
   isPetWindow ? new BrowserSpeechSynthesisOutput() : undefined
 );
+const microphoneRecorder = isChatWindow ? new BrowserMicrophoneRecorder() : undefined;
 const initialState = bridge.getState();
 
 if (typeof document !== "undefined") {
@@ -124,9 +127,13 @@ if (typeof window !== "undefined") {
   });
   const detachSettings = window.greyfield?.on("settings:changed", (config) => {
     Object.assign(state.settings, {
-      providerModel: config.provider.model,
-      providerLLM: config.provider.llm,
-      providerBaseUrl: config.provider.baseUrl,
+          providerModel: config.provider.model,
+          providerLLM: config.provider.llm,
+          providerASR: config.provider.asr,
+          providerASRModel: config.provider.asrModel,
+          providerTTS: config.provider.tts,
+          providerTTSModel: config.provider.ttsModel,
+          providerBaseUrl: config.provider.baseUrl,
       providerApiKey: isMaskedApiKey(config.provider.apiKey) ? state.settings.providerApiKey : config.provider.apiKey,
       providerHasApiKey: config.provider.hasApiKey,
       voiceId: config.voice.id,
@@ -164,7 +171,34 @@ async function send(): Promise<void> {
 }
 
 async function interrupt(): Promise<void> {
+  microphoneRecorder?.cancel();
   syncState(await bridge.interrupt());
+}
+
+async function startVoiceInput(): Promise<void> {
+  if (!microphoneRecorder) {
+    syncState(bridge.failVoiceInput("Voice input is only available from the Chat window."));
+    return;
+  }
+  try {
+    syncState(bridge.startVoiceInput());
+    await microphoneRecorder.start();
+  } catch (error) {
+    syncState(bridge.failVoiceInput(formatVoiceInputError(error)));
+  }
+}
+
+async function stopVoiceInput(): Promise<void> {
+  if (!microphoneRecorder) {
+    syncState(bridge.failVoiceInput("Voice input is only available from the Chat window."));
+    return;
+  }
+  try {
+    const audio = await microphoneRecorder.stop();
+    syncState(bridge.finishVoiceInput(audio));
+  } catch (error) {
+    syncState(bridge.failVoiceInput(formatVoiceInputError(error)));
+  }
 }
 
 function syncState(nextState: DesktopRendererState): void {
@@ -182,6 +216,12 @@ function updateSetting(key: keyof DesktopSettingsState, value: string): void {
     (key === "providerBaseUrl" || key === "providerApiKey" || key === "providerModel")
   ) {
     patch.providerLLM = "openai-compatible";
+  }
+  if (state.settings.providerASR !== "openai-compatible" && value.trim().length > 0 && key === "providerASRModel") {
+    patch.providerASR = "openai-compatible";
+  }
+  if (state.settings.providerTTS !== "openai-compatible" && value.trim().length > 0 && key === "providerTTSModel") {
+    patch.providerTTS = "openai-compatible";
   }
   syncState(bridge.updateSettings(patch));
 }
@@ -328,6 +368,17 @@ function openChat(): void {
   window.greyfield?.send("window:open-chat", {});
 }
 
+function formatVoiceInputError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("Permission denied") || message.includes("NotAllowedError")) {
+    return "Microphone permission was denied. Allow microphone access and try again.";
+  }
+  if (message.includes("not available")) {
+    return "Microphone recording is not available in this window.";
+  }
+  return `Voice input failed: ${message}`;
+}
+
 watch(
   [bubbleText, () => state.status],
   () => {
@@ -338,6 +389,7 @@ watch(
 watch([bubbleShapeRect, () => state.window.modelPassThrough], () => syncPetWindowShape());
 
 onBeforeUnmount(() => {
+  microphoneRecorder?.cancel();
   clearSpeechBubbleTimers();
   for (const detach of detachHostListeners) {
     detach();

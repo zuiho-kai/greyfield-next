@@ -1,7 +1,10 @@
+import { createMouthOpenTimelineFromPcm } from "./audio-level-meter";
+
 export interface SpeechOutputOptions {
   audio?: Uint8Array;
   voiceId?: string;
   volume?: number;
+  onMouthOpen?: (value: number) => void;
 }
 
 export interface SpeechAudioPlaybackProbePayload {
@@ -26,6 +29,7 @@ export class BrowserSpeechSynthesisOutput implements SpeechOutput {
     | {
         element: Pick<HTMLAudioElement, "pause"> & { currentTime?: number };
         cancel: () => void;
+        stopMouthDriver?: () => void;
         objectUrl?: string;
       }
     | undefined;
@@ -44,7 +48,7 @@ export class BrowserSpeechSynthesisOutput implements SpeechOutput {
       return;
     }
     if (options.audio && isPlayableBrowserAudio(options.audio)) {
-      await this.playAudio(options.audio, options.volume);
+      await this.playAudio(options.audio, options.volume, options.onMouthOpen);
       return;
     }
     if (!this.synthesis || !this.Utterance) {
@@ -70,7 +74,11 @@ export class BrowserSpeechSynthesisOutput implements SpeechOutput {
     this.synthesis?.cancel();
   }
 
-  private async playAudio(audioData: Uint8Array, volume: number | undefined): Promise<void> {
+  private async playAudio(
+    audioData: Uint8Array,
+    volume: number | undefined,
+    onMouthOpen: ((value: number) => void) | undefined
+  ): Promise<void> {
     if (!this.AudioElement || !this.urlApi) {
       throw new Error("Audio playback is not available in this window.");
     }
@@ -82,10 +90,12 @@ export class BrowserSpeechSynthesisOutput implements SpeechOutput {
 
     await new Promise<void>((resolve, reject) => {
       let settled = false;
+      let stopMouthDriver: (() => void) | undefined;
       const cleanup = () => {
         if (this.activeAudio?.element === audio) {
           this.activeAudio = undefined;
         }
+        stopMouthDriver?.();
         this.urlApi?.revokeObjectURL(objectUrl);
       };
       const settle = (callback: () => void) => {
@@ -102,11 +112,28 @@ export class BrowserSpeechSynthesisOutput implements SpeechOutput {
         objectUrl,
         cancel: () => {
           this.audioPlaybackProbe?.cancel?.();
+          stopMouthDriver?.();
           audio.pause();
           audio.currentTime = 0;
           settle(() => reject(new Error("Speech playback failed: canceled")));
         }
       };
+      if (onMouthOpen) {
+        void createMouthDriver(audioData, onMouthOpen)
+          .then((driver) => {
+            if (settled) {
+              driver();
+              return;
+            }
+            stopMouthDriver = driver;
+            if (this.activeAudio?.element === audio) {
+              this.activeAudio.stopMouthDriver = driver;
+            }
+          })
+          .catch(() => {
+            onMouthOpen(0);
+          });
+      }
       if (this.audioPlaybackProbe) {
         void this.audioPlaybackProbe
           .playAudio({
@@ -168,4 +195,42 @@ function resolveAudioPlaybackProbe(): SpeechAudioPlaybackProbe | undefined {
   const candidate = (globalThis as typeof globalThis & { __greyfieldAudioPlaybackProbe?: SpeechAudioPlaybackProbe })
     .__greyfieldAudioPlaybackProbe;
   return typeof candidate?.playAudio === "function" ? candidate : undefined;
+}
+
+async function createMouthDriver(audioData: Uint8Array, onMouthOpen: (value: number) => void): Promise<() => void> {
+  const AudioContextCtor = (
+    globalThis as typeof globalThis & {
+      AudioContext?: typeof AudioContext;
+      webkitAudioContext?: typeof AudioContext;
+    }
+  ).AudioContext ?? (globalThis as typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextCtor) {
+    onMouthOpen(0);
+    return () => onMouthOpen(0);
+  }
+  const context = new AudioContextCtor();
+  try {
+    const buffer = await context.decodeAudioData(audioData.slice().buffer);
+    const timeline = createMouthOpenTimelineFromPcm(buffer.getChannelData(0), {
+      sampleRate: buffer.sampleRate,
+      frameMs: 50
+    });
+    let index = 0;
+    onMouthOpen(timeline[index] ?? 0);
+    const timer = setInterval(() => {
+      index += 1;
+      onMouthOpen(timeline[index] ?? 0);
+      if (index >= timeline.length - 1) {
+        clearInterval(timer);
+      }
+    }, 50);
+    return () => {
+      clearInterval(timer);
+      onMouthOpen(0);
+      void context.close().catch(() => undefined);
+    };
+  } catch (error) {
+    void context.close().catch(() => undefined);
+    throw error;
+  }
 }

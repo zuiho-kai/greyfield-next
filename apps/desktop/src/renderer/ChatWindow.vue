@@ -60,6 +60,15 @@
         <button type="submit" class="send-button" :disabled="!draft.trim()">
           <span>📤</span> {{ chatStatus.sendLabel }}
         </button>
+        <button
+          type="button"
+          class="voice-input-button"
+          :class="{ 'voice-input-button--active': state.voiceInput.status === 'listening' }"
+          :disabled="state.voiceInput.status === 'transcribing'"
+          @click="$emit(state.voiceInput.status === 'listening' ? 'stop-voice-input' : 'start-voice-input')"
+        >
+          <span>🎙️</span> {{ voiceInputLabel }}
+        </button>
         <button type="button" class="stop-button" :disabled="!chatStatus.canStop" @click="$emit('interrupt')">
           <span>⏹️</span> {{ chatStatus.stopLabel }}
         </button>
@@ -82,6 +91,8 @@ defineEmits<{
   "update:draft": [value: string];
   send: [];
   interrupt: [];
+  "start-voice-input": [];
+  "stop-voice-input": [];
   "open-settings": [];
 }>();
 
@@ -90,4 +101,13 @@ function valueFrom(event: Event): string {
 }
 
 const chatStatus = computed(() => describeChatStatus(props.state, props.draft));
+const voiceInputLabel = computed(() => {
+  if (props.state.voiceInput.status === "listening") {
+    return "Stop Mic";
+  }
+  if (props.state.voiceInput.status === "transcribing") {
+    return "Transcribing";
+  }
+  return "Voice";
+});
 </script>

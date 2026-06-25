@@ -30,6 +30,10 @@ export interface DesktopRendererState {
   assistantDraft: string;
   audioQueue: string[];
   settings: DesktopSettingsState;
+  voiceInput: {
+    status: "idle" | "listening" | "transcribing" | "error";
+    message: string;
+  };
   window: {
     modelPassThrough: boolean;
     locked: boolean;
@@ -46,10 +50,12 @@ export interface DesktopRendererState {
 
 export interface DesktopSettingsState {
   providerLLM: string;
+  providerASR: string;
   providerBaseUrl: string;
   providerApiKey: string;
   providerHasApiKey: boolean;
   providerModel: string;
+  providerASRModel: string;
   providerTTS: string;
   providerTTSModel: string;
   voiceId: string;
@@ -200,6 +206,58 @@ export class DesktopRuntimeBridge {
     return this.getState();
   }
 
+  startVoiceInput(): DesktopRendererState {
+    this.state = {
+      ...this.state,
+      status: "listening",
+      errorMessage: "",
+      voiceInput: {
+        status: "listening",
+        message: "Listening..."
+      }
+    };
+    this.host?.send("runtime:input", { type: "audio.chunk", data: new Uint8Array() });
+    return this.getState();
+  }
+
+  finishVoiceInput(audio: Uint8Array): DesktopRendererState {
+    if (audio.length > 0) {
+      this.host?.send("runtime:input", { type: "audio.chunk", data: audio });
+    }
+    this.host?.send("runtime:input", { type: "audio.end" });
+    this.state = {
+      ...this.state,
+      status: "listening",
+      voiceInput: {
+        status: "transcribing",
+        message: "Transcribing voice..."
+      }
+    };
+    if (!this.host) {
+      this.state = {
+        ...this.state,
+        voiceInput: {
+          status: "idle",
+          message: ""
+        }
+      };
+    }
+    return this.getState();
+  }
+
+  failVoiceInput(message: string): DesktopRendererState {
+    this.state = {
+      ...this.state,
+      status: "error",
+      errorMessage: message,
+      voiceInput: {
+        status: "error",
+        message
+      }
+    };
+    return this.getState();
+  }
+
   async interrupt(): Promise<DesktopRendererState> {
     this.speechPlaybackEpoch += 1;
     this.speechOutput?.cancel();
@@ -328,7 +386,20 @@ export class DesktopRuntimeBridge {
       .speak(text, {
         audio,
         voiceId: this.state.settings.voiceId,
-        volume: this.state.settings.voiceVolume
+        volume: this.state.settings.voiceVolume,
+        onMouthOpen: (mouthOpen) => {
+          if (playbackEpoch !== this.speechPlaybackEpoch) {
+            return;
+          }
+          this.state = {
+            ...this.state,
+            stage: {
+              ...this.state.stage,
+              mouthOpen
+            }
+          };
+          this.emitStateChange();
+        }
       })
       .then(() => {
         if (this.completeSpeechPlayback(text, playbackEpoch)) {
@@ -354,10 +425,15 @@ export class DesktopRuntimeBridge {
     if (playbackEpoch !== this.speechPlaybackEpoch) {
       return false;
     }
+    this.state = {
+      ...this.state,
+      stage: {
+        ...this.state.stage,
+        mouthOpen: 0
+      }
+    };
     const removed = this.removeQueuedSpeech(text);
-    if (removed) {
-      this.emitStateChange();
-    }
+    this.emitStateChange();
     return removed;
   }
 
@@ -453,17 +529,23 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
     voiceTest: {
       status: "idle",
       message: ""
-    },
-    inputDraft: "",
+      },
+      voiceInput: {
+        status: "idle",
+        message: ""
+      },
+      inputDraft: "",
     messages: [],
     assistantDraft: "",
     audioQueue: [],
     settings: {
       providerLLM: defaultGreyfieldConfig.provider.llm,
+      providerASR: defaultGreyfieldConfig.provider.asr,
       providerBaseUrl: defaultGreyfieldConfig.provider.baseUrl,
       providerApiKey: defaultGreyfieldConfig.provider.apiKey,
       providerHasApiKey: defaultGreyfieldConfig.provider.apiKey.length > 0,
       providerModel: defaultGreyfieldConfig.provider.model,
+      providerASRModel: defaultGreyfieldConfig.provider.asrModel,
       providerTTS: defaultGreyfieldConfig.provider.tts,
       providerTTSModel: defaultGreyfieldConfig.provider.ttsModel,
       voiceId: defaultGreyfieldConfig.voice.id,

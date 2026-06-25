@@ -78,7 +78,7 @@ export function describeChatStatus(
       label: "Waiting",
       detail: "Listening for input.",
       tone: "waiting",
-      canStop: false,
+      canStop: true,
       sendLabel: "Send",
       stopLabel: "Stop"
     };

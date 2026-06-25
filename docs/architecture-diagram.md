@@ -20,17 +20,19 @@ flowchart TB
   end
 
   subgraph Runtime["packages/core-runtime - 对话运行时"]
-    Protocol["event protocol<br/>text.input / interrupt / stage events"]
-    Loop["GreyfieldRuntime<br/>prompt / stream / sentence TTS / interrupt"]
+    Protocol["event protocol<br/>text.input / audio.chunk / audio.end / interrupt"]
+    Loop["GreyfieldRuntime<br/>ASR / prompt / stream / sentence TTS / interrupt"]
     Prompt["prompt assembly<br/>persona / memory / recent turns"]
     LLM["LLMProvider<br/>fake / OpenAI-compatible"]
+    ASR["ASRProvider<br/>fake / OpenAI-compatible"]
   end
 
   subgraph Audio["packages/audio-runtime - 音频运行时"]
     Sentence["sentence splitter"]
-    TTS["TTSProvider<br/>V1 next: real TTS"]
-    VAD["VAD / ASR<br/>V1 later"]
-    Level["audio level -> mouth-open"]
+    Mic["browser microphone recorder<br/>MediaRecorder / harness probe"]
+    TTS["TTSProvider<br/>fake / OpenAI-compatible"]
+    VAD["VAD boundary"]
+    Level["decoded PCM level -> mouth-open"]
   end
 
   subgraph Store["packages/persistence - 文件与状态"]
@@ -65,6 +67,7 @@ flowchart TB
   Runtime --> Protocol
   Runtime --> Prompt
   Runtime --> LLM
+  Runtime --> ASR
   Runtime --> Sentence
   Runtime --> TTS
   Runtime --> Sessions
