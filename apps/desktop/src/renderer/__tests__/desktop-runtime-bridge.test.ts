@@ -47,6 +47,8 @@ describe("createDesktopRuntimeBridge", () => {
       providerLLM: "fake",
       providerBaseUrl: "https://llm.local/v1",
       providerApiKey: "local-key",
+      providerTTS: "openai-compatible",
+      providerTTSModel: "FunAudioLLM/CosyVoice2-0.5B",
       voiceId: "voice-greyfield",
       voiceVolume: 0.45,
       voiceSpeechEnabled: true,
@@ -64,6 +66,8 @@ describe("createDesktopRuntimeBridge", () => {
       providerLLM: "fake",
       providerBaseUrl: "https://llm.local/v1",
       providerApiKey: "local-key",
+      providerTTS: "openai-compatible",
+      providerTTSModel: "FunAudioLLM/CosyVoice2-0.5B",
       voiceId: "voice-greyfield",
       voiceVolume: 0.45,
       voiceSpeechEnabled: true,
@@ -90,6 +94,8 @@ describe("createDesktopRuntimeBridge", () => {
       providerLLM: "openai-compatible",
       providerBaseUrl: "https://llm.example/v1",
       providerApiKey: "secret",
+      providerTTS: "openai-compatible",
+      providerTTSModel: "FunAudioLLM/CosyVoice2-0.5B",
       voiceSpeechEnabled: true,
       voiceVolume: 0.5,
       microphoneId: "mic-front",
@@ -107,6 +113,8 @@ describe("createDesktopRuntimeBridge", () => {
           provider: {
             llm: "openai-compatible",
             model: "local-model-b",
+            tts: "openai-compatible",
+            ttsModel: "FunAudioLLM/CosyVoice2-0.5B",
             baseUrl: "https://llm.example/v1",
             apiKey: "secret"
           },
@@ -218,6 +226,7 @@ describe("createDesktopRuntimeBridge", () => {
     await Promise.resolve();
 
     expect(speechOutput.speak).toHaveBeenCalledWith("Speak this.", {
+      audio: new Uint8Array([1]),
       voiceId: "voice-greyfield",
       volume: 0.5
     });

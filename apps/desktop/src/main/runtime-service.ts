@@ -2,6 +2,7 @@ import {
   GreyfieldRuntime,
   InMemorySessionStore,
   OpenAICompatibleLLMProvider,
+  OpenAICompatibleTTSProvider,
   type CharacterPersona,
   type LLMProvider,
   type MemoryStore,
@@ -21,6 +22,7 @@ export interface RuntimeServiceOptions {
   sessionStore?: SessionStore;
   recentTurnLimit?: number;
   llmTimeoutMs?: number;
+  ttsTimeoutMs?: number;
 }
 
 export interface LLMTestResult {
@@ -131,7 +133,7 @@ export class RuntimeService {
     const persona = await this.loadPersona();
     return new GreyfieldRuntime({
       llm: this.createLLMProvider(),
-      tts: new MainFakeTTSProvider(),
+      tts: this.createTTSProvider(),
       memoryStore: this.memoryStore,
       sessionStore: this.sessionStore,
       persona,
@@ -175,6 +177,19 @@ export class RuntimeService {
       });
     }
     return new MainFakeLLMProvider();
+  }
+
+  private createTTSProvider(): TTSProvider {
+    if (this.config.provider.tts === "openai-compatible") {
+      return new OpenAICompatibleTTSProvider({
+        baseUrl: this.config.provider.baseUrl,
+        apiKey: this.config.provider.apiKey,
+        model: this.config.provider.ttsModel,
+        fetch: this.options.fetch,
+        timeoutMs: this.options.ttsTimeoutMs
+      });
+    }
+    return new MainFakeTTSProvider();
   }
 
   private validateOpenAICompatibleProviderConfig(action: "testing" | "chatting"): string {

@@ -46,6 +46,8 @@ export interface DesktopSettingsState {
   providerApiKey: string;
   providerHasApiKey: boolean;
   providerModel: string;
+  providerTTS: string;
+  providerTTSModel: string;
   voiceId: string;
   voiceVolume: number;
   voiceSpeechEnabled: boolean;
@@ -111,7 +113,7 @@ export class DesktopRuntimeBridge {
     this.host?.on("runtime:event", (event) => {
       this.state = reduceRuntimeEvent(this.state, event, this.interactionProfile);
       if (event.type === "assistant.audio.chunk") {
-        this.playSpeech(event.text);
+        this.playSpeech(event.text, event.data);
       }
       if (event.type === "runtime.status" && event.status === "interrupted") {
         this.speechOutput?.cancel();
@@ -274,13 +276,14 @@ export class DesktopRuntimeBridge {
     return configFromSettings(this.state.settings);
   }
 
-  private playSpeech(text: string): void {
+  private playSpeech(text: string, audio: Uint8Array): void {
     if (!this.speechOutput || !this.state.settings.voiceSpeechEnabled) {
       return;
     }
     const playbackEpoch = this.speechPlaybackEpoch;
     void this.speechOutput
       .speak(text, {
+        audio,
         voiceId: this.state.settings.voiceId,
         volume: this.state.settings.voiceVolume
       })
@@ -390,6 +393,8 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       providerApiKey: defaultGreyfieldConfig.provider.apiKey,
       providerHasApiKey: defaultGreyfieldConfig.provider.apiKey.length > 0,
       providerModel: defaultGreyfieldConfig.provider.model,
+      providerTTS: defaultGreyfieldConfig.provider.tts,
+      providerTTSModel: defaultGreyfieldConfig.provider.ttsModel,
       voiceId: defaultGreyfieldConfig.voice.id,
       voiceVolume: defaultGreyfieldConfig.voice.volume,
       voiceSpeechEnabled: defaultGreyfieldConfig.voice.speechEnabled,

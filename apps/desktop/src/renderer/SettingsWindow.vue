@@ -114,6 +114,26 @@
           </header>
           <div class="settings-fields">
             <label>
+              <span>TTS</span>
+              <select
+                :value="state.settings.providerTTS"
+                autocomplete="off"
+                @change="$emit('update-setting', 'providerTTS', valueFrom($event))"
+              >
+                <option value="fake">Local fallback</option>
+                <option value="openai-compatible">OpenAI-compatible</option>
+              </select>
+            </label>
+            <label>
+              <span>TTS Model</span>
+              <input
+                :value="state.settings.providerTTSModel"
+                autocomplete="off"
+                spellcheck="false"
+                @input="$emit('update-setting', 'providerTTSModel', valueFrom($event))"
+              />
+            </label>
+            <label>
               <span>Voice</span>
               <input
                 :value="state.settings.voiceId"

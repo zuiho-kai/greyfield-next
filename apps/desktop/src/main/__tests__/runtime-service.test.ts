@@ -33,6 +33,10 @@ describe("RuntimeService", () => {
   it("emits desktop TTS chunks when voice output is enabled", async () => {
     const service = new RuntimeService({
       ...defaultGreyfieldConfig,
+      provider: {
+        ...defaultGreyfieldConfig.provider,
+        tts: "fake"
+      },
       voice: {
         ...defaultGreyfieldConfig.voice,
         speechEnabled: true
@@ -48,6 +52,51 @@ describe("RuntimeService", () => {
       type: "assistant.audio.chunk",
       text: "你好，我醒着。",
       data: expect.any(Uint8Array)
+    });
+  });
+
+  it("uses the OpenAI-compatible TTS provider when voice output is enabled", async () => {
+    const audio = new Uint8Array([0x49, 0x44, 0x33, 0x03]);
+    const fetch = vi.fn(async (url) => {
+      if (String(url).endsWith("/audio/speech")) {
+        return new Response(audio, { status: 200, headers: { "content-type": "audio/mpeg" } });
+      }
+      return new Response(null, { status: 500 });
+    });
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          tts: "openai-compatible",
+          baseUrl: "https://voice.example/v1",
+          apiKey: "secret",
+          ttsModel: "FunAudioLLM/CosyVoice2-0.5B"
+        },
+        voice: {
+          ...defaultGreyfieldConfig.voice,
+          id: "FunAudioLLM/CosyVoice2-0.5B:anna",
+          speechEnabled: true
+        }
+      },
+      { fetch }
+    );
+    const events: unknown[] = [];
+
+    await service.handle({ type: "text.input", text: "朗读打开" }, (event) => {
+      events.push(event);
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://voice.example/v1/audio/speech",
+      expect.objectContaining({
+        body: expect.stringContaining('"model":"FunAudioLLM/CosyVoice2-0.5B"')
+      })
+    );
+    expect(events).toContainEqual({
+      type: "assistant.audio.chunk",
+      text: "你好，我醒着。",
+      data: audio
     });
   });
 
