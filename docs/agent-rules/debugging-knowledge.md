@@ -32,12 +32,19 @@ runtime event -> renderer state -> stage/bubble
 - Renderer fallback runtime behavior does not prove the Electron main-process runtime path.
 - Fake providers are required for deterministic QA; real provider success must not replace fake-provider harness coverage.
 - API key/config UI working does not prove secrets are owned by the correct process boundary.
+- Real TTS playback does not prove the full voice companion path. Voice claims also need microphone input, ASR, transcript routing, mouth movement, Stop cleanup, and UI state.
+- Encoded or compressed audio bytes are not a reliable mouth-motion signal. Mouth movement should be driven where decoded PCM or real playback state is available.
+- Settings UI can fail through echo paths: a masked saved secret can still wipe an in-progress user draft if every renderer settings listener is not covered.
+- Electron harness flakes often come from synchronizing on a derived UI condition instead of the owner state. Wait for the owner probe first, then assert downstream UI.
+- Parallel Electron/browser harnesses can interfere through shared desktop builds, cache directories, ports, or active windows. Treat concurrent failures from shared Electron flows as suspect until reproduced serially.
+- A passing narrow harness after a flaky aggregate failure is diagnostic evidence only. The aggregate gate still needs to pass before the claim is trusted.
 
 ## Escalation Rules
 
 - If the same class of bug appears twice, update a retro or create a focused error-book entry.
 - If a user corrects the same conclusion twice, assume the current diagnosis is wrong and reopen the evidence chain.
 - If a fix requires crossing package boundaries, state why the owner boundary is still correct.
+- If a user says a completion claim is over-scoped or missing required behavior, stop implementing adjacent polish and redo the requirement-to-evidence audit.
 
 ## Commonsense And Knowledge Base
 
@@ -64,3 +71,4 @@ Update rules:
 - Do not create tiny one-off knowledge files for every incident. Prefer appending to the nearest existing document.
 - Create a new `docs/runbooks/error-books/*` entry only when repeated failures no longer fit the current retros.
 - Every new knowledge entry should include the practical consequence: what future agents should do differently.
+- If a retro exposes a process failure, also update the framework layer that would have prevented it: `AGENTS.md`, `docs/agent-rules/*`, `docs/development-speed-policy.md`, or the V1 feature manifest.

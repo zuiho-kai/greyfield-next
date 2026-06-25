@@ -37,6 +37,29 @@ For frontend-visible PRs, green CI is necessary but not sufficient. Before openi
 - Check product-shape assertions that automation can miss: no stale background blocks, no text/control overflow, no permanent desktop obstruction, no pet-face/body occlusion by speech bubbles, and no mismatch between Settings state and the path an ordinary user takes.
 - If the PR fixes a missed frontend behavior, add or update a harness assertion in the same branch so the next agent does not rely on the user as first-pass QA.
 
+## Electron Harness Concurrency
+
+Electron/browser harnesses that build desktop artifacts or launch windows share process, cache, file, and OS-window state. They are checkpoint tools, not parallel load-test tools.
+
+- Run unit tests and static checks in parallel when useful.
+- Run Electron harnesses serially unless the scripts explicitly isolate build output, ports, cache directories, and app windows.
+- If a parallel Electron run fails with navigation, window, hit-test, or cache-like symptoms, rerun the failing harness serially before changing product code.
+- A serial narrow rerun can classify a failure as timing/interference, but a final frontend-visible claim still requires the aggregate gate to pass afterward.
+- Do not leave sessions running after a failed Electron harness; confirm the command exited before starting the next shared-window harness.
+
+## Completion Evidence Gate
+
+Use this gate before saying a V1 capability is done or before updating release wording:
+
+1. Read the feature row in `packages/dev-harness/v1-features.json`.
+2. Read the matching product-plan and completion-evidence sections.
+3. Expand the feature into a scenario matrix, including Stop/cancel/error/retry and ordinary user paths.
+4. Mark each evidence item as PR-local, main/current-head, or credentialed external-provider.
+5. Rerun the relevant current-head harness after merge if the release wording depends on merged code.
+6. Search docs for stale status words and old SHAs before opening a docs/evidence PR.
+
+Partial capability work should keep the parent feature visibly incomplete until the whole matrix has current-head proof.
+
 ## Fast Loop
 
 Use this while actively editing:

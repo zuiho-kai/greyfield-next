@@ -74,6 +74,8 @@ The project owner checks:
 - Are the right harnesses run for the risk touched?
 - Did the work create a lesson that belongs in a retro or knowledge doc?
 - Is the PR one cohesive user-facing goal?
+- If this PR changes completion wording, is the claim backed by merged current-head evidence rather than PR-local evidence?
+- If this PR is only a partial capability slice, do docs and PR wording keep the remaining V1 scope explicit?
 
 ## Level 4: PR Gate
 
@@ -92,6 +94,23 @@ For frontend-visible PRs, also required:
 - Current screenshots were opened and inspected by the author before asking for user verification.
 - The PR body names the visual/harness evidence used for Settings, Chat, Pet, speech bubble, Stop, or provider UI changes.
 - Product-shape regressions are treated as blockers even if DOM-level assertions pass.
+
+For completion or release-evidence PRs, also required:
+
+- Re-read `packages/dev-harness/v1-features.json`, `docs/plans/v1-product-plan.md`, and `docs/v1-completion-evidence.md`.
+- Build a requirement-to-evidence map before saying "done".
+- Label evidence as PR-local, main/current-head, or credentialed external-provider.
+- Search docs for stale candidate wording such as `local branch`, `needs rerun`, `candidate`, `not claimable`, and old head SHAs.
+- If a merge changes status, either update docs after current-head rerun in the same PR flow or open a docs-only follow-up before declaring the goal closed.
+
+## Scenario Matrix Rule
+
+Some features are not single checks. A project-owner review must verify the full matrix when the feature name implies it:
+
+- Voice companion: microphone capture, ASR, transcript-to-chat, text response, TTS playback, waveform mouth movement, Stop/cancel, queue cleanup, user-visible state, and fake/local provider coverage.
+- Provider settings: ordinary typing path, masked-secret echo, missing fields, testing state, success, failure, active-chat rejection, and no unintended provider requests.
+- Desktop pet interaction: model-pixel interaction, transparent pass-through, drag continuity, wheel bounds, pass-through toggles, bubble placement, and recovery controls.
+- Speech bubble: first-token display, long-reply cap, fade lifecycle, viewport/screen containment, disabled-bubble hit-area removal, and full Chat history retention.
 
 ## Reviewer-Lens Audits
 

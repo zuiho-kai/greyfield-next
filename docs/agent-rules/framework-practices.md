@@ -38,3 +38,28 @@ Use these practices from surveyed open-source workflow repositories without impo
 - Use specialist lenses when helpful, but do not let role vocabulary replace evidence.
 - Start complex work with a confidence check: unknowns, risky files, required verification, and rollback path.
 - Watch context and tool load. Enable only the integrations needed for the current task.
+
+## Greyfield PR Backtrace Practices
+
+These practices were promoted from the V1 closeout PR sequence #41-#57.
+
+| PRs | Lesson | Future rule |
+| --- | --- | --- |
+| #41 | Independently green feature slices still created cross-branch regressions when integrated: Stop had to stay available while voice output was queued, natural speech completion had to clear shared UI, and bubble click-through state had to remain fresh. | Treat integration as its own user-facing goal. After merging slices locally, rerun cross-path harnesses and audit shared state, not only each slice's original test. |
+| #42 | Dragging failed when the pointer crossed transparent model pixels during an active drag. | Pet interaction tests must include continuity across alpha/hit-test transitions, not only the start point. |
+| #43 | Settings API key input looked saved but became uneditable because masked settings echoes were mapped through two renderer paths. | Settings and secret UI must test ordinary typing/editing paths and every settings sync listener, not only persistence output. |
+| #44 | Frontend regressions kept escaping narrow tests. | Frontend-visible changes need the aggregate `frontend-full` gate and current screenshot inspection before user handoff. |
+| #45 | Settings visual polish and destroyed auxiliary windows were V1 quality issues, not optional cleanup. | Window lifecycle and product readability are acceptance surfaces when they block ordinary users. |
+| #46 | The Stop-audio harness was flaky because it waited on Settings queue state before proving the Pet speech probe had both utterances. | Harnesses must synchronize on the owner of the condition under test; downstream UI state can be diagnostic, not the only gate. |
+| #54 | Real TTS playback was valuable, but it did not satisfy the full V1 voice scope. | A partial capability PR must preserve the larger feature status and explicitly prevent release wording from shrinking to the implemented subset. |
+| #55 | Full voice required microphone capture, ASR, transcript routing, TTS playback, waveform mouth movement, and Stop cleanup together. | Voice completion is a scenario matrix, not a single provider check. Keep fake/local OpenAI-compatible harnesses so the path is testable without secrets or hardware. |
+| #56 | After merge, docs still had PR-local evidence wording until a follow-up corrected them. | Any PR that changes completion status needs a post-merge current-head doc pass or a preplanned docs follow-up. |
+| #57 | A retro alone recorded the incident but did not change the operating framework. | Repeated or severe misses must graduate from retro notes into agent rules, verification policy, or review gates. |
+
+## Completion Claim Discipline
+
+- Derive the release claim from `packages/dev-harness/v1-features.json`, `docs/plans/v1-product-plan.md`, and the actual user path, then map each requirement to evidence.
+- Separate three evidence classes: PR-local review evidence, merged current-head evidence, and credentialed external-provider evidence.
+- A partial feature may merge only if the docs and PR body keep the unimplemented remainder visible.
+- Do not mark a feature done because the last implemented slice passed. Mark it done only after the whole scenario matrix has current-head proof.
+- If the user says the scope is still missing, reopen the evidence map before defending the previous claim.
