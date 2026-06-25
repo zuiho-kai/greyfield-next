@@ -31,6 +31,13 @@ export interface LLMTestResult {
   firstToken?: string;
 }
 
+export interface VoiceTestResult {
+  ok: boolean;
+  message: string;
+  text?: string;
+  data?: Uint8Array;
+}
+
 export class RuntimeService {
   private config: GreyfieldConfig;
   private readonly stage = new FakeStageDriver();
@@ -39,6 +46,7 @@ export class RuntimeService {
   private readonly interactionProfile = createDefaultInteractionProfile();
   private activeRuntime: GreyfieldRuntime | undefined;
   private testingLLM = false;
+  private testingVoice = false;
 
   constructor(config: GreyfieldConfig, private readonly options: RuntimeServiceOptions = {}) {
     this.config = config;
@@ -129,6 +137,44 @@ export class RuntimeService {
     }
   }
 
+  async testVoice(): Promise<VoiceTestResult> {
+    if (this.activeRuntime) {
+      return {
+        ok: false,
+        message: "Voice test is unavailable while a chat response is running."
+      };
+    }
+    if (this.testingVoice) {
+      return {
+        ok: false,
+        message: "Voice test is already running."
+      };
+    }
+    const providerConfigError = this.validateTTSProviderConfig();
+    if (providerConfigError) {
+      return { ok: false, message: providerConfigError };
+    }
+
+    this.testingVoice = true;
+    const text = "你好，这是 Greyfield 的语音测试。";
+    try {
+      const data = await this.createTTSProvider().synthesize(text, this.config.voice.id);
+      return {
+        ok: true,
+        message: "Voice test succeeded.",
+        text,
+        data
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : String(error)
+      };
+    } finally {
+      this.testingVoice = false;
+    }
+  }
+
   private async createRuntime(): Promise<GreyfieldRuntime> {
     const persona = await this.loadPersona();
     return new GreyfieldRuntime({
@@ -204,6 +250,25 @@ export class RuntimeService {
     }
     if (this.config.provider.model.trim().length === 0) {
       return `OpenAI-compatible provider needs a model before ${action}.`;
+    }
+    return "";
+  }
+
+  private validateTTSProviderConfig(): string {
+    if (this.config.provider.tts !== "openai-compatible") {
+      return "";
+    }
+    if (this.config.provider.baseUrl.trim().length === 0) {
+      return "OpenAI-compatible TTS needs a Base URL before testing voice.";
+    }
+    if (this.config.provider.apiKey.trim().length === 0) {
+      return "OpenAI-compatible TTS needs an API key before testing voice.";
+    }
+    if (this.config.provider.ttsModel.trim().length === 0) {
+      return "OpenAI-compatible TTS needs a TTS model before testing voice.";
+    }
+    if (this.config.voice.id.trim().length === 0) {
+      return "OpenAI-compatible TTS needs a voice before testing voice.";
     }
     return "";
   }

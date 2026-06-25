@@ -100,6 +100,89 @@ describe("RuntimeService", () => {
     });
   });
 
+  it("tests the configured OpenAI-compatible voice without appending session turns", async () => {
+    const audio = new Uint8Array([0x49, 0x44, 0x33, 0x03]);
+    const fetch = vi.fn(async () => new Response(audio, { status: 200, headers: { "content-type": "audio/mpeg" } }));
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          tts: "openai-compatible",
+          baseUrl: "https://voice.example/v1",
+          apiKey: "secret",
+          ttsModel: "FunAudioLLM/CosyVoice2-0.5B"
+        },
+        voice: {
+          ...defaultGreyfieldConfig.voice,
+          id: "FunAudioLLM/CosyVoice2-0.5B:anna",
+          speechEnabled: false
+        }
+      },
+      { fetch }
+    );
+
+    const result = await service.testVoice();
+
+    expect(result).toEqual({
+      ok: true,
+      message: "Voice test succeeded.",
+      text: "你好，这是 Greyfield 的语音测试。",
+      data: audio
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      "https://voice.example/v1/audio/speech",
+      expect.objectContaining({
+        body: expect.stringContaining('"voice":"FunAudioLLM/CosyVoice2-0.5B:anna"')
+      })
+    );
+    expect(await service.getRecentTurns(2)).toEqual([]);
+  });
+
+  it("reports missing TTS settings before testing an OpenAI-compatible voice", async () => {
+    const fetch = vi.fn();
+    const missingKey = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          tts: "openai-compatible",
+          baseUrl: "https://voice.example/v1",
+          apiKey: "",
+          ttsModel: "FunAudioLLM/CosyVoice2-0.5B"
+        }
+      },
+      { fetch }
+    );
+    const missingVoice = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          tts: "openai-compatible",
+          baseUrl: "https://voice.example/v1",
+          apiKey: "secret",
+          ttsModel: "FunAudioLLM/CosyVoice2-0.5B"
+        },
+        voice: {
+          ...defaultGreyfieldConfig.voice,
+          id: ""
+        }
+      },
+      { fetch }
+    );
+
+    await expect(missingKey.testVoice()).resolves.toEqual({
+      ok: false,
+      message: "OpenAI-compatible TTS needs an API key before testing voice."
+    });
+    await expect(missingVoice.testVoice()).resolves.toEqual({
+      ok: false,
+      message: "OpenAI-compatible TTS needs a voice before testing voice."
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("uses the OpenAI-compatible provider when config requests it", async () => {
     const fetch = vi.fn(async () => {
       const body = new ReadableStream<Uint8Array>({

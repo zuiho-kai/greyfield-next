@@ -21,6 +21,10 @@ export interface DesktopRendererState {
     message: string;
     firstToken?: string;
   };
+  voiceTest: {
+    status: "idle" | "testing" | "success" | "error";
+    message: string;
+  };
   inputDraft: string;
   messages: DesktopMessage[];
   assistantDraft: string;
@@ -143,6 +147,22 @@ export class DesktopRuntimeBridge {
           ...(result.firstToken ? { firstToken: result.firstToken } : {})
         }
       };
+      this.emitStateChange();
+    });
+    this.host?.on("provider:test-voice-result", (result) => {
+      const text = result.text ?? "Voice test";
+      this.state = {
+        ...this.state,
+        voiceTest: {
+          status: result.ok ? "success" : "error",
+          message: formatVoiceTestMessage(result.message, result.ok)
+        },
+        voiceErrorMessage: result.ok ? "" : result.message,
+        audioQueue: result.ok && result.data ? [...this.state.audioQueue, text] : this.state.audioQueue
+      };
+      if (result.ok && result.data) {
+        this.playSpeech(text, result.data, { force: true });
+      }
       this.emitStateChange();
     });
   }
@@ -268,6 +288,29 @@ export class DesktopRuntimeBridge {
     return this.getState();
   }
 
+  testVoiceProvider(): DesktopRendererState {
+    this.state = {
+      ...this.state,
+      voiceTest: {
+        status: "testing",
+        message: "Testing voice playback..."
+      },
+      voiceErrorMessage: ""
+    };
+    this.host?.send("provider:test-voice", {});
+    if (!this.host) {
+      this.state = {
+        ...this.state,
+        voiceTest: {
+          status: "success",
+          message: "Voice test succeeded."
+        },
+        audioQueue: [...this.state.audioQueue, "你好，这是 Greyfield 的语音测试。"]
+      };
+    }
+    return this.getState();
+  }
+
   getState(): DesktopRendererState {
     return structuredClone(this.state);
   }
@@ -276,8 +319,8 @@ export class DesktopRuntimeBridge {
     return configFromSettings(this.state.settings);
   }
 
-  private playSpeech(text: string, audio: Uint8Array): void {
-    if (!this.speechOutput || !this.state.settings.voiceSpeechEnabled) {
+  private playSpeech(text: string, audio: Uint8Array, options: { force?: boolean } = {}): void {
+    if (!this.speechOutput || (!this.state.settings.voiceSpeechEnabled && !options.force)) {
       return;
     }
     const playbackEpoch = this.speechPlaybackEpoch;
@@ -351,6 +394,30 @@ function formatProviderTestMessage(message: string, ok: boolean): string {
   return `${message.replace(/[.。]+$/g, "")}. Check API key, Base URL, and Model, then retry.`;
 }
 
+function formatVoiceTestMessage(message: string, ok: boolean): string {
+  if (ok) {
+    return message;
+  }
+  if (message.includes("Voice test is unavailable while a chat response is running.")) {
+    return `${message} Stop the current reply or wait for it to finish, then retry.`;
+  }
+  if (!isVoiceConfigurationFailure(message)) {
+    return message;
+  }
+  return `${message.replace(/[.。]+$/g, "")}. Check API key, Base URL, TTS model, and Voice, then retry.`;
+}
+
+function isVoiceConfigurationFailure(message: string): boolean {
+  return (
+    message.includes("OpenAI-compatible TTS needs a Base URL") ||
+    message.includes("OpenAI-compatible TTS needs an API key") ||
+    message.includes("OpenAI-compatible TTS needs a TTS model") ||
+    message.includes("OpenAI-compatible TTS needs a voice") ||
+    message.includes("OpenAI-compatible TTS request failed:") ||
+    message.includes("OpenAI-compatible TTS request timed out")
+  );
+}
+
 function isActiveChatTestRejection(message: string): boolean {
   return message.includes("LLM test is unavailable while a chat response is running.");
 }
@@ -380,6 +447,10 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
     errorMessage: "",
     voiceErrorMessage: "",
     providerTest: {
+      status: "idle",
+      message: ""
+    },
+    voiceTest: {
       status: "idle",
       message: ""
     },

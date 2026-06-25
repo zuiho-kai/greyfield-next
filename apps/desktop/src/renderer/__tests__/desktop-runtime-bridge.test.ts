@@ -180,6 +180,74 @@ describe("createDesktopRuntimeBridge", () => {
     });
   });
 
+  it("sends a voice test request and plays returned audio even when reply speech is disabled", async () => {
+    const sent: Array<[string, unknown]> = [];
+    let voiceTestResult:
+      | ((event: import("../../shared/ipc").DesktopVoiceTestResult) => void)
+      | undefined;
+    const speechOutput = {
+      speak: vi.fn(async () => undefined),
+      cancel: vi.fn()
+    };
+    const bridge = createDesktopRuntimeBridgeWithSpeech(
+      {
+        send: (channel, payload) => sent.push([channel, payload]),
+        on: (channel, handler) => {
+          if (channel === "provider:test-voice-result") {
+            voiceTestResult = handler as typeof voiceTestResult;
+          }
+          return () => undefined;
+        }
+      },
+      speechOutput
+    );
+    bridge.updateSettings({ voiceSpeechEnabled: false, voiceId: "voice-greyfield", voiceVolume: 0.5 });
+
+    const testing = bridge.testVoiceProvider();
+    voiceTestResult?.({
+      ok: true,
+      message: "Voice test succeeded.",
+      text: "Test voice.",
+      data: new Uint8Array([0x49, 0x44, 0x33, 0x03])
+    });
+    await Promise.resolve();
+
+    expect(testing.voiceTest).toEqual({ status: "testing", message: "Testing voice playback..." });
+    expect(sent).toContainEqual(["provider:test-voice", {}]);
+    expect(speechOutput.speak).toHaveBeenCalledWith("Test voice.", {
+      audio: new Uint8Array([0x49, 0x44, 0x33, 0x03]),
+      voiceId: "voice-greyfield",
+      volume: 0.5
+    });
+    expect(bridge.getState().voiceTest).toEqual({
+      status: "success",
+      message: "Voice test succeeded."
+    });
+  });
+
+  it("shows voice test errors with retry guidance", () => {
+    let voiceTestResult:
+      | ((event: import("../../shared/ipc").DesktopVoiceTestResult) => void)
+      | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: () => undefined,
+      on: (channel, handler) => {
+        if (channel === "provider:test-voice-result") {
+          voiceTestResult = handler as typeof voiceTestResult;
+        }
+        return () => undefined;
+      }
+    });
+
+    voiceTestResult?.({ ok: false, message: "OpenAI-compatible TTS request failed: 401 Unauthorized" });
+
+    expect(bridge.getState().voiceTest).toEqual({
+      status: "error",
+      message:
+        "OpenAI-compatible TTS request failed: 401 Unauthorized. Check API key, Base URL, TTS model, and Voice, then retry."
+    });
+  });
+
   it("shows provider test errors in renderer state", () => {
     let providerTestResult:
       | ((event: { ok: boolean; message: string; firstToken?: string }) => void)

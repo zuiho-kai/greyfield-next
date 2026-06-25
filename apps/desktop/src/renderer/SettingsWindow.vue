@@ -173,6 +173,33 @@
               />
             </label>
           </div>
+          <div class="settings-actions settings-actions--single">
+            <button
+              type="button"
+              class="test-voice-button"
+              :class="`test-voice-button--${testVoiceAction.tone}`"
+              :disabled="testVoiceAction.disabled"
+              @click="$emit('test-voice')"
+            >
+              {{ testVoiceAction.label }}
+            </button>
+          </div>
+          <p
+            v-if="testVoiceAction.disableReason"
+            class="provider-test-result provider-test-result--error"
+            role="status"
+          >
+            {{ testVoiceAction.disableReason }}
+          </p>
+          <p
+            v-else-if="voiceTestStatus"
+            class="provider-test-result"
+            :class="`provider-test-result--${voiceTestStatus.tone}`"
+            role="status"
+          >
+            <strong>{{ voiceTestStatus.label }}</strong>
+            <span>{{ voiceTestStatus.detail }}</span>
+          </p>
         </div>
 
         <div class="settings-section">
@@ -348,6 +375,7 @@ const emit = defineEmits<{
   "choose-model": [];
   "reset-transform": [];
   "test-llm": [];
+  "test-voice": [];
   "preview-expression": [expression: string];
   "preview-motion": [group: string];
   "open-chat": [];
@@ -365,6 +393,8 @@ const testLlmAction = computed(() =>
   )
 );
 const providerTestStatus = computed(() => describeProviderTestStatus(props.state.providerTest));
+const testVoiceAction = computed(() => describeTestVoiceAction(props.state));
+const voiceTestStatus = computed(() => describeVoiceTestStatus(props.state.voiceTest));
 const currentBundledLive2DModel = computed(() => findBundledLive2DModel(props.state.settings.modelPath));
 const isCustomLive2DModel = computed(() => currentBundledLive2DModel.value === undefined);
 const selectedLive2DModel = computed(() =>
@@ -397,5 +427,57 @@ function selectLive2DModel(modelPath: string): void {
     return;
   }
   emit("update-setting", "modelPath", model.modelPath);
+}
+
+function describeTestVoiceAction(state: DesktopRendererState): {
+  disabled: boolean;
+  disableReason: string;
+  label: string;
+  tone: "idle" | "testing" | "blocked";
+} {
+  if (state.voiceTest.status === "testing") {
+    return { disabled: true, disableReason: "", label: "Testing voice...", tone: "testing" };
+  }
+  const blockedReason = describeVoiceBlockedReason(state);
+  if (blockedReason) {
+    return { disabled: true, disableReason: blockedReason, label: "Test Voice", tone: "blocked" };
+  }
+  return { disabled: false, disableReason: "", label: "Test Voice", tone: "idle" };
+}
+
+function describeVoiceBlockedReason(state: DesktopRendererState): string {
+  if (state.settings.providerTTS !== "openai-compatible") {
+    return "";
+  }
+  if (state.settings.providerBaseUrl.trim().length === 0) {
+    return "OpenAI-compatible voice needs a Base URL before testing.";
+  }
+  if (!state.settings.providerHasApiKey && state.settings.providerApiKey.trim().length === 0) {
+    return "Voice test needs an API key.";
+  }
+  if (state.settings.providerTTSModel.trim().length === 0) {
+    return "Choose the TTS model name before testing voice.";
+  }
+  if (state.settings.voiceId.trim().length === 0) {
+    return "Choose the voice before testing.";
+  }
+  return "";
+}
+
+function describeVoiceTestStatus(voiceTest: DesktopRendererState["voiceTest"]): {
+  tone: "testing" | "success" | "error";
+  label: string;
+  detail: string;
+} | null {
+  if (voiceTest.status === "idle" || voiceTest.message.trim().length === 0) {
+    return null;
+  }
+  if (voiceTest.status === "testing") {
+    return { tone: "testing", label: "Testing voice", detail: voiceTest.message };
+  }
+  if (voiceTest.status === "success") {
+    return { tone: "success", label: "Voice test succeeded", detail: voiceTest.message };
+  }
+  return { tone: "error", label: "Voice test failed", detail: voiceTest.message };
 }
 </script>

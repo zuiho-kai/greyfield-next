@@ -26,6 +26,7 @@
         "Settings editable fields, provider readiness, Test LLM, and active-chat rejection",
         "Chat waiting/generating/stopped/failed/retry UI through provider failure and abort harnesses",
         "Stop clearing speech playback, mouth-open state, and audio queue",
+        "Real OpenAI-compatible TTS bytes entering Electron renderer playback when credentials are supplied",
         "restart-visible recent context continuity"
       ]
     }
@@ -197,6 +198,7 @@
         "Desktop voice output is disabled by default so the app does not suddenly speak.",
         "Users can enable or disable assistant reply speech from settings.",
         "When enabled with OpenAI-compatible TTS settings, sentence audio is synthesized through /audio/speech and played as real audio bytes.",
+        "Settings exposes Test Voice so users can validate TTS settings without sending a chat message.",
         "Fake TTS bytes still fall back to local renderer speech output for offline harness coverage.",
         "Finished renderer speech playback clears queued speech UI state across desktop windows.",
         "TTS or speech playback failure reports a voice-only error and does not remove the assistant text reply or session turn.",
@@ -205,7 +207,7 @@
         "Audio runtime exposes a pure RMS VAD boundary before microphone integration."
       ],
       "qa": {
-        "script": "vitest sentence-splitter vad tts-text-budget speech-synthesis-output openai-compatible-tts-provider runtime-loop runtime-service desktop-runtime-bridge config; pnpm harness:electron:stop-audio; optional provider proof: pnpm harness:real-tts"
+        "script": "vitest sentence-splitter vad tts-text-budget speech-synthesis-output openai-compatible-tts-provider runtime-loop runtime-service desktop-runtime-bridge config; pnpm harness:electron:stop-audio; optional provider proof: pnpm harness:real-tts; optional desktop provider proof: pnpm harness:electron:real-tts"
       }
     },
     {

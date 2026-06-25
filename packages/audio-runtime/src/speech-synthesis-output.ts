@@ -4,6 +4,18 @@ export interface SpeechOutputOptions {
   volume?: number;
 }
 
+export interface SpeechAudioPlaybackProbePayload {
+  bytes: number;
+  headerHex: string;
+  objectUrl: string;
+  volume: number;
+}
+
+export interface SpeechAudioPlaybackProbe {
+  playAudio(payload: SpeechAudioPlaybackProbePayload): Promise<void>;
+  cancel?(): void;
+}
+
 export interface SpeechOutput {
   speak(text: string, options?: SpeechOutputOptions): Promise<void>;
   cancel(): void;
@@ -22,7 +34,8 @@ export class BrowserSpeechSynthesisOutput implements SpeechOutput {
     private readonly synthesis: SpeechSynthesis | undefined = globalThis.speechSynthesis,
     private readonly Utterance: typeof SpeechSynthesisUtterance | undefined = globalThis.SpeechSynthesisUtterance,
     private readonly AudioElement: typeof Audio | undefined = globalThis.Audio,
-    private readonly urlApi: Pick<typeof URL, "createObjectURL" | "revokeObjectURL"> | undefined = globalThis.URL
+    private readonly urlApi: Pick<typeof URL, "createObjectURL" | "revokeObjectURL"> | undefined = globalThis.URL,
+    private readonly audioPlaybackProbe: SpeechAudioPlaybackProbe | undefined = resolveAudioPlaybackProbe()
   ) {}
 
   async speak(text: string, options: SpeechOutputOptions = {}): Promise<void> {
@@ -88,11 +101,26 @@ export class BrowserSpeechSynthesisOutput implements SpeechOutput {
         element: audio,
         objectUrl,
         cancel: () => {
+          this.audioPlaybackProbe?.cancel?.();
           audio.pause();
           audio.currentTime = 0;
           settle(() => reject(new Error("Speech playback failed: canceled")));
         }
       };
+      if (this.audioPlaybackProbe) {
+        void this.audioPlaybackProbe
+          .playAudio({
+            bytes: audioData.length,
+            headerHex: toHeaderHex(audioData),
+            objectUrl,
+            volume: audio.volume
+          })
+          .then(() => settle(resolve))
+          .catch((error: unknown) => {
+            settle(() => reject(error instanceof Error ? error : new Error(String(error))));
+          });
+        return;
+      }
       audio.onended = () => settle(resolve);
       audio.onerror = () => settle(() => reject(new Error("Speech playback failed: audio decode error")));
       void audio.play().catch((error: unknown) => {
@@ -128,4 +156,16 @@ function clamp01(value: number): number {
     return 1;
   }
   return Math.min(1, Math.max(0, value));
+}
+
+function toHeaderHex(audioData: Uint8Array): string {
+  return Array.from(audioData.slice(0, 8))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function resolveAudioPlaybackProbe(): SpeechAudioPlaybackProbe | undefined {
+  const candidate = (globalThis as typeof globalThis & { __greyfieldAudioPlaybackProbe?: SpeechAudioPlaybackProbe })
+    .__greyfieldAudioPlaybackProbe;
+  return typeof candidate?.playAudio === "function" ? candidate : undefined;
 }

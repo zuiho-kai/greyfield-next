@@ -81,6 +81,34 @@ describe("BrowserSpeechSynthesisOutput", () => {
     expect(urlApi.revokeObjectURL).toHaveBeenCalledWith("blob:greyfield-audio");
   });
 
+  it("allows harnesses to observe and complete real audio playback", async () => {
+    const urlApi = {
+      createObjectURL: vi.fn(() => "blob:greyfield-audio"),
+      revokeObjectURL: vi.fn()
+    };
+    const playAudio = vi.fn(async () => undefined);
+    const output = new BrowserSpeechSynthesisOutput(
+      undefined,
+      undefined,
+      TestAudioElement as unknown as typeof Audio,
+      urlApi,
+      { playAudio }
+    );
+
+    await output.speak("real audio", {
+      audio: new Uint8Array([0x49, 0x44, 0x33, 0x03, 0, 0, 0, 0]),
+      volume: 0.25
+    });
+
+    expect(playAudio).toHaveBeenCalledWith({
+      bytes: 8,
+      headerHex: "4944330300000000",
+      objectUrl: "blob:greyfield-audio",
+      volume: 0.25
+    });
+    expect(urlApi.revokeObjectURL).toHaveBeenCalledWith("blob:greyfield-audio");
+  });
+
   it("cancels active audio playback", async () => {
     const audioElements: TestAudioElement[] = [];
     const AudioElement = class extends TestAudioElement {

@@ -833,8 +833,13 @@ h1 {
   cursor: wait;
 }
 
+.settings-actions button.test-voice-button--testing:disabled {
+  cursor: wait;
+}
+
 .settings-actions button.test-llm-button--blocked:disabled,
-.settings-actions button.test-llm-button--active-chat:disabled {
+.settings-actions button.test-llm-button--active-chat:disabled,
+.settings-actions button.test-voice-button--blocked:disabled {
   cursor: not-allowed;
 }
 

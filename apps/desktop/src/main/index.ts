@@ -127,6 +127,10 @@ function registerIpc(): void {
     void testLLMProvider();
   });
 
+  ipcMain.on("provider:test-voice", () => {
+    void testVoiceProvider();
+  });
+
   ipcMain.on("window:set-click-through", (_event, payload: { enabled: boolean }) => {
     setModelPassThrough(payload.enabled);
   });
@@ -223,6 +227,13 @@ async function testLLMProvider(): Promise<void> {
   const result = await runtimeService?.testLLM();
   if (result) {
     broadcastProviderTestResult(result);
+  }
+}
+
+async function testVoiceProvider(): Promise<void> {
+  const result = await runtimeService?.testVoice();
+  if (result) {
+    broadcastVoiceTestResult(result);
   }
 }
 
@@ -326,6 +337,12 @@ function broadcastSpeechPlayback(payload: { type: "finished" | "error"; text: st
 function broadcastProviderTestResult(result: Awaited<ReturnType<RuntimeService["testLLM"]>>): void {
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send("provider:test-llm-result", result);
+  }
+}
+
+function broadcastVoiceTestResult(result: Awaited<ReturnType<RuntimeService["testVoice"]>>): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send("provider:test-voice-result", result);
   }
 }
 
