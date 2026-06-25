@@ -8,10 +8,18 @@ export interface DesktopSpeechPlaybackEvent {
   message?: string;
 }
 
+export interface DesktopVoiceTestResult {
+  ok: boolean;
+  message: string;
+  text?: string;
+  data?: Uint8Array;
+}
+
 export interface DesktopIpcRequestMap {
   "runtime:input": RuntimeInputEvent;
   "runtime:speech-playback": DesktopSpeechPlaybackEvent;
   "provider:test-llm": {};
+  "provider:test-voice": {};
   "settings:update": GreyfieldConfigPatch;
   "window:set-click-through": { enabled: boolean };
   "window:set-hit-test": { passthrough: boolean; reason: "transparent-area" | "model-pass-through" | "model-hit" };
@@ -38,6 +46,7 @@ export interface DesktopIpcEventMap {
     message: string;
     firstToken?: string;
   };
+  "provider:test-voice-result": DesktopVoiceTestResult;
   "settings:changed": RendererGreyfieldConfig;
   "window:state": {
     modelPassThrough: boolean;

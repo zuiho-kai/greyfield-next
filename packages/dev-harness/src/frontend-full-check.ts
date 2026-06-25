@@ -5,6 +5,7 @@ type Check = {
   name: string;
   command: string;
   args: string[];
+  optional?: "real-tts";
 };
 
 const workspaceRoot = fileURLToPath(new URL("../../..", import.meta.url));
@@ -24,12 +25,22 @@ const checks: Check[] = [
   { name: "Chat provider failure harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-provider-failure-check.ts"] },
   { name: "Chat provider abort harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-provider-abort-check.ts"] },
   { name: "Stop audio harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-stop-audio-check.ts"] },
+  {
+    name: "real OpenAI-compatible TTS Electron harness",
+    command: pnpmCommand,
+    args: ["exec", "tsx", "packages/dev-harness/src/electron-real-tts-check.ts"],
+    optional: "real-tts"
+  },
   { name: "restart context harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-restart-context-check.ts"] }
 ];
 
 const startedAt = Date.now();
 
 for (const check of checks) {
+  if (check.optional === "real-tts" && !hasRealTTSCredentials(process.env)) {
+    console.log(`\n[frontend-full] SKIP ${check.name} (missing GREYFIELD_REAL_TTS_* or GREYFIELD_REAL_LLM_* env)`);
+    continue;
+  }
   const checkStartedAt = Date.now();
   console.log(`\n[frontend-full] START ${check.name}`);
   await run(check);
@@ -64,4 +75,10 @@ function formatDuration(ms: number): string {
   const minutes = Math.floor(seconds / 60);
   const remainder = seconds % 60;
   return minutes > 0 ? `${minutes}m ${remainder}s` : `${remainder}s`;
+}
+
+function hasRealTTSCredentials(env: Record<string, string | undefined>): boolean {
+  const baseUrl = env.GREYFIELD_REAL_TTS_BASE_URL || env.GREYFIELD_REAL_LLM_BASE_URL;
+  const apiKey = env.GREYFIELD_REAL_TTS_API_KEY || env.GREYFIELD_REAL_LLM_API_KEY;
+  return Boolean(baseUrl?.trim() && apiKey?.trim());
 }

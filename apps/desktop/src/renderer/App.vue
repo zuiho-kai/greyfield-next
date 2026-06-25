@@ -38,6 +38,7 @@
     @choose-model="chooseModel"
     @reset-transform="resetTransform"
     @test-llm="testLLM"
+    @test-voice="testVoice"
     @preview-expression="previewExpression"
     @preview-motion="previewMotion"
     @open-chat="openChat"
@@ -215,6 +216,10 @@ function resetTransform(): void {
 
 function testLLM(): void {
   syncState(bridge.testLLMProvider());
+}
+
+function testVoice(): void {
+  syncState(bridge.testVoiceProvider());
 }
 
 function previewExpression(expression: string): void {
