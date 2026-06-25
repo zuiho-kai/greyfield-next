@@ -19,7 +19,7 @@
     "height": 620
   },
   "live2d": {
-    "modelPath": "assets/live2d/default/default.model3.json",
+    "modelPath": "assets/live2d/momose-hiyori/runtime/hiyori_free_t08.model3.json",
     "scale": 1,
     "x": 0,
     "y": 0

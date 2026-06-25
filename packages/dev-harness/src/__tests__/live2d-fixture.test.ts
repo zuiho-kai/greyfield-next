@@ -3,10 +3,14 @@ import { existsSync } from "node:fs";
 import { resolveLive2DFixturePath, toViteFsModelUrl } from "../live2d-fixture";
 
 describe("Live2D fixture resolver", () => {
-  it("finds the installed Cubism sample model used by dev and harness scripts", () => {
+  it("finds the bundled official sample model used by dev and harness scripts", () => {
     const fixture = resolveLive2DFixturePath();
 
     expect(fixture.endsWith(".model3.json")).toBe(true);
+    expect(fixture).toContain("apps");
+    expect(fixture).toContain("momose-hiyori");
+    expect(fixture).toContain("hiyori_free");
+    expect(fixture).not.toContain("haru_greeter");
     expect(existsSync(fixture)).toBe(true);
   });
 

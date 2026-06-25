@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { defaultGreyfieldConfig, mergeConfig } from "../config";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { defaultGreyfieldConfig, loadGreyfieldConfig, mergeConfig } from "../config";
 
 describe("Greyfield config", () => {
   it("keeps provider, voice, microphone, window, live2d, and character settings in one schema", () => {
@@ -41,5 +44,22 @@ describe("Greyfield config", () => {
       scale: 1.25
     });
     expect(config.ui.speechBubbleEnabled).toBe(false);
+  });
+
+  it("loads user config files written with a UTF-8 BOM", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "greyfield-config-"));
+    const path = join(dir, "greyfield.config.json");
+
+    try {
+      await writeFile(path, `\ufeff${JSON.stringify({ live2d: { modelPath: "assets/live2d/test.model3.json" } })}`);
+
+      await expect(loadGreyfieldConfig(path)).resolves.toMatchObject({
+        live2d: {
+          modelPath: "assets/live2d/test.model3.json"
+        }
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
