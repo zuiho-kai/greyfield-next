@@ -29,6 +29,7 @@
     "harness:electron:settings-active-chat-test": "pnpm build:desktop && tsx packages/dev-harness/src/electron-settings-active-chat-test-check.ts",
     "harness:real-tts": "tsx packages/dev-harness/src/real-tts-check.ts",
     "harness:electron:real-tts": "pnpm build:desktop && tsx packages/dev-harness/src/electron-real-tts-check.ts",
+    "harness:electron:voice-input": "pnpm build:desktop && tsx packages/dev-harness/src/electron-voice-input-check.ts",
     "harness:frontend-full": "tsx packages/dev-harness/src/frontend-full-check.ts",
     "harness:pet:quick": "tsx packages/dev-harness/src/electron-check.ts --quick",
     "dev:live2d": "node apps/desktop/scripts/dev-live2d-electron.mjs",

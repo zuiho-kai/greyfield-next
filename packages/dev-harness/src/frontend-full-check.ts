@@ -25,6 +25,7 @@ const checks: Check[] = [
   { name: "Chat provider failure harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-provider-failure-check.ts"] },
   { name: "Chat provider abort harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-provider-abort-check.ts"] },
   { name: "Stop audio harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-stop-audio-check.ts"] },
+  { name: "microphone ASR and waveform mouth harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-voice-input-check.ts"] },
   {
     name: "real OpenAI-compatible TTS Electron harness",
     command: pnpmCommand,

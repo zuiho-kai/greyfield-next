@@ -46,6 +46,15 @@ describe("describeChatStatus", () => {
     });
   });
 
+  it("keeps Stop available while listening for microphone input", () => {
+    expect(describeChatStatus({ ...createInitialDesktopRendererState(), status: "listening" })).toMatchObject({
+      label: "Waiting",
+      tone: "waiting",
+      canStop: true,
+      stopLabel: "Stop"
+    });
+  });
+
   it("renders interrupted as a stable stopped state", () => {
     expect(describeChatStatus({ ...createInitialDesktopRendererState(), status: "interrupted" })).toMatchObject({
       label: "Stopped",

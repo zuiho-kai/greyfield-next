@@ -1,4 +1,4 @@
-import type { LLMProvider, MemoryStore, TTSProvider } from "@greyfield/core-runtime";
+import type { ASRProvider, LLMProvider, MemoryStore, TTSProvider } from "@greyfield/core-runtime";
 
 export class FakeLLMProvider implements LLMProvider {
   constructor(private readonly chunks = ["你好，我醒着。", " 现在可以继续做桌宠了。"]) {}
@@ -16,6 +16,15 @@ export class FakeTTSProvider implements TTSProvider {
   async synthesize(text: string): Promise<Uint8Array> {
     this.synthesized.push(text);
     return new TextEncoder().encode(`audio:${text}`);
+  }
+}
+
+export class FakeASRProvider implements ASRProvider {
+  readonly transcribed: number[] = [];
+
+  async transcribe(audio: Uint8Array): Promise<string> {
+    this.transcribed.push(audio.length);
+    return "这是麦克风语音输入。";
   }
 }
 

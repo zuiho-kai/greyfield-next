@@ -169,6 +169,46 @@ describe("GreyfieldRuntime", () => {
     expect(events).toContainEqual({ type: "assistant.text.final", text: "Quiet response." });
   });
 
+  it("transcribes audio input and routes the transcript through the text runtime", async () => {
+    const transcribe = vi.fn(async () => "Use voice");
+    const sessionStore = new InMemorySessionStore("session-audio-input");
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* () {
+          yield "Voice reply.";
+        }
+      },
+      asr: { transcribe },
+      tts: {
+        synthesize: async (text) => new Uint8Array([text.length])
+      },
+      memoryStore,
+      sessionStore,
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default"
+    });
+    const events: RuntimeOutputEvent[] = [];
+
+    await runtime.handle({ type: "audio.chunk", data: new Uint8Array([1, 2]) }, (event) => {
+      events.push(event);
+    });
+    await runtime.handle({ type: "audio.chunk", data: new Uint8Array([3]) }, (event) => {
+      events.push(event);
+    });
+    await runtime.handle({ type: "audio.end" }, (event) => {
+      events.push(event);
+    });
+
+    expect(transcribe).toHaveBeenCalledWith(new Uint8Array([1, 2, 3]), expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(events).toContainEqual({ type: "runtime.status", status: "listening" });
+    expect(events).toContainEqual({ type: "transcript.final", text: "Use voice" });
+    expect(events).toContainEqual({ type: "assistant.text.final", text: "Voice reply." });
+    expect(await sessionStore.getRecent(2)).toMatchObject([
+      { role: "user", content: "Use voice" },
+      { role: "assistant", content: "Voice reply." }
+    ]);
+  });
+
   it("caps spoken text per turn", async () => {
     const synthesized: string[] = [];
     const runtime = new GreyfieldRuntime({
@@ -306,8 +346,8 @@ describe("GreyfieldRuntime", () => {
     expect(events).toContainEqual({ type: "runtime.status", status: "interrupted" });
   });
 
-  it("drives mouth-open from synthesized audio level and resets after playback", async () => {
-    const mouthOpenValues: number[] = [];
+  it("emits synthesized audio without driving stage mouth from encoded bytes", async () => {
+    const setMouthOpen = vi.fn();
     const runtime = new GreyfieldRuntime({
       llm: {
         stream: async function* () {
@@ -325,15 +365,16 @@ describe("GreyfieldRuntime", () => {
         loadModel: async () => undefined,
         setExpression: async () => undefined,
         playMotion: async () => undefined,
-        setMouthOpen: async (value) => {
-          mouthOpenValues.push(value);
-        }
+        setMouthOpen
       }
     });
+    const events: RuntimeOutputEvent[] = [];
 
-    await runtime.handle({ type: "text.input", text: "say it" }, () => undefined);
+    await runtime.handle({ type: "text.input", text: "say it" }, (event) => {
+      events.push(event);
+    });
 
-    expect(mouthOpenValues[0]).toBeGreaterThan(0.9);
-    expect(mouthOpenValues.at(-1)).toBe(0);
+    expect(events.some((event) => event.type === "assistant.audio.chunk")).toBe(true);
+    expect(setMouthOpen).not.toHaveBeenCalled();
   });
 });

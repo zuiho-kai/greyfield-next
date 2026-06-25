@@ -19,14 +19,13 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 | 设置页 | 已有 provider/model/key、角色文件、模型路径、语音/麦克风等设置入口；Test LLM 走 main process；provider 配置会显示 Preview / blocked / ready-to-test 状态；测试中、成功、失败、active chat 被拒绝均有用户可读 UI 和 harness 证据；#45 已修 Settings 视觉可读性和关闭/恢复稳定性。 | V1 provider/Test LLM 产品化已在 main；模型管理 UX 可留到 V1 后。 |
 | 聊天窗口 | 已从宠物窗口拆出，能显示消息、状态、错误；Waiting / Generating / Stopped / Failed / Retry-ready 状态已产品化；Stop 能打断文字流，也能在语音队列仍播放时保持可点击。 | V1 Chat polish 已在 main；后续只做缺陷修复，不再扩功能。 |
 | 气泡 | 宠物旁有短回复气泡，支持文本压缩、长度上限；位置固定在宠物窗口上方稳定槽位，不跟随模型移动，只在窗口/屏幕边缘内水平和垂直夹紧；长 streaming 回复会进气泡首 token、保持短文本，完整内容留在 Chat；右侧边缘和开关/点击穿透已有专门 harness 和截图证据。 | V1 气泡 QA 已在 main；继续靠 `frontend-full` 和截图看护。 |
-| 语音输出 | 已有句子级 TTS 队列、默认静音、Settings `Speak replies` 开关、Settings `Test Voice` 试听、renderer Web Speech/真实 MP3 播放、TTS 失败隔离、长回复 TTS budget；Stop 会取消正在播放的语音、清空队列并重置嘴型；当前本地收尾新增真实 OpenAI-compatible TTS Electron harness，证明 `/audio/speech` MP3 bytes 进入 renderer 播放层。 | V1 TTS 输出闭环已具备本地真实 provider 证据；合入后需在 main/current-head 复跑。ASR 留到 V1 后。 |
-| 语音输入 | 只有 VAD/音频边界基础。 | V1 后段任务，不能先做。 |
+| 语音输入/输出 | 已有句子级 TTS 队列、默认静音、Settings `Speak replies`、Settings `Test Voice`、真实 TTS 播放、TTS 失败隔离、长回复 TTS budget；当前本地 full-voice 分支新增 Chat 麦克风录音、OpenAI-compatible ASR `/audio/transcriptions`、transcript 走同一条 runtime text path、真实解码 PCM 电平驱动嘴型、Stop 同时取消麦克风/ASR/TTS/队列/嘴型。 | 这是 V1 语音闭环候选证据；合入前只能说“本分支通过”，合入后需 main/current-head 复跑。 |
 | CI | GitHub Actions workflow 已入仓；PR 跑 Fast checks、Desktop pet quick harness 和前端可见改动的 `frontend-full`；main / manual dispatch 额外跑 Full checkpoint harness；#46 已修复 #45 合入后暴露的 Stop audio harness 同步 race，并且 main run `28072461072` 已通过 Fast checks、Desktop pet quick 和 `frontend-full`。 | 自动保护已恢复；继续控制 Electron harness 耗时和稳定性。 |
 
 ## 现在不能宣称什么
 
 - 不能宣称“真实 LLM release 证据是当前的”：当前环境没有 `GREYFIELD_REAL_LLM_*`，所以 `pnpm harness:electron:real-llm` 仍需在有凭据时复跑。
-- 不能宣称“语音伴侣完整完成”：当前 TTS 输出闭环已有真实 provider 和 Electron 播放层证据，但 ASR、麦克风对话、真实音频能量嘴型仍是 V1 后工作。
+- 不能宣称“语音伴侣在 main 已完整完成”：当前 full-voice 分支补齐了 ASR、麦克风对话和真实解码音频能量嘴型，但 release 口径必须等 PR 合入后在 main/current-head 复跑。
 - 不能宣称“模型管理 UX 完成”：Settings provider/Test LLM 已产品化，模型管理和更完整设置体验可留到 V1 后。
 - 不能把桌面控制、浏览器控制、屏幕读取、长期任务、多智能体、直播、VRM/Godot 放进 V1。
 
@@ -131,39 +130,32 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 
 ### P3：真实语音最小闭环
 
-当前已完成 V1 TTS 输出最小闭环：
+当前本地 full-voice 分支已补齐 V1 语音闭环候选：
 
 1. 句子级 TTS 队列会在完整句子形成时发出 audio chunk。
 2. Desktop voice 默认关闭，避免应用突然发声。
 3. Settings `Speak replies` 可启用 Web Speech fallback 或 OpenAI-compatible `/audio/speech` 返回的真实 MP3 播放。
 4. TTS 或播放失败只显示 voice-only error，不破坏文字回复和 session turn。
 5. 长回复有 TTS 字符预算，避免播放无限延长。
-6. Stop 能停止 provider stream、TTS 队列、正在播放的语音和嘴型。
+6. Stop 能停止 provider stream、麦克风监听/ASR、TTS 队列、正在播放的语音和嘴型。
 7. Settings `Test Voice` 可不发送聊天消息直接试听当前 TTS 配置。
 8. `pnpm harness:real-tts` 证明真实 TTS endpoint 返回可播放 MP3；`pnpm harness:electron:real-tts` 证明 Settings `Test Voice`、真实 MP3 bytes 进入 Electron renderer 播放层，并覆盖自然播放结束和 Stop 取消。
+9. Chat `Voice` 录音按钮通过 renderer `MediaRecorder` 捕获麦克风音频，音频字节发给 Electron main。
+10. OpenAI-compatible ASR provider 通过 `/audio/transcriptions` 转写；fake ASR 让无麦克风、无凭据环境也能跑验收。
+11. `transcript.final` 会显示成用户消息，并复用文字输入的 runtime、上下文、错误处理、interrupt 和 session 持久化路径。
+12. renderer 播放真实音频时用 `AudioContext.decodeAudioData` 得到 PCM，并按音频能量时间线驱动 Live2D mouth-open。
+13. `pnpm harness:electron:voice-input` 用本地 ASR/LLM/TTS server 和麦克风 probe 证明麦克风 Stop 取消、ASR -> Chat -> TTS、波形嘴型、Stop 播放取消、队列清空和嘴型归零。
 
-不放进 V1 的内容：
+仍不放进 V1 的内容：
 
-- 真实音频能量驱动嘴型；
 - 外部 TTS provider 选择；
-- ASR / 麦克风语音输入。
+- 高级 VAD 自动分段/唤醒词；
+- 麦克风设备枚举 UI 的完整产品化。
 
 验收标准：
 
 - 文字回复开始后，第一句能较快发声。
 - 打断在 500ms 内停止声音和嘴型。
-
-### P4：最后做 ASR
-
-只有真实 TTS 和 interrupt 稳定后才做。
-
-1. 麦克风设备选择。
-2. VAD 触发录音边界。
-3. ASR provider。
-4. 语音输入走同一条 runtime text path。
-
-验收标准：
-
 - 用户能用语音发起一轮普通对话。
 - 语音路径不绕开文字路径的上下文、interrupt、错误处理和 session 持久化。
 
@@ -174,7 +166,7 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 1. 提供 `GREYFIELD_REAL_LLM_BASE_URL` / `GREYFIELD_REAL_LLM_API_KEY` / `GREYFIELD_REAL_LLM_MODEL` 后，在最终目标分支复跑 `pnpm harness:electron:real-llm`。
 2. 提供 `GREYFIELD_REAL_TTS_BASE_URL` / `GREYFIELD_REAL_TTS_API_KEY`，或兼容的 `GREYFIELD_REAL_LLM_*` 后，在最终目标分支复跑 `pnpm harness:real-tts` 和 `pnpm harness:electron:real-tts`。
 3. 打开最新 `pnpm harness:v1-visual` / `frontend-full` 产物截图做一次人工视觉确认。
-4. 不再新增 V1 后功能，例如 ASR、桌面控制、浏览器控制、长期任务代理或完整模型管理。
+4. 不再新增 V1 后功能，例如高级 VAD/唤醒词、桌面控制、浏览器控制、长期任务代理或完整模型管理。
 5. 每个后续 closeout PR 合入前，按 [V1 Completion Evidence Checklist](../v1-completion-evidence.md) 跑它触及路径的 harness；前端可见改动必须跑 `pnpm harness:frontend-full` 或等同 CI 证据。
 
 ## V1 完成判定

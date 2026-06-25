@@ -9,6 +9,11 @@ export interface MouthOpenMappingOptions {
   curve?: number;
 }
 
+export interface MouthOpenTimelineOptions extends MouthOpenMappingOptions {
+  sampleRate: number;
+  frameMs?: number;
+}
+
 export function measureAudioLevel(samples: Uint8Array | Float32Array): AudioLevel {
   if (samples.length === 0) {
     return { rms: 0, peak: 0 };
@@ -40,6 +45,26 @@ export function mapAudioLevelToMouthOpen(level: AudioLevel, options: MouthOpenMa
 
   const normalized = clamp01((level.rms - noiseGate) / (1 - noiseGate));
   return clamp01(Math.pow(normalized, curve) * gain);
+}
+
+export function createMouthOpenTimelineFromPcm(
+  samples: Float32Array,
+  options: MouthOpenTimelineOptions
+): number[] {
+  if (samples.length === 0 || !Number.isFinite(options.sampleRate) || options.sampleRate <= 0) {
+    return [0];
+  }
+  const frameSize = Math.max(1, Math.round(options.sampleRate * ((options.frameMs ?? 50) / 1000)));
+  const timeline: number[] = [];
+  for (let offset = 0; offset < samples.length; offset += frameSize) {
+    timeline.push(
+      mapAudioLevelToMouthOpen(measureAudioLevel(samples.subarray(offset, Math.min(samples.length, offset + frameSize))), options)
+    );
+  }
+  if (timeline[timeline.length - 1] !== 0) {
+    timeline.push(0);
+  }
+  return timeline;
 }
 
 function normalizeSample(sample: number, source: Uint8Array | Float32Array): number {

@@ -55,6 +55,65 @@ describe("RuntimeService", () => {
     });
   });
 
+  it("routes fake microphone audio through ASR and then chat", async () => {
+    const service = new RuntimeService(defaultGreyfieldConfig);
+    const events: unknown[] = [];
+
+    await service.handle({ type: "audio.chunk", data: new Uint8Array([1, 2, 3]) }, (event) => {
+      events.push(event);
+    });
+    await service.handle({ type: "audio.end" }, (event) => {
+      events.push(event);
+    });
+
+    expect(events).toContainEqual({ type: "runtime.status", status: "listening" });
+    expect(events).toContainEqual({ type: "transcript.final", text: "这是麦克风语音输入。" });
+    expect(events).toContainEqual({ type: "assistant.text.final", text: "你好，我醒着。现在可以继续做桌宠了。" });
+    expect(await service.getRecentTurns(2)).toMatchObject([
+      { role: "user", content: "这是麦克风语音输入。" },
+      { role: "assistant", content: "你好，我醒着。现在可以继续做桌宠了。" }
+    ]);
+  });
+
+  it("uses the OpenAI-compatible ASR provider for microphone audio", async () => {
+    const fetch = vi.fn(async (url) => {
+      if (String(url).endsWith("/audio/transcriptions")) {
+        return new Response(JSON.stringify({ text: "远程语音输入" }), { status: 200 });
+      }
+      return new Response(null, { status: 500 });
+    });
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          asr: "openai-compatible",
+          baseUrl: "https://voice.example/v1",
+          apiKey: "secret",
+          asrModel: "whisper-1"
+        }
+      },
+      { fetch }
+    );
+    const events: unknown[] = [];
+
+    await service.handle({ type: "audio.chunk", data: new Uint8Array([1, 2, 3]) }, (event) => {
+      events.push(event);
+    });
+    await service.handle({ type: "audio.end" }, (event) => {
+      events.push(event);
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://voice.example/v1/audio/transcriptions",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.any(FormData)
+      })
+    );
+    expect(events).toContainEqual({ type: "transcript.final", text: "远程语音输入" });
+  });
+
   it("uses the OpenAI-compatible TTS provider when voice output is enabled", async () => {
     const audio = new Uint8Array([0x49, 0x44, 0x33, 0x03]);
     const fetch = vi.fn(async (url) => {

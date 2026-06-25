@@ -26,6 +26,8 @@
         "Settings editable fields, provider readiness, Test LLM, and active-chat rejection",
         "Chat waiting/generating/stopped/failed/retry UI through provider failure and abort harnesses",
         "Stop clearing speech playback, mouth-open state, and audio queue",
+        "Microphone voice input through ASR and the normal chat runtime",
+        "Decoded-audio waveform mouth movement during real TTS playback",
         "Real OpenAI-compatible TTS bytes entering Electron renderer playback when credentials are supplied",
         "restart-visible recent context continuity"
       ]
@@ -200,14 +202,17 @@
         "When enabled with OpenAI-compatible TTS settings, sentence audio is synthesized through /audio/speech and played as real audio bytes.",
         "Settings exposes Test Voice so users can validate TTS settings without sending a chat message.",
         "Fake TTS bytes still fall back to local renderer speech output for offline harness coverage.",
+        "Chat exposes microphone voice input; browser recording bytes are sent through Electron main, ASR, transcript.final, and the same runtime text path as typed messages.",
+        "OpenAI-compatible ASR posts microphone audio to /audio/transcriptions while fake ASR keeps offline harness coverage deterministic.",
+        "Renderer mouth-open is driven during real audio playback from decoded PCM audio energy instead of a one-time compressed-byte estimate.",
         "Finished renderer speech playback clears queued speech UI state across desktop windows.",
         "TTS or speech playback failure reports a voice-only error and does not remove the assistant text reply or session turn.",
         "Long replies are capped by a per-turn TTS character budget so playback cannot run unbounded.",
-        "Stop cancels active renderer speech playback and clears queued speech UI state.",
-        "Audio runtime exposes a pure RMS VAD boundary before microphone integration."
+        "Stop cancels microphone listening, ASR/TTS runtime state, active renderer speech playback, queued speech UI state, and mouth-open state.",
+        "Audio runtime exposes pure RMS VAD, microphone recorder, and decoded PCM mouth-open timeline boundaries."
       ],
       "qa": {
-        "script": "vitest sentence-splitter vad tts-text-budget speech-synthesis-output openai-compatible-tts-provider runtime-loop runtime-service desktop-runtime-bridge config; pnpm harness:electron:stop-audio; optional provider proof: pnpm harness:real-tts; optional desktop provider proof: pnpm harness:electron:real-tts"
+        "script": "vitest sentence-splitter vad tts-text-budget speech-synthesis-output microphone-recorder audio-level-meter openai-compatible-asr-provider openai-compatible-tts-provider runtime-loop runtime-service desktop-runtime-bridge config; pnpm harness:electron:stop-audio; pnpm harness:electron:voice-input; optional provider proof: pnpm harness:real-tts; optional desktop provider proof: pnpm harness:electron:real-tts"
       }
     },
     {
@@ -284,7 +289,8 @@
       "package": "packages/dev-harness",
       "acceptance": [
         "Fake LLM, ASR, and TTS run without network credentials.",
-        "Acceptance verifies text -> LLM -> TTS -> stage event flow."
+        "Acceptance verifies text -> LLM -> TTS runtime event flow.",
+        "Acceptance verifies fake audio input -> ASR -> transcript -> LLM -> TTS without microphone hardware."
       ],
       "qa": {
         "script": "pnpm harness:acceptance"

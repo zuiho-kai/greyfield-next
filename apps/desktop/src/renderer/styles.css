@@ -587,11 +587,12 @@ h1 {
 
 .action-buttons {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 10px;
 }
 
 .send-button,
+.voice-input-button,
 .stop-button {
   display: flex;
   align-items: center;
@@ -631,16 +632,28 @@ h1 {
   color: #ffffff;
 }
 
-.stop-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(143, 49, 80, 0.3);
+.voice-input-button {
+  background: linear-gradient(135deg, #3c5f8f 0%, #24466f 100%);
+  color: #ffffff;
 }
 
-.stop-button:active {
+.voice-input-button--active {
+  background: linear-gradient(135deg, #b65f2a 0%, #82421f 100%);
+}
+
+.stop-button:hover,
+.voice-input-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(36, 70, 111, 0.28);
+}
+
+.stop-button:active,
+.voice-input-button:active:not(:disabled) {
   transform: translateY(0);
 }
 
-.stop-button:disabled {
+.stop-button:disabled,
+.voice-input-button:disabled {
   cursor: not-allowed;
   opacity: 0.52;
   transform: none;

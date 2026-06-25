@@ -114,6 +114,26 @@
           </header>
           <div class="settings-fields">
             <label>
+              <span>ASR</span>
+              <select
+                :value="state.settings.providerASR"
+                autocomplete="off"
+                @change="$emit('update-setting', 'providerASR', valueFrom($event))"
+              >
+                <option value="fake">Fake microphone</option>
+                <option value="openai-compatible">OpenAI-compatible</option>
+              </select>
+            </label>
+            <label>
+              <span>ASR Model</span>
+              <input
+                :value="state.settings.providerASRModel"
+                autocomplete="off"
+                spellcheck="false"
+                @input="$emit('update-setting', 'providerASRModel', valueFrom($event))"
+              />
+            </label>
+            <label>
               <span>TTS</span>
               <select
                 :value="state.settings.providerTTS"

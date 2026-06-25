@@ -1,8 +1,10 @@
 import {
   GreyfieldRuntime,
   InMemorySessionStore,
+  OpenAICompatibleASRProvider,
   OpenAICompatibleLLMProvider,
   OpenAICompatibleTTSProvider,
+  type ASRProvider,
   type CharacterPersona,
   type LLMProvider,
   type MemoryStore,
@@ -22,6 +24,7 @@ export interface RuntimeServiceOptions {
   sessionStore?: SessionStore;
   recentTurnLimit?: number;
   llmTimeoutMs?: number;
+  asrTimeoutMs?: number;
   ttsTimeoutMs?: number;
 }
 
@@ -60,7 +63,14 @@ export class RuntimeService {
 
   async handle(input: RuntimeInputEvent, emit: RuntimeEventHandler): Promise<void> {
     if (input.type === "runtime.interrupt" && this.activeRuntime) {
-      await this.activeRuntime.handle(input, emit);
+      const runtime = this.activeRuntime;
+      try {
+        await runtime.handle(input, emit);
+      } finally {
+        if (this.activeRuntime === runtime) {
+          this.activeRuntime = undefined;
+        }
+      }
       return;
     }
 
@@ -68,14 +78,31 @@ export class RuntimeService {
       await this.activeRuntime.handle({ type: "runtime.interrupt" }, emit);
     }
 
+    if (input.type === "audio.chunk" && this.activeRuntime) {
+      await this.activeRuntime.handle(input, emit);
+      return;
+    }
+
+    if (input.type === "audio.end" && this.activeRuntime) {
+      const runtime = this.activeRuntime;
+      try {
+        await runtime.handle(input, emit);
+      } finally {
+        if (this.activeRuntime === runtime) {
+          this.activeRuntime = undefined;
+        }
+      }
+      return;
+    }
+
     const runtime = await this.createRuntime();
-    if (input.type === "text.input") {
+    if (input.type === "text.input" || input.type === "audio.chunk") {
       this.activeRuntime = runtime;
     }
     try {
       await runtime.handle(input, emit);
     } finally {
-      if (this.activeRuntime === runtime) {
+      if (this.activeRuntime === runtime && input.type !== "audio.chunk") {
         this.activeRuntime = undefined;
       }
     }
@@ -179,6 +206,7 @@ export class RuntimeService {
     const persona = await this.loadPersona();
     return new GreyfieldRuntime({
       llm: this.createLLMProvider(),
+      asr: this.createASRProvider(),
       tts: this.createTTSProvider(),
       memoryStore: this.memoryStore,
       sessionStore: this.sessionStore,
@@ -223,6 +251,23 @@ export class RuntimeService {
       });
     }
     return new MainFakeLLMProvider();
+  }
+
+  private createASRProvider(): ASRProvider {
+    if (this.config.provider.asr === "openai-compatible") {
+      const providerConfigError = this.validateASRProviderConfig("transcribing");
+      if (providerConfigError) {
+        throw new Error(providerConfigError);
+      }
+      return new OpenAICompatibleASRProvider({
+        baseUrl: this.config.provider.baseUrl,
+        apiKey: this.config.provider.apiKey,
+        model: this.config.provider.asrModel,
+        fetch: this.options.fetch,
+        timeoutMs: this.options.asrTimeoutMs
+      });
+    }
+    return new MainFakeASRProvider();
   }
 
   private createTTSProvider(): TTSProvider {
@@ -272,6 +317,22 @@ export class RuntimeService {
     }
     return "";
   }
+
+  private validateASRProviderConfig(action: "transcribing"): string {
+    if (this.config.provider.asr !== "openai-compatible") {
+      return "";
+    }
+    if (this.config.provider.baseUrl.trim().length === 0) {
+      return `OpenAI-compatible ASR needs a Base URL before ${action}.`;
+    }
+    if (this.config.provider.apiKey.trim().length === 0) {
+      return `OpenAI-compatible ASR needs an API key before ${action}.`;
+    }
+    if (this.config.provider.asrModel.trim().length === 0) {
+      return `OpenAI-compatible ASR needs an ASR model before ${action}.`;
+    }
+    return "";
+  }
 }
 
 class MainFakeLLMProvider implements LLMProvider {
@@ -284,6 +345,15 @@ class MainFakeLLMProvider implements LLMProvider {
 class MainFakeTTSProvider implements TTSProvider {
   async synthesize(text: string): Promise<Uint8Array> {
     return new TextEncoder().encode(`fake-audio:${text}`);
+  }
+}
+
+class MainFakeASRProvider implements ASRProvider {
+  async transcribe(audio: Uint8Array): Promise<string> {
+    if (audio.length === 0) {
+      return "";
+    }
+    return "这是麦克风语音输入。";
   }
 }
 

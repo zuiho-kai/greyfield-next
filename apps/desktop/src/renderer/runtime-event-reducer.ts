@@ -14,6 +14,10 @@ export function reduceRuntimeEvent(
       return {
         ...state,
         status: event.status,
+        voiceInput: {
+          status: "idle",
+          message: ""
+        },
         assistantDraft: "",
         audioQueue: [],
         stage: {
@@ -26,6 +30,18 @@ export function reduceRuntimeEvent(
     return {
       ...state,
       status: event.status,
+      voiceInput:
+        event.status === "listening"
+          ? {
+              status: state.voiceInput.status === "transcribing" ? "transcribing" : "listening",
+              message: state.voiceInput.status === "transcribing" ? "Transcribing voice..." : "Listening..."
+            }
+          : event.status === "thinking" || event.status === "speaking" || event.status === "idle"
+            ? {
+                status: "idle",
+                message: ""
+              }
+            : state.voiceInput,
       stage: {
         ...state.stage,
         ...stageReactionForStatus(event.status, interactionProfile)
@@ -40,6 +56,10 @@ export function reduceRuntimeEvent(
       status: "error",
       errorMessage: event.message,
       voiceErrorMessage: "",
+      voiceInput: {
+        status: "error",
+        message: event.message
+      },
       inputDraft: lastUserMessage,
       assistantDraft: "",
       audioQueue: [],
@@ -47,6 +67,21 @@ export function reduceRuntimeEvent(
         ...state.stage,
         mouthOpen: 0
       }
+    };
+  }
+
+  if (event.type === "transcript.final") {
+    if (state.status === "interrupted") {
+      return state;
+    }
+    return {
+      ...state,
+      voiceInput: {
+        status: "idle",
+        message: ""
+      },
+      errorMessage: "",
+      messages: [...state.messages, { role: "user", text: event.text }]
     };
   }
 

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { SpeechOutputOptions } from "@greyfield/audio-runtime";
 import { createDesktopRuntimeBridge, createDesktopRuntimeBridgeWithSpeech } from "../desktop-runtime-bridge";
 import { API_KEY_MASK } from "../../shared/secrets";
 
@@ -92,6 +93,8 @@ describe("createDesktopRuntimeBridge", () => {
     bridge.updateSettings({
       providerModel: "local-model-b",
       providerLLM: "openai-compatible",
+      providerASR: "openai-compatible",
+      providerASRModel: "whisper-1",
       providerBaseUrl: "https://llm.example/v1",
       providerApiKey: "secret",
       providerTTS: "openai-compatible",
@@ -112,6 +115,8 @@ describe("createDesktopRuntimeBridge", () => {
         {
           provider: {
             llm: "openai-compatible",
+            asr: "openai-compatible",
+            asrModel: "whisper-1",
             model: "local-model-b",
             tts: "openai-compatible",
             ttsModel: "FunAudioLLM/CosyVoice2-0.5B",
@@ -214,11 +219,11 @@ describe("createDesktopRuntimeBridge", () => {
 
     expect(testing.voiceTest).toEqual({ status: "testing", message: "Testing voice playback..." });
     expect(sent).toContainEqual(["provider:test-voice", {}]);
-    expect(speechOutput.speak).toHaveBeenCalledWith("Test voice.", {
+    expect(speechOutput.speak).toHaveBeenCalledWith("Test voice.", expect.objectContaining({
       audio: new Uint8Array([0x49, 0x44, 0x33, 0x03]),
       voiceId: "voice-greyfield",
       volume: 0.5
-    });
+    }));
     expect(bridge.getState().voiceTest).toEqual({
       status: "success",
       message: "Voice test succeeded."
@@ -293,11 +298,70 @@ describe("createDesktopRuntimeBridge", () => {
     runtimeEvent?.({ type: "assistant.audio.chunk", text: "Speak this.", data: new Uint8Array([1]) });
     await Promise.resolve();
 
-    expect(speechOutput.speak).toHaveBeenCalledWith("Speak this.", {
+    expect(speechOutput.speak).toHaveBeenCalledWith("Speak this.", expect.objectContaining({
       audio: new Uint8Array([1]),
       voiceId: "voice-greyfield",
       volume: 0.5
+    }));
+  });
+
+  it("sends microphone audio to Electron main and renders the transcript as user text", () => {
+    const sent: Array<[string, unknown]> = [];
+    let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: (channel, payload) => sent.push([channel, payload]),
+      on: (channel, handler) => {
+        if (channel === "runtime:event") {
+          runtimeEvent = handler as typeof runtimeEvent;
+        }
+        return () => undefined;
+      }
     });
+
+    const listening = bridge.startVoiceInput();
+    const transcribing = bridge.finishVoiceInput(new Uint8Array([1, 2, 3]));
+    runtimeEvent?.({ type: "transcript.final", text: "语音消息" });
+
+    expect(listening.voiceInput).toEqual({ status: "listening", message: "Listening..." });
+    expect(transcribing.voiceInput).toEqual({ status: "transcribing", message: "Transcribing voice..." });
+    expect(sent).toContainEqual(["runtime:input", { type: "audio.chunk", data: new Uint8Array() }]);
+    expect(sent).toContainEqual(["runtime:input", { type: "audio.chunk", data: new Uint8Array([1, 2, 3]) }]);
+    expect(sent).toContainEqual(["runtime:input", { type: "audio.end" }]);
+    expect(bridge.getState().messages).toContainEqual({ role: "user", text: "语音消息" });
+    expect(bridge.getState().voiceInput).toEqual({ status: "idle", message: "" });
+  });
+
+  it("drives mouth-open while real audio playback reports decoded levels", async () => {
+    let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
+    let capturedOptions: SpeechOutputOptions | undefined;
+    const mouthOpenValues: number[] = [];
+    const bridge = createDesktopRuntimeBridgeWithSpeech(
+      {
+        send: () => undefined,
+        on: (channel, handler) => {
+          if (channel === "runtime:event") {
+            runtimeEvent = handler as typeof runtimeEvent;
+          }
+          return () => undefined;
+        }
+      },
+      {
+        speak: vi.fn(async (_text, options) => {
+          capturedOptions = options;
+          options?.onMouthOpen?.(0.73);
+        }),
+        cancel: vi.fn()
+      }
+    );
+    bridge.updateSettings({ voiceSpeechEnabled: true });
+    bridge.onStateChange((state) => mouthOpenValues.push(state.stage.mouthOpen));
+
+    runtimeEvent?.({ type: "assistant.audio.chunk", text: "Speak this.", data: new Uint8Array([1]) });
+    await Promise.resolve();
+
+    expect(capturedOptions?.onMouthOpen).toBeTypeOf("function");
+    expect(mouthOpenValues).toContain(0.73);
+    expect(bridge.getState().stage.mouthOpen).toBe(0);
   });
 
   it("removes speech items from the queue after playback finishes", async () => {

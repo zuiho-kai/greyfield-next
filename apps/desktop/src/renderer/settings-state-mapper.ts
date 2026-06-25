@@ -7,10 +7,12 @@ export function settingsFromConfig(config: RendererGreyfieldConfig | GreyfieldCo
   const hasApiKey = "hasApiKey" in config.provider ? config.provider.hasApiKey : config.provider.apiKey.length > 0;
   return {
     providerLLM: config.provider.llm,
+    providerASR: config.provider.asr,
     providerBaseUrl: config.provider.baseUrl,
     providerApiKey: isMaskedApiKey(config.provider.apiKey) ? "" : config.provider.apiKey,
     providerHasApiKey: hasApiKey,
     providerModel: config.provider.model,
+    providerASRModel: config.provider.asrModel,
     providerTTS: config.provider.tts,
     providerTTSModel: config.provider.ttsModel,
     voiceId: config.voice.id,
@@ -32,9 +34,11 @@ export function configFromSettings(settings: DesktopSettingsState): GreyfieldCon
     provider: {
       ...defaultGreyfieldConfig.provider,
       llm: settings.providerLLM,
+      asr: settings.providerASR,
       baseUrl: settings.providerBaseUrl,
       apiKey: settings.providerApiKey,
       model: settings.providerModel,
+      asrModel: settings.providerASRModel,
       tts: settings.providerTTS,
       ttsModel: settings.providerTTSModel
     },
@@ -71,8 +75,14 @@ export function settingsPatchToConfigPatch(patch: DesktopSettingsPatch): Greyfie
   if (patch.providerTTS !== undefined) {
     configPatch.provider = { ...configPatch.provider, tts: patch.providerTTS };
   }
+  if (patch.providerASR !== undefined) {
+    configPatch.provider = { ...configPatch.provider, asr: patch.providerASR };
+  }
   if (patch.providerTTSModel !== undefined) {
     configPatch.provider = { ...configPatch.provider, ttsModel: patch.providerTTSModel };
+  }
+  if (patch.providerASRModel !== undefined) {
+    configPatch.provider = { ...configPatch.provider, asrModel: patch.providerASRModel };
   }
   if (patch.providerLLM !== undefined) {
     configPatch.provider = { ...configPatch.provider, llm: patch.providerLLM };

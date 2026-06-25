@@ -7,6 +7,8 @@ import { defaultGreyfieldConfig, loadGreyfieldConfig, mergeConfig } from "../con
 describe("Greyfield config", () => {
   it("keeps provider, voice, microphone, window, live2d, and character settings in one schema", () => {
     expect(defaultGreyfieldConfig.provider.llm).toBe("fake");
+    expect(defaultGreyfieldConfig.provider.asr).toBe("fake");
+    expect(defaultGreyfieldConfig.provider.asrModel).toBe("whisper-1");
     expect(defaultGreyfieldConfig.provider.baseUrl).toBe("https://api.openai.com/v1");
     expect(defaultGreyfieldConfig.audio.microphoneId).toBe("default");
     expect(defaultGreyfieldConfig.characterFile).toBe("characters/greyfield.yaml");
@@ -30,6 +32,7 @@ describe("Greyfield config", () => {
       asr: "fake",
       tts: "openai-compatible",
       model: "local-test-model",
+      asrModel: "whisper-1",
       ttsModel: "FunAudioLLM/CosyVoice2-0.5B",
       baseUrl: "https://api.openai.com/v1",
       apiKey: ""

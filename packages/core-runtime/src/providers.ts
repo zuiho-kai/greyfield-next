@@ -19,8 +19,12 @@ export interface LLMProvider {
   stream(messages: ChatMessage[], tools?: ToolDefinition[], options?: LLMStreamOptions): AsyncIterable<string>;
 }
 
+export interface ASRTranscribeOptions {
+  signal?: AbortSignal;
+}
+
 export interface ASRProvider {
-  transcribe(audio: Uint8Array): Promise<string>;
+  transcribe(audio: Uint8Array, options?: ASRTranscribeOptions): Promise<string>;
 }
 
 export interface TTSStreamOptions {

@@ -46,6 +46,7 @@ The `frontend-full` profile runs the frontend-visible V1 guard:
 - Chat provider abort
 - Stop audio
 - Real OpenAI-compatible TTS Electron harness when `GREYFIELD_REAL_TTS_*` or compatible `GREYFIELD_REAL_LLM_*` env vars are supplied
+- Microphone ASR and waveform mouth harness with local OpenAI-compatible ASR/LLM/TTS server
 - restart context
 
 Current local voice-output closeout evidence on the working tree adds a real TTS desktop playback guard:
@@ -53,6 +54,17 @@ Current local voice-output closeout evidence on the working tree adds a real TTS
 - `pnpm harness:real-tts` with SiliconFlow-compatible env -> returned playable MP3 bytes (`headerHex: "4944330300000000"`).
 - `pnpm harness:electron:real-tts` -> `settingsVoiceTestWorked: true`, `audioElementPlayed: true`, `playbackFinishClearedQueue: true`, `stopCanceledAudioElement: true`, `audioQueueCleared: true`, `mouthOpenReset: true`.
 - `pnpm harness:frontend-full` with real TTS env -> 15 checks passed in 2m 34s, including the new real OpenAI-compatible TTS Electron harness.
+
+Current local full-voice closeout evidence on this working tree adds the two missing V1 voice paths:
+
+- `pnpm typecheck` -> passed.
+- Targeted core/audio/main/renderer/persistence tests -> 9 files / 90 tests passed.
+- `pnpm test:backend` -> 26 files / 96 tests passed.
+- `pnpm test:frontend` -> 26 files / 108 tests passed.
+- `pnpm harness:acceptance` -> fake text and fake audio input paths passed.
+- `pnpm harness:electron:voice-input` -> `microphoneStopCanceledInput: true`, `transcriptReachedChat: true`, `ttsPlaybackStarted: true`, `waveformMouthMoved: true`, `stopCanceledPlayback: true`, `queueCleared: true`, `mouthOpenReset: true`.
+- `pnpm harness:frontend-full` -> 16 checks passed in 2m 41s, including the new microphone ASR and waveform mouth harness.
+- The new voice-input harness uses a local OpenAI-compatible ASR/LLM/TTS server plus a microphone probe, so it does not depend on microphone hardware, user audio, or external API credentials.
 
 Historical local #41 integration verification was run on `codex/v1-integration-audit` before merge and remains useful as the integration audit trail:
 
@@ -115,12 +127,14 @@ Visual review artifacts from `pnpm harness:v1-visual` were inspected from `.cach
 | Show short assistant text in pet bubble while full history stays in Chat | `pnpm harness:electron:bubble-long-reply`; `pnpm harness:v1-visual` screenshots; main `frontend-full` on `c53b709` | Current on main through #46 |
 | Keep bubble inside right edge and remove bubble hit area when disabled | Merged #41 includes #26 `pnpm harness:electron:bubble-edge-clickthrough` and screenshots under `.cache/greyfield-bubble-edge-clickthrough/latest/`; latest output also proves `passThroughBubbleToggleKeptStoredShapeFresh: true` when the bubble is disabled during Model Pass Through; main `frontend-full` on `c53b709` | Current on main through #46 |
 | Enable real assistant speech output without sudden default audio | Merged #41 includes #29 Settings `Speak replies`, renderer Web Speech playback, default-quiet behavior, TTS failure isolation, long-reply speech budget, natural playback queue cleanup, and Electron proof that `savedVoiceSpeech: true`; current local closeout adds Settings `Test Voice`, `pnpm harness:real-tts`, and `pnpm harness:electron:real-tts` proof that real OpenAI-compatible `/audio/speech` MP3 bytes enter renderer audio playback; main `frontend-full` on `c53b709` remains the merged baseline | Current on local voice closeout; needs merge/current-head rerun before release claim |
-| Stop active speech playback, queued speech UI, and mouth-open state | Merged #41 includes `pnpm harness:electron:stop-audio`, keeps `pnpm harness:electron:provider-abort` passing, proves `playbackFinishClearedQueue`, `speechCanceled`, `audioQueueCleared`, and `mouthOpenReset`, and adds the integration fix proving Stop remains enabled while enabled voice output is still queued after text completion; #46 waits for Pet speech probe synchronization; main `frontend-full` on `c53b709` | Current on main through #46 |
+| Use microphone voice input to start a normal chat turn | Current local full-voice closeout adds Chat `Voice` recording, OpenAI-compatible ASR `/audio/transcriptions`, `transcript.final`, and normal runtime text routing; `pnpm harness:electron:voice-input` proves a microphone probe recording reaches ASR, the transcript appears as a user chat message, and the assistant reply appears through the existing chat path | Current on local full-voice closeout; needs merge/current-head rerun before release claim |
+| Drive Live2D mouth from decoded real audio waveform | Current local full-voice closeout adds decoded PCM mouth-open timeline in `audio-runtime` and renderer playback `onMouthOpen`; unit test `audio-level-meter` proves the PCM timeline mapping, and `pnpm harness:electron:voice-input` proves mouth-open becomes non-zero during local WAV TTS playback and returns to zero after Stop | Current on local full-voice closeout; needs merge/current-head rerun before release claim |
+| Stop active microphone input, ASR/TTS, speech playback, queued speech UI, and mouth-open state | Merged #41 includes `pnpm harness:electron:stop-audio`, keeps `pnpm harness:electron:provider-abort` passing, proves `playbackFinishClearedQueue`, `speechCanceled`, `audioQueueCleared`, and `mouthOpenReset`, and adds the integration fix proving Stop remains enabled while enabled voice output is still queued after text completion; #46 waits for Pet speech probe synchronization; current local full-voice closeout adds `pnpm harness:electron:voice-input`, proving Stop cancels microphone listening before ASR and later cancels active TTS playback while clearing queue and mouth-open state | Current on local full-voice closeout; needs merge/current-head rerun before release claim |
 
 ## Current Non-Claimable Paths
 
 - Real OpenAI-compatible provider evidence is not current because the required `GREYFIELD_REAL_LLM_*` env vars were unavailable. The fake provider path, provider failure path, Test LLM product states, and provider abort path are covered; real-provider chat still needs an env-backed rerun before any real endpoint release claim.
-- ASR and microphone conversation remain outside this TTS voice-output closeout and are not claimable from the TTS evidence above.
+- ASR, microphone conversation, and waveform mouth movement are only claimable from the current local full-voice closeout evidence after this PR is merged and rerun on current head; they are not claimable from the older TTS-only #54 evidence.
 - Current closeout PRs that touch Settings UI, Chat UI, Pet UI, Electron main lifecycle, or harness behavior must rerun the affected current-head evidence before merge. For frontend-visible changes, `pnpm harness:frontend-full` is the preferred aggregate gate.
 - A final V1 release claim still needs one current-head checkpoint record after the last closeout PR, covering `pnpm typecheck`, `pnpm test`, `pnpm harness:acceptance`, `pnpm harness:live2d`, `pnpm harness:pet:quick`, `pnpm harness:electron`, and the feature-specific harnesses listed above or `pnpm harness:frontend-full` when it covers the touched frontend surface.
 
