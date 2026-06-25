@@ -12,21 +12,21 @@ export function resolveLive2DFixturePath(): string {
 
   const packageFixture = join(
     workspaceRoot,
-    "packages",
-    "stage-live2d",
-    "node_modules",
-    "live2dcubismcore",
-    "characters",
-    "haru_greeter_pro_jp",
+    "apps",
+    "desktop",
+    "public",
+    "assets",
+    "live2d",
+    "momose-hiyori",
     "runtime",
-    "haru_greeter_t03.model3.json"
+    "hiyori_free_t08.model3.json"
   );
   if (existsSync(packageFixture)) {
     return packageFixture;
   }
 
   throw new Error(
-    "No Live2D fixture found. Set GREYFIELD_LIVE2D_FIXTURE to a .model3.json file or install stage-live2d dependencies."
+    "No Live2D fixture found. Set GREYFIELD_LIVE2D_FIXTURE to a .model3.json file or install the official sample assets."
   );
 }
 

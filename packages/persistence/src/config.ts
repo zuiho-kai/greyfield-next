@@ -6,7 +6,7 @@ export { defaultGreyfieldConfig, mergeConfig, type GreyfieldConfig, type Greyfie
 export async function loadGreyfieldConfig(path: string): Promise<GreyfieldConfig> {
   try {
     const raw = await readFile(path, "utf8");
-    return mergeConfig(JSON.parse(raw) as GreyfieldConfigPatch);
+    return mergeConfig(JSON.parse(stripUtf8Bom(raw)) as GreyfieldConfigPatch);
   } catch (error) {
     if (isNotFoundError(error)) {
       return defaultGreyfieldConfig;
@@ -17,6 +17,10 @@ export async function loadGreyfieldConfig(path: string): Promise<GreyfieldConfig
 
 export async function saveGreyfieldConfig(path: string, config: GreyfieldConfig): Promise<void> {
   await writeFile(path, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+}
+
+function stripUtf8Bom(raw: string): string {
+  return raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
 }
 
 function isNotFoundError(error: unknown): boolean {

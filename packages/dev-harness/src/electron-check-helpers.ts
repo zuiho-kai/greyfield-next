@@ -21,6 +21,18 @@ export async function waitForLive2DTransform(
   throw new Error(`Timed out waiting for Live2D transform ${JSON.stringify(expected)}`);
 }
 
+export async function waitForLive2DModelPath(path: string, modelPath: string): Promise<typeof defaultGreyfieldConfig> {
+  const started = Date.now();
+  while (Date.now() - started < 5_000) {
+    const config = await readConfig(path).catch(() => null);
+    if (config?.live2d.modelPath === modelPath) {
+      return config;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Timed out waiting for Live2D model path ${modelPath}`);
+}
+
 export async function waitForSavedModel(path: string, model: string): Promise<typeof defaultGreyfieldConfig> {
   const started = Date.now();
   while (Date.now() - started < 5_000) {

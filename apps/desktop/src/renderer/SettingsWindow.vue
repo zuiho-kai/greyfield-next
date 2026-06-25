@@ -27,177 +27,228 @@
       </header>
 
       <section class="settings-panel" aria-label="Settings">
-        <label>
-          <span>Provider</span>
-          <select
-            :value="state.settings.providerLLM"
-            autocomplete="off"
-            @change="$emit('update-setting', 'providerLLM', valueFrom($event))"
+        <div class="settings-section">
+          <header class="settings-section__header">
+            <h2>Provider</h2>
+            <span>{{ providerStatus.label }}</span>
+          </header>
+          <div class="settings-fields">
+            <label>
+              <span>Provider</span>
+              <select
+                :value="state.settings.providerLLM"
+                autocomplete="off"
+                @change="$emit('update-setting', 'providerLLM', valueFrom($event))"
+              >
+                <option value="fake">Fake preview</option>
+                <option value="openai-compatible">OpenAI-compatible</option>
+              </select>
+            </label>
+            <label>
+              <span>Base URL</span>
+              <input
+                :value="state.settings.providerBaseUrl"
+                autocomplete="off"
+                spellcheck="false"
+                @input="$emit('update-setting', 'providerBaseUrl', valueFrom($event))"
+              />
+            </label>
+            <label>
+              <span>API Key</span>
+              <input
+                :value="state.settings.providerApiKey"
+                autocomplete="off"
+                spellcheck="false"
+                :placeholder="state.settings.providerHasApiKey ? 'Saved API key' : ''"
+                type="password"
+                @input="$emit('update-setting', 'providerApiKey', valueFrom($event))"
+              />
+            </label>
+            <label>
+              <span>Model</span>
+              <input
+                :value="state.settings.providerModel"
+                autocomplete="off"
+                spellcheck="false"
+                @input="$emit('update-setting', 'providerModel', valueFrom($event))"
+              />
+            </label>
+          </div>
+          <div class="provider-status" :class="`provider-status--${providerStatus.tone}`" role="status">
+            <strong>{{ providerStatus.label }}</strong>
+            <span>{{ providerStatus.detail }}</span>
+          </div>
+          <div class="settings-actions settings-actions--single">
+            <button
+              type="button"
+              class="test-llm-button"
+              :class="`test-llm-button--${testLlmAction.tone}`"
+              :disabled="testLlmAction.disabled"
+              @click="$emit('test-llm')"
+            >
+              {{ testLlmAction.label }}
+            </button>
+          </div>
+          <p
+            v-if="testLlmAction.disableReason"
+            class="provider-test-result provider-test-result--error"
+            role="status"
           >
-            <option value="fake">Fake preview</option>
-            <option value="openai-compatible">OpenAI-compatible</option>
-          </select>
-        </label>
-        <label>
-          <span>Base URL</span>
-          <input
-            :value="state.settings.providerBaseUrl"
-            autocomplete="off"
-            spellcheck="false"
-            @input="$emit('update-setting', 'providerBaseUrl', valueFrom($event))"
-          />
-        </label>
-        <label>
-          <span>API Key</span>
-          <input
-            :value="state.settings.providerApiKey"
-            autocomplete="off"
-            spellcheck="false"
-            :placeholder="state.settings.providerHasApiKey ? 'Saved API key' : ''"
-            type="password"
-            @input="$emit('update-setting', 'providerApiKey', valueFrom($event))"
-          />
-        </label>
-        <label>
-          <span>Model</span>
-          <input
-            :value="state.settings.providerModel"
-            autocomplete="off"
-            spellcheck="false"
-            @input="$emit('update-setting', 'providerModel', valueFrom($event))"
-          />
-        </label>
-        <div class="provider-status" :class="`provider-status--${providerStatus.tone}`" role="status">
-          <strong>{{ providerStatus.label }}</strong>
-          <span>{{ providerStatus.detail }}</span>
-        </div>
-        <label>
-          <span>Voice</span>
-          <input
-            :value="state.settings.voiceId"
-            autocomplete="off"
-            spellcheck="false"
-            @input="$emit('update-setting', 'voiceId', valueFrom($event))"
-          />
-        </label>
-        <label>
-          <span>Speak</span>
-          <input
-            :checked="state.settings.voiceSpeechEnabled"
-            aria-label="Speak replies"
-            type="checkbox"
-            @change="$emit('update-boolean-setting', 'voiceSpeechEnabled', checkedFrom($event))"
-          />
-        </label>
-        <label>
-          <span>Volume</span>
-          <input
-            :value="state.settings.voiceVolume"
-            aria-label="Voice volume"
-            type="number"
-            min="0"
-            max="1"
-            step="0.05"
-            @input="$emit('update-numeric-setting', 'voiceVolume', valueFrom($event))"
-          />
-        </label>
-        <label>
-          <span>Mic</span>
-          <input
-            :value="state.settings.microphoneId"
-            autocomplete="off"
-            spellcheck="false"
-            @input="$emit('update-setting', 'microphoneId', valueFrom($event))"
-          />
-        </label>
-        <label>
-          <span>Character</span>
-          <input
-            :value="state.settings.characterFile"
-            autocomplete="off"
-            spellcheck="false"
-            @input="$emit('update-setting', 'characterFile', valueFrom($event))"
-          />
-        </label>
-        <label>
-          <span>Live2D</span>
-          <input
-            :value="state.settings.modelPath"
-            autocomplete="off"
-            spellcheck="false"
-            @input="$emit('update-setting', 'modelPath', valueFrom($event))"
-          />
-        </label>
-        <div class="settings-actions">
-          <button type="button" @click="$emit('choose-model')">Choose model</button>
-          <button type="button" @click="$emit('reset-transform')">Reset transform</button>
-          <button
-            type="button"
-            class="test-llm-button"
-            :class="`test-llm-button--${testLlmAction.tone}`"
-            :disabled="testLlmAction.disabled"
-            @click="$emit('test-llm')"
+            {{ testLlmAction.disableReason }}
+          </p>
+          <p
+            v-else-if="providerTestStatus"
+            class="provider-test-result"
+            :class="`provider-test-result--${providerTestStatus.tone}`"
+            role="status"
           >
-            {{ testLlmAction.label }}
-          </button>
+            <strong>{{ providerTestStatus.label }}</strong>
+            <span>{{ providerTestStatus.detail }}</span>
+          </p>
         </div>
-        <p
-          v-if="testLlmAction.disableReason"
-          class="provider-test-result provider-test-result--error"
-          role="status"
-        >
-          {{ testLlmAction.disableReason }}
-        </p>
-        <p
-          v-else-if="providerTestStatus"
-          class="provider-test-result"
-          :class="`provider-test-result--${providerTestStatus.tone}`"
-          role="status"
-        >
-          <strong>{{ providerTestStatus.label }}</strong>
-          <span>{{ providerTestStatus.detail }}</span>
-        </p>
-        <label>
-          <span>Scale</span>
-          <input
-            :value="state.settings.modelScale"
-            aria-label="Scale"
-            type="number"
-            min="0.2"
-            max="3"
-            step="0.05"
-            @input="$emit('update-numeric-setting', 'modelScale', valueFrom($event))"
-          />
-        </label>
-        <label>
-          <span>X</span>
-          <input
-            :value="state.settings.modelX"
-            aria-label="Model X"
-            type="number"
-            step="1"
-            @input="$emit('update-numeric-setting', 'modelX', valueFrom($event))"
-          />
-        </label>
-        <label>
-          <span>Y</span>
-          <input
-            :value="state.settings.modelY"
-            aria-label="Model Y"
-            type="number"
-            step="1"
-            @input="$emit('update-numeric-setting', 'modelY', valueFrom($event))"
-          />
-        </label>
-        <label>
-          <span>Bubble</span>
-          <input
-            :checked="state.settings.speechBubbleEnabled"
-            aria-label="Speech Bubble"
-            type="checkbox"
-            @change="$emit('update-boolean-setting', 'speechBubbleEnabled', checkedFrom($event))"
-          />
-        </label>
+
+        <div class="settings-section">
+          <header class="settings-section__header">
+            <h2>Voice</h2>
+            <span>{{ state.settings.voiceSpeechEnabled ? "On" : "Off" }}</span>
+          </header>
+          <div class="settings-fields">
+            <label>
+              <span>Voice</span>
+              <input
+                :value="state.settings.voiceId"
+                autocomplete="off"
+                spellcheck="false"
+                @input="$emit('update-setting', 'voiceId', valueFrom($event))"
+              />
+            </label>
+            <label>
+              <span>Speak</span>
+              <input
+                :checked="state.settings.voiceSpeechEnabled"
+                aria-label="Speak replies"
+                type="checkbox"
+                @change="$emit('update-boolean-setting', 'voiceSpeechEnabled', checkedFrom($event))"
+              />
+            </label>
+            <label>
+              <span>Volume</span>
+              <input
+                :value="state.settings.voiceVolume"
+                aria-label="Voice volume"
+                type="number"
+                min="0"
+                max="1"
+                step="0.05"
+                @input="$emit('update-numeric-setting', 'voiceVolume', valueFrom($event))"
+              />
+            </label>
+            <label>
+              <span>Mic</span>
+              <input
+                :value="state.settings.microphoneId"
+                autocomplete="off"
+                spellcheck="false"
+                @input="$emit('update-setting', 'microphoneId', valueFrom($event))"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <header class="settings-section__header">
+            <h2>Live2D</h2>
+            <span>{{ currentBundledLive2DModel?.label ?? "Custom" }}</span>
+          </header>
+          <div class="settings-fields">
+            <label>
+              <span>Character</span>
+              <input
+                :value="state.settings.characterFile"
+                autocomplete="off"
+                spellcheck="false"
+                @input="$emit('update-setting', 'characterFile', valueFrom($event))"
+              />
+            </label>
+            <label>
+              <span>Model</span>
+              <select
+                aria-label="Live2D model"
+                :value="selectedLive2DModel"
+                autocomplete="off"
+                @change="selectLive2DModel(valueFrom($event))"
+              >
+                <option
+                  v-for="model in bundledLive2DModels"
+                  :key="model.id"
+                  :value="model.modelPath"
+                  :disabled="!model.supported"
+                >
+                  {{ model.label }}
+                </option>
+                <option v-if="isCustomLive2DModel" :value="customLive2DModelValue">Custom model</option>
+              </select>
+            </label>
+          </div>
+          <p class="live2d-model-note" role="status">
+            {{ live2DModelNote }}
+          </p>
+          <div class="settings-actions">
+            <button type="button" @click="$emit('choose-model')">Import local model</button>
+            <button type="button" @click="$emit('reset-transform')">Reset transform</button>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <header class="settings-section__header">
+            <h2>Window</h2>
+            <span>{{ state.settings.speechBubbleEnabled ? "Bubble on" : "Bubble off" }}</span>
+          </header>
+          <div class="settings-fields settings-fields--compact">
+            <label>
+              <span>Scale</span>
+              <input
+                :value="state.settings.modelScale"
+                aria-label="Scale"
+                type="number"
+                min="0.2"
+                max="3"
+                step="0.05"
+                @input="$emit('update-numeric-setting', 'modelScale', valueFrom($event))"
+              />
+            </label>
+            <label>
+              <span>X</span>
+              <input
+                :value="state.settings.modelX"
+                aria-label="Model X"
+                type="number"
+                step="1"
+                @input="$emit('update-numeric-setting', 'modelX', valueFrom($event))"
+              />
+            </label>
+            <label>
+              <span>Y</span>
+              <input
+                :value="state.settings.modelY"
+                aria-label="Model Y"
+                type="number"
+                step="1"
+                @input="$emit('update-numeric-setting', 'modelY', valueFrom($event))"
+              />
+            </label>
+            <label>
+              <span>Bubble</span>
+              <input
+                :checked="state.settings.speechBubbleEnabled"
+                aria-label="Speech Bubble"
+                type="checkbox"
+                @change="$emit('update-boolean-setting', 'speechBubbleEnabled', checkedFrom($event))"
+              />
+            </label>
+          </div>
+        </div>
+
         <p v-if="state.voiceErrorMessage" class="provider-test-result provider-test-result--error" role="status">
           {{ state.voiceErrorMessage }}
         </p>
@@ -251,6 +302,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
+import {
+  bundledLive2DModels,
+  customLive2DModelValue,
+  findBundledLive2DModel
+} from "./bundled-live2d-models";
 import Live2DStageView from "./Live2DStageView.vue";
 import { describeProviderStatus } from "./settings-provider-status";
 import { describeProviderTestStatus, describeTestLlmAction } from "./settings-test-llm";
@@ -263,7 +319,7 @@ const props = defineProps<{
   locked: boolean;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   "update-setting": [key: keyof DesktopSettingsState, value: string];
   "update-numeric-setting": [key: "modelScale" | "modelX" | "modelY" | "voiceVolume", value: string];
   "update-boolean-setting": [key: "speechBubbleEnabled" | "voiceSpeechEnabled", value: boolean];
@@ -289,6 +345,20 @@ const testLlmAction = computed(() =>
   )
 );
 const providerTestStatus = computed(() => describeProviderTestStatus(props.state.providerTest));
+const currentBundledLive2DModel = computed(() => findBundledLive2DModel(props.state.settings.modelPath));
+const isCustomLive2DModel = computed(() => currentBundledLive2DModel.value === undefined);
+const selectedLive2DModel = computed(() =>
+  currentBundledLive2DModel.value?.modelPath ?? customLive2DModelValue
+);
+const live2DModelNote = computed(() => {
+  if (currentBundledLive2DModel.value?.note) {
+    return currentBundledLive2DModel.value.note;
+  }
+  if (currentBundledLive2DModel.value) {
+    return `Using bundled model: ${currentBundledLive2DModel.value.label}.`;
+  }
+  return `Using custom model: ${props.state.settings.modelPath}`;
+});
 
 function valueFrom(event: Event): string {
   return event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement ? event.target.value : "";
@@ -296,5 +366,16 @@ function valueFrom(event: Event): string {
 
 function checkedFrom(event: Event): boolean {
   return event.target instanceof HTMLInputElement ? event.target.checked : false;
+}
+
+function selectLive2DModel(modelPath: string): void {
+  if (!modelPath || modelPath === customLive2DModelValue) {
+    return;
+  }
+  const model = findBundledLive2DModel(modelPath);
+  if (!model?.supported) {
+    return;
+  }
+  emit("update-setting", "modelPath", model.modelPath);
 }
 </script>

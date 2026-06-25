@@ -11,6 +11,7 @@ import {
   dispatchStageWheelUntilScaleChange,
   findStagePoint,
   readConfig,
+  waitForLive2DModelPath,
   waitForLive2DTransform,
   waitForModelPassThrough,
   waitForSavedModel,
@@ -261,7 +262,24 @@ try {
   const auxiliaryWindowCloseRecovery = await verifyAuxiliaryWindowCloseRecovery();
   await settingsWindow.waitForSelector(".greyfield-shell");
   await settingsWindow.locator(".provider-status--preview", { hasText: "Fake provider is active" }).waitFor();
-  await settingsWindow.getByRole("button", { name: "Choose model" }).waitFor();
+  const live2DModelSelect = settingsWindow.getByLabel("Live2D model");
+  await live2DModelSelect.waitFor();
+  const live2DOptions = await settingsWindow.getByLabel("Live2D model").evaluate((select) =>
+    Array.from((select as HTMLSelectElement).options).map((option) => ({
+      text: option.textContent?.trim(),
+      value: option.value,
+      disabled: option.disabled
+    }))
+  );
+  if (live2DOptions.length !== 1 || live2DOptions[0]?.text !== "Momose Hiyori" || live2DOptions[0].disabled) {
+    throw new Error(`Settings Live2D model list is incomplete: ${JSON.stringify(live2DOptions)}`);
+  }
+  await live2DModelSelect.selectOption("assets/live2d/momose-hiyori/runtime/hiyori_free_t08.model3.json");
+  const savedLive2DModelConfig = await waitForLive2DModelPath(
+    configPath,
+    "assets/live2d/momose-hiyori/runtime/hiyori_free_t08.model3.json"
+  );
+  await settingsWindow.getByRole("button", { name: "Import local model" }).waitFor();
   await settingsWindow.getByLabel("Scale").fill("1.36");
   await settingsWindow.getByLabel("Model X").fill("42");
   await settingsWindow.getByLabel("Model Y").fill("-24");
@@ -308,6 +326,7 @@ try {
         petSnapshot,
         settingsBounds,
         resetTransform: resetConfig.live2d,
+        savedLive2DModel: savedLive2DModelConfig.live2d.modelPath,
         savedVoiceSpeech: savedVoiceConfig.voice.speechEnabled,
         savedApiKey: savedApiKeyConfig.provider.apiKey.length > 0,
         savedModel: savedConfig.provider.model,
