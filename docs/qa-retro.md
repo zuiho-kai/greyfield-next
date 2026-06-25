@@ -80,6 +80,43 @@ Current command split:
 - Speech bubble lifecycle: `pnpm harness:electron:bubble-long-reply`
 - Settings provider user path: `pnpm harness:electron:settings-provider-test`
 
+## 2026-06-25 Regression: Voice Closeout Claim Outran Actual V1 Scope
+
+The V1 voice closeout exposed a completion-discipline miss: the work first treated real TTS playback as enough progress, while the V1 product requirement still included microphone voice input, ASR-to-chat routing, waveform-driven mouth movement, and Stop coverage across the whole voice stack.
+
+What happened:
+
+- A TTS-only closeout was allowed to merge before the full V1 voice definition was re-audited.
+- ASR/microphone input and decoded-audio mouth movement were described as later work even though the user considered them required for V1.
+- The first full-voice implementation still had an old core-runtime mouth driver based on encoded TTS bytes, which was not a real waveform/energy signal.
+- Electron harnesses were run in parallel during verification, causing build/window/cache timing interference and false failures.
+- After the full-voice PR merged, docs still used stale "local branch / needs current-head rerun" wording until a docs-only follow-up corrected them.
+
+How it was fixed:
+
+- #55 added the full voice path: browser `MediaRecorder` microphone capture, OpenAI-compatible `/audio/transcriptions` ASR, `transcript.final`, and routing into the same runtime text path as typed messages.
+- Mouth movement ownership moved to renderer playback: `BrowserSpeechSynthesisOutput` decodes actual audio bytes with `AudioContext.decodeAudioData`, builds a PCM energy timeline, and drives `mouthOpen` through renderer state.
+- `core-runtime` now emits audio chunks and transcript events, but does not infer mouth movement from compressed/encoded audio bytes.
+- `pnpm harness:electron:voice-input` now proves microphone Stop cancellation, ASR -> Chat -> TTS playback, waveform mouth movement, Stop playback cancellation, queue clear, and mouth-open reset with a local OpenAI-compatible ASR/LLM/TTS server and browser probes.
+- `pnpm harness:frontend-full` includes the new voice-input harness, and #56 updated progress/planning/evidence docs after #55 merged and current-head checks passed.
+
+How we avoid repeating it:
+
+- Before closing a V1 feature, re-read the feature manifest and product plan and convert every explicit requirement into evidence rows. Do not shrink the requirement to the part already implemented.
+- "Real TTS works" is not the same as "voice companion works." Voice acceptance must cover input, ASR, transcript-to-chat, playback, mouth movement, Stop, queue cleanup, and user-visible state.
+- Core runtime must not own mouth motion from encoded audio bytes. Real mouth movement belongs to the playback layer that can decode the actual audio signal.
+- Electron/browser harnesses that build desktop artifacts or launch windows must run serially unless they are proven isolated. Parallel runs are acceptable for unit tests, not for shared Electron builds/windows.
+- A one-off harness failure can be diagnosed with a narrower rerun, but the final claim still needs the aggregate gate to pass afterward.
+- After merging a PR that changes completion status, update docs from main/current-head evidence, not from PR-local evidence.
+
+Reusable good patterns from the fix:
+
+- Local OpenAI-compatible fake servers give end-to-end provider coverage without external keys, microphone hardware, or user audio.
+- Browser probes are useful when they observe the same public behavior a user path depends on: microphone stop/cancel, audio playback start/cancel, and mouth-open state.
+- `frontend-full` should be the aggregate gate for frontend-visible work because it combines unit tests, production build, real Live2D rendering, visual screenshots, Settings/Chat/Pet flows, provider failure/abort paths, Stop audio, microphone ASR, and restart context.
+- Visual artifacts must be opened before handoff. Programmatic `noHorizontalOverflow` or `ok: true` is necessary but not enough for Settings, Chat, Pet, and bubble UI.
+- Keep PR-local evidence and main current-head evidence separate in docs. PR evidence is review evidence; release wording needs merged-head proof.
+
 ## 2026-05-25 Regression: Native Shape, Drag Growth, Slow Harness
 
 This round exposed a second QA miss: the tests verified that the pet could receive input, but not that the native masking strategy preserved visual quality and window geometry.
