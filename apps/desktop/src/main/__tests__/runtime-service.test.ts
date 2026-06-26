@@ -654,11 +654,24 @@ describe("RuntimeService", () => {
           })
         })
       );
+      await service.handle({ type: "text.input", text: "Hiyori 还是默认模型吗？" }, (event) => {
+        events.push(event);
+      });
 
       const snapshot = await service.getMemoryDebugSnapshot();
       expect(snapshot.threadId).toBe("local-desktop-thread");
-      expect(snapshot.recentTurns).toHaveLength(6);
+      expect(snapshot.recentTurns).toHaveLength(8);
       expect(snapshot.summarySegments).toHaveLength(1);
+      expect(snapshot.lastRecallContext?.items[0]).toMatchObject({
+        id: "summary-1",
+        reason: "cue:hiyori",
+        sourceTurnIds: [
+          "desktop-main-session-1",
+          "desktop-main-session-2",
+          "desktop-main-session-3",
+          "desktop-main-session-4"
+        ]
+      });
       expect(snapshot.summarySegments[0]?.sourceTurns.map((turn) => turn.turnId)).toEqual([
         "desktop-main-session-1",
         "desktop-main-session-2",

@@ -30,6 +30,7 @@ Implemented package boundaries:
 - `packages/persistence/src/jsonl-summary-segment-store.ts`: source-linked JSONL summary segment persistence.
 - `packages/core-runtime/src/runtime-loop.ts`: optional summary recall injection and extractive summary creation for configured runtimes.
 - `apps/desktop/src/main/runtime-service.ts`: desktop runtime wiring, memory debug snapshot, and file-backed summary store handoff.
+- `apps/desktop/src/renderer/SettingsWindow.vue`: minimal Memory inspection section for raw turn count, summary source turns, and last recall reason.
 - `packages/dev-harness/src/electron-memory-summary-check.ts`: ordinary Chat path proof for raw session + summary segment persistence.
 
 Acceptance covered by tests:
@@ -41,15 +42,15 @@ Acceptance covered by tests:
 - runtime prompt includes recalled summary context when a summary store is configured.
 - long chats create extractive summary segments for old turns that leave recent context.
 - desktop runtime writes `memory/summary-segments.jsonl` under user data and exposes summary/debug state.
-- Electron Chat harness proves three user messages create six raw turns, one source-linked summary segment, and a `memory.summary.created` event.
+- Electron Chat harness proves ordinary chat creates raw turns, one source-linked summary segment, a `memory.summary.created` event, a `memory.recall.context` event, and visible Settings Memory evidence.
 
 ## Next Slice
 
-V2.0a is not product-complete until users and harnesses can inspect what was recalled. The next implementation slice should add:
+V2.0a now has a minimal inspection loop. The next implementation slice should move from inspection to user control:
 
-- minimal Memory debug UI or renderer-accessible inspection panel.
 - fake summarizer tests if/when LLM-generated summaries replace the extractive draft.
-- recall trace display for UI and test artifacts.
+- user-facing memory management: edit, disable, delete, and export.
+- pinned memory and candidate review flow.
 
 ## Verification
 

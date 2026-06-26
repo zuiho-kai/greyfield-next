@@ -1,7 +1,7 @@
 import { _electron as electron, type ElectronApplication, type Page } from "playwright";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
 import { getElectronExecutablePath } from "./electron-install";
@@ -11,8 +11,11 @@ const desktopRoot = join(workspaceRoot, "apps", "desktop");
 const executablePath = await getElectronExecutablePath(desktopRoot);
 const tempDir = await mkdtemp(join(tmpdir(), "greyfield-electron-memory-"));
 const configPath = join(tempDir, "greyfield.config.json");
+const artifactDir = join(workspaceRoot, ".cache", "greyfield-memory-summary", "latest");
+const settingsScreenshotPath = join(artifactDir, "settings-memory.png");
 
 await writeFile(configPath, `${JSON.stringify(defaultGreyfieldConfig, null, 2)}\n`, "utf8");
+await mkdir(artifactDir, { recursive: true });
 
 const app = await electron.launch({
   executablePath,
@@ -47,10 +50,12 @@ try {
   await waitForAssistantCount(chat, 2);
   await sendMessage(chat, "第三轮：继续。");
   await waitForAssistantCount(chat, 3);
+  await sendMessage(chat, "Hiyori 还是默认模型吗？");
+  await waitForAssistantCount(chat, 4);
 
   const sessionJsonl = await waitForFileContaining(join(tempDir, "sessions", "desktop-main-session.jsonl"), [
     "第一轮：我喜欢 Hiyori。",
-    "第三轮：继续。"
+    "Hiyori 还是默认模型吗？"
   ]);
   const summaryJsonl = await waitForFileContaining(join(tempDir, "memory", "summary-segments.jsonl"), [
     "第一轮：我喜欢 Hiyori。",
@@ -71,6 +76,26 @@ try {
   if (!summaryCreated) {
     throw new Error(`Missing memory.summary.created runtime event: ${JSON.stringify(events)}`);
   }
+  const recallContext = events.some((event) => {
+    return (
+      typeof event === "object" &&
+      event !== null &&
+      "type" in event &&
+      event.type === "memory.recall.context"
+    );
+  });
+  if (!recallContext) {
+    throw new Error(`Missing memory.recall.context runtime event: ${JSON.stringify(events)}`);
+  }
+
+  const settings = await waitForRoleWindow(app, "settings");
+  await settings.waitForSelector(".greyfield-shell");
+  await settings.getByRole("button", { name: "Refresh memory" }).click();
+  await settings.locator(".memory-debug", { hasText: "Summaries 1" }).waitFor();
+  await settings.locator(".memory-debug", { hasText: "desktop-main-session-1" }).waitFor();
+  await settings.locator(".memory-debug", { hasText: "Last recall" }).waitFor();
+  await settings.locator(".memory-debug", { hasText: "cue:hiyori" }).waitFor();
+  await settings.screenshot({ path: settingsScreenshotPath, fullPage: true });
 
   console.log(
     JSON.stringify(
@@ -79,6 +104,9 @@ try {
         sessionLines: sessionJsonl.trim().split(/\r?\n/).length,
         summaryLines: summaryJsonl.trim().split(/\r?\n/).length,
         summaryCreated,
+        recallContext,
+        settingsMemoryVisible: true,
+        settingsScreenshotPath,
         summaryIncludesSourceTurns: true
       },
       null,
@@ -90,7 +118,7 @@ try {
   await rm(tempDir, { recursive: true, force: true });
 }
 
-async function waitForRoleWindow(app: ElectronApplication, roleName: "chat"): Promise<Page> {
+async function waitForRoleWindow(app: ElectronApplication, roleName: "chat" | "settings"): Promise<Page> {
   const started = Date.now();
   while (Date.now() - started < 5_000) {
     for (const page of app.windows()) {

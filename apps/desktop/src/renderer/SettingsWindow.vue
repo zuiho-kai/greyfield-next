@@ -316,6 +316,34 @@
           </div>
         </div>
 
+        <div class="settings-section memory-debug" aria-label="Memory debug">
+          <header class="settings-section__header">
+            <h2>Memory</h2>
+            <span>{{ memoryStatusLabel }}</span>
+          </header>
+          <div class="memory-debug__stats">
+            <span>Raw {{ memoryRawCount }}</span>
+            <span>Summaries {{ memorySummaryCount }}</span>
+            <span>Recall {{ memoryRecallCount }}</span>
+          </div>
+          <div v-if="latestSummary" class="memory-debug__block">
+            <strong>{{ latestSummary.id }}</strong>
+            <p>{{ latestSummary.summary }}</p>
+            <small>Sources {{ latestSummary.sourceTurns.map((turn) => turn.turnId).join(", ") }}</small>
+          </div>
+          <div v-else class="memory-debug__empty">No summary segments yet.</div>
+          <div v-if="latestRecallItem" class="memory-debug__block memory-debug__block--recall">
+            <strong>Last recall</strong>
+            <p>{{ latestRecallItem.reason }}</p>
+            <small>{{ latestRecallItem.sourceTurnIds.join(", ") }}</small>
+          </div>
+          <div class="settings-actions settings-actions--single">
+            <button type="button" @click="$emit('refresh-memory-debug')">
+              {{ state.memoryDebug.status === "loading" ? "Refreshing..." : "Refresh memory" }}
+            </button>
+          </div>
+        </div>
+
         <p v-if="state.voiceErrorMessage" class="provider-test-result provider-test-result--error" role="status">
           {{ state.voiceErrorMessage }}
         </p>
@@ -367,7 +395,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted } from "vue";
 import type { DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
 import {
   bundledLive2DModels,
@@ -398,6 +426,7 @@ const emit = defineEmits<{
   "test-voice": [];
   "preview-expression": [expression: string];
   "preview-motion": [group: string];
+  "refresh-memory-debug": [];
   "open-chat": [];
 }>();
 
@@ -415,6 +444,21 @@ const testLlmAction = computed(() =>
 const providerTestStatus = computed(() => describeProviderTestStatus(props.state.providerTest));
 const testVoiceAction = computed(() => describeTestVoiceAction(props.state));
 const voiceTestStatus = computed(() => describeVoiceTestStatus(props.state.voiceTest));
+const memorySnapshot = computed(() => props.state.memoryDebug.snapshot);
+const memoryRawCount = computed(() => memorySnapshot.value?.recentTurns.length ?? 0);
+const memorySummaryCount = computed(() => memorySnapshot.value?.summarySegments.length ?? 0);
+const memoryRecallCount = computed(() => memorySnapshot.value?.lastRecallContext?.items.length ?? 0);
+const memoryStatusLabel = computed(() => {
+  if (props.state.memoryDebug.status === "loading") {
+    return "Refreshing";
+  }
+  if (!memorySnapshot.value) {
+    return "Not loaded";
+  }
+  return `${memorySummaryCount.value} summaries`;
+});
+const latestSummary = computed(() => memorySnapshot.value?.summarySegments.at(-1) ?? null);
+const latestRecallItem = computed(() => memorySnapshot.value?.lastRecallContext?.items[0] ?? null);
 const currentBundledLive2DModel = computed(() => findBundledLive2DModel(props.state.settings.modelPath));
 const isCustomLive2DModel = computed(() => currentBundledLive2DModel.value === undefined);
 const selectedLive2DModel = computed(() =>
@@ -428,6 +472,10 @@ const live2DModelNote = computed(() => {
     return `Using bundled model: ${currentBundledLive2DModel.value.label}.`;
   }
   return `Using custom model: ${props.state.settings.modelPath}`;
+});
+
+onMounted(() => {
+  emit("refresh-memory-debug");
 });
 
 function valueFrom(event: Event): string {

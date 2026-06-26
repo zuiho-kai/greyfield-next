@@ -210,9 +210,15 @@ function extractRecallCues(text: string, maxCues: number): string[] {
     counts.set(token, (counts.get(token) ?? 0) + 1);
   }
   return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .sort((a, b) => cueScore(b) - cueScore(a) || a[0].localeCompare(b[0]))
     .slice(0, maxCues)
     .map(([token]) => token);
+}
+
+function cueScore(entry: [string, number]): number {
+  const [token, count] = entry;
+  const asciiNameBoost = /^[a-z][a-z0-9_-]*$/i.test(token) ? 0.5 : 0;
+  return count + asciiNameBoost;
 }
 
 function tokenize(text: string): Set<string> {

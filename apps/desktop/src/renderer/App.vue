@@ -58,6 +58,7 @@
     @test-voice="testVoice"
     @preview-expression="previewExpression"
     @preview-motion="previewMotion"
+    @refresh-memory-debug="refreshMemoryDebug"
     @open-chat="openChat"
   />
 </template>
@@ -294,6 +295,10 @@ function testLLM(): void {
 
 function testVoice(): void {
   syncState(bridge.testVoiceProvider());
+}
+
+function refreshMemoryDebug(): void {
+  syncState(bridge.requestMemoryDebugSnapshot());
 }
 
 function previewExpression(expression: string): void {

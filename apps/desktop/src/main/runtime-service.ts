@@ -8,11 +8,13 @@ import {
   type CharacterPersona,
   type LLMProvider,
   type MemoryStore,
+  type RecallContext,
   type SessionStore,
   type SummarySegment,
   type SummarySegmentStore,
   type RuntimeEventHandler,
   type RuntimeInputEvent,
+  type RuntimeOutputEvent,
   type TTSProvider,
   type ChatMessage
 } from "@greyfield/core-runtime";
@@ -57,6 +59,7 @@ export class RuntimeService {
   private readonly summarySegmentStore: SummarySegmentStore | undefined;
   private readonly interactionProfile = createDefaultInteractionProfile();
   private readonly threadId: string;
+  private lastRecallContext: RecallContext | undefined;
   private activeRuntime: GreyfieldRuntime | undefined;
   private testingLLM = false;
   private testingVoice = false;
@@ -77,7 +80,7 @@ export class RuntimeService {
     if (input.type === "runtime.interrupt" && this.activeRuntime) {
       const runtime = this.activeRuntime;
       try {
-        await runtime.handle(input, emit);
+        await runtime.handle(input, (event) => this.emitRuntimeEvent(event, emit));
       } finally {
         if (this.activeRuntime === runtime) {
           this.activeRuntime = undefined;
@@ -87,18 +90,18 @@ export class RuntimeService {
     }
 
     if (input.type === "text.input" && this.activeRuntime) {
-      await this.activeRuntime.handle({ type: "runtime.interrupt" }, emit);
+      await this.activeRuntime.handle({ type: "runtime.interrupt" }, (event) => this.emitRuntimeEvent(event, emit));
     }
 
     if (input.type === "audio.chunk" && this.activeRuntime) {
-      await this.activeRuntime.handle(input, emit);
+      await this.activeRuntime.handle(input, (event) => this.emitRuntimeEvent(event, emit));
       return;
     }
 
     if (input.type === "audio.end" && this.activeRuntime) {
       const runtime = this.activeRuntime;
       try {
-        await runtime.handle(input, emit);
+        await runtime.handle(input, (event) => this.emitRuntimeEvent(event, emit));
       } finally {
         if (this.activeRuntime === runtime) {
           this.activeRuntime = undefined;
@@ -112,7 +115,7 @@ export class RuntimeService {
       this.activeRuntime = runtime;
     }
     try {
-      await runtime.handle(input, emit);
+      await runtime.handle(input, (event) => this.emitRuntimeEvent(event, emit));
     } finally {
       if (this.activeRuntime === runtime && input.type !== "audio.chunk") {
         this.activeRuntime = undefined;
@@ -132,12 +135,16 @@ export class RuntimeService {
     sessionId: string;
     recentTurns: Awaited<ReturnType<SessionStore["getRecent"]>>;
     summarySegments: SummarySegment[];
+    lastRecallContext?: RecallContext;
+    updatedAt: string;
   }> {
     return {
       threadId: this.threadId,
       sessionId: this.sessionStore.sessionId,
       recentTurns: await this.sessionStore.getRecent(limit),
-      summarySegments: (await this.summarySegmentStore?.list(this.threadId)) ?? []
+      summarySegments: (await this.summarySegmentStore?.list(this.threadId)) ?? [],
+      ...(this.lastRecallContext ? { lastRecallContext: this.lastRecallContext } : {}),
+      updatedAt: new Date().toISOString()
     };
   }
 
@@ -248,6 +255,13 @@ export class RuntimeService {
       summaryMinTurns: this.options.summaryMinTurns,
       ttsEnabled: this.config.voice.speechEnabled
     });
+  }
+
+  private async emitRuntimeEvent(event: RuntimeOutputEvent, emit: RuntimeEventHandler): Promise<void> {
+    if (event.type === "memory.recall.context") {
+      this.lastRecallContext = event.context;
+    }
+    await emit(event);
   }
 
   private async loadPersona(): Promise<CharacterPersona> {

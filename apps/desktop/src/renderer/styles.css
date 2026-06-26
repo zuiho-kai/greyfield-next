@@ -1115,6 +1115,68 @@ h1 {
   color: #7b2442;
 }
 
+.memory-debug {
+  gap: 9px;
+}
+
+.memory-debug__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.memory-debug__stats span {
+  min-width: 0;
+  padding: 6px 7px;
+  border: 1px solid rgba(31, 41, 51, 0.1);
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #465463;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.memory-debug__block,
+.memory-debug__empty {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(31, 41, 51, 0.12);
+  border-radius: 8px;
+  background: #fbfcfd;
+  color: #1f2933;
+}
+
+.memory-debug__block--recall {
+  border-color: rgba(31, 122, 107, 0.2);
+  background: rgba(31, 122, 107, 0.08);
+}
+
+.memory-debug__block strong {
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.memory-debug__block p,
+.memory-debug__empty {
+  margin: 0;
+  color: #465463;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.memory-debug__block small {
+  color: #607080;
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .model-inspector {
   display: grid;
   gap: 8px;

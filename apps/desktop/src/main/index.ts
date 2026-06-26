@@ -150,6 +150,10 @@ function registerIpc(): void {
     void testVoiceProvider();
   });
 
+  ipcMain.on("memory:debug-request", () => {
+    void broadcastMemoryDebugSnapshot();
+  });
+
   ipcMain.on("window:set-click-through", (_event, payload: { enabled: boolean }) => {
     setModelPassThrough(payload.enabled);
   });
@@ -267,6 +271,16 @@ async function testVoiceProvider(): Promise<void> {
   const result = await runtimeService?.testVoice();
   if (result) {
     broadcastVoiceTestResult(result);
+  }
+}
+
+async function broadcastMemoryDebugSnapshot(): Promise<void> {
+  const snapshot = await runtimeService?.getMemoryDebugSnapshot();
+  if (!snapshot) {
+    return;
+  }
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send("memory:debug-snapshot", snapshot);
   }
 }
 

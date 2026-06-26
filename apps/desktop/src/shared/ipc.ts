@@ -1,4 +1,4 @@
-import type { RuntimeInputEvent, RuntimeOutputEvent } from "@greyfield/core-runtime";
+import type { RecallContext, RuntimeInputEvent, RuntimeOutputEvent, SessionTurn, SummarySegment } from "@greyfield/core-runtime";
 import type { GreyfieldConfig, GreyfieldConfigPatch } from "@greyfield/persistence/config-schema";
 import type { RendererGreyfieldConfig } from "./renderer-config";
 
@@ -15,11 +15,21 @@ export interface DesktopVoiceTestResult {
   data?: Uint8Array;
 }
 
+export interface DesktopMemoryDebugSnapshot {
+  threadId: string;
+  sessionId: string;
+  recentTurns: SessionTurn[];
+  summarySegments: SummarySegment[];
+  lastRecallContext?: RecallContext;
+  updatedAt: string;
+}
+
 export interface DesktopIpcRequestMap {
   "runtime:input": RuntimeInputEvent;
   "runtime:speech-playback": DesktopSpeechPlaybackEvent;
   "provider:test-llm": {};
   "provider:test-voice": {};
+  "memory:debug-request": {};
   "settings:update": GreyfieldConfigPatch;
   "window:set-click-through": { enabled: boolean };
   "window:set-hit-test": { passthrough: boolean; reason: "transparent-area" | "model-pass-through" | "model-hit" };
@@ -52,6 +62,7 @@ export interface DesktopIpcEventMap {
     firstToken?: string;
   };
   "provider:test-voice-result": DesktopVoiceTestResult;
+  "memory:debug-snapshot": DesktopMemoryDebugSnapshot;
   "settings:changed": RendererGreyfieldConfig;
   "window:state": {
     modelPassThrough: boolean;
