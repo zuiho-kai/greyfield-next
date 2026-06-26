@@ -33,6 +33,8 @@ jobs:
         run: pnpm test
       - name: Acceptance harness
         run: pnpm harness:acceptance
+      - name: Memory benchmark
+        run: pnpm harness:memory-benchmark
 
   desktop-pet:
     name: Desktop pet quick harness

@@ -31,6 +31,7 @@
     "harness:electron:real-tts": "pnpm build:desktop && tsx packages/dev-harness/src/electron-real-tts-check.ts",
     "harness:electron:voice-input": "pnpm build:desktop && tsx packages/dev-harness/src/electron-voice-input-check.ts",
     "harness:electron:memory-summary": "pnpm build:desktop && tsx packages/dev-harness/src/electron-memory-summary-check.ts",
+    "harness:memory-benchmark": "tsx packages/dev-harness/src/memory-benchmark.ts",
     "harness:frontend-full": "tsx packages/dev-harness/src/frontend-full-check.ts",
     "harness:pet:quick": "tsx packages/dev-harness/src/electron-check.ts --quick",
     "dev:live2d": "node apps/desktop/scripts/dev-live2d-electron.mjs",

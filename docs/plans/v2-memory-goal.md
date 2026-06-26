@@ -38,6 +38,7 @@ Acceptance covered by tests:
 - extractive summary drafts keep source turn IDs.
 - unrelated summaries are not recalled by recency alone.
 - recall context records reason and source turn IDs.
+- deterministic memory benchmark scores summary fact coverage, noise rejection, source coverage, recall hit rate, false-positive rejection, and prompt visibility.
 - summary deletion leaves raw session JSONL intact.
 - runtime prompt includes recalled summary context when a summary store is configured.
 - long chats create extractive summary segments for old turns that leave recent context.
@@ -59,5 +60,11 @@ Current backend verification:
 ```bash
 node_modules/.bin/vitest.cmd run packages/core-runtime packages/persistence
 node_modules/.bin/tsc.cmd -p tsconfig.typecheck.json --noEmit
+node_modules/.bin/tsx.cmd packages/dev-harness/src/memory-benchmark.ts
 node_modules/.bin/tsx.cmd packages/dev-harness/src/electron-memory-summary-check.ts
 ```
+
+CI guard:
+
+- `pnpm harness:memory-benchmark` runs in Fast checks, so memory summary/recall quality is guarded even when a PR does not trigger `frontend-full`.
+- `pnpm harness:electron:memory-summary` remains the desktop product-path guard: normal Chat turns must create raw session JSONL, summary JSONL, recall events, and visible Settings Memory evidence.
