@@ -69,16 +69,16 @@ try {
     const chatWindow = await waitForRoleWindow(app, "chat");
     await sendMessage(chatWindow, "请输出一段长回复，用于检查宠物气泡。");
 
-    await petWindow.locator(".speech-bubble", { hasText: firstChunk }).waitFor({ timeout: 10_000 });
-    await delay(250);
-    const firstBubble = await readBubbleState(petWindow);
+    const firstBubble = await waitForLaidOutBubbleState(petWindow, firstChunk);
     if (!firstBubble.text.includes(firstChunk)) {
       throw new Error(`First token did not reach speech bubble: ${JSON.stringify(firstBubble)}`);
     }
     assertBubbleInViewport(firstBubble);
+    const stableBubble = await waitForCappedBubbleState(petWindow);
+    assertBubbleInViewport(stableBubble);
 
     await chatWindow.locator(".message-list .assistant", { hasText: finalTail }).waitFor({ timeout: 10_000 });
-    const finalBubble = await readBubbleState(petWindow);
+    const finalBubble = await waitForCappedBubbleState(petWindow);
     assertBubbleInViewport(finalBubble);
     if (finalBubble.text.length > 120 || !finalBubble.text.endsWith("...")) {
       throw new Error(`Speech bubble did not cap long reply text: ${JSON.stringify(finalBubble)}`);
@@ -86,8 +86,8 @@ try {
     if (finalBubble.text.includes(finalTail)) {
       throw new Error(`Speech bubble showed the full long reply tail: ${JSON.stringify(finalBubble)}`);
     }
-    if (firstBubble.x !== finalBubble.x || firstBubble.y !== finalBubble.y) {
-      throw new Error(`Speech bubble moved while streaming: first=${JSON.stringify(firstBubble)} final=${JSON.stringify(finalBubble)}`);
+    if (stableBubble.x !== finalBubble.x || stableBubble.y !== finalBubble.y) {
+      throw new Error(`Speech bubble moved while streaming: first=${JSON.stringify(stableBubble)} final=${JSON.stringify(finalBubble)}`);
     }
 
     const chatText = await chatWindow.locator(".message-list .assistant").last().textContent();
@@ -191,6 +191,60 @@ async function readBubbleState(page: Page): Promise<{
   });
 }
 
+async function waitForLaidOutBubbleState(
+  page: Page,
+  expectedText = ""
+): Promise<{
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  viewportWidth: number;
+  viewportHeight: number;
+}> {
+  await page.waitForFunction(
+    (text) => {
+      const element = document.querySelector<HTMLElement>(".speech-bubble");
+      if (!element) {
+        return false;
+      }
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 && (text.length === 0 || element.textContent?.includes(text));
+    },
+    expectedText,
+    { timeout: 10_000 }
+  );
+  return readBubbleState(page);
+}
+
+async function waitForCappedBubbleState(
+  page: Page
+): Promise<{
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  viewportWidth: number;
+  viewportHeight: number;
+}> {
+  await page.waitForFunction(
+    () => {
+      const element = document.querySelector<HTMLElement>(".speech-bubble");
+      if (!element) {
+        return false;
+      }
+      const rect = element.getBoundingClientRect();
+      const text = element.textContent?.trim() ?? "";
+      return rect.width > 0 && rect.height > 0 && text.endsWith("...");
+    },
+    undefined,
+    { timeout: 10_000 }
+  );
+  return readBubbleState(page);
+}
+
 function assertBubbleInViewport(bubble: {
   x: number;
   y: number;
@@ -199,7 +253,14 @@ function assertBubbleInViewport(bubble: {
   viewportWidth: number;
   viewportHeight: number;
 }): void {
-  if (bubble.x < 0 || bubble.y < 0 || bubble.x + bubble.width > bubble.viewportWidth || bubble.y + bubble.height > bubble.viewportHeight) {
+  if (
+    bubble.width <= 0 ||
+    bubble.height <= 0 ||
+    bubble.x < 0 ||
+    bubble.y < 0 ||
+    bubble.x + bubble.width > bubble.viewportWidth ||
+    bubble.y + bubble.height > bubble.viewportHeight
+  ) {
     throw new Error(`Speech bubble escaped viewport: ${JSON.stringify(bubble)}`);
   }
 }
