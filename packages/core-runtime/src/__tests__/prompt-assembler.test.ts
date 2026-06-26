@@ -24,13 +24,30 @@ describe("assemblePrompt", () => {
       recent,
       input: "现在继续。",
       sessionId: "session-a",
-      threadId: "thread-a"
+      threadId: "thread-a",
+      recallContext: {
+        items: [
+          {
+            kind: "summary-segment",
+            id: "summary-1",
+            summary: "Earlier chat established Hiyori as the preferred bundled model.",
+            recallCues: ["hiyori", "model"],
+            sourceTurnIds: ["session-a-1", "session-a-2"],
+            reason: "cue:hiyori",
+            score: 6
+          }
+        ],
+        skipped: []
+      }
     });
 
     expect(messages[0]?.role).toBe("system");
     expect(messages[0]?.content).toContain("Greyfield");
     expect(messages[0]?.content).toContain("V1 cannot control the desktop");
     expect(messages[0]?.content).toContain("User wants a Live2D desktop companion");
+    expect(messages[0]?.content).toContain("Recall context:");
+    expect(messages[0]?.content).toContain("summary-1");
+    expect(messages[0]?.content).toContain("Source turns: session-a-1, session-a-2");
     expect(messages[0]?.content).toContain("thread-a");
     expect(messages.map((message) => message.content)).toEqual([
       expect.stringContaining("Recent focus"),
