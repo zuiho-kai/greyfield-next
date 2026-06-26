@@ -22,6 +22,8 @@
 
 Current product plan: [Greyfield Next V1 产品计划](plans/v1-product-plan.md).
 
+Post-V1 roadmap: [Greyfield Next 版本产品书](plans/version-product-book.md) defines V1.1 productization, V2 memory/persona, V2 screen awareness, V2 controlled desktop operation, V2 advanced voice, and the later platform direction.
+
 ## 2026-06-23
 
 - Built and merged #41 as the V1 integration branch combining #35, #36, #37, #38, #39, and #40 for issues #26-#31.
