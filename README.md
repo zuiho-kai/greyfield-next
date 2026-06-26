@@ -1,71 +1,115 @@
 # Greyfield Next
 
 <p align="center">
-  <img src="docs/assets/readme/greyfield-current.png" alt="Greyfield anime Live2D desktop companion" width="560" />
+  <img src="docs/assets/readme/greyfield-current.png" alt="Greyfield Live2D desktop companion" width="420" />
 </p>
 
-<p align="center">
-  <strong>Anime-first Live2D desktop companion.</strong>
-</p>
+Greyfield Next is a fresh TypeScript monorepo for rebuilding Greyfield as a Live2D desktop companion. DigitalMate2D defines the desktop-pet UX target, AIRI informs the narrow Pixi/Live2D technical route, and the old Greyfield repository is used only as a vision note and failure retro.
 
-<p align="center">
-  二次元桌宠 · Transparent pet window · Streaming chat · Interruptible replies · Recent context
-</p>
+## V1 Goal
 
-Greyfield Next is a TypeScript monorepo for rebuilding Greyfield around the desktop-pet spine first. The character is the product surface: visible on the desktop, responsive to the user, and backed by harnesses so the cute part does not drift away from the working part.
+Make the character feel alive first:
 
-## Character First
+- visible real `.model3.json` Live2D desktop pet window
+- text input to streaming assistant response
+- sentence-level TTS instead of waiting for the full reply
+- interrupt path that stops later model chunks and speech playback
+- persona, short memory, and recent session continuity
+- fake providers for deterministic development and QA
+- touch, motion, expression, and mouth-open checks that must involve the real Live2D stage
 
-<p align="center">
-  <img src="docs/assets/readme/greyfield-idle.gif" alt="Greyfield idle Live2D loop" width="360" />
-</p>
+V1 does not include desktop control, browser control, long-running task orchestration, multi-agent behavior, livestream support, Godot/VRM, message gateways, or self-generating skills.
 
-This is not a generic chat shell with a tiny mascot bolted on. V1 starts from the visible Live2D companion, then adds chat, speech bubble, interrupt, memory, settings, and provider paths around that desktop-pet loop.
+## Workspace
 
-## Product Surfaces
+```text
+apps/desktop
+packages/audio-runtime
+packages/core-runtime
+packages/dev-harness
+packages/persistence
+packages/stage-live2d
+```
 
-| Desktop pet | Chat |
-| --- | --- |
-| <img src="docs/assets/readme/greyfield-current.png" alt="Greyfield desktop pet UI" width="340" /> | <img src="docs/assets/readme/chat-window.png" alt="Greyfield chat window" width="300" /> |
+## Architecture
 
-## V1 Focus
+Standalone diagram file: [docs/architecture-diagram.md](docs/architecture-diagram.md).
 
-Greyfield V1 is built around one product loop:
+```mermaid
+flowchart TB
+  subgraph Desktop["apps/desktop - Electron 桌面壳"]
+    Main["main process<br/>窗口 / 托盘 / 菜单 / IPC / 配置持久化"]
+    Pet["pet window<br/>透明 Live2D 桌宠窗口"]
+    Settings["settings window<br/>模型 / provider / 声音 / 窗口设置"]
+    Chat["chat window<br/>完整对话页 / Stop / 状态"]
+    Preload["typed preload IPC<br/>window.greyfield"]
+  end
 
-1. Load a real `.model3.json` Live2D model in a transparent Electron pet window.
-2. Let the user type to the assistant and see the reply stream back.
-3. Surface short speech-bubble text on the pet while preserving full chat history in the chat window.
-4. Allow interruption so stale model chunks and speech playback do not keep running.
-5. Keep persona, memory, and recent session context available across turns.
-6. Prove the behavior with deterministic fake providers and executable harnesses.
+  subgraph Stage["packages/stage-live2d - 角色表现层"]
+    Live2D["Pixi + Live2D renderer<br/>.model3.json / motions / expressions"]
+    Hit["alpha hit-test<br/>模型像素命中 / 透明区穿透"]
+    Reactions["interaction profile<br/>触摸 / 情绪 / 动作 / 表情映射"]
+    Mouth["mouth driver<br/>setMouthOpen"]
+  end
 
-V1 deliberately excludes desktop control, browser control, screen reading, long-running task orchestration, multi-agent behavior, livestream support, Godot/VRM, message gateways, and self-generating skills.
+  subgraph Runtime["packages/core-runtime - 对话运行时"]
+    Loop["GreyfieldRuntime<br/>prompt / stream / sentence TTS / interrupt"]
+    Prompt["prompt assembly<br/>persona / memory / recent turns"]
+    LLM["LLMProvider<br/>fake / OpenAI-compatible"]
+  end
 
-## Current Shape
+  subgraph Audio["packages/audio-runtime - 音频运行时"]
+    Sentence["sentence splitter"]
+    TTS["TTSProvider<br/>V1 next: real TTS"]
+    Level["audio level -> mouth-open"]
+  end
 
-Completed V1 pieces include the transparent pet window, Live2D model import path, alpha hit testing, transparent-area pass-through, model drag, bounded wheel scale, persona/memory prompt assembly, desktop recent-context persistence, and the fake-provider acceptance chain.
+  subgraph Store["packages/persistence - 文件与状态"]
+    Config["greyfield.config.json"]
+    Character["characters/greyfield.yaml"]
+    Memory["data/memory.md"]
+    Sessions["data/sessions/*.jsonl"]
+  end
 
-In-progress V1 pieces include streaming runtime hardening, sentence-level TTS, interrupt state-machine completion, settings/provider testing, and speech-bubble polish. The authoritative status lives in [`packages/dev-harness/v1-features.json`](packages/dev-harness/v1-features.json).
+  subgraph QA["packages/dev-harness - 验收"]
+    Features["v1-features.json"]
+    Harness["acceptance / live2d / pet quick / electron"]
+  end
 
-## Quick Start
+  Pet --> Preload
+  Settings --> Preload
+  Chat --> Preload
+  Preload --> Main
+
+  Main --> Config
+  Main --> Runtime
+  Main --> Stage
+
+  Pet --> Live2D
+  Pet --> Hit
+  Hit --> Main
+  Reactions --> Live2D
+  Mouth --> Live2D
+
+  Runtime --> Prompt
+  Runtime --> LLM
+  Runtime --> Sentence
+  Runtime --> TTS
+  Runtime --> Sessions
+  Runtime --> Memory
+  Runtime --> Character
+  TTS --> Level
+  Level --> Mouth
+
+  QA --> Runtime
+  QA --> Stage
+  QA --> Desktop
+```
+
+## Commands
 
 ```bash
 pnpm install
-pnpm dev:live2d
-```
-
-`pnpm dev:live2d` starts the visible Electron desktop pet with the bundled Live2D official sample fixture. The default model is Momose Hiyori at `apps/desktop/public/assets/live2d/momose-hiyori/runtime/hiyori_free_t08.model3.json`. Set `GREYFIELD_LIVE2D_FIXTURE` to another `.model3.json` to test a different model without changing source files.
-
-For the tight visual loop:
-
-```bash
-pnpm dev:live2d:fast
-pnpm dev:live2d:stop
-```
-
-## Verification
-
-```bash
 pnpm test
 pnpm test:backend
 pnpm test:frontend
@@ -78,33 +122,25 @@ pnpm harness:live2d
 pnpm harness:pet:quick
 pnpm harness:electron
 pnpm harness:electron:quick
+pnpm dev:live2d
+pnpm dev:live2d:fast
+pnpm dev:live2d:stop
 ```
 
-`pnpm harness:fallback` is diagnostic only. It does not count as V1 Live2D acceptance.
+`packages/dev-harness/v1-features.json` is the V1 source of truth. New work should add or update a feature item first, then add the smallest test or acceptance script that proves it.
+
+`pnpm harness:fallback` is only a diagnostic preview check. It does not count as V1 Live2D acceptance.
+
+`pnpm dev:live2d` starts the visible Electron desktop pet with the bundled Live2D official sample fixture. The default model is Momose Hiyori at `apps/desktop/public/assets/live2d/momose-hiyori/runtime/hiyori_free_t08.model3.json`. Set `GREYFIELD_LIVE2D_FIXTURE` to another `.model3.json` to test a different model without changing source files.
+
+Use `pnpm dev:live2d:fast` for the tight visual loop when main/preload did not change, and `pnpm dev:live2d:stop` to stop the visible pet through the PID file instead of scanning Windows processes. Use `pnpm harness:pet:quick` for frequent pet-window interaction checks; keep full `pnpm harness:electron` for checkpoint validation.
+
+CI is split into layers:
+
+- fast checks: `pnpm typecheck`, `pnpm test`, `pnpm harness:acceptance`
+- desktop pet quick: one desktop build plus `pnpm harness:pet:quick`
+- checkpoint: one desktop build plus `pnpm harness:electron:quick`, run on main or manual dispatch
 
 Use `pnpm test:backend` for runtime, persistence, audio, and Electron main regressions. Use `pnpm test:frontend` for renderer, preload, stage, and dev-harness regressions. Use `pnpm harness:v1-visual` when a change needs human-verifiable desktop-pet artifacts; it writes screenshots and `summary.json` to `.cache/greyfield-v1-visual-acceptance/latest` unless `GREYFIELD_ACCEPTANCE_ARTIFACT_DIR` is set.
 
-CI is split into fast checks, desktop-pet quick checks, and checkpoint Electron checks. Use the narrow harness while iterating, then run the checkpoint path before claiming a V1 milestone.
-
-## Workspace Map
-
-```text
-apps/desktop              Electron shell, windows, IPC, renderer UI
-packages/stage-live2d     Pixi/Live2D stage, model import, hit testing, reactions
-packages/core-runtime     Prompt assembly, streaming runtime, interrupt path
-packages/audio-runtime    Sentence splitting, TTS boundary, audio-level mapping
-packages/persistence      Config, character, memory, session storage
-packages/dev-harness      V1 manifest, acceptance scripts, Electron harnesses
-```
-
-## Architecture
-
-The diagram lives in [`docs/architecture-diagram.md`](docs/architecture-diagram.md). Product constraints and acceptance rules live in:
-
-- [`docs/product-shape.md`](docs/product-shape.md)
-- [`docs/desktop-pet-product-commonsense.md`](docs/desktop-pet-product-commonsense.md)
-- [`docs/failure-retro.md`](docs/failure-retro.md)
-- [`docs/technical-reference-projects.md`](docs/technical-reference-projects.md)
-- [`packages/dev-harness/v1-features.json`](packages/dev-harness/v1-features.json)
-
-New V1 behavior should update the feature manifest first, then add the smallest test or harness path that proves it.
+Before adding new V1 behavior, read [docs/failure-retro.md](docs/failure-retro.md), [docs/desktop-pet-product-commonsense.md](docs/desktop-pet-product-commonsense.md), and [docs/technical-reference-projects.md](docs/technical-reference-projects.md). The previous Greyfield failed by mixing too many systems into the first spine; Greyfield Next keeps the alive desktop companion loop separate from later control/agent modules.
