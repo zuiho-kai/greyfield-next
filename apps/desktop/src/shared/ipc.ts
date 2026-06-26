@@ -34,6 +34,11 @@ export interface DesktopIpcRequestMap {
   "window:show-pet-menu": { screenX: number; screenY: number };
   "window:open-settings": {};
   "window:open-chat": {};
+  "window:hide-pet": {};
+  "window:hide-controls": {};
+  "window:controls-drag-start": { screenX: number; screenY: number };
+  "window:controls-drag-move": { screenX: number; screenY: number };
+  "window:controls-drag-end": {};
   "stage:choose-model": {};
   "stage:load-model": { modelPath: string };
 }

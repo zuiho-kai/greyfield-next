@@ -18,6 +18,14 @@ describe("V1 visual acceptance summary", () => {
         hasPetShell: true,
         hasGreyfieldApi: true
       },
+      controls: {
+        role: "controls",
+        viewport: { width: 420, height: 140 },
+        hasPanel: true,
+        panelWithinViewport: true,
+        draggable: true,
+        activeButtonContrastOk: true
+      },
       stage: {
         modelPoint: { x: 120, y: 240 },
         transparentPoint: { x: 4, y: 4 },
@@ -27,22 +35,32 @@ describe("V1 visual acceptance summary", () => {
       chat: {
         assistantReplyVisible: true,
         speechBubbleVisible: true,
+        speechBubbleAvoidsModel: true,
         bubbleText: "你好，我醒着。"
       },
       settings: {
         providerPreviewVisible: true,
         settingsShellVisible: true,
         noHorizontalOverflow: true,
+        narrowNoHorizontalOverflow: true,
+        windowControlsUsable: true,
         viewportWidth: 820,
         scrollWidth: 820
       },
       artifacts: [
         { name: "pet-initial.png", path: "artifact-root/pet-initial.png", review: "Pet shell" },
+        { name: "controls-initial.png", path: "artifact-root/controls-initial.png", review: "Controls shell" },
+        { name: "controls-active-state.png", path: "artifact-root/controls-active-state.png", review: "Controls active" },
         { name: "chat-after-reply.png", path: "artifact-root/chat-after-reply.png", review: "Chat reply" },
         {
           name: "settings-provider-preview.png",
           path: "artifact-root/settings-provider-preview.png",
           review: "Provider preview"
+        },
+        {
+          name: "settings-window-controls.png",
+          path: "artifact-root/settings-window-controls.png",
+          review: "Window controls"
         }
       ]
     });
@@ -52,7 +70,10 @@ describe("V1 visual acceptance summary", () => {
       expect.arrayContaining(["pet-initial.png", "chat-after-reply.png", "settings-provider-preview.png"])
     );
     expect(summary.visualReviewRequired.join("\n")).toContain("pet-initial.png");
+    expect(summary.visualReviewRequired.join("\n")).toContain("controls-initial.png");
+    expect(summary.visualReviewRequired.join("\n")).toContain("controls-active-state.png");
     expect(summary.visualReviewRequired.join("\n")).toContain("settings-provider-preview.png");
+    expect(summary.visualReviewRequired.join("\n")).toContain("settings-window-controls.png");
   });
 
   it("keeps destructive cleanup inside the visual acceptance artifact root", () => {

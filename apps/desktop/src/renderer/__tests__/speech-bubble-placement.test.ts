@@ -4,7 +4,7 @@ import { placeSpeechBubble } from "../speech-bubble-placement";
 describe("placeSpeechBubble", () => {
   const bubble = { width: 180, height: 72 };
 
-  it("places the bubble in a centered top slot when screen space allows", () => {
+  it("places the bubble beside the model instead of covering the face", () => {
     expect(
       placeSpeechBubble({
         modelBounds: { x: 12, y: 180, width: 120, height: 320 },
@@ -12,10 +12,10 @@ describe("placeSpeechBubble", () => {
         screenBounds: { x: 0, y: 0, width: 1440, height: 900 },
         bubbleSize: bubble
       })
-    ).toMatchObject({ side: "top", x: 120, y: 8 });
+    ).toMatchObject({ side: "right", x: 148, y: 231 });
   });
 
-  it("keeps the same top slot when the model is centered", () => {
+  it("uses the top subtitle slot when both sides are too cramped", () => {
     expect(
       placeSpeechBubble({
         modelBounds: { x: 150, y: 120, width: 120, height: 320 },
@@ -23,10 +23,10 @@ describe("placeSpeechBubble", () => {
         screenBounds: { x: 0, y: 0, width: 1440, height: 900 },
         bubbleSize: bubble
       })
-    ).toMatchObject({ side: "top", x: 120, y: 8 });
+    ).toMatchObject({ side: "top", x: 120, y: 32 });
   });
 
-  it("keeps a stable window-relative position when the model moves", () => {
+  it("keeps the bubble near the model when the model moves", () => {
     const first = placeSpeechBubble({
       modelBounds: { x: 12, y: 180, width: 120, height: 320 },
       windowBounds: { x: 200, y: 120, width: 420, height: 620 },
@@ -40,7 +40,8 @@ describe("placeSpeechBubble", () => {
       bubbleSize: bubble
     });
 
-    expect(second).toEqual(first);
+    expect(second.x).toBeGreaterThan(first.x);
+    expect(second.y).toBeGreaterThan(first.y);
   });
 
   it("keeps the bubble inside the right desktop edge", () => {
@@ -51,7 +52,7 @@ describe("placeSpeechBubble", () => {
         screenBounds: { x: 0, y: 0, width: 1440, height: 900 },
         bubbleSize: bubble
       })
-    ).toMatchObject({ side: "top", x: 120, y: 8 });
+    ).toMatchObject({ side: "top", x: 120, y: 92 });
   });
 
   it("keeps the bubble below the top edge when the model reaches the top", () => {
@@ -62,7 +63,30 @@ describe("placeSpeechBubble", () => {
         screenBounds: { x: 0, y: 0, width: 1440, height: 900 },
         bubbleSize: bubble
       }).y
-    ).toBe(8);
+    ).toBe(340);
+  });
+
+  it("uses a top subtitle when side slots are cramped and the top is clear", () => {
+    expect(
+      placeSpeechBubble({
+        modelBounds: { x: 110, y: 90, width: 200, height: 320 },
+        windowBounds: { x: 200, y: 120, width: 420, height: 620 },
+        screenBounds: { x: 0, y: 0, width: 1440, height: 900 },
+        bubbleSize: { width: 260, height: 72 }
+      })
+    ).toMatchObject({ side: "top", x: 80, y: 8 });
+  });
+
+  it("uses the visible model shape to avoid covering rendered pixels", () => {
+    expect(
+      placeSpeechBubble({
+        modelBounds: { x: 100, y: 40, width: 220, height: 400 },
+        modelShape: [{ x: 250, y: 40, width: 40, height: 400 }],
+        windowBounds: { x: 200, y: 120, width: 420, height: 620 },
+        screenBounds: { x: 0, y: 0, width: 1440, height: 900 },
+        bubbleSize: { width: 196, height: 78 }
+      })
+    ).toMatchObject({ side: "left", x: 8, y: 104 });
   });
 
   it("keeps the bubble fully inside the pet window viewport", () => {

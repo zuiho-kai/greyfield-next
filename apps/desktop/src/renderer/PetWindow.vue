@@ -42,7 +42,7 @@ defineProps<{
   bubblePlacement: SpeechBubblePlacement;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   "hit-test": [payload: { hitModel: boolean }];
   "drag-start": [payload: { screenX: number; screenY: number }];
   "drag-move": [payload: { screenX: number; screenY: number }];

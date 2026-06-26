@@ -203,16 +203,18 @@
         "Settings exposes Test Voice so users can validate TTS settings without sending a chat message.",
         "Fake TTS bytes still fall back to local renderer speech output for offline harness coverage.",
         "Chat exposes microphone voice input; browser recording bytes are sent through Electron main, ASR, transcript.final, and the same runtime text path as typed messages.",
+        "An independent draggable floating control window exposes text input, microphone input, voice output toggle, Settings, pass-through, hide, and Stop without interfering with pet-window transparency.",
         "OpenAI-compatible ASR posts microphone audio to /audio/transcriptions while fake ASR keeps offline harness coverage deterministic.",
         "Renderer mouth-open is driven during real audio playback from decoded PCM audio energy instead of a one-time compressed-byte estimate.",
         "Finished renderer speech playback clears queued speech UI state across desktop windows.",
         "TTS or speech playback failure reports a voice-only error and does not remove the assistant text reply or session turn.",
         "Long replies are capped by a per-turn TTS character budget so playback cannot run unbounded.",
+        "Multiple assistant audio chunks are serialized so speech playback cannot overlap itself.",
         "Stop cancels microphone listening, ASR/TTS runtime state, active renderer speech playback, queued speech UI state, and mouth-open state.",
         "Audio runtime exposes pure RMS VAD, microphone recorder, and decoded PCM mouth-open timeline boundaries."
       ],
       "qa": {
-        "script": "vitest sentence-splitter vad tts-text-budget speech-synthesis-output microphone-recorder audio-level-meter openai-compatible-asr-provider openai-compatible-tts-provider runtime-loop runtime-service desktop-runtime-bridge config; pnpm harness:electron:stop-audio; pnpm harness:electron:voice-input; optional provider proof: pnpm harness:real-tts; optional desktop provider proof: pnpm harness:electron:real-tts"
+        "script": "vitest sentence-splitter vad tts-text-budget speech-synthesis-output microphone-recorder audio-level-meter openai-compatible-asr-provider openai-compatible-tts-provider runtime-loop runtime-service desktop-runtime-bridge config; pnpm harness:v1-visual; pnpm harness:electron:stop-audio; pnpm harness:electron:voice-input; optional provider proof: pnpm harness:real-tts; optional desktop provider proof: pnpm harness:electron:real-tts"
       }
     },
     {
@@ -259,7 +261,8 @@
         "Settings shows provider readiness as Preview, blocked, or ready-to-test before users run Test LLM.",
         "Settings exposes a Test LLM action and renders first-token success or a readable failure without writing chat history.",
         "Settings provider/Test LLM harness proves fake Preview, missing Base URL/API key/model reasons, blocked states send no provider requests, testing, success, and failure states.",
-        "Electron settings-active-chat harness proves Test LLM is rejected with visible Stop-or-wait guidance while chat is actively streaming and does not send an extra provider request."
+        "Electron settings-active-chat harness proves Test LLM is rejected with visible Stop-or-wait guidance while chat is actively streaming and does not send an extra provider request.",
+        "V1 visual acceptance proves Settings Window scale/position controls remain readable and usable at narrow desktop widths."
       ],
       "qa": {
         "script": "vitest desktop-runtime-bridge settings-provider-status settings-test-llm config settings-controller runtime-service; pnpm harness:v1-visual; pnpm harness:electron; pnpm harness:electron:settings-provider-test; pnpm harness:electron:settings-active-chat-test"

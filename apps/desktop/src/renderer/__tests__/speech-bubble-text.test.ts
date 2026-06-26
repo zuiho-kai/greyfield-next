@@ -16,4 +16,13 @@ describe("formatSpeechBubbleText", () => {
     expect(formatted).toHaveLength(48);
     expect(formatted.endsWith("...")).toBe(true);
   });
+
+  it("uses a short default preview so the pet bubble stays subtitle-sized", () => {
+    const text = "这是一段会流式输出到桌宠气泡里的很长回复，用来证明气泡只是短字幕，完整内容应该留在聊天窗口里。".repeat(2);
+
+    const formatted = formatSpeechBubbleText(text);
+
+    expect(formatted).toHaveLength(72);
+    expect(formatted.endsWith("...")).toBe(true);
+  });
 });

@@ -22,6 +22,7 @@
     "@greyfield/persistence": "workspace:*",
     "@greyfield/stage-live2d": "workspace:*",
     "live2dcubismcore": "1.0.2",
+    "lucide-vue-next": "^1.0.0",
     "vue": "^3.5.24"
   },
   "devDependencies": {

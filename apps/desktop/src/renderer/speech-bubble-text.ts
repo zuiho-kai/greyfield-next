@@ -1,4 +1,4 @@
-export const DEFAULT_SPEECH_BUBBLE_MAX_CHARS = 120;
+export const DEFAULT_SPEECH_BUBBLE_MAX_CHARS = 72;
 
 export function formatSpeechBubbleText(text: string, maxChars = DEFAULT_SPEECH_BUBBLE_MAX_CHARS): string {
   const normalized = text.replace(/\s+/g, " ").trim();

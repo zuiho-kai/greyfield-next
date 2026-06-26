@@ -58,6 +58,28 @@ export function createChatWindowOptions(preload?: string): BrowserWindowConstruc
   };
 }
 
+export function createControlsWindowOptions(config: GreyfieldConfig, preload?: string): BrowserWindowConstructorOptions {
+  return {
+    width: 420,
+    height: 140,
+    x: config.window.x ?? 0,
+    y: (config.window.y ?? 0) + config.window.height - 150,
+    transparent: true,
+    backgroundColor: "#00000000",
+    frame: false,
+    resizable: false,
+    hasShadow: false,
+    alwaysOnTop: config.window.alwaysOnTop,
+    show: true,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload,
+      sandbox: true
+    }
+  };
+}
+
 export function resolveRendererHtmlPath(mainOutputDir: string): string {
   return normalize(join(mainOutputDir, "../dist-renderer/index.html"));
 }
