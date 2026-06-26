@@ -31,6 +31,11 @@ packages/persistence
 packages/stage-live2d
 ```
 
+## Product Roadmap
+
+- [V1 product plan](docs/plans/v1-product-plan.md)
+- [Version product book](docs/plans/version-product-book.md): V1.0, V1.1, V2.0, V2.1, V2.2, V2.3, and V3.0 product scope.
+
 ## Architecture
 
 Standalone diagram file: [docs/architecture-diagram.md](docs/architecture-diagram.md).
