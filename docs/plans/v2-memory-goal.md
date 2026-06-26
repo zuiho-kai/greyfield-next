@@ -29,6 +29,8 @@ Implemented package boundaries:
 - `packages/core-runtime/src/memory-context.ts`: summary segment types, extractive summary draft, lexical/cue recall, prompt formatting.
 - `packages/persistence/src/jsonl-summary-segment-store.ts`: source-linked JSONL summary segment persistence.
 - `packages/core-runtime/src/runtime-loop.ts`: optional summary recall injection and extractive summary creation for configured runtimes.
+- `apps/desktop/src/main/runtime-service.ts`: desktop runtime wiring, memory debug snapshot, and file-backed summary store handoff.
+- `packages/dev-harness/src/electron-memory-summary-check.ts`: ordinary Chat path proof for raw session + summary segment persistence.
 
 Acceptance covered by tests:
 
@@ -38,15 +40,16 @@ Acceptance covered by tests:
 - summary deletion leaves raw session JSONL intact.
 - runtime prompt includes recalled summary context when a summary store is configured.
 - long chats create extractive summary segments for old turns that leave recent context.
+- desktop runtime writes `memory/summary-segments.jsonl` under user data and exposes summary/debug state.
+- Electron Chat harness proves three user messages create six raw turns, one source-linked summary segment, and a `memory.summary.created` event.
 
 ## Next Slice
 
 V2.0a is not product-complete until users and harnesses can inspect what was recalled. The next implementation slice should add:
 
-- main-process wiring for the summary segment store path.
-- minimal memory debug view or harness evidence for ordinary user inspection.
+- minimal Memory debug UI or renderer-accessible inspection panel.
 - fake summarizer tests if/when LLM-generated summaries replace the extractive draft.
-- recall trace exposure for UI and test artifacts.
+- recall trace display for UI and test artifacts.
 
 ## Verification
 
@@ -55,4 +58,5 @@ Current backend verification:
 ```bash
 node_modules/.bin/vitest.cmd run packages/core-runtime packages/persistence
 node_modules/.bin/tsc.cmd -p tsconfig.typecheck.json --noEmit
+node_modules/.bin/tsx.cmd packages/dev-harness/src/electron-memory-summary-check.ts
 ```

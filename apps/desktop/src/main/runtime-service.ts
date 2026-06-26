@@ -9,6 +9,8 @@ import {
   type LLMProvider,
   type MemoryStore,
   type SessionStore,
+  type SummarySegment,
+  type SummarySegmentStore,
   type RuntimeEventHandler,
   type RuntimeInputEvent,
   type TTSProvider,
@@ -22,7 +24,13 @@ export interface RuntimeServiceOptions {
   loadPersona?: (config: GreyfieldConfig) => Promise<CharacterPersona>;
   memoryStore?: MemoryStore;
   sessionStore?: SessionStore;
+  summarySegmentStore?: SummarySegmentStore;
+  threadId?: string;
   recentTurnLimit?: number;
+  recallMaxItems?: number;
+  recallMaxCharacters?: number;
+  summaryBatchTurnLimit?: number;
+  summaryMinTurns?: number;
   llmTimeoutMs?: number;
   asrTimeoutMs?: number;
   ttsTimeoutMs?: number;
@@ -46,7 +54,9 @@ export class RuntimeService {
   private readonly stage = new FakeStageDriver();
   private readonly memoryStore: MemoryStore;
   private readonly sessionStore: SessionStore;
+  private readonly summarySegmentStore: SummarySegmentStore | undefined;
   private readonly interactionProfile = createDefaultInteractionProfile();
+  private readonly threadId: string;
   private activeRuntime: GreyfieldRuntime | undefined;
   private testingLLM = false;
   private testingVoice = false;
@@ -55,6 +65,8 @@ export class RuntimeService {
     this.config = config;
     this.memoryStore = options.memoryStore ?? new MainFakeMemoryStore();
     this.sessionStore = options.sessionStore ?? new InMemorySessionStore("desktop-main-session");
+    this.summarySegmentStore = options.summarySegmentStore;
+    this.threadId = options.threadId ?? "local-desktop-thread";
   }
 
   updateConfig(config: GreyfieldConfig): void {
@@ -113,6 +125,20 @@ export class RuntimeService {
     return turns.flatMap((turn) =>
       turn.role === "user" || turn.role === "assistant" ? [{ role: turn.role, content: turn.content }] : []
     );
+  }
+
+  async getMemoryDebugSnapshot(limit = 20): Promise<{
+    threadId: string;
+    sessionId: string;
+    recentTurns: Awaited<ReturnType<SessionStore["getRecent"]>>;
+    summarySegments: SummarySegment[];
+  }> {
+    return {
+      threadId: this.threadId,
+      sessionId: this.sessionStore.sessionId,
+      recentTurns: await this.sessionStore.getRecent(limit),
+      summarySegments: (await this.summarySegmentStore?.list(this.threadId)) ?? []
+    };
   }
 
   async testLLM(): Promise<LLMTestResult> {
@@ -209,11 +235,17 @@ export class RuntimeService {
       asr: this.createASRProvider(),
       tts: this.createTTSProvider(),
       memoryStore: this.memoryStore,
+      summarySegmentStore: this.summarySegmentStore,
       sessionStore: this.sessionStore,
       persona,
       voice: this.config.voice.id,
       stage: this.stage,
+      threadId: this.threadId,
       recentTurnLimit: this.options.recentTurnLimit,
+      recallMaxItems: this.options.recallMaxItems,
+      recallMaxCharacters: this.options.recallMaxCharacters,
+      summaryBatchTurnLimit: this.options.summaryBatchTurnLimit,
+      summaryMinTurns: this.options.summaryMinTurns,
       ttsEnabled: this.config.voice.speechEnabled
     });
   }

@@ -93,12 +93,23 @@ describe("GreyfieldRuntime", () => {
       voice: "default",
       threadId: "thread-a"
     });
+    const events: RuntimeOutputEvent[] = [];
 
-    await runtime.handle({ type: "text.input", text: "Hiyori 还是默认模型吗？" }, () => undefined);
+    await runtime.handle({ type: "text.input", text: "Hiyori 还是默认模型吗？" }, (event) => {
+      events.push(event);
+    });
 
     expect(capturedMessages[0]?.content).toContain("Recall context:");
     expect(capturedMessages[0]?.content).toContain("summary-1");
     expect(capturedMessages[0]?.content).toContain("Source turns: session-a-1");
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "memory.recall.context",
+        context: expect.objectContaining({
+          items: [expect.objectContaining({ id: "summary-1", reason: "cue:hiyori" })]
+        })
+      })
+    );
   });
 
   it("creates extractive summary segments for turns that leave recent context", async () => {
@@ -135,9 +146,16 @@ describe("GreyfieldRuntime", () => {
       summaryMinTurns: 4
     });
 
-    await runtime.handle({ type: "text.input", text: "第一轮：我喜欢 Hiyori。" }, () => undefined);
-    await runtime.handle({ type: "text.input", text: "第二轮：记住 Live2D 模型偏好。" }, () => undefined);
-    await runtime.handle({ type: "text.input", text: "第三轮：继续。" }, () => undefined);
+    const events: RuntimeOutputEvent[] = [];
+    await runtime.handle({ type: "text.input", text: "第一轮：我喜欢 Hiyori。" }, (event) => {
+      events.push(event);
+    });
+    await runtime.handle({ type: "text.input", text: "第二轮：记住 Live2D 模型偏好。" }, (event) => {
+      events.push(event);
+    });
+    await runtime.handle({ type: "text.input", text: "第三轮：继续。" }, (event) => {
+      events.push(event);
+    });
 
     expect(summaries).toHaveLength(1);
     expect(summaries[0]?.summary).toContain("第一轮：我喜欢 Hiyori");
@@ -147,6 +165,12 @@ describe("GreyfieldRuntime", () => {
       "session-summary-3",
       "session-summary-4"
     ]);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "memory.summary.created",
+        segment: expect.objectContaining({ id: "summary-1" })
+      })
+    );
     expect(await sessionStore.getRecent(6)).toHaveLength(6);
   });
 

@@ -43,7 +43,12 @@ async function createWindows(): Promise<void> {
   const config = await loadGreyfieldConfig(resolveConfigPath());
   runtimeService = new RuntimeService(config, {
     ...createDesktopRuntimeStoreOptions(resolveRuntimeStorePaths()),
-    llmTimeoutMs: resolveLLMTimeoutMs()
+    llmTimeoutMs: resolvePositiveIntegerEnv("GREYFIELD_LLM_TIMEOUT_MS"),
+    recentTurnLimit: resolvePositiveIntegerEnv("GREYFIELD_RECENT_TURN_LIMIT"),
+    recallMaxItems: resolvePositiveIntegerEnv("GREYFIELD_RECALL_MAX_ITEMS"),
+    recallMaxCharacters: resolvePositiveIntegerEnv("GREYFIELD_RECALL_MAX_CHARACTERS"),
+    summaryBatchTurnLimit: resolvePositiveIntegerEnv("GREYFIELD_SUMMARY_BATCH_TURN_LIMIT"),
+    summaryMinTurns: resolvePositiveIntegerEnv("GREYFIELD_SUMMARY_MIN_TURNS")
   });
   runtimeIpcController = new RuntimeIpcController({
     service: runtimeService,
@@ -422,8 +427,8 @@ function resolveRuntimeStorePaths(): { userDataPath: string; projectRoot: string
   };
 }
 
-function resolveLLMTimeoutMs(): number | undefined {
-  const raw = process.env.GREYFIELD_LLM_TIMEOUT_MS;
+function resolvePositiveIntegerEnv(name: string): number | undefined {
+  const raw = process.env[name];
   if (!raw) {
     return undefined;
   }

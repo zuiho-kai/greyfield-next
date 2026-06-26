@@ -596,6 +596,80 @@ describe("RuntimeService", () => {
     ]);
   });
 
+  it("writes desktop summary segments and exposes a memory debug snapshot", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "greyfield-runtime-memory-"));
+    try {
+      await mkdir(join(dir, "characters"), { recursive: true });
+      await mkdir(join(dir, "data"), { recursive: true });
+      await writeFile(
+        join(dir, "characters", "test.yaml"),
+        [
+          "name: File Greyfield",
+          "tone: exact test tone",
+          "boundaries:",
+          "  - File persona boundary.",
+          "expressionMap:",
+          "  neutral: file-neutral"
+        ].join("\n"),
+        "utf8"
+      );
+      await writeFile(join(dir, "data", "memory.md"), "- File memory fact.\n", "utf8");
+      const service = new RuntimeService(
+        {
+          ...defaultGreyfieldConfig,
+          characterFile: "characters/test.yaml"
+        },
+        {
+          ...createDesktopRuntimeStoreOptions({ projectRoot: dir, userDataPath: dir }),
+          recentTurnLimit: 2,
+          summaryBatchTurnLimit: 4,
+          summaryMinTurns: 4
+        }
+      );
+      const events: unknown[] = [];
+
+      await service.handle({ type: "text.input", text: "第一轮：我喜欢 Hiyori。" }, (event) => {
+        events.push(event);
+      });
+      await service.handle({ type: "text.input", text: "第二轮：记住 Live2D 模型偏好。" }, (event) => {
+        events.push(event);
+      });
+      await service.handle({ type: "text.input", text: "第三轮：继续。" }, (event) => {
+        events.push(event);
+      });
+
+      const summaryPath = join(dir, "memory", "summary-segments.jsonl");
+      const summaryJsonl = await readFile(summaryPath, "utf8");
+      expect(summaryJsonl).toContain("第一轮：我喜欢 Hiyori");
+      expect(summaryJsonl).toContain("desktop-main-session-1");
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: "memory.summary.created",
+          segment: expect.objectContaining({
+            threadId: "local-desktop-thread",
+            sourceTurns: expect.arrayContaining([
+              expect.objectContaining({ turnId: "desktop-main-session-1" }),
+              expect.objectContaining({ turnId: "desktop-main-session-4" })
+            ])
+          })
+        })
+      );
+
+      const snapshot = await service.getMemoryDebugSnapshot();
+      expect(snapshot.threadId).toBe("local-desktop-thread");
+      expect(snapshot.recentTurns).toHaveLength(6);
+      expect(snapshot.summarySegments).toHaveLength(1);
+      expect(snapshot.summarySegments[0]?.sourceTurns.map((turn) => turn.turnId)).toEqual([
+        "desktop-main-session-1",
+        "desktop-main-session-2",
+        "desktop-main-session-3",
+        "desktop-main-session-4"
+      ]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("loads desktop persona, memory, and recent turns from file-backed stores", async () => {
     const dir = await mkdtemp(join(tmpdir(), "greyfield-runtime-"));
     try {

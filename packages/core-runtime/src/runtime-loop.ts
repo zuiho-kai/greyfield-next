@@ -150,6 +150,9 @@ export class GreyfieldRuntime {
           maxCharacters: this.options.recallMaxCharacters
         })
       : undefined;
+    if (recallContext && (recallContext.items.length > 0 || recallContext.skipped.length > 0)) {
+      await emit({ type: "memory.recall.context", context: recallContext });
+    }
 
     const messages = assemblePrompt({
       persona: this.options.persona,
@@ -200,7 +203,10 @@ export class GreyfieldRuntime {
     if (finalText.length > 0) {
       await this.options.sessionStore.append({ role: "user", content: text });
       await this.options.sessionStore.append({ role: "assistant", content: finalText });
-      await this.createSummaryForOldTurns();
+      const createdSummary = await this.createSummaryForOldTurns();
+      if (createdSummary) {
+        await emit({ type: "memory.summary.created", segment: createdSummary });
+      }
       await emit({ type: "assistant.text.final", text: finalText });
     }
 
@@ -248,7 +254,7 @@ export class GreyfieldRuntime {
     return this.options.asr;
   }
 
-  private async createSummaryForOldTurns(): Promise<void> {
+  private async createSummaryForOldTurns(): Promise<Awaited<ReturnType<SummarySegmentStore["append"]>> | undefined> {
     const summarySegmentStore = this.options.summarySegmentStore;
     if (!summarySegmentStore) {
       return;
@@ -272,7 +278,7 @@ export class GreyfieldRuntime {
     if (draft.summary.trim().length === 0 || draft.sourceTurns.length === 0) {
       return;
     }
-    await summarySegmentStore.append({
+    return summarySegmentStore.append({
       threadId: this.threadId,
       sessionId: this.options.sessionStore.sessionId,
       summary: draft.summary,
