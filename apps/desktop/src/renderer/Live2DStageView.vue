@@ -157,7 +157,7 @@ async function handlePointerDown(event: PointerEvent): Promise<void> {
   }
   if (event.button === 0) {
     dragging.value = true;
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    capturePointer(event.currentTarget as HTMLElement, event.pointerId);
     emit("dragStart", { screenX: event.screenX, screenY: event.screenY });
   }
   await reactToTouch(event);
@@ -169,10 +169,26 @@ function handlePointerUp(event: PointerEvent): void {
   }
   dragging.value = false;
   const target = event.currentTarget as HTMLElement;
-  if (target.hasPointerCapture(event.pointerId)) {
+  if (hasPointerCapture(target, event.pointerId)) {
     target.releasePointerCapture(event.pointerId);
   }
   emit("dragEnd");
+}
+
+function capturePointer(target: HTMLElement, pointerId: number): void {
+  try {
+    target.setPointerCapture(pointerId);
+  } catch {
+    // Synthetic pointer events in harnesses do not always have an active browser pointer.
+  }
+}
+
+function hasPointerCapture(target: HTMLElement, pointerId: number): boolean {
+  try {
+    return target.hasPointerCapture(pointerId);
+  } catch {
+    return false;
+  }
 }
 
 function handleWheel(event: WheelEvent): void {
