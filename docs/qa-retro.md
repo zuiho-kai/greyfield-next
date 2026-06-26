@@ -117,6 +117,45 @@ Reusable good patterns from the fix:
 - Visual artifacts must be opened before handoff. Programmatic `noHorizontalOverflow` or `ok: true` is necessary but not enough for Settings, Chat, Pet, and bubble UI.
 - Keep PR-local evidence and main current-head evidence separate in docs. PR evidence is review evidence; release wording needs merged-head proof.
 
+## 2026-06-26 Regression: Controls Existed But The Desktop Entry Point Was Missing
+
+This round exposed a frontend product-shape miss: voice input existed in Chat, and Settings did not have page-level horizontal overflow, but the ordinary desktop-pet path still failed the user.
+
+What happened:
+
+- The pet window had no visible independent input/control bar, so text input, microphone input, voice output, Settings, pass-through, hide/minimize, and Stop were discoverable only by opening other windows or menus.
+- Settings Window controls used page-level overflow checks, but the local Scale/X/Y grid could still collapse when the window narrowed.
+- The visual artifact focused on the Provider top section, so the broken Window controls were not part of the screenshot review.
+
+How we avoid repeating it:
+
+- For desktop-pet features, acceptance must include the pet-window entry point, not only the separate Chat or Settings window.
+- Visual harnesses must assert local control geometry, not just document-level `scrollWidth <= innerWidth`.
+- When a user reports a malformed sub-section, add a screenshot artifact for that exact sub-section before handing off.
+- If controls need independent dragging, prefer a separate transparent controls window over placing a rectangular toolbar inside the pet window; otherwise pet pass-through state and control hit-testing can fight each other.
+
+## 2026-06-26 Regression: Speech Playback Passed Stop QA But Still Overlapped
+
+The Stop-audio harness proved cancel, queue clear, and mouth reset, but it did not prove that normal multi-sentence playback was serialized. Manual QA then found overlapping speech.
+
+What happened:
+
+- The renderer called `speechOutput.speak()` for every assistant audio chunk as soon as it arrived.
+- The existing harness checked that Stop canceled playback, but did not track concurrent active speech count.
+- A passing Stop path was treated as enough voice safety, even though natural playback without pressing Stop is a separate user path.
+
+How it was fixed:
+
+- Desktop speech playback now chains speech promises so the next audio chunk waits for the previous playback to finish.
+- `pnpm harness:electron:stop-audio` records active speech count and reports `noOverlappingSpeech: true`.
+- A renderer unit test covers serial assistant audio chunks so this does not depend only on the Electron harness.
+
+How we avoid repeating it:
+
+- Audio QA must include both interrupt behavior and natural playback behavior.
+- A queue-related harness must assert the forbidden state directly. For speech playback, that means no concurrent active playback, not only eventual queue cleanup.
+- When the user reports an issue after a green harness, add the missing assertion to the nearest harness in the same PR before calling the fix done.
+
 ## 2026-05-25 Regression: Native Shape, Drag Growth, Slow Harness
 
 This round exposed a second QA miss: the tests verified that the pet could receive input, but not that the native masking strategy preserved visual quality and window geometry.

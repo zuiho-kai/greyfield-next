@@ -16,6 +16,8 @@ Make the character feel alive first:
 
 V1 does not include desktop control, browser control, long-running task orchestration, multi-agent behavior, livestream support, Godot/VRM, message gateways, or self-generating skills.
 
+Current status: V1 is in final closeout. `main` has the core V1 evidence through #55, and PR #59 is the current visible-experience closeout candidate for floating desktop controls, speech-bubble placement, voice-toggle stability, and non-overlapping speech playback. Do not describe a final V1 release as complete until #59 is merged and the release branch has a fresh current-head `pnpm harness:frontend-full` record.
+
 ## Workspace
 
 ```text
@@ -56,7 +58,7 @@ flowchart TB
 
   subgraph Audio["packages/audio-runtime - 音频运行时"]
     Sentence["sentence splitter"]
-    TTS["TTSProvider<br/>V1 next: real TTS"]
+    TTS["TTSProvider<br/>fake / OpenAI-compatible"]
     Level["audio level -> mouth-open"]
   end
 
@@ -118,6 +120,7 @@ pnpm harness:live2d
 pnpm harness:pet:quick
 pnpm harness:electron
 pnpm harness:electron:quick
+pnpm harness:frontend-full
 pnpm dev:live2d
 pnpm dev:live2d:fast
 pnpm dev:live2d:stop
@@ -138,5 +141,7 @@ CI is split into layers:
 - checkpoint: one desktop build plus `pnpm harness:electron:quick`, run on main or manual dispatch
 
 Use `pnpm test:backend` for runtime, persistence, audio, and Electron main regressions. Use `pnpm test:frontend` for renderer, preload, stage, and dev-harness regressions. Use `pnpm harness:v1-visual` when a change needs human-verifiable desktop-pet artifacts; it writes screenshots and `summary.json` to `.cache/greyfield-v1-visual-acceptance/latest` unless `GREYFIELD_ACCEPTANCE_ARTIFACT_DIR` is set.
+
+Use `pnpm harness:frontend-full` before handing off frontend-visible V1 work. It is the aggregate gate for Settings, Chat, Pet, controls, Live2D, speech bubble, Stop/audio, voice input, restart context, and optional credentialed real TTS coverage.
 
 Before adding new V1 behavior, read [docs/failure-retro.md](docs/failure-retro.md), [docs/desktop-pet-product-commonsense.md](docs/desktop-pet-product-commonsense.md), and [docs/technical-reference-projects.md](docs/technical-reference-projects.md). The previous Greyfield failed by mixing too many systems into the first spine; Greyfield Next keeps the alive desktop companion loop separate from later control/agent modules.

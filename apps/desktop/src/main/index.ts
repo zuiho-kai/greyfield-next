@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import type { GreyfieldConfig, GreyfieldConfigPatch } from "@greyfield/persistence/config-schema";
 import { loadGreyfieldConfig, saveGreyfieldConfig } from "@greyfield/persistence";
 import { createDesktopRuntimeStoreOptions } from "./desktop-runtime-stores";
-import { createChatWindowOptions, createPetWindowOptions, createSettingsWindowOptions, resolvePreloadPath, resolveRendererHtmlPath } from "./electron-window-options";
+import { createChatWindowOptions, createControlsWindowOptions, createPetWindowOptions, createSettingsWindowOptions, resolvePreloadPath, resolveRendererHtmlPath } from "./electron-window-options";
 import { Live2DModelController, type Live2DModelInfo } from "./live2d-model-controller";
 import { resolveLive2DModelSelection } from "./live2d-model-selection";
 import { toWindowMenuPoint } from "./pet-menu";
@@ -20,6 +20,7 @@ const currentDir = dirname(fileURLToPath(import.meta.url));
 let petWindow: BrowserWindow | undefined;
 let settingsWindow: BrowserWindow | undefined;
 let chatWindow: BrowserWindow | undefined;
+let controlsWindow: BrowserWindow | undefined;
 let tray: Tray | undefined;
 let settingsController: SettingsController | undefined;
 let runtimeService: RuntimeService | undefined;
@@ -27,6 +28,16 @@ let runtimeIpcController: RuntimeIpcController | undefined;
 let petWindowController: PetWindowController | undefined;
 let live2DModelController: Live2DModelController | undefined;
 let isQuitting = false;
+let controlsWindowDrag:
+  | {
+      startScreenX: number;
+      startScreenY: number;
+      startWindowX: number;
+      startWindowY: number;
+      width: number;
+      height: number;
+    }
+  | undefined;
 
 async function createWindows(): Promise<void> {
   const config = await loadGreyfieldConfig(resolveConfigPath());
@@ -64,19 +75,21 @@ async function createWindows(): Promise<void> {
   petWindowController.setModelPassThrough(config.window.modelPassThrough);
   settingsWindow = new BrowserWindow(createSettingsWindowOptions(preload));
   chatWindow = new BrowserWindow(createChatWindowOptions(preload));
+  controlsWindow = new BrowserWindow(createControlsWindowOptions(config, preload));
   attachWindowLifecycle();
 
   registerIpc();
   await loadRenderer(petWindow, "pet");
   await loadRenderer(settingsWindow, "settings");
   await loadRenderer(chatWindow, "chat");
+  await loadRenderer(controlsWindow, "controls");
   broadcastSettings(config);
   broadcastWindowState();
   applyHitTest({ passthrough: true, reason: "transparent-area" });
   createTray();
 }
 
-async function loadRenderer(window: BrowserWindow, role: "pet" | "settings" | "chat"): Promise<void> {
+async function loadRenderer(window: BrowserWindow, role: "pet" | "settings" | "chat" | "controls"): Promise<void> {
   const devUrl = process.env.GREYFIELD_DESKTOP_URL;
   if (devUrl) {
     const url = new URL(devUrl);
@@ -100,6 +113,7 @@ function createTray(): void {
     Menu.buildFromTemplate([
       { label: "Show Settings", click: () => showWindowIfUsable(settingsWindow) },
       { label: "Open Chat", click: () => showWindowIfUsable(chatWindow) },
+      { label: "Show Controls", click: () => showWindowIfUsable(controlsWindow) },
       { label: "Model Pass Through", type: "checkbox", checked: petWindowController?.isModelPassThrough(), click: () => setModelPassThrough(!petWindowController?.isModelPassThrough()) },
       { label: "Interrupt", click: () => handleRuntimeInput({ type: "runtime.interrupt" }) },
       { type: "separator" },
@@ -187,6 +201,17 @@ function registerIpc(): void {
 
   ipcMain.on("window:open-settings", () => showWindowIfUsable(settingsWindow));
   ipcMain.on("window:open-chat", () => showWindowIfUsable(chatWindow));
+  ipcMain.on("window:hide-pet", () => hideWindowIfUsable(petWindow));
+  ipcMain.on("window:hide-controls", () => hideWindowIfUsable(controlsWindow));
+  ipcMain.on("window:controls-drag-start", (_event, payload: { screenX: number; screenY: number }) => {
+    startControlsWindowDrag(payload);
+  });
+  ipcMain.on("window:controls-drag-move", (_event, payload: { screenX: number; screenY: number }) => {
+    moveControlsWindowDrag(payload);
+  });
+  ipcMain.on("window:controls-drag-end", () => {
+    controlsWindowDrag = undefined;
+  });
   ipcMain.on("stage:choose-model", () => {
     void live2DModelController?.chooseModel();
   });
@@ -205,6 +230,9 @@ function attachWindowLifecycle(): void {
   });
   attachHideOnClose(chatWindow, () => {
     chatWindow = undefined;
+  });
+  attachHideOnClose(controlsWindow, () => {
+    controlsWindow = undefined;
   });
 }
 
@@ -259,6 +287,35 @@ function applyStoredShape(): void {
   petWindowController?.applyStoredShape();
 }
 
+function startControlsWindowDrag(payload: { screenX: number; screenY: number }): void {
+  const window = getUsableWindow(controlsWindow);
+  if (!window) {
+    return;
+  }
+  const bounds = window.getBounds();
+  controlsWindowDrag = {
+    startScreenX: payload.screenX,
+    startScreenY: payload.screenY,
+    startWindowX: bounds.x,
+    startWindowY: bounds.y,
+    width: bounds.width,
+    height: bounds.height
+  };
+}
+
+function moveControlsWindowDrag(payload: { screenX: number; screenY: number }): void {
+  const window = getUsableWindow(controlsWindow);
+  if (!window || !controlsWindowDrag) {
+    return;
+  }
+  window.setBounds({
+    x: Math.round(controlsWindowDrag.startWindowX + payload.screenX - controlsWindowDrag.startScreenX),
+    y: Math.round(controlsWindowDrag.startWindowY + payload.screenY - controlsWindowDrag.startScreenY),
+    width: controlsWindowDrag.width,
+    height: controlsWindowDrag.height
+  });
+}
+
 function canUseWindowShape(): boolean {
   return process.env.GREYFIELD_ENABLE_NATIVE_SHAPE === "1" && (process.platform === "win32" || process.platform === "linux");
 }
@@ -271,6 +328,7 @@ function showPetMenu(point: { screenX: number; screenY: number }): void {
   const menu = Menu.buildFromTemplate([
     { label: "Open Chat", click: () => showWindowIfUsable(chatWindow) },
     { label: "Settings", click: () => showWindowIfUsable(settingsWindow) },
+    { label: "Show Controls", click: () => showWindowIfUsable(controlsWindow) },
     { type: "separator" },
     { label: "Model Pass Through", type: "checkbox", checked: petWindowController?.isModelPassThrough(), click: () => setModelPassThrough(!petWindowController?.isModelPassThrough()) },
     { label: "Lock Position", type: "checkbox", checked: petWindowController?.isLocked(), click: () => {

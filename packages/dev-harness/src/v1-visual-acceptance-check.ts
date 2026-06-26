@@ -29,6 +29,14 @@ type VisualAcceptanceSummaryInput = {
     hasPetShell: boolean;
     hasGreyfieldApi: boolean;
   };
+  controls: {
+    role: string | null;
+    viewport: { width: number; height: number };
+    hasPanel: boolean;
+    panelWithinViewport: boolean;
+    draggable: boolean;
+    activeButtonContrastOk: boolean;
+  };
   stage: {
     modelPoint: { x: number; y: number };
     transparentPoint: { x: number; y: number };
@@ -38,12 +46,15 @@ type VisualAcceptanceSummaryInput = {
   chat: {
     assistantReplyVisible: boolean;
     speechBubbleVisible: boolean;
+    speechBubbleAvoidsModel: boolean;
     bubbleText: string;
   };
   settings: {
     providerPreviewVisible: boolean;
     settingsShellVisible: boolean;
     noHorizontalOverflow: boolean;
+    narrowNoHorizontalOverflow: boolean;
+    windowControlsUsable: boolean;
     viewportWidth: number;
     scrollWidth: number;
   };
@@ -62,10 +73,13 @@ export function buildV1VisualAcceptanceSummary(input: VisualAcceptanceSummaryInp
     generatedAt: new Date().toISOString(),
     ...input,
     visualReviewRequired: [
-      "Open pet-initial.png and confirm the pet surface is transparent, unframed, and not a web control panel.",
-      "Open pet-after-chat.png and confirm the speech bubble is readable and does not cover the full chat history.",
+      "Open pet-initial.png and confirm the pet surface is transparent, unframed, and separate from the controls window.",
+      "Open controls-initial.png and confirm the desktop input bar is compact, draggable, and not a row of bulky text buttons.",
+      "Open controls-active-state.png and confirm clicked controls keep visible icons instead of white-on-white blocks.",
+      "Open pet-after-chat.png and confirm the speech bubble reads like a short subtitle and does not cover the model.",
       "Open chat-after-reply.png and confirm the full assistant reply stays in the Chat window.",
-      "Open settings-provider-preview.png and confirm Settings reads like a product surface, not a debug console."
+      "Open settings-provider-preview.png and confirm Settings reads like a product surface, not a debug console.",
+      "Open settings-window-controls.png and confirm Window scale/position controls are readable and not collapsed."
     ]
   };
 }
@@ -117,15 +131,20 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     await waitForPaintedStage(petWindow);
 
     const pet = await readPetSnapshot(petWindow);
-    if (pet.role !== "pet" || pet.hasControls || !pet.hasPetShell || !pet.hasGreyfieldApi) {
+    if (
+      pet.role !== "pet" ||
+      pet.hasControls ||
+      !pet.hasPetShell ||
+      !pet.hasGreyfieldApi
+    ) {
       throw new Error(`Pet window did not render the expected desktop-pet shell: ${JSON.stringify(pet)}`);
     }
     if (pet.bodyBackgroundColor !== "rgba(0, 0, 0, 0)" || pet.bodyBackgroundImage !== "none") {
       throw new Error(`Pet window is not transparent: ${JSON.stringify(pet)}`);
     }
 
-    const modelPoint = await findStagePoint(petWindow, true);
-    const transparentPoint = await findStagePoint(petWindow, false);
+    const modelPoint = await waitForStagePoint(petWindow, true);
+    const transparentPoint = await waitForStagePoint(petWindow, false);
     await petWindow.evaluate(() =>
       window.greyfield?.send("window:set-hit-test", { passthrough: false, reason: "model-hit" })
     );
@@ -134,8 +153,29 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     await dispatchStageMove(petWindow, transparentPoint);
     await waitForStageHit(petWindow, false, transparentPoint);
 
+    const controlsWindow = await waitForRoleWindow(app, "controls");
+    await controlsWindow.waitForSelector(".desktop-control-panel");
+    const controls = await readControlsSnapshot(controlsWindow);
+    controls.draggable = await dragDesktopControls(app, controlsWindow);
+    if (controls.role !== "controls" || !controls.hasPanel || !controls.panelWithinViewport || !controls.draggable) {
+      throw new Error(`Desktop controls did not render the expected draggable panel: ${JSON.stringify(controls)}`);
+    }
+
     const artifacts: Artifact[] = [];
     artifacts.push(await screenshot(petWindow, artifactDir, "pet-initial.png", "Transparent pet shell and model surface."));
+    artifacts.push(await screenshot(controlsWindow, artifactDir, "controls-initial.png", "Draggable desktop input controls."));
+    const activeButtonProbe = await verifyActiveControlContrast(controlsWindow);
+    controls.activeButtonContrastOk = activeButtonProbe.ok;
+    if (!controls.activeButtonContrastOk) {
+      throw new Error(
+        `Desktop controls active/hover button state lost icon contrast: ${JSON.stringify({
+          controls,
+          activeButtonProbe
+        })}`
+      );
+    }
+    artifacts.push(await screenshot(controlsWindow, artifactDir, "controls-active-state.png", "Active desktop controls button state."));
+    await controlsWindow.getByRole("button", { name: "Turn voice output off" }).click();
 
     const chatWindow = await waitForRoleWindow(app, "chat");
     await chatWindow.waitForSelector(".chat-shell");
@@ -144,6 +184,10 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     await chatWindow.locator(".message-list .assistant", { hasText: "你好，我醒着。现在可以继续做桌宠了。" }).waitFor();
     await petWindow.locator(".speech-bubble").waitFor();
     const bubbleText = await petWindow.locator(".speech-bubble").textContent();
+    const bubbleProbe = await readSpeechBubbleModelOverlap(petWindow);
+    if (!bubbleProbe.visible || bubbleProbe.overlapsModel) {
+      throw new Error(`Speech bubble overlaps the model surface: ${JSON.stringify(bubbleProbe)}`);
+    }
     artifacts.push(await screenshot(petWindow, artifactDir, "pet-after-chat.png", "Pet bubble after a fake chat reply."));
     artifacts.push(await screenshot(chatWindow, artifactDir, "chat-after-reply.png", "Chat keeps the complete assistant reply."));
 
@@ -155,24 +199,32 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     const settingsWindow = await waitForRoleWindow(app, "settings");
     await settingsWindow.waitForSelector(".greyfield-shell");
     await settingsWindow.locator(".provider-status--preview", { hasText: "Fake provider is active" }).waitFor();
-    const settingsLayout = await settingsWindow.evaluate(() => {
-      const scrollWidth = document.scrollingElement?.scrollWidth ?? document.documentElement.scrollWidth;
-      return {
-        viewportWidth: window.innerWidth,
-        scrollWidth,
-        noHorizontalOverflow: scrollWidth <= window.innerWidth
-      };
-    });
-    if (!settingsLayout.noHorizontalOverflow) {
+    const settingsLayout = await readSettingsLayout(settingsWindow);
+    if (!settingsLayout.noHorizontalOverflow || !settingsLayout.windowControlsUsable) {
       throw new Error(`Settings window has horizontal overflow: ${JSON.stringify(settingsLayout)}`);
     }
+    await resizeElectronWindow(app, "settings", 520, 620);
+    await settingsWindow.waitForTimeout(100);
+    const narrowSettingsLayout = await readSettingsLayout(settingsWindow);
+    if (!narrowSettingsLayout.noHorizontalOverflow || !narrowSettingsLayout.windowControlsUsable) {
+      throw new Error(`Settings window breaks in narrow layout: ${JSON.stringify(narrowSettingsLayout)}`);
+    }
+    const finalSettingsLayout = {
+      ...narrowSettingsLayout,
+      narrowNoHorizontalOverflow: narrowSettingsLayout.noHorizontalOverflow
+    };
     artifacts.push(
       await screenshot(settingsWindow, artifactDir, "settings-provider-preview.png", "Settings provider preview state.")
+    );
+    await settingsWindow.getByLabel("Scale").scrollIntoViewIfNeeded();
+    artifacts.push(
+      await screenshot(settingsWindow, artifactDir, "settings-window-controls.png", "Settings Window controls.")
     );
 
     const summary = buildV1VisualAcceptanceSummary({
       artifactDir,
       pet,
+      controls,
       stage: {
         modelPoint: roundPoint(modelPoint),
         transparentPoint: roundPoint(transparentPoint),
@@ -182,12 +234,11 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
       chat: {
         assistantReplyVisible: true,
         speechBubbleVisible: true,
+        speechBubbleAvoidsModel: !bubbleProbe.overlapsModel,
         bubbleText: bubbleText?.trim() ?? ""
       },
       settings: {
-        providerPreviewVisible: true,
-        settingsShellVisible: true,
-        ...settingsLayout
+        ...finalSettingsLayout
       },
       artifacts
     });
@@ -233,7 +284,7 @@ async function launchApp(tempDir: string, configPath: string): Promise<ElectronA
   return app;
 }
 
-async function waitForRoleWindow(app: ElectronApplication, roleName: "pet" | "settings" | "chat"): Promise<Page> {
+async function waitForRoleWindow(app: ElectronApplication, roleName: "pet" | "settings" | "chat" | "controls"): Promise<Page> {
   const started = Date.now();
   while (Date.now() - started < 5_000) {
     for (const page of app.windows()) {
@@ -282,6 +333,20 @@ async function waitForPaintedStage(page: Page): Promise<void> {
   });
 }
 
+async function waitForStagePoint(page: Page, hit: boolean): Promise<{ x: number; y: number }> {
+  const started = Date.now();
+  let lastError: unknown;
+  while (Date.now() - started < 8_000) {
+    try {
+      return await findStagePoint(page, hit);
+    } catch (error) {
+      lastError = error;
+      await delay(150);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(`Timed out waiting for ${hit ? "model" : "transparent"} stage point`);
+}
+
 async function readPetSnapshot(page: Page): Promise<VisualAcceptanceSummaryInput["pet"]> {
   return page.evaluate(() => {
     const bodyStyle = getComputedStyle(document.body);
@@ -298,6 +363,232 @@ async function readPetSnapshot(page: Page): Promise<VisualAcceptanceSummaryInput
       hasGreyfieldApi: typeof window.greyfield?.send === "function"
     };
   });
+}
+
+async function readSpeechBubbleModelOverlap(page: Page): Promise<{
+  visible: boolean;
+  overlapsModel: boolean;
+  rect?: { x: number; y: number; width: number; height: number };
+  overlappingPoints: Array<{ x: number; y: number }>;
+}> {
+  return page.evaluate(() => {
+    const bubble = document.querySelector<HTMLElement>(".speech-bubble");
+    if (!bubble) {
+      return { visible: false, overlapsModel: false, overlappingPoints: [] };
+    }
+    const rect = bubble.getBoundingClientRect();
+    const sampler = (
+      window as typeof window & {
+        __greyfieldStageSmoke?: { sampleModelHit(clientX: number, clientY: number): boolean };
+      }
+    ).__greyfieldStageSmoke?.sampleModelHit;
+    if (!sampler) {
+      return {
+        visible: true,
+        overlapsModel: false,
+        rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+        overlappingPoints: []
+      };
+    }
+
+    const overlappingPoints: Array<{ x: number; y: number }> = [];
+    const inset = 8;
+    const columns = 5;
+    const rows = 3;
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        const x = rect.left + inset + ((rect.width - inset * 2) * column) / Math.max(1, columns - 1);
+        const y = rect.top + inset + ((rect.height - inset * 2) * row) / Math.max(1, rows - 1);
+        if (sampler(x, y)) {
+          overlappingPoints.push({ x: Math.round(x), y: Math.round(y) });
+        }
+      }
+    }
+
+    return {
+      visible: true,
+      overlapsModel: overlappingPoints.length > 0,
+      rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      overlappingPoints
+    };
+  });
+}
+
+async function readControlsSnapshot(page: Page): Promise<VisualAcceptanceSummaryInput["controls"]> {
+  return page.evaluate(() => {
+    const panel = document.querySelector(".desktop-control-panel");
+    const rect = panel?.getBoundingClientRect();
+    return {
+      role: new URLSearchParams(window.location.search).get("window"),
+      viewport: {
+        width: window.innerWidth,
+        height: window.innerHeight
+      },
+      hasPanel: panel !== null,
+      panelWithinViewport: rect
+        ? rect.left >= 0 && rect.top >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight
+        : false,
+      draggable: false,
+      activeButtonContrastOk: false
+    };
+  });
+}
+
+async function verifyActiveControlContrast(page: Page): Promise<{
+  ok: boolean;
+  color?: string;
+  backgroundColor?: string;
+  contrast?: number;
+  className?: string;
+  icon?: { width: number; height: number };
+}> {
+  const voiceButton = page.getByRole("button", { name: "Turn voice output on" });
+  await voiceButton.click();
+  await page.getByRole("button", { name: "Turn voice output off" }).waitFor();
+  await page.waitForTimeout(100);
+  return page.evaluate(() => {
+    const activeButton = document.querySelector<HTMLButtonElement>(".desktop-control-button--active");
+    if (!activeButton) {
+      return { ok: false };
+    }
+    const rect = activeButton.getBoundingClientRect();
+    activeButton.dispatchEvent(
+      new MouseEvent("mousemove", {
+        bubbles: true,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2
+      })
+    );
+    const style = getComputedStyle(activeButton);
+    const color = parseRgb(style.color);
+    const background = parseRgb(style.backgroundColor);
+    if (!color || !background) {
+      return {
+        ok: false,
+        color: style.color,
+        backgroundColor: style.backgroundColor,
+        className: activeButton.className
+      };
+    }
+    const contrast = contrastRatio(color, background);
+    const icon = activeButton.querySelector("svg");
+    const iconRect = icon?.getBoundingClientRect();
+    return {
+      ok: contrast >= 3 && Boolean(iconRect && iconRect.width >= 12 && iconRect.height >= 12),
+      color: style.color,
+      backgroundColor: style.backgroundColor,
+      contrast,
+      className: activeButton.className,
+      icon: iconRect ? { width: iconRect.width, height: iconRect.height } : undefined
+    };
+
+    function parseRgb(value: string): [number, number, number] | null {
+      const match = value.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+      if (!match) {
+        return null;
+      }
+      return [Number(match[1]), Number(match[2]), Number(match[3])];
+    }
+
+    function contrastRatio(foreground: [number, number, number], background: [number, number, number]): number {
+      const lighter = Math.max(luminance(foreground), luminance(background));
+      const darker = Math.min(luminance(foreground), luminance(background));
+      return (lighter + 0.05) / (darker + 0.05);
+    }
+
+    function luminance(rgb: [number, number, number]): number {
+      const [red, green, blue] = rgb.map((channel) => {
+        const value = channel / 255;
+        return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+    }
+  });
+}
+
+async function dragDesktopControls(app: ElectronApplication, page: Page): Promise<boolean> {
+  const before = await readRoleWindowBounds(app, "controls");
+  const handle = page.locator(".desktop-control-handle");
+  const handleBox = await handle.boundingBox();
+  if (!before || !handleBox) {
+    return false;
+  }
+
+  const start = { x: handleBox.x + handleBox.width / 2, y: handleBox.y + handleBox.height / 2 };
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + 72, start.y - 28, { steps: 6 });
+  await page.mouse.up();
+  const started = Date.now();
+  while (Date.now() - started < 3_000) {
+    const after = await readRoleWindowBounds(app, "controls");
+    if (after && (Math.abs(after.x - before.x) >= 20 || Math.abs(after.y - before.y) >= 20)) {
+      return after.width === before.width && after.height === before.height;
+    }
+    await delay(100);
+  }
+  return false;
+}
+
+async function readRoleWindowBounds(
+  app: ElectronApplication,
+  roleName: "pet" | "settings" | "chat" | "controls"
+): Promise<{ x: number; y: number; width: number; height: number } | null> {
+  return app.evaluate(
+    ({ BrowserWindow }, targetRole) => {
+      const window = BrowserWindow.getAllWindows().find((browserWindow) =>
+        browserWindow.webContents.getURL().includes(`window=${targetRole}`)
+      );
+      return window?.getBounds() ?? null;
+    },
+    roleName
+  );
+}
+
+async function readSettingsLayout(page: Page): Promise<VisualAcceptanceSummaryInput["settings"]> {
+  return page.evaluate(() => {
+    const scrollWidth = document.scrollingElement?.scrollWidth ?? document.documentElement.scrollWidth;
+    const compactInputs = Array.from(document.querySelectorAll<HTMLInputElement>(".settings-fields--compact input"));
+    const windowControlsUsable =
+      compactInputs.length >= 4 &&
+      compactInputs.every((input) => {
+        const label = input.closest("label");
+        if (!label) {
+          return false;
+        }
+        const labelRect = label.getBoundingClientRect();
+        const inputRect = input.getBoundingClientRect();
+        return (
+          inputRect.width >= 18 &&
+          inputRect.height >= 18 &&
+          inputRect.left >= labelRect.left - 1 &&
+          inputRect.right <= labelRect.right + 1 &&
+          inputRect.top >= labelRect.top - 1 &&
+          inputRect.bottom <= labelRect.bottom + 1
+        );
+      });
+    return {
+      providerPreviewVisible: document.querySelector(".provider-status--preview") !== null,
+      settingsShellVisible: document.querySelector(".greyfield-shell") !== null,
+      viewportWidth: window.innerWidth,
+      scrollWidth,
+      noHorizontalOverflow: scrollWidth <= window.innerWidth,
+      narrowNoHorizontalOverflow: scrollWidth <= window.innerWidth,
+      windowControlsUsable
+    };
+  });
+}
+
+async function resizeElectronWindow(app: ElectronApplication, roleName: "pet" | "settings" | "chat", width: number, height: number): Promise<void> {
+  await app.evaluate(
+    ({ BrowserWindow }, payload) => {
+      const target = BrowserWindow.getAllWindows().find((browserWindow) =>
+        browserWindow.webContents.getURL().includes(`window=${payload.roleName}`)
+      );
+      target?.setSize(payload.width, payload.height);
+    },
+    { roleName, width, height }
+  );
 }
 
 async function screenshot(page: Page, artifactDir: string, name: string, review: string): Promise<Artifact> {

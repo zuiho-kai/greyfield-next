@@ -15,6 +15,21 @@
     @model-bounds="updateModelBounds"
     @model-shape="updateModelShape"
   />
+  <ControlsWindow
+    v-else-if="isControlsWindow"
+    :state="state"
+    @send-message="sendMessage"
+    @interrupt="interrupt"
+    @start-voice-input="startVoiceInput"
+    @stop-voice-input="stopVoiceInput"
+    @toggle-speech-output="toggleSpeechOutput"
+    @open-settings="openSettings"
+    @toggle-model-pass-through="setModelPassThrough(!state.window.modelPassThrough)"
+    @hide-controls="hideControls"
+    @drag-start="handleControlsDragStart"
+    @drag-move="handleControlsDragMove"
+    @drag-end="handleControlsDragEnd"
+  />
   <ChatWindow
     v-else-if="isChatWindow"
     :state="state"
@@ -51,6 +66,7 @@
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { BrowserMicrophoneRecorder, BrowserSpeechSynthesisOutput } from "@greyfield/audio-runtime";
 import ChatWindow from "./ChatWindow.vue";
+import ControlsWindow from "./ControlsWindow.vue";
 import { createDesktopRuntimeBridgeWithSpeech } from "./desktop-runtime-bridge";
 import type { DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
 import PetWindow from "./PetWindow.vue";
@@ -58,6 +74,7 @@ import SettingsWindow from "./SettingsWindow.vue";
 import { beginPetDrag, continuePetDrag, endPetDrag, reducePetWheelScale, resolvePetHitTest, type PetDragState } from "./pet-interaction";
 import { createPetWindowShape } from "./pet-window-shape";
 import { placeSpeechBubble, type Rect } from "./speech-bubble-placement";
+import { resolveSpeechBubbleSourceText } from "./speech-bubble-source";
 import { formatSpeechBubbleText } from "./speech-bubble-text";
 import { isMaskedApiKey } from "../shared/secrets";
 
@@ -67,17 +84,19 @@ const windowRole =
   typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("window") : null;
 const isPetWindow = windowRole === "pet";
 const isChatWindow = windowRole === "chat";
+const isControlsWindow = windowRole === "controls";
 const bridge = createDesktopRuntimeBridgeWithSpeech(
   typeof window !== "undefined" ? window.greyfield : undefined,
   isPetWindow ? new BrowserSpeechSynthesisOutput() : undefined
 );
-const microphoneRecorder = isChatWindow ? new BrowserMicrophoneRecorder() : undefined;
+const microphoneRecorder = isChatWindow || isControlsWindow ? new BrowserMicrophoneRecorder() : undefined;
 const initialState = bridge.getState();
 
 if (typeof document !== "undefined") {
   document.body.classList.toggle("pet-window", isPetWindow);
   document.body.classList.toggle("chat-window", isChatWindow);
-  document.body.classList.toggle("settings-window", !isPetWindow && !isChatWindow);
+  document.body.classList.toggle("controls-window", isControlsWindow);
+  document.body.classList.toggle("settings-window", !isPetWindow && !isChatWindow && !isControlsWindow);
 }
 
 if (queryModelPath) {
@@ -92,11 +111,17 @@ const detachHostListeners: Array<() => void> = [];
 const modelInfo = ref<{ modelPath: string; expressions: string[]; motions: Record<string, number> } | null>(null);
 const dragState = ref<PetDragState>(endPetDrag({ active: false, startScreenX: 0, startScreenY: 0, startWindowX: 0, startWindowY: 0, modelScale: 1 }));
 const lastWheelScaleAt = ref(0);
-const speechBubbleSize = { width: 220, height: 124 } as const;
+const speechBubbleSize = { width: 196, height: 78 } as const;
 const speechBubbleHoldMs = 6500;
 const speechBubbleFadeMs = 450;
 const stageStatus = computed(() => state.status as "idle" | "listening" | "thinking" | "speaking" | "interrupted" | "error");
-const bubbleText = computed(() => state.assistantDraft || [...state.messages].reverse().find((message) => message.role === "assistant")?.text || "");
+const bubbleText = computed(() =>
+  resolveSpeechBubbleSourceText({
+    assistantDraft: state.assistantDraft,
+    messages: state.messages,
+    status: state.status
+  })
+);
 const visibleBubbleText = ref("");
 const speechBubbleFading = ref(false);
 let speechBubbleHoldTimer: ReturnType<typeof setTimeout> | null = null;
@@ -104,6 +129,7 @@ let speechBubbleFadeTimer: ReturnType<typeof setTimeout> | null = null;
 const bubblePlacement = computed(() =>
   placeSpeechBubble({
     modelBounds: lastModelBounds.value ?? { x: 120, y: 120, width: 180, height: 360 },
+    modelShape: lastModelShape.value,
     windowBounds: { x: window.screenX, y: window.screenY, width: window.innerWidth, height: window.innerHeight },
     screenBounds: { x: window.screen.availLeft ?? 0, y: window.screen.availTop ?? 0, width: window.screen.availWidth, height: window.screen.availHeight },
     bubbleSize: speechBubbleSize
@@ -165,8 +191,12 @@ if (typeof window !== "undefined") {
 }
 
 async function send(): Promise<void> {
-  const nextState = await bridge.sendText(draft.value);
+  await sendMessage(draft.value);
   draft.value = "";
+}
+
+async function sendMessage(text: string): Promise<void> {
+  const nextState = await bridge.sendText(text);
   syncState(nextState);
 }
 
@@ -177,7 +207,7 @@ async function interrupt(): Promise<void> {
 
 async function startVoiceInput(): Promise<void> {
   if (!microphoneRecorder) {
-    syncState(bridge.failVoiceInput("Voice input is only available from the Chat window."));
+    syncState(bridge.failVoiceInput("Voice input is available from the pet controls or Chat window."));
     return;
   }
   try {
@@ -190,7 +220,7 @@ async function startVoiceInput(): Promise<void> {
 
 async function stopVoiceInput(): Promise<void> {
   if (!microphoneRecorder) {
-    syncState(bridge.failVoiceInput("Voice input is only available from the Chat window."));
+    syncState(bridge.failVoiceInput("Voice input is available from the pet controls or Chat window."));
     return;
   }
   try {
@@ -244,6 +274,10 @@ function setModelPassThrough(value: boolean): void {
 
 function setLocked(value: boolean): void {
   syncState(bridge.setWindowState({ locked: value }));
+}
+
+function toggleSpeechOutput(): void {
+  updateBooleanSetting("voiceSpeechEnabled", !state.settings.voiceSpeechEnabled);
 }
 
 function chooseModel(): void {
@@ -366,6 +400,26 @@ function openSettings(): void {
 
 function openChat(): void {
   window.greyfield?.send("window:open-chat", {});
+}
+
+function hidePet(): void {
+  window.greyfield?.send("window:hide-pet", {});
+}
+
+function hideControls(): void {
+  window.greyfield?.send("window:hide-controls", {});
+}
+
+function handleControlsDragStart(payload: { screenX: number; screenY: number }): void {
+  window.greyfield?.send("window:controls-drag-start", payload);
+}
+
+function handleControlsDragMove(payload: { screenX: number; screenY: number }): void {
+  window.greyfield?.send("window:controls-drag-move", payload);
+}
+
+function handleControlsDragEnd(): void {
+  window.greyfield?.send("window:controls-drag-end", {});
 }
 
 function formatVoiceInputError(error: unknown): string {

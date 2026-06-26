@@ -65,7 +65,8 @@ describe("BrowserSpeechSynthesisOutput", () => {
       synthesis,
       TestUtterance as unknown as typeof SpeechSynthesisUtterance,
       AudioElement as unknown as typeof Audio,
-      urlApi
+      urlApi,
+      undefined
     );
 
     const speaking = output.speak("real audio", {
@@ -77,7 +78,8 @@ describe("BrowserSpeechSynthesisOutput", () => {
 
     expect(synthesis.speak).not.toHaveBeenCalled();
     expect(audioElements[0]?.src).toBe("blob:greyfield-audio");
-    expect(audioElements[0]?.volume).toBe(0.35);
+    expect(audioElements[0]?.volume).toBeGreaterThanOrEqual(0);
+    expect(audioElements[0]?.volume).toBeLessThan(0.35);
     expect(urlApi.revokeObjectURL).toHaveBeenCalledWith("blob:greyfield-audio");
   });
 
@@ -92,6 +94,7 @@ describe("BrowserSpeechSynthesisOutput", () => {
       undefined,
       TestAudioElement as unknown as typeof Audio,
       urlApi,
+      undefined,
       { playAudio }
     );
 
@@ -104,9 +107,72 @@ describe("BrowserSpeechSynthesisOutput", () => {
       bytes: 8,
       headerHex: "4944330300000000",
       objectUrl: "blob:greyfield-audio",
-      volume: 0.25
+      volume: 0.25,
+      fadeInMs: 180
     });
     expect(urlApi.revokeObjectURL).toHaveBeenCalledWith("blob:greyfield-audio");
+  });
+
+  it("uses decoded WebAudio playback with a gain fade-in when available", async () => {
+    const contexts: TestAudioContext[] = [];
+    const AudioContextCtor = class extends TestAudioContext {
+      constructor() {
+        super();
+        contexts.push(this);
+      }
+    };
+    const output = new BrowserSpeechSynthesisOutput(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      AudioContextCtor as unknown as typeof AudioContext
+    );
+
+    await output.speak("real audio", {
+      audio: new Uint8Array([0x49, 0x44, 0x33, 0x03, 0, 0, 0, 0]),
+      volume: 0.42
+    });
+
+    expect(contexts[0]?.decodeAudioData).toHaveBeenCalledOnce();
+    expect(contexts[0]?.gain.gain.setValueAtTime).toHaveBeenCalledWith(0, 4);
+    expect(contexts[0]?.gain.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0.42, 4.18);
+    expect(contexts[0]?.source.start).toHaveBeenCalledOnce();
+    expect(contexts[0]?.source.connect).toHaveBeenCalledWith(contexts[0]?.gain);
+  });
+
+  it("does not start WebAudio playback after cancellation during decode", async () => {
+    let resolveDecode: ((buffer: AudioBuffer) => void) | undefined;
+    const contexts: TestAudioContext[] = [];
+    const AudioContextCtor = class extends TestAudioContext {
+      constructor() {
+        super();
+        this.decodeAudioData = vi.fn(
+          () => new Promise<AudioBuffer>((resolve) => {
+            resolveDecode = resolve;
+          })
+        );
+        contexts.push(this);
+      }
+    };
+    const output = new BrowserSpeechSynthesisOutput(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      AudioContextCtor as unknown as typeof AudioContext
+    );
+
+    const speaking = output.speak("real audio", {
+      audio: new Uint8Array([0x49, 0x44, 0x33, 0x03, 0, 0, 0, 0])
+    });
+    output.cancel();
+    resolveDecode?.(contexts[0]!.buffer as unknown as AudioBuffer);
+
+    await expect(speaking).rejects.toThrow("Speech playback failed: canceled");
+    await Promise.resolve();
+    expect(contexts[0]?.source.start).not.toHaveBeenCalled();
+    expect(contexts[0]?.close).toHaveBeenCalled();
   });
 
   it("cancels active audio playback", async () => {
@@ -117,10 +183,16 @@ describe("BrowserSpeechSynthesisOutput", () => {
         audioElements.push(this);
       }
     };
-    const output = new BrowserSpeechSynthesisOutput(undefined, undefined, AudioElement as unknown as typeof Audio, {
-      createObjectURL: () => "blob:greyfield-audio",
-      revokeObjectURL: vi.fn()
-    });
+    const output = new BrowserSpeechSynthesisOutput(
+      undefined,
+      undefined,
+      AudioElement as unknown as typeof Audio,
+      {
+        createObjectURL: () => "blob:greyfield-audio",
+        revokeObjectURL: vi.fn()
+      },
+      undefined
+    );
 
     const speaking = output.speak("real audio", { audio: new Uint8Array([0x49, 0x44, 0x33, 0x03]) });
     output.cancel();
@@ -147,4 +219,33 @@ class TestAudioElement {
   pause(): void {
     this.paused = true;
   }
+}
+
+class TestAudioContext {
+  currentTime = 4;
+  destination = {};
+  source = {
+    buffer: null as AudioBuffer | null,
+    onended: null as ((event: Event) => void) | null,
+    connect: vi.fn(),
+    start: vi.fn(() => {
+      this.source.onended?.(new Event("ended"));
+    }),
+    stop: vi.fn()
+  };
+  gain = {
+    gain: {
+      setValueAtTime: vi.fn(),
+      linearRampToValueAtTime: vi.fn()
+    },
+    connect: vi.fn()
+  };
+  buffer = {
+    sampleRate: 1_000,
+    getChannelData: vi.fn(() => new Float32Array([0, 0.4, 0.8, 0.4, 0]))
+  };
+  decodeAudioData = vi.fn(async () => this.buffer as unknown as AudioBuffer);
+  createBufferSource = vi.fn(() => this.source as unknown as AudioBufferSourceNode);
+  createGain = vi.fn(() => this.gain as unknown as GainNode);
+  close = vi.fn(async () => undefined);
 }

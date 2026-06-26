@@ -2,7 +2,7 @@
 
 This checklist is the pre-release evidence map for Greyfield Next V1. It is not a completion claim by itself. A path is only claimable when the referenced test, harness, screenshot, or manual step exists on the branch being released.
 
-Last updated: 2026-06-25.
+Last updated: 2026-06-26.
 
 ## Evidence Rules
 
@@ -10,8 +10,30 @@ Last updated: 2026-06-25.
 - PR-local evidence counts for review of that PR, but V1 release evidence only counts after the PR is merged and the affected path has current-head evidence.
 - Screenshot artifacts are review evidence, not a replacement for executable harnesses.
 - Integration PR [#41](https://github.com/zuiho-kai/greyfield-next/pull/41) combined #35, #36, #37, #38, #39, and #40 and is now merged into `main`.
-- PRs [#42](https://github.com/zuiho-kai/greyfield-next/pull/42), [#43](https://github.com/zuiho-kai/greyfield-next/pull/43), [#44](https://github.com/zuiho-kai/greyfield-next/pull/44), [#45](https://github.com/zuiho-kai/greyfield-next/pull/45), [#46](https://github.com/zuiho-kai/greyfield-next/pull/46), and [#55](https://github.com/zuiho-kai/greyfield-next/pull/55) are also merged into `main`.
+- PRs [#42](https://github.com/zuiho-kai/greyfield-next/pull/42), [#43](https://github.com/zuiho-kai/greyfield-next/pull/43), [#44](https://github.com/zuiho-kai/greyfield-next/pull/44), [#45](https://github.com/zuiho-kai/greyfield-next/pull/45), [#46](https://github.com/zuiho-kai/greyfield-next/pull/46), [#55](https://github.com/zuiho-kai/greyfield-next/pull/55), and [#58](https://github.com/zuiho-kai/greyfield-next/pull/58) are also merged into `main`.
+- PR [#59](https://github.com/zuiho-kai/greyfield-next/pull/59) is a PR-local final visible-experience closeout candidate. Its evidence is listed separately until it is merged and rerun on `main`.
 - Old PR [#32](https://github.com/zuiho-kai/greyfield-next/pull/32) is closed as superseded by #38 and #41.
+
+## Current PR-Local Closeout Candidate
+
+PR #59 adds the independent floating controls window and fixes the latest manual-QA misses in Settings layout, pet speech-bubble placement, voice-toggle transform stability, WebAudio TTS fade-in, and overlapping speech playback.
+
+PR-local verification passed on #59:
+
+- `pnpm typecheck` -> passed.
+- Targeted vitest for desktop runtime bridge, audio playback, speech bubble source/text/placement, and V1 visual summary -> passed.
+- `pnpm harness:electron` -> `voiceToggleKeptLive2DTransform: true`.
+- `pnpm harness:electron:stop-audio` -> `noOverlappingSpeech: true`, `speechCanceled: true`, `audioQueueCleared: true`, `mouthOpenReset: true`.
+- `pnpm harness:electron:voice-input` -> passed.
+- `pnpm harness:frontend-full` -> 16 checks passed in 3m 45s. Optional real OpenAI-compatible TTS Electron harness skipped because `GREYFIELD_REAL_TTS_*` / `GREYFIELD_REAL_LLM_*` env vars were not set.
+
+Important #59 visual acceptance fields:
+
+- `controls.draggable: true`
+- `controls.activeButtonContrastOk: true`
+- `chat.speechBubbleAvoidsModel: true`
+
+This is review evidence for #59. It becomes release evidence only after #59 merges and the same affected paths pass on `main`.
 
 ## Current Main Evidence
 
@@ -119,7 +141,7 @@ Visual review artifacts from `pnpm harness:v1-visual` were inspected from `.cach
 
 | User path | Current evidence | Claim status |
 | --- | --- | --- |
-| Open app and see a transparent desktop pet, not a webpage | `pnpm harness:v1-visual`; `pnpm harness:electron`; `pnpm harness:pet:quick`; screenshots in `.cache/greyfield-v1-visual-acceptance/latest/`; main `frontend-full` on `4479c262` | Current on main through #55 |
+| Open app and see a transparent desktop pet, not a webpage | `pnpm harness:v1-visual`; `pnpm harness:electron`; `pnpm harness:pet:quick`; screenshots in `.cache/greyfield-v1-visual-acceptance/latest/`; main `frontend-full` on `4479c262`; #59 PR-local controls-window visual evidence | Current on main through #55; controls window PR-local on #59 |
 | Interact with the pet model pixels while transparent areas pass through | `pnpm harness:pet:quick`; `pnpm harness:electron`; unit tests `pet-interaction`, `desktop-runtime-bridge`; main `frontend-full` on `4479c262` | Current on main through #55 |
 | Drag pet window without resizing or changing model scale | `pnpm harness:pet:quick`; `pnpm harness:electron`; unit tests `pet-interaction`, `pet-window-controller`; #42 drag guard; #46 drag-state harness sync; main `frontend-full` on `4479c262` | Current on main through #55 |
 | Wheel-scale only on model pixels and within bounds | `pnpm harness:pet:quick`; unit tests `pet-interaction`; main `frontend-full` on `4479c262` | Current on main through #55 |
@@ -130,18 +152,19 @@ Visual review artifacts from `pnpm harness:v1-visual` were inspected from `.cach
 | Configure provider and understand whether Test LLM can run | Main evidence: `settings-provider-status` tests, `pnpm harness:electron:settings-provider-test`, and `pnpm harness:electron:settings-active-chat-test`; #43 API-key input fix; #45 Settings UI/lifecycle closeout; main `frontend-full` on `4479c262` | Current on main through #55 |
 | Reject Test LLM during active chat without sending another provider request | `pnpm harness:electron:settings-active-chat-test`; merged #41 alignment with provider UI; main `frontend-full` on `4479c262` | Current on main through #55 |
 | Keep recent context across restart | `pnpm harness:electron:restart-context`; unit tests `runtime-service`, `jsonl-session-store`, `prompt-assembler`; main `frontend-full` on `4479c262` | Current on main through #55 |
-| Show short assistant text in pet bubble while full history stays in Chat | `pnpm harness:electron:bubble-long-reply`; `pnpm harness:v1-visual` screenshots; main `frontend-full` on `4479c262` | Current on main through #55 |
+| Show short assistant text in pet bubble while full history stays in Chat | `pnpm harness:electron:bubble-long-reply`; `pnpm harness:v1-visual` screenshots; main `frontend-full` on `4479c262`; #59 PR-local visual acceptance proves the bubble avoids rendered model pixels and does not flash the previous assistant text into a new turn | Current on main through #55; model-avoidance and old-message flash fix PR-local on #59 |
 | Keep bubble inside right edge and remove bubble hit area when disabled | Merged #41 includes #26 `pnpm harness:electron:bubble-edge-clickthrough` and screenshots under `.cache/greyfield-bubble-edge-clickthrough/latest/`; latest output also proves `passThroughBubbleToggleKeptStoredShapeFresh: true` when the bubble is disabled during Model Pass Through; main `frontend-full` on `4479c262` | Current on main through #55 |
-| Enable real assistant speech output without sudden default audio | Merged #41 includes #29 Settings `Speak replies`, renderer Web Speech playback, default-quiet behavior, TTS failure isolation, long-reply speech budget, natural playback queue cleanup, and Electron proof that `savedVoiceSpeech: true`; #54 adds Settings `Test Voice`, `pnpm harness:real-tts`, and `pnpm harness:electron:real-tts` proof that OpenAI-compatible `/audio/speech` MP3 bytes enter renderer audio playback; main `frontend-full` on `4479c262` covers local OpenAI-compatible TTS playback and Stop cleanup through the voice-input harness | Current on main through #55; external real TTS demo requires env rerun |
+| Enable real assistant speech output without sudden default audio | Merged #41 includes #29 Settings `Speak replies`, renderer Web Speech playback, default-quiet behavior, TTS failure isolation, long-reply speech budget, natural playback queue cleanup, and Electron proof that `savedVoiceSpeech: true`; #54 adds Settings `Test Voice`, `pnpm harness:real-tts`, and `pnpm harness:electron:real-tts` proof that OpenAI-compatible `/audio/speech` MP3 bytes enter renderer audio playback; main `frontend-full` on `4479c262` covers local OpenAI-compatible TTS playback and Stop cleanup through the voice-input harness; #59 PR-local WebAudio path applies a short gain ramp and decoded PCM mouth driving | Current on main through #55; WebAudio fade-in PR-local on #59; external real TTS demo requires env rerun |
 | Use microphone voice input to start a normal chat turn | #55 adds Chat `Voice` recording, OpenAI-compatible ASR `/audio/transcriptions`, `transcript.final`, and normal runtime text routing; `pnpm harness:electron:voice-input` on main `4479c262` proves a microphone probe recording reaches ASR, the transcript appears as a user chat message, and the assistant reply appears through the existing chat path | Current on main through #55 |
 | Drive Live2D mouth from decoded real audio waveform | #55 adds decoded PCM mouth-open timeline in `audio-runtime` and renderer playback `onMouthOpen`; unit test `audio-level-meter` proves the PCM timeline mapping, and `pnpm harness:electron:voice-input` on main `4479c262` proves mouth-open becomes non-zero during local WAV TTS playback and returns to zero after Stop | Current on main through #55 |
-| Stop active microphone input, ASR/TTS, speech playback, queued speech UI, and mouth-open state | Merged #41 includes `pnpm harness:electron:stop-audio`, keeps `pnpm harness:electron:provider-abort` passing, proves `playbackFinishClearedQueue`, `speechCanceled`, `audioQueueCleared`, and `mouthOpenReset`, and adds the integration fix proving Stop remains enabled while enabled voice output is still queued after text completion; #46 waits for Pet speech probe synchronization; #55 adds `pnpm harness:electron:voice-input`, proving Stop cancels microphone listening before ASR and later cancels active TTS playback while clearing queue and mouth-open state | Current on main through #55 |
+| Stop active microphone input, ASR/TTS, speech playback, queued speech UI, and mouth-open state | Merged #41 includes `pnpm harness:electron:stop-audio`, keeps `pnpm harness:electron:provider-abort` passing, proves `playbackFinishClearedQueue`, `speechCanceled`, `audioQueueCleared`, and `mouthOpenReset`, and adds the integration fix proving Stop remains enabled while enabled voice output is still queued after text completion; #46 waits for Pet speech probe synchronization; #55 adds `pnpm harness:electron:voice-input`, proving Stop cancels microphone listening before ASR and later cancels active TTS playback while clearing queue and mouth-open state; #59 PR-local stop-audio harness adds `noOverlappingSpeech: true` to prove multiple speech chunks serialize instead of overlapping | Current on main through #55; non-overlap proof PR-local on #59 |
 
 ## Current Non-Claimable Paths
 
 - Real OpenAI-compatible provider evidence is not current because the required `GREYFIELD_REAL_LLM_*` env vars were unavailable. The fake provider path, provider failure path, Test LLM product states, and provider abort path are covered; real-provider chat still needs an env-backed rerun before any real endpoint release claim.
+- #59 closeout evidence is PR-local until that PR is merged and `pnpm harness:frontend-full` passes again on `main`.
 - Current closeout PRs that touch Settings UI, Chat UI, Pet UI, Electron main lifecycle, or harness behavior must rerun the affected current-head evidence before merge. For frontend-visible changes, `pnpm harness:frontend-full` is the preferred aggregate gate.
-- A final V1 release claim still needs one current-head checkpoint record after the last closeout PR, covering `pnpm typecheck`, `pnpm test`, `pnpm harness:acceptance`, `pnpm harness:live2d`, `pnpm harness:pet:quick`, `pnpm harness:electron`, and the feature-specific harnesses listed above or `pnpm harness:frontend-full` when it covers the touched frontend surface.
+- A final V1 release claim still needs one current-head checkpoint record after #59, covering `pnpm typecheck`, `pnpm test`, `pnpm harness:acceptance`, `pnpm harness:live2d`, `pnpm harness:pet:quick`, `pnpm harness:electron`, and the feature-specific harnesses listed above or `pnpm harness:frontend-full` when it covers the touched frontend surface.
 
 ## Release Audit Steps
 

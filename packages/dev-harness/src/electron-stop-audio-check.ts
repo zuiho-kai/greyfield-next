@@ -41,8 +41,11 @@ try {
     await chatWindow.getByLabel("Message").fill("请说一句话，然后我会停止。");
     await chatWindow.getByRole("button", { name: "Send" }).click();
     await waitForAudioStripCount(settingsWindow, 2, "initial playback queue");
+    await waitForSpeechSpeakCount(petWindow, 1);
+    await finishOneSpeech(petWindow);
     await waitForSpeechSpeakCount(petWindow, 2);
-    await finishAllSpeech(petWindow);
+    await assertNoOverlappingSpeech(petWindow);
+    await finishOneSpeech(petWindow);
     await waitForAudioStripCount(settingsWindow, 0, "natural playback completion");
     const stopDisabledAfterPlayback = await chatWindow.getByRole("button", { name: "Stop" }).isDisabled();
     if (!stopDisabledAfterPlayback) {
@@ -73,6 +76,7 @@ try {
           speechEvents,
           playbackFinishClearedQueue: stopDisabledAfterPlayback,
           speechCanceled: speechEvents.includes("cancel"),
+          noOverlappingSpeech: true,
           audioQueueCleared: true,
           mouthOpenReset: true
         },
@@ -141,23 +145,32 @@ async function installSpeechProbe(page: Page): Promise<void> {
     }
     const speechEvents: string[] = [];
     const utterances: SpeechSynthesisUtterance[] = [];
+    const state = {
+      active: 0,
+      maxActive: 0
+    };
     (window as typeof window & { __greyfieldSpeechEvents?: string[] }).__greyfieldSpeechEvents = speechEvents;
-    (window as typeof window & { __greyfieldFinishSpeech?: () => number }).__greyfieldFinishSpeech = () => {
-      const pending = [...utterances];
-      utterances.length = 0;
-      for (const utterance of pending) {
-        utterance.onend?.(new Event("end") as SpeechSynthesisEvent);
+    (window as typeof window & { __greyfieldSpeechProbeState?: typeof state }).__greyfieldSpeechProbeState = state;
+    (window as typeof window & { __greyfieldFinishSpeech?: () => boolean }).__greyfieldFinishSpeech = () => {
+      const utterance = utterances.shift();
+      if (!utterance) {
+        return false;
       }
-      return pending.length;
+      state.active = Math.max(0, state.active - 1);
+      utterance.onend?.(new Event("end") as SpeechSynthesisEvent);
+      return true;
     };
     synthesis.speak = (utterance: SpeechSynthesisUtterance) => {
       speechEvents.push(`speak:${utterance.text}`);
+      state.active += 1;
+      state.maxActive = Math.max(state.maxActive, state.active);
       utterances.push(utterance);
     };
     synthesis.cancel = () => {
       speechEvents.push("cancel");
       const pending = [...utterances];
       utterances.length = 0;
+      state.active = 0;
       for (const utterance of pending) {
         utterance.onerror?.({ error: "canceled" } as SpeechSynthesisErrorEvent);
       }
@@ -193,6 +206,16 @@ async function readSpeechEvents(page: Page): Promise<string[]> {
   });
 }
 
+async function assertNoOverlappingSpeech(page: Page): Promise<void> {
+  const state = await page.evaluate(() => {
+    return (window as typeof window & { __greyfieldSpeechProbeState?: { active: number; maxActive: number } })
+      .__greyfieldSpeechProbeState;
+  });
+  if (!state || state.maxActive > 1) {
+    throw new Error(`Speech playback overlapped: ${JSON.stringify(state)}`);
+  }
+}
+
 async function waitForAudioStripCount(page: Page, expectedCount: number, label: string): Promise<void> {
   try {
     await page.waitForFunction(
@@ -214,9 +237,9 @@ async function waitForAudioStripCount(page: Page, expectedCount: number, label: 
   }
 }
 
-async function finishAllSpeech(page: Page): Promise<void> {
+async function finishOneSpeech(page: Page): Promise<void> {
   await page.waitForFunction(() => {
-    const finish = (window as typeof window & { __greyfieldFinishSpeech?: () => number }).__greyfieldFinishSpeech;
-    return typeof finish === "function" && finish() > 0;
+    const finish = (window as typeof window & { __greyfieldFinishSpeech?: () => boolean }).__greyfieldFinishSpeech;
+    return typeof finish === "function" && finish();
   });
 }

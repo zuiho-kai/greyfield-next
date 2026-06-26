@@ -12,6 +12,7 @@ export interface SpeechAudioPlaybackProbePayload {
   headerHex: string;
   objectUrl: string;
   volume: number;
+  fadeInMs: number;
 }
 
 export interface SpeechAudioPlaybackProbe {
@@ -27,7 +28,6 @@ export interface SpeechOutput {
 export class BrowserSpeechSynthesisOutput implements SpeechOutput {
   private activeAudio:
     | {
-        element: Pick<HTMLAudioElement, "pause"> & { currentTime?: number };
         cancel: () => void;
         stopMouthDriver?: () => void;
         objectUrl?: string;
@@ -39,6 +39,7 @@ export class BrowserSpeechSynthesisOutput implements SpeechOutput {
     private readonly Utterance: typeof SpeechSynthesisUtterance | undefined = globalThis.SpeechSynthesisUtterance,
     private readonly AudioElement: typeof Audio | undefined = globalThis.Audio,
     private readonly urlApi: Pick<typeof URL, "createObjectURL" | "revokeObjectURL"> | undefined = globalThis.URL,
+    private readonly AudioContextCtor: typeof AudioContext | undefined = resolveAudioContextCtor(),
     private readonly audioPlaybackProbe: SpeechAudioPlaybackProbe | undefined = resolveAudioPlaybackProbe()
   ) {}
 
@@ -79,24 +80,28 @@ export class BrowserSpeechSynthesisOutput implements SpeechOutput {
     volume: number | undefined,
     onMouthOpen: ((value: number) => void) | undefined
   ): Promise<void> {
-    if (!this.AudioElement || !this.urlApi) {
+    if (!this.AudioContextCtor && (!this.AudioElement || !this.urlApi)) {
       throw new Error("Audio playback is not available in this window.");
     }
 
-    const blob = new Blob([audioData.slice().buffer], { type: "audio/mpeg" });
-    const objectUrl = this.urlApi.createObjectURL(blob);
-    const audio = new this.AudioElement(objectUrl);
-    audio.volume = clamp01(volume ?? 1);
+    const objectUrl = this.urlApi?.createObjectURL(new Blob([audioData.slice().buffer], { type: "audio/mpeg" })) ?? "";
+    const targetVolume = clamp01(volume ?? 1);
 
     await new Promise<void>((resolve, reject) => {
       let settled = false;
       let stopMouthDriver: (() => void) | undefined;
+      let stopPlayback: (() => void) | undefined;
+      let stopVolumeFade: (() => void) | undefined;
+      let canceled = false;
       const cleanup = () => {
-        if (this.activeAudio?.element === audio) {
+        if (this.activeAudio?.objectUrl === objectUrl) {
           this.activeAudio = undefined;
         }
+        stopVolumeFade?.();
         stopMouthDriver?.();
-        this.urlApi?.revokeObjectURL(objectUrl);
+        if (objectUrl) {
+          this.urlApi?.revokeObjectURL(objectUrl);
+        }
       };
       const settle = (callback: () => void) => {
         if (settled) {
@@ -108,15 +113,79 @@ export class BrowserSpeechSynthesisOutput implements SpeechOutput {
       };
 
       this.activeAudio = {
-        element: audio,
         objectUrl,
         cancel: () => {
+          canceled = true;
           this.audioPlaybackProbe?.cancel?.();
+          stopPlayback?.();
           stopMouthDriver?.();
-          audio.pause();
-          audio.currentTime = 0;
           settle(() => reject(new Error("Speech playback failed: canceled")));
         }
+      };
+      if (this.audioPlaybackProbe) {
+        if (onMouthOpen) {
+          void createMouthDriver(audioData, onMouthOpen)
+            .then((driver) => {
+              if (settled) {
+                driver();
+                return;
+              }
+              stopMouthDriver = driver;
+              if (this.activeAudio?.objectUrl === objectUrl) {
+                this.activeAudio.stopMouthDriver = driver;
+              }
+            })
+            .catch(() => {
+              onMouthOpen(0);
+            });
+        }
+        void this.audioPlaybackProbe
+          .playAudio({
+            bytes: audioData.length,
+            headerHex: toHeaderHex(audioData),
+            objectUrl,
+            volume: targetVolume,
+            fadeInMs: defaultAudioFadeInMs
+          })
+          .then(() => settle(resolve))
+          .catch((error: unknown) => {
+            settle(() => reject(error instanceof Error ? error : new Error(String(error))));
+          });
+        return;
+      }
+      if (this.AudioContextCtor) {
+        void playDecodedAudio({
+          AudioContextCtor: this.AudioContextCtor,
+          audioData,
+          targetVolume,
+          onMouthOpen,
+          setStopPlayback: (stop) => {
+            stopPlayback = stop;
+          },
+          setStopMouthDriver: (stop) => {
+            stopMouthDriver = stop;
+            if (this.activeAudio?.objectUrl === objectUrl) {
+              this.activeAudio.stopMouthDriver = stop;
+            }
+          },
+          isCanceled: () => canceled
+        })
+          .then(() => settle(resolve))
+          .catch((error: unknown) => {
+            settle(() => reject(error instanceof Error ? error : new Error(String(error))));
+          });
+        return;
+      }
+
+      if (!this.AudioElement || !objectUrl) {
+        settle(() => reject(new Error("Audio playback is not available in this window.")));
+        return;
+      }
+      const audio = new this.AudioElement(objectUrl);
+      audio.volume = 0;
+      stopPlayback = () => {
+        audio.pause();
+        audio.currentTime = 0;
       };
       if (onMouthOpen) {
         void createMouthDriver(audioData, onMouthOpen)
@@ -126,7 +195,7 @@ export class BrowserSpeechSynthesisOutput implements SpeechOutput {
               return;
             }
             stopMouthDriver = driver;
-            if (this.activeAudio?.element === audio) {
+            if (this.activeAudio?.objectUrl === objectUrl) {
               this.activeAudio.stopMouthDriver = driver;
             }
           })
@@ -134,25 +203,16 @@ export class BrowserSpeechSynthesisOutput implements SpeechOutput {
             onMouthOpen(0);
           });
       }
-      if (this.audioPlaybackProbe) {
-        void this.audioPlaybackProbe
-          .playAudio({
-            bytes: audioData.length,
-            headerHex: toHeaderHex(audioData),
-            objectUrl,
-            volume: audio.volume
-          })
-          .then(() => settle(resolve))
-          .catch((error: unknown) => {
-            settle(() => reject(error instanceof Error ? error : new Error(String(error))));
-          });
-        return;
-      }
       audio.onended = () => settle(resolve);
       audio.onerror = () => settle(() => reject(new Error("Speech playback failed: audio decode error")));
-      void audio.play().catch((error: unknown) => {
-        settle(() => reject(error instanceof Error ? error : new Error(String(error))));
-      });
+      void audio
+        .play()
+        .then(() => {
+          stopVolumeFade = fadeHtmlAudioVolume(audio, targetVolume);
+        })
+        .catch((error: unknown) => {
+          settle(() => reject(error instanceof Error ? error : new Error(String(error))));
+        });
     });
   }
 
@@ -197,13 +257,17 @@ function resolveAudioPlaybackProbe(): SpeechAudioPlaybackProbe | undefined {
   return typeof candidate?.playAudio === "function" ? candidate : undefined;
 }
 
-async function createMouthDriver(audioData: Uint8Array, onMouthOpen: (value: number) => void): Promise<() => void> {
-  const AudioContextCtor = (
+function resolveAudioContextCtor(): typeof AudioContext | undefined {
+  return (
     globalThis as typeof globalThis & {
       AudioContext?: typeof AudioContext;
       webkitAudioContext?: typeof AudioContext;
     }
   ).AudioContext ?? (globalThis as typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+}
+
+async function createMouthDriver(audioData: Uint8Array, onMouthOpen: (value: number) => void): Promise<() => void> {
+  const AudioContextCtor = resolveAudioContextCtor();
   if (!AudioContextCtor) {
     onMouthOpen(0);
     return () => onMouthOpen(0);
@@ -233,4 +297,111 @@ async function createMouthDriver(audioData: Uint8Array, onMouthOpen: (value: num
     void context.close().catch(() => undefined);
     throw error;
   }
+}
+
+const defaultAudioFadeInMs = 180;
+
+async function playDecodedAudio(input: {
+  AudioContextCtor: typeof AudioContext;
+  audioData: Uint8Array;
+  targetVolume: number;
+  onMouthOpen?: (value: number) => void;
+  setStopPlayback(stop: () => void): void;
+  setStopMouthDriver(stop: () => void): void;
+  isCanceled(): boolean;
+}): Promise<void> {
+  const context = new input.AudioContextCtor();
+  let source: AudioBufferSourceNode | undefined;
+  try {
+    const buffer = await context.decodeAudioData(input.audioData.slice().buffer);
+    if (input.isCanceled()) {
+      return;
+    }
+    source = context.createBufferSource();
+    source.buffer = buffer;
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0, context.currentTime);
+    gain.gain.linearRampToValueAtTime(input.targetVolume, context.currentTime + defaultAudioFadeInMs / 1000);
+    source.connect(gain);
+    gain.connect(context.destination);
+
+    if (input.onMouthOpen) {
+      input.setStopMouthDriver(
+        driveMouthFromAudioBuffer(buffer, input.onMouthOpen, {
+          fadeInMs: defaultAudioFadeInMs
+        })
+      );
+    }
+
+    input.setStopPlayback(() => {
+      try {
+        source?.stop();
+      } catch {
+        // Already stopped.
+      }
+      void context.close().catch(() => undefined);
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      source!.onended = () => resolve();
+      try {
+        if (input.isCanceled()) {
+          resolve();
+          return;
+        }
+        source!.start();
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  } finally {
+    input.onMouthOpen?.(0);
+    void context.close().catch(() => undefined);
+  }
+}
+
+function driveMouthFromAudioBuffer(
+  buffer: AudioBuffer,
+  onMouthOpen: (value: number) => void,
+  options: { fadeInMs: number; frameMs?: number }
+): () => void {
+  const frameMs = options.frameMs ?? 50;
+  const timeline = createMouthOpenTimelineFromPcm(buffer.getChannelData(0), {
+    sampleRate: buffer.sampleRate,
+    frameMs
+  });
+  let index = 0;
+  onMouthOpen(0);
+  const timer = setInterval(() => {
+    const elapsedMs = index * frameMs;
+    const fade = Math.min(1, elapsedMs / Math.max(1, options.fadeInMs));
+    onMouthOpen((timeline[index] ?? 0) * fade);
+    index += 1;
+    if (index >= timeline.length) {
+      clearInterval(timer);
+      onMouthOpen(0);
+    }
+  }, frameMs);
+  return () => {
+    clearInterval(timer);
+    onMouthOpen(0);
+  };
+}
+
+function fadeHtmlAudioVolume(audio: Pick<HTMLAudioElement, "volume">, targetVolume: number): () => void {
+  const startedAt = performance.now();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const step = () => {
+    const progress = Math.min(1, (performance.now() - startedAt) / defaultAudioFadeInMs);
+    audio.volume = targetVolume * progress;
+    if (progress < 1) {
+      timer = setTimeout(step, 16);
+    }
+  };
+  step();
+  return () => {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  };
 }

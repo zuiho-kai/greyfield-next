@@ -297,6 +297,23 @@ try {
   await settingsWindow.getByLabel("Scale").fill("1.36");
   await settingsWindow.getByLabel("Model X").fill("42");
   await settingsWindow.getByLabel("Model Y").fill("-24");
+  const transformedConfig = await waitForLive2DTransform(configPath, { scale: 1.36, x: 42, y: -24 });
+  const controlsWindow = await waitForRoleWindow("controls");
+  await controlsWindow.getByRole("button", { name: "Turn voice output on" }).click();
+  const voiceToggleConfig = await waitForVoiceSpeech(configPath, true);
+  if (
+    voiceToggleConfig.live2d.scale !== transformedConfig.live2d.scale ||
+    voiceToggleConfig.live2d.x !== transformedConfig.live2d.x ||
+    voiceToggleConfig.live2d.y !== transformedConfig.live2d.y
+  ) {
+    throw new Error(
+      `Voice toggle reset Live2D transform; before=${JSON.stringify(transformedConfig.live2d)}, after=${JSON.stringify(
+        voiceToggleConfig.live2d
+      )}`
+    );
+  }
+  await controlsWindow.getByRole("button", { name: "Turn voice output off" }).click();
+  await waitForVoiceSpeech(configPath, false);
   await settingsWindow.getByRole("button", { name: "Reset transform" }).click();
   const resetConfig = await waitForLive2DTransform(configPath, { scale: 1, x: 0, y: 0 });
   await settingsWindow.getByRole("button", { name: "Test LLM" }).click();
@@ -341,6 +358,7 @@ try {
         settingsBounds,
         resetTransform: resetConfig.live2d,
         savedLive2DModel: savedLive2DModelConfig.live2d.modelPath,
+        voiceToggleKeptLive2DTransform: true,
         savedVoiceSpeech: savedVoiceConfig.voice.speechEnabled,
         savedApiKey: savedApiKeyConfig.provider.apiKey.length > 0,
         savedModel: savedConfig.provider.model,
@@ -379,7 +397,7 @@ async function waitForSettingsWindow(): Promise<Page> {
   return waitForRoleWindow("settings");
 }
 
-async function waitForRoleWindow(roleName: "pet" | "settings" | "chat"): Promise<Page> {
+async function waitForRoleWindow(roleName: "pet" | "settings" | "chat" | "controls"): Promise<Page> {
   const started = Date.now();
   while (Date.now() - started < 5_000) {
     for (const page of app.windows()) {

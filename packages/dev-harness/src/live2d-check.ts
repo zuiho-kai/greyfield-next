@@ -121,11 +121,12 @@ async function findCanvasPoint(page: Page, hit: boolean): Promise<{ x: number; y
       for (let x = 0; x < canvas.width; x += stepX) {
         const alpha = image[(y * canvas.width + x) * 4 + 3];
         const isHit = alpha >= 16;
+        const point = {
+          x: rect.left + (x / canvas.width) * rect.width,
+          y: rect.top + ((canvas.height - 1 - y) / canvas.height) * rect.height
+        };
         if (isHit === wantHit) {
-          return {
-            x: rect.left + (x / canvas.width) * rect.width,
-            y: rect.top + ((canvas.height - 1 - y) / canvas.height) * rect.height
-          };
+          return point;
         }
       }
     }
