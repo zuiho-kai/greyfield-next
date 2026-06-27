@@ -45,7 +45,7 @@
         "status": "not_implemented",
         "score": 0,
         "weight": 0.22,
-        "evidence": "No MemoryAtom schema, extractor, atom store, or atom writer exists in current runtime"
+        "evidence": "Core MemoryAtom schema, deterministic extractor, and JSONL atom store exist, but no desktop user-path atom write/recall, LLM extractor, or dynamic benchmark scoring is active on main"
       },
       {
         "id": "calendar-recall",
@@ -117,7 +117,7 @@
           "calendar recall should surface birthday and first-meeting anniversary without exact keyword overlap",
           "drilldown should show source turns rose-1 and rose-2"
         ],
-        "currentGap": "Current code can only create an extractive summary segment; it has no atom schema, date-aware recall, or source passage drilldown.",
+        "currentGap": "Current main has an atom schema, deterministic first slice, and JSONL store, but desktop memory still cannot write and recall these relationship atoms from the user path, run date-aware recall, or drill down to exact source passages.",
         "sourceExpectations": {
           "sourceTurnIds": ["rose-1", "rose-2"],
           "exactFragments": ["我的生日是 9 月 7 日", "第一次相遇是 2024 年 5 月 20 日", "红玫瑰"]

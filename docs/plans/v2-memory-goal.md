@@ -74,7 +74,7 @@ The benchmark is intentionally local/fake and does not require external keys. It
 
 V2.1 work must extend this fixture before claiming memory atom extraction, scene memory, calendar recall, evidence drilldown, memory layering, or vector recall quality. A feature can add a new recall engine later, but it must keep the benchmark passing or explain the updated acceptance fixture in the same PR.
 
-The current V2.0c benchmark separates narrow regression scores from product readiness. `summaryRegressionScore` and `recallRegressionScore` are locked at `1`, while `productReadinessScore` is locked at `0.4` because memory atom extraction, scene memory, calendar recall, evidence drilldown, memory layering, role isolation, and semantic recall are not implemented yet. CI fails if any score drops below the recorded baseline. When future PRs intentionally add harder cases or improve the product, they must update the fixture baseline in the same PR and explain the new accepted score.
+The current V2.0c benchmark separates narrow regression scores from product readiness. `summaryRegressionScore` and `recallRegressionScore` are locked at `1`, while `productReadinessScore` is locked at `0.16` and `v21aScenarioScore` is locked at `0.05` because memory atom extraction, scene memory, calendar recall, evidence drilldown, memory layering, role isolation, and semantic recall are not implemented yet. The current computed output is `productReadiness.score: 0.163`, `capabilityScore: 0.211`, and `scenarioScore: 0.05`. CI fails if any score drops below the recorded baseline. When future PRs intentionally add harder cases or improve the product, they must update the fixture baseline in the same PR and explain the new accepted score.
 
 Still not in this slice:
 
@@ -115,6 +115,7 @@ CI guard:
 - `pnpm harness:memory-benchmark` runs in Fast checks, so memory summary/recall quality is guarded even when a PR does not trigger `frontend-full`.
 - The memory benchmark fixture is the required V2.0 acceptance gate for future memory feature PRs.
 - The benchmark fixture records `baselineScores`; future memory PRs may raise or intentionally update those baselines, but they must not silently degrade below them.
+- CI uploads the benchmark JSON summary from `.cache/greyfield-memory-benchmark/latest/summary.json`, so PR review can compare actual scores instead of only reading pass/fail status.
 - `pnpm harness:electron:memory-summary` and `pnpm harness:electron:memory-control` currently share `packages/dev-harness/src/electron-memory-summary-check.ts`; the former keeps the V2.0a summary foundation entrypoint stable, while the latter names the V2.0b edit/disable/delete/export gate.
 - `frontend-full-check.ts` runs `pnpm harness:electron:memory-control`, so frontend-visible memory regressions are covered by the aggregate gate.
 - Main run `28289995890` on head `731f951` passed Fast checks, including `pnpm harness:memory-benchmark`, and `frontend-full`, including the memory-control harness with `memoryEditVisible: true`, `memoryExportVisible: true`, `disabledMemorySkipped: true`, `deletedMemoryKeptRawTurns: true`, and `summaryIncludesSourceTurns: true`.

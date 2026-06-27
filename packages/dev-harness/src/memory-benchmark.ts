@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
   buildRecallContext,
   createSummarySegmentDraft,
@@ -152,30 +153,41 @@ const ok =
   summaryResults.every((result) => result.passed) &&
   recallResults.every((result) => result.passed);
 
-console.log(
-  JSON.stringify(
-    {
-      ok,
-      fixtureVersion: fixture.version,
-      thresholds: fixture.thresholds,
-      baselineScores: fixture.baselineScores,
-      summary: {
-        score: roundScore(summaryScore),
-        cases: summaryResults
-      },
-      recall: {
-        score: roundScore(recallScore),
-        cases: recallResults
-      },
-      productReadiness: productReadinessResult
-    },
-    null,
-    2
-  )
-);
+const report = {
+  ok,
+  fixtureVersion: fixture.version,
+  generatedAt: new Date().toISOString(),
+  thresholds: fixture.thresholds,
+  baselineScores: fixture.baselineScores,
+  scores: {
+    summaryRegressionScore: roundScore(summaryScore),
+    recallRegressionScore: roundScore(recallScore),
+    productReadinessScore: productReadinessResult.score,
+    productReadinessCapabilityScore: productReadinessResult.capabilityScore,
+    v21aScenarioScore: productReadinessResult.scenarioScore
+  },
+  summary: {
+    score: roundScore(summaryScore),
+    cases: summaryResults
+  },
+  recall: {
+    score: roundScore(recallScore),
+    cases: recallResults
+  },
+  productReadiness: productReadinessResult
+};
+
+await writeBenchmarkReport(report);
+console.log(JSON.stringify(report, null, 2));
 
 if (!ok) {
   process.exitCode = 1;
+}
+
+async function writeBenchmarkReport(report: unknown): Promise<void> {
+  const artifactDir = process.env.GREYFIELD_MEMORY_BENCHMARK_ARTIFACT_DIR?.trim() || ".cache/greyfield-memory-benchmark/latest";
+  await mkdir(artifactDir, { recursive: true });
+  await writeFile(join(artifactDir, "summary.json"), `${JSON.stringify(report, null, 2)}\n`, "utf8");
 }
 
 async function loadFixture(): Promise<MemoryBenchmarkFixture> {
