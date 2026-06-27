@@ -872,6 +872,83 @@ describe("RuntimeService", () => {
     }
   });
 
+  it("writes desktop memory atoms and recalls them from file-backed stores", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "greyfield-runtime-atoms-"));
+    try {
+      await mkdir(join(dir, "characters"), { recursive: true });
+      await mkdir(join(dir, "data"), { recursive: true });
+      await writeFile(
+        join(dir, "characters", "test.yaml"),
+        [
+          "name: File Greyfield",
+          "tone: exact test tone",
+          "boundaries:",
+          "  - File persona boundary.",
+          "expressionMap:",
+          "  neutral: file-neutral"
+        ].join("\n"),
+        "utf8"
+      );
+      await writeFile(join(dir, "data", "memory.md"), "- File memory fact.\n", "utf8");
+      const config = {
+        ...defaultGreyfieldConfig,
+        characterFile: "characters/test.yaml"
+      };
+      const firstService = new RuntimeService(config, createDesktopRuntimeStoreOptions({ projectRoot: dir, userDataPath: dir }));
+
+      await firstService.handle(
+        { type: "text.input", text: "今天是我们第一次遇见的纪念日，记住我送你一朵玫瑰，以后每年提醒我。" },
+        () => undefined
+      );
+
+      const atomJsonl = await readFile(join(dir, "memory", "atoms.jsonl"), "utf8");
+      expect(atomJsonl).toContain("relationship_event");
+      expect(atomJsonl).toContain("desktop-main-session-1");
+      expect(atomJsonl).toContain("送玫瑰");
+
+      let requestBody = "";
+      const fetch = vi.fn(async (_url, init) => {
+        requestBody = String(init?.body ?? "");
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            const encoder = new TextEncoder();
+            controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"rose"}}]}\n\n'));
+            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            controller.close();
+          }
+        });
+        return new Response(body, { status: 200 });
+      });
+      const secondService = new RuntimeService(
+        {
+          ...config,
+          provider: {
+            ...config.provider,
+            llm: "openai-compatible",
+            apiKey: "secret",
+            baseUrl: "https://llm.example/v1",
+            model: "remote-model"
+          }
+        },
+        {
+          ...createDesktopRuntimeStoreOptions({ projectRoot: dir, userDataPath: dir }),
+          fetch
+        }
+      );
+
+      await secondService.handle({ type: "text.input", text: "初遇纪念日要准备什么？" }, () => undefined);
+
+      const messages = JSON.parse(requestBody).messages as Array<{ role: string; content: string }>;
+      const system = messages[0]?.content ?? "";
+      expect(system).toContain("Atom recall context:");
+      expect(system).toContain("relationship_event");
+      expect(system).toContain("Source turns: desktop-main-session-1");
+      expect(system).toContain("Ritual action: 送玫瑰");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("interrupt aborts the active OpenAI-compatible request", async () => {
     let capturedSignal: AbortSignal | undefined;
     let requestStarted: (() => void) | undefined;

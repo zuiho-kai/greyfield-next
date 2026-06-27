@@ -7,6 +7,7 @@ import {
   type ASRProvider,
   type CharacterPersona,
   type LLMProvider,
+  type MemoryAtomStore,
   type MemoryStore,
   type RecallContext,
   type SessionStore,
@@ -29,6 +30,7 @@ export interface RuntimeServiceOptions {
   memoryStore?: MemoryStore;
   sessionStore?: SessionStore;
   summarySegmentStore?: SummarySegmentStore;
+  memoryAtomStore?: MemoryAtomStore;
   threadId?: string;
   recentTurnLimit?: number;
   recallMaxItems?: number;
@@ -74,6 +76,7 @@ export class RuntimeService {
   private readonly memoryStore: MemoryStore;
   private readonly sessionStore: SessionStore;
   private readonly summarySegmentStore: SummarySegmentStore | undefined;
+  private readonly memoryAtomStore: MemoryAtomStore | undefined;
   private readonly interactionProfile = createDefaultInteractionProfile();
   private lastRecallContext: RecallContext | undefined;
   private activeRuntime: GreyfieldRuntime | undefined;
@@ -85,6 +88,7 @@ export class RuntimeService {
     this.memoryStore = options.memoryStore ?? new MainFakeMemoryStore();
     this.sessionStore = options.sessionStore ?? new InMemorySessionStore("desktop-main-session");
     this.summarySegmentStore = options.summarySegmentStore;
+    this.memoryAtomStore = options.memoryAtomStore;
   }
 
   private get threadId(): string {
@@ -342,6 +346,7 @@ export class RuntimeService {
       tts: this.createTTSProvider(),
       memoryStore: this.memoryStore,
       summarySegmentStore: this.summarySegmentStore,
+      memoryAtomStore: this.memoryAtomStore,
       sessionStore: this.sessionStore,
       persona,
       voice: this.config.voice.id,
