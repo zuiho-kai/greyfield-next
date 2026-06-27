@@ -32,4 +32,16 @@ describe("InMemorySessionStore", () => {
     expect(handoff.summary).toContain("先加载 Live2D");
     expect(handoff.summary).toContain("fake provider");
   });
+
+  it("looks up raw turns by source turn id in request order", async () => {
+    const store = new InMemorySessionStore("session-a");
+
+    await store.append({ role: "user", content: "第一轮" });
+    await store.append({ role: "assistant", content: "第二轮" });
+
+    expect(await store.getByIds(["session-a-2", "missing-turn", "session-a-1", "session-a-2"])).toMatchObject([
+      { id: "session-a-2", content: "第二轮" },
+      { id: "session-a-1", content: "第一轮" }
+    ]);
+  });
 });

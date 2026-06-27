@@ -20,6 +20,10 @@ describe("JsonlSessionStore", () => {
         { id: "session-a-2", role: "assistant", content: "我记得第一轮" },
         { id: "session-a-3", role: "user", content: "第二轮" }
       ]);
+      expect(await second.getByIds(["session-a-3", "missing-turn", "session-a-1", "session-a-3"])).toMatchObject([
+        { id: "session-a-3", role: "user", content: "第二轮" },
+        { id: "session-a-1", role: "user", content: "第一轮" }
+      ]);
       expect((await readFile(path, "utf8")).trim().split(/\r?\n/)).toHaveLength(3);
     } finally {
       await rm(dir, { recursive: true, force: true });

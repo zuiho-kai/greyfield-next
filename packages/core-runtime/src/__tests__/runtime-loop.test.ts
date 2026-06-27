@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { GreyfieldRuntime } from "../runtime-loop";
 import { InMemorySessionStore } from "../session-store";
 import type { AppendSessionTurn, SessionHandoff, SessionStore, SessionTurn } from "../session-store";
-import type { SummarySegmentStore } from "../memory-context";
+import { normalizeSummarySegment, type SummarySegmentStore } from "../memory-context";
 import type { LLMProvider, MemoryStore, TTSProvider } from "../providers";
 import type { RuntimeOutputEvent } from "../events";
 
@@ -58,10 +58,11 @@ describe("GreyfieldRuntime", () => {
       append: async () => {
         throw new Error("not used");
       },
+      get: async () => null,
       update: async () => null,
       delete: async () => false,
       list: async () => [
-        {
+        normalizeSummarySegment({
           id: "summary-1",
           threadId: "thread-a",
           sessionId: "session-a",
@@ -76,7 +77,7 @@ describe("GreyfieldRuntime", () => {
             }
           ],
           createdAt: "2026-06-26T01:00:01.000Z"
-        }
+        })
       ]
     };
     const runtime = new GreyfieldRuntime({
@@ -118,14 +119,15 @@ describe("GreyfieldRuntime", () => {
     const summaries: Awaited<ReturnType<SummarySegmentStore["list"]>> = [];
     const summarySegmentStore: SummarySegmentStore = {
       append: async (segment) => {
-        const stored = {
+        const stored = normalizeSummarySegment({
           id: `summary-${summaries.length + 1}`,
           ...segment,
           createdAt: segment.createdAt ?? "2026-06-26T01:00:00.000Z"
-        };
+        });
         summaries.push(stored);
         return stored;
       },
+      get: async (id) => summaries.find((summary) => summary.id === id) ?? null,
       update: async () => null,
       delete: async () => false,
       list: async () => summaries
@@ -181,6 +183,7 @@ describe("GreyfieldRuntime", () => {
       append: async () => {
         throw new Error("not used");
       },
+      get: async () => null,
       update: async () => null,
       delete: async () => false,
       list: async () => {
@@ -218,6 +221,7 @@ describe("GreyfieldRuntime", () => {
       append: async () => {
         throw new Error("summary append failed");
       },
+      get: async () => null,
       update: async () => null,
       delete: async () => false,
       list: async () => []

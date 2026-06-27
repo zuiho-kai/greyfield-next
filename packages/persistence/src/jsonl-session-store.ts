@@ -1,26 +1,29 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { AppendSessionTurn, SessionHandoff, SessionStore, SessionTurn } from "@greyfield/core-runtime";
+import { normalizeTurnIds, type AppendSessionTurn, type SessionHandoff, type SessionTurn, type SourceSessionStore } from "@greyfield/core-runtime";
 
-export class JsonlSessionStore implements SessionStore {
+export class JsonlSessionStore implements SourceSessionStore {
   private sequence = 0;
+  private mutation = Promise.resolve();
 
   constructor(readonly sessionId: string, private readonly path: string) {}
 
   async append(turn: AppendSessionTurn): Promise<SessionTurn> {
-    const current = await this.readTurns();
-    this.sequence = Math.max(this.sequence, current.length);
-    this.sequence += 1;
-    const stored: SessionTurn = {
-      id: `${this.sessionId}-${this.sequence}`,
-      role: turn.role,
-      content: turn.content,
-      createdAt: turn.createdAt ?? new Date().toISOString(),
-      meta: turn.meta
-    };
-    await mkdir(dirname(this.path), { recursive: true });
-    await writeFile(this.path, `${current.map((item) => JSON.stringify(item)).join("\n")}${current.length > 0 ? "\n" : ""}${JSON.stringify(stored)}\n`, "utf8");
-    return stored;
+    return this.serializeMutation(async () => {
+      const current = await this.readTurns();
+      this.sequence = Math.max(this.sequence, current.length);
+      this.sequence += 1;
+      const stored: SessionTurn = {
+        id: `${this.sessionId}-${this.sequence}`,
+        role: turn.role,
+        content: turn.content,
+        createdAt: turn.createdAt ?? new Date().toISOString(),
+        meta: turn.meta
+      };
+      await mkdir(dirname(this.path), { recursive: true });
+      await appendFile(this.path, `${JSON.stringify(stored)}\n`, "utf8");
+      return stored;
+    });
   }
 
   async getRecent(limit: number): Promise<SessionTurn[]> {
@@ -28,6 +31,19 @@ export class JsonlSessionStore implements SessionStore {
       return [];
     }
     return (await this.readTurns()).slice(-limit);
+  }
+
+  async getByIds(turnIds: string[]): Promise<SessionTurn[]> {
+    const requested = normalizeTurnIds(turnIds);
+    if (requested.length === 0) {
+      return [];
+    }
+    const turns = await this.readTurns();
+    const byId = new Map(turns.map((turn) => [turn.id, turn]));
+    return requested.flatMap((turnId) => {
+      const turn = byId.get(turnId);
+      return turn ? [turn] : [];
+    });
   }
 
   async createHandoff(limit = 20): Promise<SessionHandoff> {
@@ -51,6 +67,20 @@ export class JsonlSessionStore implements SessionStore {
         return [];
       }
       throw error;
+    }
+  }
+
+  private async serializeMutation<T>(work: () => Promise<T>): Promise<T> {
+    const previous = this.mutation;
+    let release!: () => void;
+    this.mutation = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await work();
+    } finally {
+      release();
     }
   }
 }
