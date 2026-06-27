@@ -53,6 +53,7 @@ export interface DesktopIpcRequestMap {
   "memory:debug-request": {};
   "memory:summary-update": DesktopMemorySummaryUpdate;
   "memory:summary-delete": { id: string };
+  "memory:summary-clear": {};
   "memory:export-request": {};
   "settings:update": GreyfieldConfigPatch;
   "window:set-click-through": { enabled: boolean };

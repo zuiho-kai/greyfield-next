@@ -1048,6 +1048,7 @@ describe("createDesktopRuntimeBridge", () => {
     memoryActionResult?.({ ok: true, message: "Memory summary-1 saved." });
     bridge.updateMemorySummary({ id: "summary-1", disabled: true });
     bridge.deleteMemorySummary("summary-1");
+    bridge.clearMemorySummaries();
 
     expect(saving.memoryDebug).toMatchObject({
       actionStatus: "working",
@@ -1059,9 +1060,10 @@ describe("createDesktopRuntimeBridge", () => {
     ]);
     expect(sent).toContainEqual(["memory:summary-update", { id: "summary-1", disabled: true }]);
     expect(sent).toContainEqual(["memory:summary-delete", { id: "summary-1" }]);
+    expect(sent).toContainEqual(["memory:summary-clear", {}]);
     expect(bridge.getState().memoryDebug).toMatchObject({
       actionStatus: "working",
-      actionMessage: "Deleting memory..."
+      actionMessage: "Clearing summary memory..."
     });
   });
 
