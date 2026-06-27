@@ -36,6 +36,7 @@ Treat GitHub CI, CodeRabbit, and PR bot checks as merge-readiness gates, not as 
 - After opening or updating a PR, record the PR URL and continue only with local work unless the user has asked to merge now.
 - Before marking a PR ready for merge or running `gh pr merge`, inspect CI, CodeRabbit, and unresolved bot review threads exactly once, then fix only actionable blockers.
 - If remote checks are pending and no merge decision is being made, report `pending` and stop waiting. Do not spend the thread budget watching queues.
+- If a merge decision is blocked only on pending remote checks, use a low-frequency wait of minutes rather than rapid polling. Prefer delegating the wait to a watcher/subagent while the main agent continues non-overlapping implementation or review.
 - If remote checks fail, debug the failing job directly; do not broaden scope or rerun unrelated full suites first.
 
 ## PR Frontend Gate
@@ -117,6 +118,7 @@ Checkpoint evidence can be local or PR-local. Remote CI evidence is required onl
 - Use subagents for phase-end architecture review, black-box QA, and specialized audits.
 - Do not open subagents as a default substitute for reading local code and running targeted tests.
 - After subagent findings, implement only the smallest high-value fixes first, then return to feature delivery.
+- For multi-agent implementation, the coordinator must assign explicit file ownership, expected verification commands, and forbidden adjacent scope. After handoff, the coordinator reviews the PR/diff and may merge only after dependency ordering and interface-impact checks are satisfied.
 
 ## Practical Rule
 

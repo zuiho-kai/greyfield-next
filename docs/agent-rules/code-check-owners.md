@@ -37,6 +37,7 @@ The module owner checks:
 - Are existing helpers/constants reused?
 - Does the public/internal API surface stay minimal?
 - Are failure modes readable and non-silent?
+- If a shared interface or exported type changed, were existing test mocks, sibling PRs, and downstream package implementations searched and updated before merge?
 
 Module-owner examples:
 
@@ -87,6 +88,7 @@ Required before opening or merging a feature PR.
 - Level 3 project-owner check is complete for V1 behavior changes.
 - Verification commands/results are in the PR body.
 - P0/P1 findings are fixed. P2 findings are fixed or explicitly deferred with rationale.
+- For interface-changing PRs, run `rg` for every modified interface/type/member name and inspect affected mocks, fake stores, harness fixtures, and already-open sibling PRs. Do not rely on one local test file to prove the new contract is adopted.
 
 For frontend-visible PRs, also required:
 
