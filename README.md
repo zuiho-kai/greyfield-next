@@ -20,7 +20,7 @@ Make the character feel alive first:
 
 V1 does not include desktop control, browser control, long-running task orchestration, multi-agent behavior, livestream support, Godot/VRM, message gateways, or self-generating skills.
 
-Current status: V1 visible-experience closeout is on `main`. The latest V1 evidence head `b605321` includes #59, #63, and #65, and GitHub Actions run `28287921556` passed Fast checks, Desktop pet quick harness, and `frontend-full` on 2026-06-27. V2.0a memory foundation is merged; V2.0b adds user-facing memory edit, disable, delete, and export controls.
+Current status: V1 visible-experience closeout is on `main`. The latest current-head evidence `731f951` includes #59, #63, #65, and #67, and GitHub Actions run `28289995890` passed Fast checks, Desktop pet quick harness, and `frontend-full` on 2026-06-27. V2.0a memory foundation is merged; V2.0b user-facing memory edit, disable, delete, and export controls are also on `main`.
 
 ## Workspace
 
