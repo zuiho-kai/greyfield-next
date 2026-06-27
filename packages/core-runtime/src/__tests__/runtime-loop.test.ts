@@ -3,6 +3,7 @@ import { GreyfieldRuntime } from "../runtime-loop";
 import { InMemorySessionStore } from "../session-store";
 import type { AppendSessionTurn, SessionHandoff, SessionStore, SessionTurn } from "../session-store";
 import { normalizeSummarySegment, type SummarySegmentStore } from "../memory-context";
+import type { MemoryAtom, MemoryAtomStore, UpdateMemoryAtom } from "../memory-atoms";
 import type { LLMProvider, MemoryStore, TTSProvider } from "../providers";
 import type { RuntimeOutputEvent } from "../events";
 
@@ -112,6 +113,82 @@ describe("GreyfieldRuntime", () => {
         })
       })
     );
+  });
+
+  it("extracts memory atoms after a successful turn and recalls them into later prompts", async () => {
+    const memoryAtomStore = new TestMemoryAtomStore();
+    const sessionStore = new InMemorySessionStore("session-atoms");
+    let capturedMessages: Parameters<LLMProvider["stream"]>[0] = [];
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* (messages) {
+          capturedMessages = messages;
+          yield "I will remember that.";
+        }
+      },
+      tts: { synthesize: async (text) => new Uint8Array([text.length]) },
+      memoryStore,
+      memoryAtomStore,
+      sessionStore,
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default",
+      threadId: "thread-atoms"
+    });
+
+    await runtime.handle(
+      { type: "text.input", text: "今天是我们第一次遇见的纪念日，记住我送你一朵玫瑰，以后每年提醒我。" },
+      () => undefined
+    );
+
+    const storedAtoms = await memoryAtomStore.list("thread-atoms");
+    expect(storedAtoms).toHaveLength(1);
+    expect(storedAtoms[0]).toMatchObject({
+      type: "relationship_event",
+      sourceTurnIds: ["session-atoms-1"],
+      ritualAction: "送玫瑰"
+    });
+
+    await runtime.handle({ type: "text.input", text: "初遇纪念日要准备什么？" }, () => undefined);
+
+    expect(capturedMessages[0]?.content).toContain("Atom recall context:");
+    expect(capturedMessages[0]?.content).toContain("memory-atom");
+    expect(capturedMessages[0]?.content).toContain("Source turns: session-atoms-1");
+    expect(capturedMessages[0]?.content).toContain("Ritual action: 送玫瑰");
+  });
+
+  it("keeps chat usable when memory atom storage is unavailable", async () => {
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* () {
+          yield "Reply survived.";
+        }
+      },
+      tts: { synthesize: async (text) => new Uint8Array([text.length]) },
+      memoryStore,
+      memoryAtomStore: {
+        append: async () => {
+          throw new Error("atom append failed");
+        },
+        list: async () => {
+          throw new Error("atom list failed");
+        },
+        update: async () => null,
+        delete: async () => false
+      },
+      sessionStore: new InMemorySessionStore("session-atom-failure"),
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default",
+      threadId: "thread-atom-failure"
+    });
+    const events: RuntimeOutputEvent[] = [];
+
+    await runtime.handle({ type: "text.input", text: "记住我喜欢雨天火锅。" }, (event) => {
+      events.push(event);
+    });
+
+    expect(events).toContainEqual({ type: "assistant.text.final", text: "Reply survived." });
+    expect(events).toContainEqual({ type: "assistant.audio.end" });
+    expect(events).toContainEqual({ type: "runtime.status", status: "idle" });
   });
 
   it("creates extractive summary segments for turns that leave recent context", async () => {
@@ -588,3 +665,39 @@ describe("GreyfieldRuntime", () => {
     expect(setMouthOpen).not.toHaveBeenCalled();
   });
 });
+
+class TestMemoryAtomStore implements MemoryAtomStore {
+  private readonly atoms: MemoryAtom[] = [];
+
+  async append(atom: MemoryAtom): Promise<MemoryAtom> {
+    const existingIndex = this.atoms.findIndex((stored) => stored.id === atom.id);
+    if (existingIndex >= 0) {
+      this.atoms[existingIndex] = atom;
+      return atom;
+    }
+    this.atoms.push(atom);
+    return atom;
+  }
+
+  async list(threadId: string): Promise<MemoryAtom[]> {
+    return this.atoms.filter((atom) => atom.threadId === threadId);
+  }
+
+  async update(id: string, patch: UpdateMemoryAtom): Promise<MemoryAtom | null> {
+    const atom = this.atoms.find((stored) => stored.id === id);
+    if (!atom) {
+      return null;
+    }
+    Object.assign(atom, patch);
+    return atom;
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const index = this.atoms.findIndex((atom) => atom.id === id);
+    if (index < 0) {
+      return false;
+    }
+    this.atoms.splice(index, 1);
+    return true;
+  }
+}
