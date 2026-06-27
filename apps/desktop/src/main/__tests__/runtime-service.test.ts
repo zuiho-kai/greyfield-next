@@ -766,6 +766,9 @@ describe("RuntimeService", () => {
         async append() {
           throw new Error("append is not used by this test");
         },
+        async get(id) {
+          return summaries.find((segment) => segment.id === id) ?? null;
+        },
         async list(threadId) {
           return summaries.filter((segment) => segment.threadId === threadId);
         },
