@@ -4,6 +4,86 @@
     "summaryScore": 0.95,
     "recallScore": 0.95
   },
+  "baselineScores": {
+    "summaryRegressionScore": 1,
+    "recallRegressionScore": 1,
+    "productReadinessScore": 0.4
+  },
+  "productReadiness": {
+    "targetScore": 1,
+    "capabilities": [
+      {
+        "id": "source-linked-summary",
+        "description": "Old chat turns can be summarized with source turn references.",
+        "score": 1,
+        "weight": 0.12,
+        "evidence": "summary regression cases"
+      },
+      {
+        "id": "deterministic-recall",
+        "description": "Relevant summary segments can be recalled with false-positive rejection.",
+        "score": 1,
+        "weight": 0.12,
+        "evidence": "recall regression cases"
+      },
+      {
+        "id": "prompt-budget-and-traceability",
+        "description": "Recalled memory shows source turns/reason and respects prompt budget.",
+        "score": 1,
+        "weight": 0.08,
+        "evidence": "prompt visibility and max-character recall cases"
+      },
+      {
+        "id": "manual-memory-controls",
+        "description": "Settings Memory can edit, disable, delete, and export summary memory.",
+        "score": 1,
+        "weight": 0.08,
+        "evidence": "harness:electron:memory-control"
+      },
+      {
+        "id": "automatic-memory-candidates",
+        "description": "The runtime proposes candidate long-term memories from conversation.",
+        "score": 0,
+        "weight": 0.12,
+        "evidence": "not implemented"
+      },
+      {
+        "id": "explicit-candidate-review",
+        "description": "User can accept, edit, or reject a candidate before long-term write.",
+        "score": 0,
+        "weight": 0.12,
+        "evidence": "not implemented"
+      },
+      {
+        "id": "no-silent-long-term-write",
+        "description": "Candidate memories are not silently promoted to durable user/persona memory.",
+        "score": 0,
+        "weight": 0.08,
+        "evidence": "not implemented for candidate flow"
+      },
+      {
+        "id": "memory-layering",
+        "description": "Persona, user, relationship, facts, and preferences are stored and injected separately.",
+        "score": 0,
+        "weight": 0.12,
+        "evidence": "not implemented"
+      },
+      {
+        "id": "role-isolated-memory",
+        "description": "Switching roles keeps role-specific memory and assets isolated.",
+        "score": 0,
+        "weight": 0.08,
+        "evidence": "not implemented"
+      },
+      {
+        "id": "semantic-recall",
+        "description": "Recall can find semantically related memories without exact keyword overlap.",
+        "score": 0,
+        "weight": 0.08,
+        "evidence": "not implemented"
+      }
+    ]
+  },
   "sessionId": "memory-benchmark-session",
   "threadId": "memory-benchmark-thread",
   "summaryCases": [
