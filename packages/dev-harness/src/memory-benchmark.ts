@@ -13,11 +13,30 @@ interface MemoryBenchmarkFixture {
     summaryScore: number;
     recallScore: number;
   };
+  baselineScores: {
+    summaryRegressionScore: number;
+    recallRegressionScore: number;
+    productReadinessScore: number;
+  };
+  productReadiness: ProductReadinessFixture;
   sessionId: string;
   threadId: string;
   summaryCases: SummaryBenchmarkCase[];
   recallSegments: RecallSegmentFixture[];
   recallCases: RecallBenchmarkCase[];
+}
+
+interface ProductReadinessFixture {
+  targetScore: number;
+  capabilities: ProductCapabilityFixture[];
+}
+
+interface ProductCapabilityFixture {
+  id: string;
+  description: string;
+  score: number;
+  weight: number;
+  evidence: string;
 }
 
 interface SummaryBenchmarkCase {
@@ -79,10 +98,14 @@ const summaryResults = fixture.summaryCases.map((testCase) => runSummaryCase(tes
 const recallResults = fixture.recallCases.map((testCase) => runRecallCase(testCase));
 const summaryScore = average(summaryResults.map((result) => result.score));
 const recallScore = average(recallResults.map((result) => result.score));
+const productReadinessResult = scoreProductReadiness(fixture.productReadiness);
 const ok =
   fixture.version === 2 &&
   summaryScore >= fixture.thresholds.summaryScore &&
   recallScore >= fixture.thresholds.recallScore &&
+  summaryScore >= fixture.baselineScores.summaryRegressionScore &&
+  recallScore >= fixture.baselineScores.recallRegressionScore &&
+  productReadinessResult.score >= fixture.baselineScores.productReadinessScore &&
   summaryResults.every((result) => result.passed) &&
   recallResults.every((result) => result.passed);
 
@@ -92,6 +115,7 @@ console.log(
       ok,
       fixtureVersion: fixture.version,
       thresholds: fixture.thresholds,
+      baselineScores: fixture.baselineScores,
       summary: {
         score: roundScore(summaryScore),
         cases: summaryResults
@@ -99,7 +123,8 @@ console.log(
       recall: {
         score: roundScore(recallScore),
         cases: recallResults
-      }
+      },
+      productReadiness: productReadinessResult
     },
     null,
     2
@@ -122,6 +147,18 @@ function validateFixture(candidate: MemoryBenchmarkFixture): void {
   if (candidate.version !== 2) {
     throw new Error(`Unsupported memory benchmark fixture version: ${candidate.version}`);
   }
+  validateScore("thresholds.summaryScore", candidate.thresholds.summaryScore);
+  validateScore("thresholds.recallScore", candidate.thresholds.recallScore);
+  validateScore("baselineScores.summaryRegressionScore", candidate.baselineScores.summaryRegressionScore);
+  validateScore("baselineScores.recallRegressionScore", candidate.baselineScores.recallRegressionScore);
+  validateScore("baselineScores.productReadinessScore", candidate.baselineScores.productReadinessScore);
+  validateProductReadiness(candidate.productReadiness);
+  if (candidate.baselineScores.summaryRegressionScore < candidate.thresholds.summaryScore) {
+    throw new Error("baselineScores.summaryRegressionScore must be greater than or equal to thresholds.summaryScore");
+  }
+  if (candidate.baselineScores.recallRegressionScore < candidate.thresholds.recallScore) {
+    throw new Error("baselineScores.recallRegressionScore must be greater than or equal to thresholds.recallScore");
+  }
   assertUnique("summary case", candidate.summaryCases.map((testCase) => testCase.id));
   assertUnique("recall segment", candidate.recallSegments.map((segment) => segment.id));
   assertUnique("recall case", candidate.recallCases.map((testCase) => testCase.id));
@@ -135,6 +172,30 @@ function validateFixture(candidate: MemoryBenchmarkFixture): void {
   }
 }
 
+function validateProductReadiness(productReadiness: ProductReadinessFixture): void {
+  validateScore("productReadiness.targetScore", productReadiness.targetScore);
+  assertUnique("product capability", productReadiness.capabilities.map((capability) => capability.id));
+  const totalWeight = productReadiness.capabilities.reduce((total, capability) => total + capability.weight, 0);
+  if (productReadiness.capabilities.length === 0) {
+    throw new Error("productReadiness.capabilities must not be empty");
+  }
+  if (Math.abs(totalWeight - 1) > 0.000_001) {
+    throw new Error(`productReadiness capability weights must add up to 1, got ${totalWeight}`);
+  }
+  for (const capability of productReadiness.capabilities) {
+    validateScore(`productReadiness.${capability.id}.score`, capability.score);
+    if (!Number.isFinite(capability.weight) || capability.weight <= 0 || capability.weight > 1) {
+      throw new Error(`productReadiness.${capability.id}.weight must be a finite positive weight`);
+    }
+  }
+}
+
+function validateScore(label: string, value: number): void {
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error(`${label} must be a finite score between 0 and 1`);
+  }
+}
+
 function assertUnique(label: string, values: string[]): void {
   const seen = new Set<string>();
   for (const value of values) {
@@ -143,6 +204,18 @@ function assertUnique(label: string, values: string[]): void {
     }
     seen.add(value);
   }
+}
+
+function scoreProductReadiness(productReadiness: ProductReadinessFixture): {
+  score: number;
+  targetScore: number;
+  capabilities: ProductCapabilityFixture[];
+} {
+  return {
+    score: roundScore(productReadiness.capabilities.reduce((total, capability) => total + capability.score * capability.weight, 0)),
+    targetScore: productReadiness.targetScore,
+    capabilities: productReadiness.capabilities
+  };
 }
 
 function runSummaryCase(testCase: SummaryBenchmarkCase, loadedFixture: MemoryBenchmarkFixture): CaseResult {

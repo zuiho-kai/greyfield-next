@@ -78,7 +78,7 @@ V2.0 memory implementation goal: [V2 Memory Goal](plans/v2-memory-goal.md) recor
 - V1 visible-experience evidence is now current on `main`; remaining non-current claims are credentialed external real LLM/TTS demo reruns and post-V1 model-management polish.
 - Merged #67 as the V2.0b memory-control slice: Settings Memory can edit summary text/cues, disable or re-enable a summary, delete a selected summary without deleting raw chat turns, and export memory evidence.
 - Added current-head guard coverage for V2.0b: `SummarySegmentStore.update`, disabled-summary recall skip, RuntimeService memory control methods, renderer IPC bridge commands/results, a disabled-memory benchmark case, and `pnpm harness:electron:memory-control` through main run `28289995890`.
-- V2.0c defines the next memory gate: `pnpm harness:memory-benchmark` is fixture-driven and must cover long-chat summary traceability, candidate-worthy facts, conflict/update ranking, noise rejection, disabled memory, false-positive rejection, prompt source visibility, and prompt budget skips before later memory promotion or layering work claims completion.
+- V2.0c defines the next memory gate: `pnpm harness:memory-benchmark` is fixture-driven and must cover long-chat summary traceability, candidate-worthy facts, conflict/update ranking, noise rejection, disabled memory, false-positive rejection, prompt source visibility, and prompt budget skips before later memory promotion or layering work claims completion. The current locked baselines are `summaryRegressionScore: 1`, `recallRegressionScore: 1`, and `productReadinessScore: 0.4`; CI fails below the recorded fixture baselines.
 
 ## 2026-05-23
 
