@@ -10,6 +10,7 @@ This project needs two modes: fast feature iteration and slower checkpoint valid
 - TDD steps were too small for architecture cleanup. Red/green is still required for behavior changes, but several tiny refactors were each followed by too much global validation.
 - Documentation was updated too frequently. Progress and retros should be updated at phase boundaries or after real misses, not after every small edit.
 - Subagent review and long retros were used in the middle of implementation. They are valuable at phase boundaries, but they slow down feature throughput when used as the default loop.
+- Remote CI and CodeRabbit were watched during development instead of only at merge readiness. That burned time without increasing the amount of user-visible product work.
 
 ## Default Verification Matrix
 
@@ -28,6 +29,14 @@ This project needs two modes: fast feature iteration and slower checkpoint valid
 PR CI runs `scripts/check-pr-bot-review-threads.mjs` before the normal fast checks. The gate queries the current PR's GitHub review threads and fails if any unresolved inline thread contains a bot-authored comment.
 
 This is intentionally thread-state based. A bot comment can be fixed in code or rejected as not applicable, but the PR author must resolve the thread either way so CI does not silently pass an unhandled review finding.
+
+Treat GitHub CI, CodeRabbit, and PR bot checks as merge-readiness gates, not as the active development loop.
+
+- During implementation, do not poll remote CI or CodeRabbit after every push. Keep working from local source inspection, targeted unit tests, and the narrow harness for the touched behavior.
+- After opening or updating a PR, record the PR URL and continue only with local work unless the user has asked to merge now.
+- Before marking a PR ready for merge or running `gh pr merge`, inspect CI, CodeRabbit, and unresolved bot review threads exactly once, then fix only actionable blockers.
+- If remote checks are pending and no merge decision is being made, report `pending` and stop waiting. Do not spend the thread budget watching queues.
+- If remote checks fail, debug the failing job directly; do not broaden scope or rerun unrelated full suites first.
 
 ## PR Frontend Gate
 
@@ -78,6 +87,8 @@ pnpm harness:pet:quick
 
 Only run commands that prove the touched behavior. Do not run full Electron after every small refactor unless the change touches settings/chat/preload/main IPC or native pet-window behavior in a way quick harness cannot cover.
 
+The fast loop is local. It should not include waiting for GitHub Actions, CodeRabbit, or bot review status.
+
 ## Checkpoint Loop
 
 Use this before claiming a milestone, after risky refactors, or before handing the build back for user verification:
@@ -91,6 +102,8 @@ pnpm harness:electron
 ```
 
 If a full checkpoint fails after a fast loop passed, fix the harness or product issue and record the lesson only if it changes future practice.
+
+Checkpoint evidence can be local or PR-local. Remote CI evidence is required only when deciding whether to merge, or when release wording depends on merged main/current-head evidence.
 
 ## Documentation Policy
 

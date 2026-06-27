@@ -56,6 +56,7 @@ These practices were promoted from the V1 closeout PR sequence #41-#57.
 | #56 | After merge, docs still had PR-local evidence wording until a follow-up corrected them. | Any PR that changes completion status needs a post-merge current-head doc pass or a preplanned docs follow-up. |
 | #57 | A retro alone recorded the incident but did not change the operating framework. | Repeated or severe misses must graduate from retro notes into agent rules, verification policy, or review gates. |
 | #59 | Floating controls existed and Stop-audio passed, but manual QA still found malformed active button visuals, odd bubble placement, and overlapping speech. | Frontend-visible acceptance must assert trigger-after-click visual states and forbidden concurrent states directly; existence, final cleanup, and green Stop tests are not enough. |
+| #67-#68 | The V2.0b memory-control work shipped useful functionality, but too much thread budget was spent watching CI/CodeRabbit and doing post-merge evidence cleanup inside the same feature loop. | During development, use local targeted checks. Treat CI/CodeRabbit as merge-readiness gates only; if remote checks are pending and no merge decision is being made, report status and stop waiting. Split post-merge docs cleanup from the next feature unless release wording is the immediate task. |
 
 ## Completion Claim Discipline
 
