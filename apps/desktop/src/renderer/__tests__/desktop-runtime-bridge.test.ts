@@ -952,4 +952,78 @@ describe("createDesktopRuntimeBridge", () => {
       messages: [{ role: "user", text: "停一下" }]
     });
   });
+
+  it("requests and stores memory debug snapshots from Electron main", () => {
+    const sent: Array<[string, unknown]> = [];
+    let memorySnapshot: ((snapshot: import("../../shared/ipc").DesktopMemoryDebugSnapshot) => void) | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: (channel, payload) => sent.push([channel, payload]),
+      on: (channel, handler) => {
+        if (channel === "memory:debug-snapshot") {
+          memorySnapshot = handler as typeof memorySnapshot;
+        }
+        return () => undefined;
+      }
+    });
+
+    const loading = bridge.requestMemoryDebugSnapshot();
+    memorySnapshot?.({
+      threadId: "thread-a",
+      sessionId: "session-a",
+      recentTurns: [
+        {
+          id: "session-a-1",
+          role: "user",
+          content: "I like Hiyori.",
+          createdAt: "2026-06-26T00:00:00.000Z"
+        }
+      ],
+      summarySegments: [
+        {
+          id: "summary-1",
+          threadId: "thread-a",
+          sessionId: "session-a",
+          summary: "User prefers Hiyori.",
+          recallCues: ["hiyori"],
+          sourceTurns: [
+            {
+              sessionId: "session-a",
+              turnId: "session-a-1",
+              role: "user",
+              createdAt: "2026-06-26T00:00:00.000Z"
+            }
+          ],
+          createdAt: "2026-06-26T00:00:01.000Z"
+        }
+      ],
+      lastRecallContext: {
+        items: [
+          {
+            kind: "summary-segment",
+            id: "summary-1",
+            summary: "User prefers Hiyori.",
+            recallCues: ["hiyori"],
+            sourceTurnIds: ["session-a-1"],
+            reason: "cue:hiyori",
+            score: 5
+          }
+        ],
+        skipped: []
+      },
+      updatedAt: "2026-06-26T00:00:02.000Z"
+    });
+
+    expect(loading.memoryDebug.status).toBe("loading");
+    expect(sent).toContainEqual(["memory:debug-request", {}]);
+    expect(bridge.getState().memoryDebug).toMatchObject({
+      status: "ready",
+      snapshot: {
+        threadId: "thread-a",
+        summarySegments: [expect.objectContaining({ id: "summary-1" })],
+        lastRecallContext: {
+          items: [expect.objectContaining({ reason: "cue:hiyori" })]
+        }
+      }
+    });
+  });
 });

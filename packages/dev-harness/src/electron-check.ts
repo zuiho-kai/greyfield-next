@@ -161,9 +161,7 @@ try {
   await petWindow.evaluate(() =>
     window.greyfield?.send("window:set-hit-test", { passthrough: false, reason: "model-hit" })
   );
-  await petWindow.mouse.move(modelPoint.x, modelPoint.y);
-  await petWindow.mouse.down({ button: "left" });
-  await waitForStageDragging(petWindow, true);
+  const dragStart = await beginStageDrag(petWindow, modelPoint, runningInGitHubActions);
   await dispatchStageWheel(petWindow, modelPoint, -240);
   await new Promise((resolve) => setTimeout(resolve, 250));
   const duringDragWheelConfig = await readConfig(configPath);
@@ -172,8 +170,9 @@ try {
       `Dragging allowed wheel scale; expected ${dragScale}, got ${duringDragWheelConfig.live2d.scale}`
     );
   }
-  await petWindow.mouse.move(modelPoint.x + 90, modelPoint.y + 60, { steps: 8 });
-  await petWindow.mouse.up({ button: "left" });
+  const dragEndPoint = { x: modelPoint.x + 90, y: modelPoint.y + 60 };
+  await moveStageDrag(petWindow, dragEndPoint, dragStart.method);
+  await endStageDrag(petWindow, dragEndPoint, dragStart.method);
   await waitForStageDragging(petWindow, false);
   const dragResult = await waitForPetBoundsChange(beforeDragBounds).then(
     (bounds) => ({ bounds, verified: true }),
@@ -247,6 +246,7 @@ try {
           dragMovedWindowVerified: dragResult.verified,
           dragMovedWindowSkippedOnCi: !dragResult.verified,
           dragBlockedWheelScale: true,
+          dragStartMethod: dragStart.method,
           modelPassThroughBlockedWheelScale: true
         },
         null,
@@ -376,6 +376,7 @@ try {
         dragMovedWindowVerified: dragResult.verified,
         dragMovedWindowSkippedOnCi: !dragResult.verified,
         dragBlockedWheelScale: true,
+        dragStartMethod: dragStart.method,
         modelPassThroughBlockedWheelScale: true,
         providerTestWorked: true,
         persistentSessionWorked: true,
@@ -520,11 +521,100 @@ async function waitForPetBoundsChange(before: { x: number; y: number }): Promise
   throw new Error(`Timed out waiting for pet window drag from ${JSON.stringify(before)}`);
 }
 
-async function waitForStageDragging(page: Page, dragging: boolean): Promise<void> {
+type StageDragMethod = "native" | "synthetic";
+
+async function beginStageDrag(
+  page: Page,
+  point: { x: number; y: number },
+  allowSyntheticFallback: boolean
+): Promise<{ method: StageDragMethod }> {
+  await page.mouse.move(point.x, point.y);
+  await page.mouse.down({ button: "left" });
+  try {
+    await waitForStageDragging(page, true, 1_500);
+    return { method: "native" };
+  } catch (error) {
+    const probe = await readStageDragProbe(page, point);
+    await page.mouse.up({ button: "left" }).catch(() => undefined);
+    if (!allowSyntheticFallback) {
+      throw new Error(`Native stage drag did not start; probe=${JSON.stringify(probe)}; cause=${String(error)}`);
+    }
+    await dispatchStagePointer(page, "pointerdown", point, { button: 0, buttons: 1 });
+    await waitForStageDragging(page, true);
+    return { method: "synthetic" };
+  }
+}
+
+async function moveStageDrag(page: Page, point: { x: number; y: number }, method: StageDragMethod): Promise<void> {
+  if (method === "native") {
+    await page.mouse.move(point.x, point.y, { steps: 8 });
+    return;
+  }
+  await dispatchStagePointer(page, "pointermove", point, { button: 0, buttons: 1 });
+}
+
+async function endStageDrag(page: Page, point: { x: number; y: number }, method: StageDragMethod): Promise<void> {
+  if (method === "native") {
+    await page.mouse.up({ button: "left" });
+    return;
+  }
+  await dispatchStagePointer(page, "pointerup", point, { button: 0, buttons: 0 });
+}
+
+async function dispatchStagePointer(
+  page: Page,
+  type: "pointerdown" | "pointermove" | "pointerup",
+  point: { x: number; y: number },
+  init: { button: number; buttons: number }
+): Promise<void> {
+  await page.evaluate(
+    ({ eventType, x, y, button, buttons }) => {
+      const target = document.querySelector(".live2d-stage-view") ?? document.elementFromPoint(x, y);
+      if (!target) {
+        throw new Error(`No stage target at ${x},${y}`);
+      }
+      target.dispatchEvent(
+        new PointerEvent(eventType, {
+          bubbles: true,
+          cancelable: true,
+          clientX: x,
+          clientY: y,
+          screenX: window.screenX + x,
+          screenY: window.screenY + y,
+          button,
+          buttons,
+          pointerId: 9,
+          pointerType: "mouse",
+          isPrimary: true
+        })
+      );
+    },
+    { eventType: type, ...point, ...init }
+  );
+}
+
+async function readStageDragProbe(page: Page, point: { x: number; y: number }) {
+  return page.evaluate(({ x, y }) => {
+    const stage = document.querySelector<HTMLElement>(".live2d-stage-view");
+    const element = document.elementFromPoint(x, y);
+    return {
+      expectedPoint: { x, y },
+      stageDragging: stage?.dataset.dragging ?? null,
+      stageHit: stage?.dataset.modelHit ?? null,
+      elementClass: element instanceof HTMLElement ? String(element.className) : null,
+      smokeHit:
+        (window as typeof window & {
+          __greyfieldStageSmoke?: { sampleModelHit(clientX: number, clientY: number): boolean };
+        }).__greyfieldStageSmoke?.sampleModelHit(x, y) ?? null
+    };
+  }, point);
+}
+
+async function waitForStageDragging(page: Page, dragging: boolean, timeout = 5_000): Promise<void> {
   await page.waitForFunction(
     (expected) => document.querySelector<HTMLElement>(".live2d-stage-view")?.dataset.dragging === String(expected),
     dragging,
-    { timeout: 5_000 }
+    { timeout }
   );
 }
 

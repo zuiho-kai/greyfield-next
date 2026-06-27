@@ -8,9 +8,13 @@ import {
   type CharacterPersona,
   type LLMProvider,
   type MemoryStore,
+  type RecallContext,
   type SessionStore,
+  type SummarySegment,
+  type SummarySegmentStore,
   type RuntimeEventHandler,
   type RuntimeInputEvent,
+  type RuntimeOutputEvent,
   type TTSProvider,
   type ChatMessage
 } from "@greyfield/core-runtime";
@@ -22,7 +26,13 @@ export interface RuntimeServiceOptions {
   loadPersona?: (config: GreyfieldConfig) => Promise<CharacterPersona>;
   memoryStore?: MemoryStore;
   sessionStore?: SessionStore;
+  summarySegmentStore?: SummarySegmentStore;
+  threadId?: string;
   recentTurnLimit?: number;
+  recallMaxItems?: number;
+  recallMaxCharacters?: number;
+  summaryBatchTurnLimit?: number;
+  summaryMinTurns?: number;
   llmTimeoutMs?: number;
   asrTimeoutMs?: number;
   ttsTimeoutMs?: number;
@@ -46,7 +56,9 @@ export class RuntimeService {
   private readonly stage = new FakeStageDriver();
   private readonly memoryStore: MemoryStore;
   private readonly sessionStore: SessionStore;
+  private readonly summarySegmentStore: SummarySegmentStore | undefined;
   private readonly interactionProfile = createDefaultInteractionProfile();
+  private lastRecallContext: RecallContext | undefined;
   private activeRuntime: GreyfieldRuntime | undefined;
   private testingLLM = false;
   private testingVoice = false;
@@ -55,6 +67,11 @@ export class RuntimeService {
     this.config = config;
     this.memoryStore = options.memoryStore ?? new MainFakeMemoryStore();
     this.sessionStore = options.sessionStore ?? new InMemorySessionStore("desktop-main-session");
+    this.summarySegmentStore = options.summarySegmentStore;
+  }
+
+  private get threadId(): string {
+    return this.options.threadId ?? deriveThreadId(this.config);
   }
 
   updateConfig(config: GreyfieldConfig): void {
@@ -65,7 +82,7 @@ export class RuntimeService {
     if (input.type === "runtime.interrupt" && this.activeRuntime) {
       const runtime = this.activeRuntime;
       try {
-        await runtime.handle(input, emit);
+        await runtime.handle(input, (event) => this.emitRuntimeEvent(event, emit));
       } finally {
         if (this.activeRuntime === runtime) {
           this.activeRuntime = undefined;
@@ -75,18 +92,18 @@ export class RuntimeService {
     }
 
     if (input.type === "text.input" && this.activeRuntime) {
-      await this.activeRuntime.handle({ type: "runtime.interrupt" }, emit);
+      await this.activeRuntime.handle({ type: "runtime.interrupt" }, (event) => this.emitRuntimeEvent(event, emit));
     }
 
     if (input.type === "audio.chunk" && this.activeRuntime) {
-      await this.activeRuntime.handle(input, emit);
+      await this.activeRuntime.handle(input, (event) => this.emitRuntimeEvent(event, emit));
       return;
     }
 
     if (input.type === "audio.end" && this.activeRuntime) {
       const runtime = this.activeRuntime;
       try {
-        await runtime.handle(input, emit);
+        await runtime.handle(input, (event) => this.emitRuntimeEvent(event, emit));
       } finally {
         if (this.activeRuntime === runtime) {
           this.activeRuntime = undefined;
@@ -100,7 +117,7 @@ export class RuntimeService {
       this.activeRuntime = runtime;
     }
     try {
-      await runtime.handle(input, emit);
+      await runtime.handle(input, (event) => this.emitRuntimeEvent(event, emit));
     } finally {
       if (this.activeRuntime === runtime && input.type !== "audio.chunk") {
         this.activeRuntime = undefined;
@@ -113,6 +130,24 @@ export class RuntimeService {
     return turns.flatMap((turn) =>
       turn.role === "user" || turn.role === "assistant" ? [{ role: turn.role, content: turn.content }] : []
     );
+  }
+
+  async getMemoryDebugSnapshot(limit = 20): Promise<{
+    threadId: string;
+    sessionId: string;
+    recentTurns: Awaited<ReturnType<SessionStore["getRecent"]>>;
+    summarySegments: SummarySegment[];
+    lastRecallContext?: RecallContext;
+    updatedAt: string;
+  }> {
+    return {
+      threadId: this.threadId,
+      sessionId: this.sessionStore.sessionId,
+      recentTurns: await this.sessionStore.getRecent(limit),
+      summarySegments: (await this.summarySegmentStore?.list(this.threadId)) ?? [],
+      ...(this.lastRecallContext ? { lastRecallContext: this.lastRecallContext } : {}),
+      updatedAt: new Date().toISOString()
+    };
   }
 
   async testLLM(): Promise<LLMTestResult> {
@@ -209,13 +244,26 @@ export class RuntimeService {
       asr: this.createASRProvider(),
       tts: this.createTTSProvider(),
       memoryStore: this.memoryStore,
+      summarySegmentStore: this.summarySegmentStore,
       sessionStore: this.sessionStore,
       persona,
       voice: this.config.voice.id,
       stage: this.stage,
+      threadId: this.threadId,
       recentTurnLimit: this.options.recentTurnLimit,
+      recallMaxItems: this.options.recallMaxItems,
+      recallMaxCharacters: this.options.recallMaxCharacters,
+      summaryBatchTurnLimit: this.options.summaryBatchTurnLimit,
+      summaryMinTurns: this.options.summaryMinTurns,
       ttsEnabled: this.config.voice.speechEnabled
     });
+  }
+
+  private async emitRuntimeEvent(event: RuntimeOutputEvent, emit: RuntimeEventHandler): Promise<void> {
+    if (event.type === "memory.recall.context") {
+      this.lastRecallContext = event.context;
+    }
+    await emit(event);
   }
 
   private async loadPersona(): Promise<CharacterPersona> {
@@ -369,4 +417,10 @@ class MainFakeMemoryStore implements MemoryStore {
   async consolidate(): Promise<string> {
     return "- Greyfield Next desktop runtime is using local fake providers.";
   }
+}
+
+function deriveThreadId(config: GreyfieldConfig): string {
+  const source = config.characterFile.trim() || "default-character";
+  const slug = source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return `desktop:${slug || "default-character"}`;
 }

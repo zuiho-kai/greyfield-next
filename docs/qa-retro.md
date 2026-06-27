@@ -91,6 +91,28 @@ Current command split:
 - Speech bubble lifecycle: `pnpm harness:electron:bubble-long-reply`
 - Settings provider user path: `pnpm harness:electron:settings-provider-test`
 
+## 2026-06-27 Regression: Long Reply Bubble Drifted During Streaming
+
+The full frontend gate caught a desktop-pet polish issue that a looser visual check could have missed: during a long streaming reply, the pet bubble kept recomputing placement from live model bounds, so idle Live2D motion moved the same visible bubble by a few pixels.
+
+What happened:
+
+- `pnpm harness:frontend-full` failed in `pnpm harness:electron:bubble-long-reply`.
+- The capped bubble text stayed correct and inside the viewport, but its `x/y` changed while the same reply was still visible.
+- This made the desktop bubble feel like a web tooltip attached to animated layout measurements instead of a stable subtitle for the current utterance.
+
+How it was fixed:
+
+- The pet renderer now locks the bubble placement when a visible bubble first appears.
+- The lock is released when the bubble is cleared after its fade lifecycle.
+- The next bubble can still use fresh model/window bounds, so edge avoidance remains dynamic between utterances.
+
+How we avoid repeating it:
+
+- For desktop speech bubbles, "stable" means the same visible utterance keeps one placement. Do not recompute `left/top` from animated model bounds during that utterance.
+- Long-reply harnesses should assert both product constraints: capped text stays short, and the bubble does not drift while streaming.
+- If a harness catches a visible UI behavior that looks small in pixels, first decide whether the user would perceive motion or instability before weakening the assertion.
+
 ## 2026-06-25 Regression: Voice Closeout Claim Outran Actual V1 Scope
 
 The V1 voice closeout exposed a completion-discipline miss: the work first treated real TTS playback as enough progress, while the V1 product requirement still included microphone voice input, ASR-to-chat routing, waveform-driven mouth movement, and Stop coverage across the whole voice stack.

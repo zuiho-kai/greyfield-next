@@ -1,5 +1,6 @@
 import { splitCompleteSentences, takeTtsTextWithinBudget } from "@greyfield/audio-runtime";
 import type { RuntimeEventHandler, RuntimeInputEvent } from "./events";
+import { buildRecallContext, createSummarySegmentDraft, type SummarySegmentStore } from "./memory-context";
 import { assemblePrompt } from "./prompt-assembler";
 import type { ASRProvider, LLMProvider, MemoryStore, TTSProvider } from "./providers";
 import type { CharacterPersona } from "./persona";
@@ -11,17 +12,24 @@ export interface GreyfieldRuntimeOptions {
   asr?: ASRProvider;
   tts: TTSProvider;
   memoryStore: MemoryStore;
+  summarySegmentStore?: SummarySegmentStore;
   sessionStore: SessionStore;
   persona: CharacterPersona;
   voice: string;
   stage?: StageDriver;
   threadId?: string;
   recentTurnLimit?: number;
+  recallMaxItems?: number;
+  recallMaxCharacters?: number;
+  summaryBatchTurnLimit?: number;
+  summaryMinTurns?: number;
   ttsEnabled?: boolean;
   ttsMaxCharactersPerTurn?: number;
 }
 
 const defaultTtsMaxCharactersPerTurn = 600;
+const defaultSummaryBatchTurnLimit = 12;
+const defaultSummaryMinTurns = 4;
 
 export class GreyfieldRuntime {
   private interrupted = false;
@@ -133,6 +141,18 @@ export class GreyfieldRuntime {
       this.options.sessionStore.getRecent(this.recentTurnLimit),
       this.options.sessionStore.createHandoff(this.recentTurnLimit)
     ]);
+    const summarySegments = await this.loadSummarySegments();
+    const recallContext = this.options.summarySegmentStore
+      ? buildRecallContext({
+          input: text,
+          summarySegments,
+          maxItems: this.options.recallMaxItems,
+          maxCharacters: this.options.recallMaxCharacters
+        })
+      : undefined;
+    if (recallContext && (recallContext.items.length > 0 || recallContext.skipped.length > 0)) {
+      await emit({ type: "memory.recall.context", context: recallContext });
+    }
 
     const messages = assemblePrompt({
       persona: this.options.persona,
@@ -141,7 +161,8 @@ export class GreyfieldRuntime {
       recent,
       input: text,
       sessionId: this.options.sessionStore.sessionId,
-      threadId: this.threadId
+      threadId: this.threadId,
+      recallContext
     });
 
     let fullText = "";
@@ -182,6 +203,14 @@ export class GreyfieldRuntime {
     if (finalText.length > 0) {
       await this.options.sessionStore.append({ role: "user", content: text });
       await this.options.sessionStore.append({ role: "assistant", content: finalText });
+      try {
+        const createdSummary = await this.createSummaryForOldTurns();
+        if (createdSummary) {
+          await emit({ type: "memory.summary.created", segment: createdSummary });
+        }
+      } catch (error) {
+        console.warn(`Greyfield memory summary unavailable: ${formatError(error)}`);
+      }
       await emit({ type: "assistant.text.final", text: finalText });
     }
 
@@ -222,11 +251,57 @@ export class GreyfieldRuntime {
     return budget.usedCharacters;
   }
 
+  private async loadSummarySegments(): Promise<Awaited<ReturnType<SummarySegmentStore["list"]>>> {
+    const summarySegmentStore = this.options.summarySegmentStore;
+    if (!summarySegmentStore) {
+      return [];
+    }
+    try {
+      return await summarySegmentStore.list(this.threadId);
+    } catch (error) {
+      console.warn(`Greyfield memory recall unavailable: ${formatError(error)}`);
+      return [];
+    }
+  }
+
   private requireASRProvider(): ASRProvider {
     if (!this.options.asr) {
       throw new Error("Voice input is not configured.");
     }
     return this.options.asr;
+  }
+
+  private async createSummaryForOldTurns(): Promise<Awaited<ReturnType<SummarySegmentStore["append"]>> | undefined> {
+    const summarySegmentStore = this.options.summarySegmentStore;
+    if (!summarySegmentStore) {
+      return;
+    }
+    const summaryBatchTurnLimit = this.options.summaryBatchTurnLimit ?? defaultSummaryBatchTurnLimit;
+    const turns = await this.options.sessionStore.getRecent(this.recentTurnLimit + summaryBatchTurnLimit);
+    const oldTurns = turns.slice(0, Math.max(0, turns.length - this.recentTurnLimit));
+    const existing = await summarySegmentStore.list(this.threadId);
+    const summarizedTurnIds = new Set(existing.flatMap((segment) => segment.sourceTurns.map((turn) => turn.turnId)));
+    const unsummarizedTurns = oldTurns
+      .filter((turn) => turn.role === "user" || turn.role === "assistant")
+      .filter((turn) => !summarizedTurnIds.has(turn.id))
+      .slice(0, summaryBatchTurnLimit);
+    if (unsummarizedTurns.length < (this.options.summaryMinTurns ?? defaultSummaryMinTurns)) {
+      return;
+    }
+    const draft = createSummarySegmentDraft({
+      sessionId: this.options.sessionStore.sessionId,
+      turns: unsummarizedTurns
+    });
+    if (draft.summary.trim().length === 0 || draft.sourceTurns.length === 0) {
+      return;
+    }
+    return summarySegmentStore.append({
+      threadId: this.threadId,
+      sessionId: this.options.sessionStore.sessionId,
+      summary: draft.summary,
+      recallCues: draft.recallCues,
+      sourceTurns: draft.sourceTurns
+    });
   }
 }
 

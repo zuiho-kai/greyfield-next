@@ -35,6 +35,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 10
     needs: pr-bot-review-gate
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -52,6 +54,8 @@ jobs:
         run: pnpm test
       - name: Acceptance harness
         run: pnpm harness:acceptance
+      - name: Memory benchmark
+        run: pnpm harness:memory-benchmark
 
   desktop-pet:
     name: Desktop pet quick harness

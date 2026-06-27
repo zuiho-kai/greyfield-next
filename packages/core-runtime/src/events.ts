@@ -1,3 +1,5 @@
+import type { RecallContext, SummarySegment } from "./memory-context";
+
 export type RuntimeInputEvent =
   | { type: "text.input"; text: string }
   | { type: "audio.chunk"; data: Uint8Array }
@@ -17,6 +19,8 @@ export type RuntimeOutputEvent =
   | { type: "assistant.audio.chunk"; text: string; data: Uint8Array }
   | { type: "assistant.audio.error"; text: string; message: string }
   | { type: "assistant.audio.end" }
+  | { type: "memory.recall.context"; context: RecallContext }
+  | { type: "memory.summary.created"; segment: SummarySegment }
   | { type: "stage.expression"; id: string }
   | { type: "stage.motion"; group: string; index?: number }
   | { type: "error"; message: string; cause?: unknown };

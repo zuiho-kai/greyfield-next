@@ -43,7 +43,12 @@ async function createWindows(): Promise<void> {
   const config = await loadGreyfieldConfig(resolveConfigPath());
   runtimeService = new RuntimeService(config, {
     ...createDesktopRuntimeStoreOptions(resolveRuntimeStorePaths()),
-    llmTimeoutMs: resolveLLMTimeoutMs()
+    llmTimeoutMs: resolvePositiveIntegerEnv("GREYFIELD_LLM_TIMEOUT_MS"),
+    recentTurnLimit: resolvePositiveIntegerEnv("GREYFIELD_RECENT_TURN_LIMIT"),
+    recallMaxItems: resolvePositiveIntegerEnv("GREYFIELD_RECALL_MAX_ITEMS"),
+    recallMaxCharacters: resolvePositiveIntegerEnv("GREYFIELD_RECALL_MAX_CHARACTERS"),
+    summaryBatchTurnLimit: resolvePositiveIntegerEnv("GREYFIELD_SUMMARY_BATCH_TURN_LIMIT"),
+    summaryMinTurns: resolvePositiveIntegerEnv("GREYFIELD_SUMMARY_MIN_TURNS")
   });
   runtimeIpcController = new RuntimeIpcController({
     service: runtimeService,
@@ -143,6 +148,10 @@ function registerIpc(): void {
 
   ipcMain.on("provider:test-voice", (event) => {
     void testVoiceProvider(event.sender);
+  });
+
+  ipcMain.on("memory:debug-request", () => {
+    void broadcastMemoryDebugSnapshot();
   });
 
   ipcMain.on("window:set-click-through", (_event, payload: { enabled: boolean }) => {
@@ -262,6 +271,16 @@ async function testVoiceProvider(sender: Electron.WebContents): Promise<void> {
   const result = await runtimeService?.testVoice();
   if (result) {
     broadcastVoiceTestResult(sender, result);
+  }
+}
+
+async function broadcastMemoryDebugSnapshot(): Promise<void> {
+  const snapshot = await runtimeService?.getMemoryDebugSnapshot();
+  if (!snapshot) {
+    return;
+  }
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send("memory:debug-snapshot", snapshot);
   }
 }
 
@@ -422,13 +441,13 @@ function resolveRuntimeStorePaths(): { userDataPath: string; projectRoot: string
   };
 }
 
-function resolveLLMTimeoutMs(): number | undefined {
-  const raw = process.env.GREYFIELD_LLM_TIMEOUT_MS;
+function resolvePositiveIntegerEnv(name: string): number | undefined {
+  const raw = process.env[name];
   if (!raw) {
     return undefined;
   }
   const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 app.whenReady().then(createWindows).catch((error) => {

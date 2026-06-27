@@ -79,6 +79,7 @@ Greyfield Next 要从一个稳定的 Live2D 桌面桌宠，逐步发展成一个
 - [SillyTavern memory notes](../research/v2-memory/sillytavern.md)
 - [MaiBot memory notes](../research/v2-memory/maibot.md)
 - [Greyfield V2.0 memory synthesis](../research/v2-memory/synthesis.md)
+- [V2 memory implementation goal](v2-memory-goal.md)
 
 ### 能力拆分
 

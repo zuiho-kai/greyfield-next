@@ -1,6 +1,12 @@
 import { defaultGreyfieldConfig, type GreyfieldConfig } from "@greyfield/persistence/config-schema";
 import type { SpeechOutput } from "@greyfield/audio-runtime";
-import type { DesktopIpcEventChannel, DesktopIpcEventMap, DesktopIpcRequestChannel, DesktopIpcRequestMap } from "../shared/ipc";
+import type {
+  DesktopIpcEventChannel,
+  DesktopIpcEventMap,
+  DesktopIpcRequestChannel,
+  DesktopIpcRequestMap,
+  DesktopMemoryDebugSnapshot
+} from "../shared/ipc";
 import { isMaskedApiKey } from "../shared/secrets";
 import { createDefaultInteractionProfile } from "@greyfield/stage-live2d";
 import { createRendererPreviewRuntimeEvents } from "./preview-runtime-events";
@@ -24,6 +30,10 @@ export interface DesktopRendererState {
   voiceTest: {
     status: "idle" | "testing" | "success" | "error";
     message: string;
+  };
+  memoryDebug: {
+    status: "idle" | "loading" | "ready";
+    snapshot: DesktopMemoryDebugSnapshot | null;
   };
   inputDraft: string;
   messages: DesktopMessage[];
@@ -123,6 +133,19 @@ export class DesktopRuntimeBridge {
     });
     this.host?.on("runtime:event", (event) => {
       this.state = reduceRuntimeEvent(this.state, event, this.interactionProfile);
+      if (event.type === "memory.recall.context" && this.state.memoryDebug.snapshot) {
+        this.state = {
+          ...this.state,
+          memoryDebug: {
+            status: "ready",
+            snapshot: {
+              ...this.state.memoryDebug.snapshot,
+              lastRecallContext: event.context,
+              updatedAt: new Date().toISOString()
+            }
+          }
+        };
+      }
       if (event.type === "assistant.audio.chunk") {
         this.playSpeech(event.text, event.data);
       }
@@ -172,6 +195,16 @@ export class DesktopRuntimeBridge {
       if (returnedAudio && this.speechOutput) {
         this.playSpeech(text, returnedAudio, { force: true });
       }
+      this.emitStateChange();
+    });
+    this.host?.on("memory:debug-snapshot", (snapshot) => {
+      this.state = {
+        ...this.state,
+        memoryDebug: {
+          status: "ready",
+          snapshot
+        }
+      };
       this.emitStateChange();
     });
   }
@@ -373,6 +406,33 @@ export class DesktopRuntimeBridge {
     return this.getState();
   }
 
+  requestMemoryDebugSnapshot(): DesktopRendererState {
+    this.state = {
+      ...this.state,
+      memoryDebug: {
+        ...this.state.memoryDebug,
+        status: "loading"
+      }
+    };
+    this.host?.send("memory:debug-request", {});
+    if (!this.host) {
+      this.state = {
+        ...this.state,
+        memoryDebug: {
+          status: "ready",
+          snapshot: {
+            threadId: "preview-thread",
+            sessionId: "preview-session",
+            recentTurns: [],
+            summarySegments: [],
+            updatedAt: new Date().toISOString()
+          }
+        }
+      };
+    }
+    return this.getState();
+  }
+
   getState(): DesktopRendererState {
     return structuredClone(this.state);
   }
@@ -546,12 +606,16 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
     voiceTest: {
       status: "idle",
       message: ""
-      },
-      voiceInput: {
-        status: "idle",
-        message: ""
-      },
-      inputDraft: "",
+    },
+    memoryDebug: {
+      status: "idle",
+      snapshot: null
+    },
+    voiceInput: {
+      status: "idle",
+      message: ""
+    },
+    inputDraft: "",
     messages: [],
     assistantDraft: "",
     audioQueue: [],

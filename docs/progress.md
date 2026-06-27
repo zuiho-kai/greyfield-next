@@ -26,6 +26,8 @@ Post-V1 roadmap: [Greyfield Next 版本产品书](plans/version-product-book.md)
 
 V2.0 memory research notes: [Clowder AI](research/v2-memory/clowder-ai.md), [SillyTavern](research/v2-memory/sillytavern.md), [MaiBot](research/v2-memory/maibot.md), and [Greyfield synthesis](research/v2-memory/synthesis.md).
 
+V2.0 memory implementation goal: [V2 Memory Goal](plans/v2-memory-goal.md) tracks the V2.0a raw-log, summary-segment, and recall-context foundation.
+
 ## 2026-06-23
 
 - Built and merged #41 as the V1 integration branch combining #35, #36, #37, #38, #39, and #40 for issues #26-#31.
