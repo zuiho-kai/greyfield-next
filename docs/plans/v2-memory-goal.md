@@ -19,7 +19,7 @@ The first engineering goal, V2.0a, is merged into `main` via [#63](https://githu
 - No automatic pinned long-term memory.
 - No silent user-fact promotion.
 - No vector database requirement.
-- No Memory Panel UI yet.
+- No Memory Panel UI in V2.0a; user-facing controls were added later in V2.0b.
 - No LLM-generated summary dependency in the first storage slice.
 
 ## V2.0a Foundation
@@ -47,7 +47,7 @@ Acceptance covered by tests:
 
 ## V2.0b Memory Control
 
-V2.0b moves from inspection to user control:
+V2.0b moved from inspection to user control and is merged into `main` via [#67](https://github.com/zuiho-kai/greyfield-next/pull/67):
 
 - `SummarySegment` carries `disabled` and `updatedAt` metadata, while older JSONL rows remain readable as enabled memories.
 - `SummarySegmentStore.update` is the owner boundary for editing summary text, recall cues, and disabled state.
@@ -82,4 +82,4 @@ CI guard:
 - `pnpm harness:memory-benchmark` runs in Fast checks, so memory summary/recall quality is guarded even when a PR does not trigger `frontend-full`.
 - `pnpm harness:electron:memory-summary` and `pnpm harness:electron:memory-control` currently share `packages/dev-harness/src/electron-memory-summary-check.ts`; the former keeps the V2.0a summary foundation entrypoint stable, while the latter names the V2.0b edit/disable/delete/export gate.
 - `frontend-full-check.ts` runs `pnpm harness:electron:memory-control`, so frontend-visible memory regressions are covered by the aggregate gate.
-- Main run `28287921556` on head `b605321` passed Fast checks, including `pnpm harness:memory-benchmark`, and `frontend-full`, including the memory summary harness with `summaryCreated: true`, `recallContext: true`, `settingsMemoryVisible: true`, and `summaryIncludesSourceTurns: true`.
+- Main run `28289995890` on head `731f951` passed Fast checks, including `pnpm harness:memory-benchmark`, and `frontend-full`, including the memory-control harness with `memoryEditVisible: true`, `memoryExportVisible: true`, `disabledMemorySkipped: true`, `deletedMemoryKeptRawTurns: true`, and `summaryIncludesSourceTurns: true`.
