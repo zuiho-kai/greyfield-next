@@ -214,7 +214,7 @@
         "Audio runtime exposes pure RMS VAD, microphone recorder, and decoded PCM mouth-open timeline boundaries."
       ],
       "qa": {
-        "script": "vitest sentence-splitter vad tts-text-budget speech-synthesis-output microphone-recorder audio-level-meter openai-compatible-asr-provider openai-compatible-tts-provider runtime-loop runtime-service desktop-runtime-bridge config; pnpm harness:v1-visual; pnpm harness:electron:stop-audio; pnpm harness:electron:voice-input; optional provider proof: pnpm harness:real-tts; optional desktop provider proof: pnpm harness:electron:real-tts"
+        "script": "vitest sentence-splitter vad tts-text-budget speech-synthesis-output microphone-recorder audio-level-meter openai-compatible-asr-provider openai-compatible-tts-provider runtime-loop runtime-service desktop-runtime-bridge config; pnpm harness:v1-visual; pnpm harness:electron:stop-audio; pnpm harness:electron:voice-input"
       }
     },
     {

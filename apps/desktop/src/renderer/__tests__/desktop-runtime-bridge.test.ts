@@ -257,6 +257,34 @@ describe("createDesktopRuntimeBridge", () => {
     });
   });
 
+  it("does not enqueue voice test audio when speech playback is unavailable", () => {
+    let voiceTestResult:
+      | ((event: import("../../shared/ipc").DesktopVoiceTestResult) => void)
+      | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: () => undefined,
+      on: (channel, handler) => {
+        if (channel === "provider:test-voice-result") {
+          voiceTestResult = handler as typeof voiceTestResult;
+        }
+        return () => undefined;
+      }
+    });
+
+    voiceTestResult?.({
+      ok: true,
+      message: "Voice test succeeded.",
+      text: "No speaker.",
+      data: new Uint8Array([0x49, 0x44, 0x33, 0x03])
+    });
+
+    expect(bridge.getState().voiceTest).toEqual({
+      status: "success",
+      message: "Voice test succeeded."
+    });
+    expect(bridge.getState().audioQueue).toEqual([]);
+  });
+
   it("shows provider test errors in renderer state", () => {
     let providerTestResult:
       | ((event: { ok: boolean; message: string; firstToken?: string }) => void)

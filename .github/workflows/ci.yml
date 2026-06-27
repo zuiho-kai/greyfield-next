@@ -11,11 +11,30 @@ concurrency:
   group: greyfield-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
+  pr-bot-review-gate:
+    name: PR bot review gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Fail on unresolved bot review threads
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/check-pr-bot-review-threads.mjs
+
   fast:
     name: Fast checks
     runs-on: windows-latest
     timeout-minutes: 10
+    needs: pr-bot-review-gate
     permissions:
       contents: read
     steps:

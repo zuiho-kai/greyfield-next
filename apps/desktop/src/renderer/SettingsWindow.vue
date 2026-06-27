@@ -404,7 +404,7 @@ import {
 } from "./bundled-live2d-models";
 import Live2DStageView from "./Live2DStageView.vue";
 import { describeProviderStatus } from "./settings-provider-status";
-import { describeProviderTestStatus, describeTestLlmAction } from "./settings-test-llm";
+import { describeProviderTestStatus, describeTestLlmAction, describeTestVoiceAction } from "./settings-test-llm";
 
 const props = defineProps<{
   state: DesktopRendererState;
@@ -442,7 +442,9 @@ const testLlmAction = computed(() =>
   )
 );
 const providerTestStatus = computed(() => describeProviderTestStatus(props.state.providerTest));
-const testVoiceAction = computed(() => describeTestVoiceAction(props.state));
+const testVoiceAction = computed(() =>
+  describeTestVoiceAction(props.stageStatus, props.state.voiceTest.status, describeVoiceBlockedReason(props.state))
+);
 const voiceTestStatus = computed(() => describeVoiceTestStatus(props.state.voiceTest));
 const memorySnapshot = computed(() => props.state.memoryDebug.snapshot);
 const memoryRawCount = computed(() => memorySnapshot.value?.recentTurns.length ?? 0);
@@ -495,22 +497,6 @@ function selectLive2DModel(modelPath: string): void {
     return;
   }
   emit("update-setting", "modelPath", model.modelPath);
-}
-
-function describeTestVoiceAction(state: DesktopRendererState): {
-  disabled: boolean;
-  disableReason: string;
-  label: string;
-  tone: "idle" | "testing" | "blocked";
-} {
-  if (state.voiceTest.status === "testing") {
-    return { disabled: true, disableReason: "", label: "Testing voice...", tone: "testing" };
-  }
-  const blockedReason = describeVoiceBlockedReason(state);
-  if (blockedReason) {
-    return { disabled: true, disableReason: blockedReason, label: "Test Voice", tone: "blocked" };
-  }
-  return { disabled: false, disableReason: "", label: "Test Voice", tone: "idle" };
 }
 
 function describeVoiceBlockedReason(state: DesktopRendererState): string {

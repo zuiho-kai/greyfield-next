@@ -72,8 +72,7 @@ button {
   backdrop-filter: blur(12px);
   pointer-events: none;
   overflow-wrap: anywhere;
-  word-break: break-word;
-  animation: speechBubbleIn 180ms ease-out;
+  animation: speech-bubble-in 180ms ease-out;
   transition: opacity 450ms ease, transform 450ms ease;
 }
 
@@ -322,7 +321,7 @@ button {
   opacity: 0.48;
 }
 
-@keyframes speechBubbleIn {
+@keyframes speech-bubble-in {
   from {
     opacity: 0;
     transform: translateY(6px) scale(0.98);

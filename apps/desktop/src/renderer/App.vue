@@ -126,6 +126,7 @@ const bubbleText = computed(() =>
 const visibleBubbleText = ref("");
 const speechBubbleFading = ref(false);
 const lockedBubblePlacement = ref<ReturnType<typeof placeSpeechBubble> | null>(null);
+const dismissedBubbleText = ref("");
 let speechBubbleHoldTimer: ReturnType<typeof setTimeout> | null = null;
 let speechBubbleFadeTimer: ReturnType<typeof setTimeout> | null = null;
 const liveBubblePlacement = computed(() =>
@@ -464,6 +465,15 @@ function updateSpeechBubbleLifecycle(): void {
     visibleBubbleText.value = "";
     speechBubbleFading.value = false;
     lockedBubblePlacement.value = null;
+    dismissedBubbleText.value = "";
+    return;
+  }
+  if (state.assistantDraft) {
+    dismissedBubbleText.value = "";
+  } else if (dismissedBubbleText.value === nextText) {
+    visibleBubbleText.value = "";
+    speechBubbleFading.value = false;
+    lockedBubblePlacement.value = null;
     return;
   }
 
@@ -472,7 +482,7 @@ function updateSpeechBubbleLifecycle(): void {
   }
   visibleBubbleText.value = nextText;
   speechBubbleFading.value = false;
-  if (state.assistantDraft || state.status === "generating") {
+  if (state.assistantDraft || state.status === "thinking" || state.status === "speaking") {
     return;
   }
 
@@ -482,6 +492,7 @@ function updateSpeechBubbleLifecycle(): void {
       visibleBubbleText.value = "";
       speechBubbleFading.value = false;
       lockedBubblePlacement.value = null;
+      dismissedBubbleText.value = nextText;
       syncPetWindowShape();
     }, speechBubbleFadeMs);
   }, speechBubbleHoldMs);
