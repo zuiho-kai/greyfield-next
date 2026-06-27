@@ -142,6 +142,9 @@ try {
   if (afterWheelConfig.live2d.scale < 0.4 || afterWheelConfig.live2d.scale > 2) {
     throw new Error(`Wheel scale escaped V1 bounds: ${afterWheelConfig.live2d.scale}`);
   }
+  const dragPoint = await findStagePoint(petWindow, true);
+  await dispatchStageMove(petWindow, dragPoint);
+  await waitForStageHit(petWindow, true, dragPoint);
   const beforeRightClickBounds = await getPetBounds();
   await petWindow.mouse.move(modelPoint.x, modelPoint.y);
   await petWindow.mouse.click(modelPoint.x, modelPoint.y, { button: "right" });
@@ -161,8 +164,8 @@ try {
   await petWindow.evaluate(() =>
     window.greyfield?.send("window:set-hit-test", { passthrough: false, reason: "model-hit" })
   );
-  const dragStart = await beginStageDrag(petWindow, modelPoint, runningInGitHubActions);
-  await dispatchStageWheel(petWindow, modelPoint, -240);
+  const dragStart = await beginStageDrag(petWindow, dragPoint, runningInGitHubActions);
+  await dispatchStageWheel(petWindow, dragPoint, -240);
   await new Promise((resolve) => setTimeout(resolve, 250));
   const duringDragWheelConfig = await readConfig(configPath);
   if (duringDragWheelConfig.live2d.scale !== dragScale) {
@@ -170,7 +173,7 @@ try {
       `Dragging allowed wheel scale; expected ${dragScale}, got ${duringDragWheelConfig.live2d.scale}`
     );
   }
-  const dragEndPoint = { x: modelPoint.x + 90, y: modelPoint.y + 60 };
+  const dragEndPoint = { x: dragPoint.x + 90, y: dragPoint.y + 60 };
   await moveStageDrag(petWindow, dragEndPoint, dragStart.method);
   await endStageDrag(petWindow, dragEndPoint, dragStart.method);
   await waitForStageDragging(petWindow, false);
@@ -214,10 +217,11 @@ try {
     );
   }
 
+  const passThroughPoint = await findStagePoint(petWindow, true);
   await petWindow.evaluate(() => window.greyfield?.send("settings:update", { window: { modelPassThrough: true } }));
   const passThroughConfig = await waitForModelPassThrough(configPath, true);
-  await petWindow.mouse.move(modelPoint.x, modelPoint.y);
-  await dispatchStageWheel(petWindow, modelPoint, -240);
+  await petWindow.mouse.move(passThroughPoint.x, passThroughPoint.y);
+  await dispatchStageWheel(petWindow, passThroughPoint, -240);
   await new Promise((resolve) => setTimeout(resolve, 250));
   const afterPassThroughWheelConfig = await readConfig(configPath);
   if (afterPassThroughWheelConfig.live2d.scale !== passThroughConfig.live2d.scale) {
@@ -540,7 +544,14 @@ async function beginStageDrag(
       throw new Error(`Native stage drag did not start; probe=${JSON.stringify(probe)}; cause=${String(error)}`);
     }
     await dispatchStagePointer(page, "pointerdown", point, { button: 0, buttons: 1 });
-    await waitForStageDragging(page, true);
+    try {
+      await waitForStageDragging(page, true);
+    } catch (syntheticError) {
+      const syntheticProbe = await readStageDragProbe(page, point);
+      throw new Error(
+        `Synthetic stage drag did not start; probe=${JSON.stringify(syntheticProbe)}; cause=${String(syntheticError)}`
+      );
+    }
     return { method: "synthetic" };
   }
 }
