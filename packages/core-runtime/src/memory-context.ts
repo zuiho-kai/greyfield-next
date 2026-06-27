@@ -14,6 +14,7 @@ export interface SummarySegment {
   sessionId: string;
   summary: string;
   recallCues: string[];
+  sourceTurnIds?: string[];
   sourceTurns: MemorySourceTurnRef[];
   createdAt: string;
   disabled?: boolean;
@@ -26,10 +27,15 @@ export interface AppendSummarySegment {
   summary: string;
   recallCues: string[];
   sourceTurns: MemorySourceTurnRef[];
+  sourceTurnIds?: string[];
   createdAt?: string;
 }
 
-export interface SummarySegmentStore {
+export interface SummarySegmentLookup {
+  get(id: string): Promise<SummarySegment | null>;
+}
+
+export interface SummarySegmentStore extends SummarySegmentLookup {
   append(segment: AppendSummarySegment): Promise<SummarySegment>;
   list(threadId: string): Promise<SummarySegment[]>;
   update(id: string, patch: UpdateSummarySegment): Promise<SummarySegment | null>;
@@ -47,6 +53,10 @@ export function normalizeRecallCues(values: string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
+export function normalizeSourceTurnIds(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
 export function normalizeSummarySegmentUpdate(patch: UpdateSummarySegment): UpdateSummarySegment {
   return {
     ...(patch.summary !== undefined ? { summary: patch.summary.trim() } : {}),
@@ -56,9 +66,45 @@ export function normalizeSummarySegmentUpdate(patch: UpdateSummarySegment): Upda
   };
 }
 
+export function normalizeSummarySegmentSources(segment: {
+  sourceTurns?: MemorySourceTurnRef[];
+  sourceTurnIds?: string[];
+}): Pick<SummarySegment, "sourceTurns" | "sourceTurnIds"> {
+  const sourceTurns = segment.sourceTurns ?? [];
+  return {
+    sourceTurns,
+    sourceTurnIds: normalizeSourceTurnIds([...sourceTurns.map((turn) => turn.turnId), ...(segment.sourceTurnIds ?? [])])
+  };
+}
+
+export function getSummarySegmentSourceTurnIds(segment: {
+  sourceTurns?: MemorySourceTurnRef[];
+  sourceTurnIds?: string[];
+}): string[] {
+  return normalizeSourceTurnIds([...(segment.sourceTurnIds ?? []), ...(segment.sourceTurns ?? []).map((turn) => turn.turnId)]);
+}
+
+export function normalizeSummarySegment(
+  segment: Omit<SummarySegment, "sourceTurns" | "sourceTurnIds"> & {
+    sourceTurns?: MemorySourceTurnRef[];
+    sourceTurnIds?: string[];
+  }
+): SummarySegment {
+  const sources = normalizeSummarySegmentSources(segment);
+  return {
+    ...segment,
+    recallCues: normalizeRecallCues(segment.recallCues),
+    sourceTurns: sources.sourceTurns,
+    sourceTurnIds: sources.sourceTurnIds,
+    disabled: segment.disabled ?? false,
+    updatedAt: segment.updatedAt ?? segment.createdAt
+  };
+}
+
 export interface SummarySegmentDraft {
   summary: string;
   recallCues: string[];
+  sourceTurnIds: string[];
   sourceTurns: MemorySourceTurnRef[];
 }
 
@@ -93,6 +139,22 @@ export interface BuildRecallContextOptions {
   summarySegments: SummarySegment[];
   maxItems?: number;
   maxCharacters?: number;
+}
+
+export type MemorySourceDrilldownRequest =
+  | { kind: "summary-segment"; id: string }
+  | { kind: "recall-context-item"; item: Pick<RecallContextItem, "kind" | "id" | "sourceTurnIds"> }
+  | { kind: "source-turns"; sourceTurnIds: string[] };
+
+export type MemorySourceDrilldownSource =
+  | { kind: "summary-segment"; id: string }
+  | { kind: "source-turns" };
+
+export interface MemorySourceDrilldownResult {
+  source: MemorySourceDrilldownSource;
+  sourceTurnIds: string[];
+  turns: SessionTurn[];
+  missingTurnIds: string[];
 }
 
 const defaultMaxSummaryCharacters = 700;
@@ -141,6 +203,7 @@ export function createSummarySegmentDraft(options: CreateSummarySegmentDraftOpti
       eligibleTurns.map((turn) => turn.content).join(" "),
       options.maxRecallCues ?? defaultMaxRecallCues
     ),
+    sourceTurnIds: normalizeSourceTurnIds(sourceTurns.map((turn) => turn.turnId)),
     sourceTurns
   };
 }
@@ -183,7 +246,7 @@ export function buildRecallContext(options: BuildRecallContextOptions): RecallCo
       id: item.segment.id,
       summary: item.segment.summary,
       recallCues: item.segment.recallCues,
-      sourceTurnIds: item.segment.sourceTurns.map((turn) => turn.turnId),
+      sourceTurnIds: getSummarySegmentSourceTurnIds(item.segment),
       reason: item.cueMatches.length > 0 ? `cue:${item.cueMatches.join(",")}` : "lexical",
       score: item.score
     };
@@ -201,6 +264,21 @@ export function buildRecallContext(options: BuildRecallContextOptions): RecallCo
   }
 
   return { items, skipped };
+}
+
+export function buildMemorySourceDrilldownResult(options: {
+  source: MemorySourceDrilldownSource;
+  sourceTurnIds: string[];
+  turns: SessionTurn[];
+}): MemorySourceDrilldownResult {
+  const sourceTurnIds = normalizeSourceTurnIds(options.sourceTurnIds);
+  const foundTurnIds = new Set(options.turns.map((turn) => turn.id));
+  return {
+    source: options.source,
+    sourceTurnIds,
+    turns: options.turns,
+    missingTurnIds: sourceTurnIds.filter((turnId) => !foundTurnIds.has(turnId))
+  };
 }
 
 export function formatRecallContextForPrompt(context: RecallContext): string {

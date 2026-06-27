@@ -1,6 +1,6 @@
 import { splitCompleteSentences, takeTtsTextWithinBudget } from "@greyfield/audio-runtime";
 import type { RuntimeEventHandler, RuntimeInputEvent } from "./events";
-import { buildRecallContext, createSummarySegmentDraft, type SummarySegmentStore } from "./memory-context";
+import { buildRecallContext, createSummarySegmentDraft, getSummarySegmentSourceTurnIds, type SummarySegmentStore } from "./memory-context";
 import { assemblePrompt } from "./prompt-assembler";
 import type { ASRProvider, LLMProvider, MemoryStore, TTSProvider } from "./providers";
 import type { CharacterPersona } from "./persona";
@@ -280,7 +280,7 @@ export class GreyfieldRuntime {
     const turns = await this.options.sessionStore.getRecent(this.recentTurnLimit + summaryBatchTurnLimit);
     const oldTurns = turns.slice(0, Math.max(0, turns.length - this.recentTurnLimit));
     const existing = await summarySegmentStore.list(this.threadId);
-    const summarizedTurnIds = new Set(existing.flatMap((segment) => segment.sourceTurns.map((turn) => turn.turnId)));
+    const summarizedTurnIds = new Set(existing.flatMap((segment) => getSummarySegmentSourceTurnIds(segment)));
     const unsummarizedTurns = oldTurns
       .filter((turn) => turn.role === "user" || turn.role === "assistant")
       .filter((turn) => !summarizedTurnIds.has(turn.id))
@@ -300,6 +300,7 @@ export class GreyfieldRuntime {
       sessionId: this.options.sessionStore.sessionId,
       summary: draft.summary,
       recallCues: draft.recallCues,
+      sourceTurnIds: draft.sourceTurnIds,
       sourceTurns: draft.sourceTurns
     });
   }

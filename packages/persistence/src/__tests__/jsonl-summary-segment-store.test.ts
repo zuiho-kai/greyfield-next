@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -51,9 +51,11 @@ describe("JsonlSummarySegmentStore", () => {
         threadId: "thread-a",
         sessionId: "session-a",
         recallCues: ["hiyori", "live2d"],
+        sourceTurnIds: [firstTurn.id, secondTurn.id],
         disabled: false,
         updatedAt: "2026-06-26T01:00:02.000Z"
       });
+      expect(await summaries.get(stored.id)).toEqual(stored);
       expect(await summaries.list("thread-a")).toEqual([stored]);
       const updated = await summaries.update(stored.id, {
         summary: "Edited memory: User prefers Hiyori.",
@@ -70,6 +72,7 @@ describe("JsonlSummarySegmentStore", () => {
       });
       expect(await summaries.update("missing-summary", { disabled: false })).toBeNull();
       expect(await summaries.delete(stored.id)).toBe(true);
+      expect(await summaries.get(stored.id)).toBeNull();
       expect(await summaries.list("thread-a")).toEqual([]);
 
       const rawSessionLines = (await readFile(sessionPath, "utf8")).trim().split(/\r?\n/);
@@ -121,6 +124,43 @@ describe("JsonlSummarySegmentStore", () => {
       expect(await summaries.list("thread-a")).toHaveLength(2);
       expect(await readFile(summaryPath, "utf8")).toContain("First summary.");
       expect(await readFile(summaryPath, "utf8")).toContain("Second summary.");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("normalizes older summary rows that only stored sourceTurns", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "greyfield-summary-segments-legacy-"));
+    const summaryPath = join(dir, "summaries.jsonl");
+    try {
+      await writeFile(
+        summaryPath,
+        `${JSON.stringify({
+          id: "summary-7",
+          threadId: "thread-a",
+          sessionId: "session-a",
+          summary: "User disliked the game because saves broke.",
+          recallCues: ["game"],
+          sourceTurns: [
+            {
+              sessionId: "session-a",
+              turnId: "session-a-1",
+              role: "user",
+              createdAt: "2026-06-26T01:00:00.000Z"
+            }
+          ],
+          createdAt: "2026-06-26T01:00:01.000Z"
+        })}\n`,
+        "utf8"
+      );
+      const summaries = new JsonlSummarySegmentStore(summaryPath);
+
+      expect(await summaries.get("summary-7")).toMatchObject({
+        id: "summary-7",
+        sourceTurnIds: ["session-a-1"],
+        disabled: false,
+        updatedAt: "2026-06-26T01:00:01.000Z"
+      });
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

@@ -1,9 +1,19 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import {
+  buildMemorySourceDrilldownResult,
+  getSummarySegmentSourceTurnIds,
+  normalizeSummarySegment,
+  normalizeSummarySegmentSources,
   normalizeRecallCues,
+  normalizeSourceTurnIds,
   type AppendSummarySegment,
+  type MemorySourceDrilldownRequest,
+  type MemorySourceDrilldownResult,
+  type MemorySourceDrilldownSource,
+  type SessionTurnLookup,
   type SummarySegment,
+  type SummarySegmentLookup,
   type SummarySegmentStore,
   type UpdateSummarySegment
 } from "@greyfield/core-runtime";
@@ -20,13 +30,15 @@ export class JsonlSummarySegmentStore implements SummarySegmentStore {
       this.sequence = Math.max(this.sequence, ...current.map((item) => parseSequence(item.id)));
       this.sequence += 1;
       const createdAt = segment.createdAt ?? new Date().toISOString();
+      const sources = normalizeSummarySegmentSources(segment);
       const stored: SummarySegment = {
         id: `summary-${this.sequence}`,
         threadId: segment.threadId,
         sessionId: segment.sessionId,
         summary: segment.summary,
         recallCues: normalizeRecallCues(segment.recallCues),
-        sourceTurns: segment.sourceTurns,
+        sourceTurnIds: sources.sourceTurnIds,
+        sourceTurns: sources.sourceTurns,
         createdAt,
         disabled: false,
         updatedAt: createdAt
@@ -34,6 +46,10 @@ export class JsonlSummarySegmentStore implements SummarySegmentStore {
       await this.writeSegments([...current, stored]);
       return stored;
     });
+  }
+
+  async get(id: string): Promise<SummarySegment | null> {
+    return (await this.readSegments()).find((segment) => segment.id === id) ?? null;
   }
 
   async list(threadId: string): Promise<SummarySegment[]> {
@@ -115,13 +131,58 @@ export class JsonlSummarySegmentStore implements SummarySegmentStore {
   }
 }
 
+export interface MemorySourceDrilldownStoreOptions {
+  sessionStore: SessionTurnLookup;
+  summarySegmentStore: SummarySegmentLookup;
+}
+
+export class MemorySourceDrilldownStore {
+  constructor(private readonly options: MemorySourceDrilldownStoreOptions) {}
+
+  async resolve(request: MemorySourceDrilldownRequest): Promise<MemorySourceDrilldownResult | null> {
+    if (request.kind === "summary-segment") {
+      const segment = await this.options.summarySegmentStore.get(request.id);
+      if (!segment) {
+        return null;
+      }
+      return this.resolveSourceTurnIds(
+        {
+          kind: "summary-segment",
+          id: segment.id
+        },
+        getSummarySegmentSourceTurnIds(segment)
+      );
+    }
+
+    if (request.kind === "recall-context-item") {
+      return this.resolveSourceTurnIds(
+        {
+          kind: request.item.kind,
+          id: request.item.id
+        },
+        request.item.sourceTurnIds
+      );
+    }
+
+    return this.resolveSourceTurnIds({ kind: "source-turns" }, request.sourceTurnIds);
+  }
+
+  private async resolveSourceTurnIds(
+    source: MemorySourceDrilldownSource,
+    turnIds: string[]
+  ): Promise<MemorySourceDrilldownResult> {
+    const sourceTurnIds = normalizeSourceTurnIds(turnIds);
+    const turns = await this.options.sessionStore.getByIds(sourceTurnIds);
+    return buildMemorySourceDrilldownResult({
+      source,
+      sourceTurnIds,
+      turns
+    });
+  }
+}
+
 function normalizeSegment(segment: SummarySegment): SummarySegment {
-  return {
-    ...segment,
-    recallCues: normalizeRecallCues(segment.recallCues),
-    disabled: segment.disabled ?? false,
-    updatedAt: segment.updatedAt ?? segment.createdAt
-  };
+  return normalizeSummarySegment(segment);
 }
 
 function parseSequence(id: string): number {

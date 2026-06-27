@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildMemorySourceDrilldownResult,
   buildRecallContext,
   createSummarySegmentDraft,
   formatRecallContextForPrompt,
+  normalizeSummarySegment,
   type SummarySegment
 } from "../memory-context";
 import type { SessionTurn } from "../session-store";
@@ -36,7 +38,35 @@ describe("memory context", () => {
     expect(draft.summary).toContain("默认 Live2D 模型偏好是 Hiyori");
     expect(draft.summary).not.toContain("window blurred");
     expect(draft.sourceTurns.map((turn) => turn.turnId)).toEqual(["session-a-1", "session-a-2"]);
+    expect(draft.sourceTurnIds).toEqual(["session-a-1", "session-a-2"]);
     expect(draft.recallCues).toContain("hiyori");
+  });
+
+  it("normalizes legacy sourceTurns-only summaries with canonical sourceTurnIds", () => {
+    const segment = normalizeSummarySegment({
+      id: "summary-1",
+      threadId: "thread-a",
+      sessionId: "session-a",
+      summary: "User disliked a game because combat stuttered and saves broke.",
+      recallCues: ["game"],
+      sourceTurns: [
+        {
+          sessionId: "session-a",
+          turnId: "session-a-1",
+          role: "user",
+          createdAt: "2026-06-26T01:00:00.000Z"
+        }
+      ],
+      createdAt: "2026-06-26T01:00:01.000Z"
+    });
+
+    const context = buildRecallContext({
+      input: "game 为什么差？",
+      summarySegments: [segment]
+    });
+
+    expect(segment.sourceTurnIds).toEqual(["session-a-1"]);
+    expect(context.items[0]?.sourceTurnIds).toEqual(["session-a-1"]);
   });
 
   it("recalls matching summary segments and records why they were selected", () => {
@@ -118,6 +148,25 @@ describe("memory context", () => {
     expect(context.items).toEqual([]);
     expect(context.skipped).toEqual([{ kind: "summary-segment", id: "summary-1", reason: "max_characters" }]);
   });
+
+  it("builds source drilldown results with missing raw turn ids surfaced", () => {
+    const result = buildMemorySourceDrilldownResult({
+      source: { kind: "summary-segment", id: "summary-1" },
+      sourceTurnIds: ["session-a-1", "session-a-2", "session-a-1"],
+      turns: [
+        {
+          id: "session-a-1",
+          role: "user",
+          content: "这个游戏很差，存档会坏。",
+          createdAt: "2026-06-26T01:00:00.000Z"
+        }
+      ]
+    });
+
+    expect(result.sourceTurnIds).toEqual(["session-a-1", "session-a-2"]);
+    expect(result.turns.map((turn) => turn.content)).toEqual(["这个游戏很差，存档会坏。"]);
+    expect(result.missingTurnIds).toEqual(["session-a-2"]);
+  });
 });
 
 function makeSegment(id: string, summary: string, recallCues: string[], sourceTurnIds: string[]): SummarySegment {
@@ -127,6 +176,7 @@ function makeSegment(id: string, summary: string, recallCues: string[], sourceTu
     sessionId: "session-a",
     summary,
     recallCues,
+    sourceTurnIds,
     sourceTurns: sourceTurnIds.map((turnId) => ({
       sessionId: "session-a",
       turnId,

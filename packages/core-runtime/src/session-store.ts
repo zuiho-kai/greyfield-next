@@ -28,7 +28,13 @@ export interface SessionStore {
   createHandoff(limit?: number): Promise<SessionHandoff>;
 }
 
-export class InMemorySessionStore implements SessionStore {
+export interface SessionTurnLookup {
+  getByIds(turnIds: string[]): Promise<SessionTurn[]>;
+}
+
+export type SourceSessionStore = SessionStore & SessionTurnLookup;
+
+export class InMemorySessionStore implements SourceSessionStore {
   private readonly turns: SessionTurn[] = [];
   private sequence = 0;
 
@@ -54,6 +60,18 @@ export class InMemorySessionStore implements SessionStore {
     return this.turns.slice(-limit);
   }
 
+  async getByIds(turnIds: string[]): Promise<SessionTurn[]> {
+    const requested = normalizeTurnIds(turnIds);
+    if (requested.length === 0) {
+      return [];
+    }
+    const byId = new Map(this.turns.map((turn) => [turn.id, turn]));
+    return requested.flatMap((turnId) => {
+      const turn = byId.get(turnId);
+      return turn ? [turn] : [];
+    });
+  }
+
   async createHandoff(limit = 20): Promise<SessionHandoff> {
     const turns = await this.getRecent(limit);
     const summary = turns.map((turn) => `${turn.role}: ${turn.content}`).join("\n");
@@ -63,4 +81,8 @@ export class InMemorySessionStore implements SessionStore {
       turns
     };
   }
+}
+
+export function normalizeTurnIds(turnIds: string[]): string[] {
+  return [...new Set(turnIds.map((turnId) => turnId.trim()).filter(Boolean))];
 }
