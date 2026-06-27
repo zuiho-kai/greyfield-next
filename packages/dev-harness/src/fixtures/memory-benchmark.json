@@ -1,0 +1,218 @@
+{
+  "version": 2,
+  "thresholds": {
+    "summaryScore": 0.95,
+    "recallScore": 0.95
+  },
+  "sessionId": "memory-benchmark-session",
+  "threadId": "memory-benchmark-thread",
+  "summaryCases": [
+    {
+      "id": "model-preference-with-ui-noise",
+      "description": "Extract stable model preference while ignoring desktop UI noise.",
+      "turns": [
+        { "id": "model-1", "role": "user", "content": "我喜欢 Hiyori，当默认 Live2D 模型比较舒服。" },
+        { "id": "model-2", "role": "assistant", "content": "记住：默认模型偏好是 Hiyori。" },
+        { "id": "model-3", "role": "event", "content": "window blurred while user moved the settings panel" },
+        { "id": "model-4", "role": "user", "content": "Mao 先不要作为默认模型。" }
+      ],
+      "expectations": {
+        "facts": ["Hiyori", "默认 Live2D 模型", "Mao"],
+        "sourceTurnIds": ["model-1", "model-2", "model-4"],
+        "forbiddenFragments": ["window blurred", "settings panel"],
+        "recallCueFragments": ["hiyori"]
+      }
+    },
+    {
+      "id": "routine-preference-with-short-aside",
+      "description": "Preserve routine preference even when the chat has a short unrelated aside.",
+      "turns": [
+        { "id": "routine-1", "role": "user", "content": "以后晚上 22:30 以后提醒我休息，不要继续催我加班。" },
+        { "id": "routine-2", "role": "assistant", "content": "明白，夜间提醒会偏向休息，而不是继续工作。" },
+        { "id": "routine-3", "role": "user", "content": "顺便这个按钮颜色以后再说。" }
+      ],
+      "expectations": {
+        "facts": ["22:30", "提醒我休息", "不要继续催我加班"],
+        "sourceTurnIds": ["routine-1", "routine-2", "routine-3"],
+        "forbiddenFragments": [],
+        "recallCueFragments": ["22", "休息", "提醒"]
+      }
+    },
+    {
+      "id": "long-chat-source-traceability",
+      "description": "Longer chats keep source traceability and avoid event noise.",
+      "turns": [
+        { "id": "long-1", "role": "user", "content": "第一轮：我喜欢 Hiyori。" },
+        { "id": "long-2", "role": "assistant", "content": "记住，默认模型偏好是 Hiyori。" },
+        { "id": "long-3", "role": "event", "content": "settings window resized while dragging" },
+        { "id": "long-4", "role": "user", "content": "如果模型列表以后加 Sakura，也不要自动替换默认模型。" },
+        { "id": "long-5", "role": "assistant", "content": "默认模型保持 Hiyori，Sakura 只是备选。" },
+        { "id": "long-6", "role": "event", "content": "mouse moved across transparent desktop area" },
+        { "id": "long-7", "role": "user", "content": "另外我不喜欢被叫老板，叫我博士更自然。" },
+        { "id": "long-8", "role": "assistant", "content": "好的，称呼偏好更新为博士。" }
+      ],
+      "expectations": {
+        "facts": ["Hiyori", "Sakura", "博士"],
+        "sourceTurnIds": ["long-1", "long-2", "long-4", "long-5", "long-7", "long-8"],
+        "forbiddenFragments": ["settings window resized", "transparent desktop area"],
+        "recallCueFragments": ["hiyori", "sakura", "博士"]
+      }
+    },
+    {
+      "id": "candidate-worthy-privacy-rule",
+      "description": "Candidate-worthy long-term rules survive the summary draft for later promotion review.",
+      "turns": [
+        { "id": "privacy-1", "role": "user", "content": "以后不要自动把屏幕截图写进长期记忆，除非我明确说保存。" },
+        { "id": "privacy-2", "role": "assistant", "content": "记住：截图默认不进入长期记忆，只有明确保存才写入。" },
+        { "id": "privacy-3", "role": "user", "content": "这个是长期规则，不是这次临时吐槽。" }
+      ],
+      "expectations": {
+        "facts": ["截图默认不进入长期记忆", "明确保存", "长期规则"],
+        "sourceTurnIds": ["privacy-1", "privacy-2", "privacy-3"],
+        "forbiddenFragments": ["临时吐槽丢弃"],
+        "recallCueFragments": ["截图", "长期记忆", "保存"]
+      }
+    }
+  ],
+  "recallSegments": [
+    {
+      "id": "memory-hiyori",
+      "summary": "User prefers Hiyori as the default Live2D model and does not want Mao as default.",
+      "recallCues": ["hiyori", "live2d", "mao", "default"],
+      "sourceTurnIds": ["turn-hiyori-1"],
+      "createdAt": "2026-06-26T01:00:00.000Z"
+    },
+    {
+      "id": "memory-night-rest",
+      "summary": "User wants reminders after 22:30 to encourage rest instead of more work.",
+      "recallCues": ["22:30", "提醒", "休息", "加班"],
+      "sourceTurnIds": ["turn-night-rest-1"],
+      "createdAt": "2026-06-26T01:01:00.000Z"
+    },
+    {
+      "id": "memory-audio-fade",
+      "summary": "First TTS playback used to pop and drag; audio fade-in and serialized queue are required.",
+      "recallCues": ["tts", "语音", "爆音", "拖音", "队列"],
+      "sourceTurnIds": ["turn-audio-fade-1"],
+      "createdAt": "2026-06-26T01:02:00.000Z"
+    },
+    {
+      "id": "memory-ci-noise",
+      "summary": "The team discussed CI checkout cache cleanup and unrelated lint timing.",
+      "recallCues": ["ci", "cache", "lint"],
+      "sourceTurnIds": ["turn-ci-noise-1"],
+      "createdAt": "2026-06-26T01:03:00.000Z"
+    },
+    {
+      "id": "memory-disabled-zeta",
+      "summary": "Disabled old memory says Zeta should be recalled from this segment.",
+      "recallCues": ["disabled-zeta", "zeta"],
+      "sourceTurnIds": ["turn-disabled-zeta-1"],
+      "createdAt": "2026-06-26T01:04:00.000Z",
+      "disabled": true
+    },
+    {
+      "id": "memory-title-old",
+      "summary": "User previously accepted being called 老板.",
+      "recallCues": ["称呼", "老板"],
+      "sourceTurnIds": ["turn-title-old-1"],
+      "createdAt": "2026-06-20T01:00:00.000Z"
+    },
+    {
+      "id": "memory-title-new",
+      "summary": "User corrected the title: call them 博士, not 老板.",
+      "recallCues": ["称呼", "博士", "老板"],
+      "sourceTurnIds": ["turn-title-new-1"],
+      "createdAt": "2026-06-27T01:00:00.000Z"
+    },
+    {
+      "id": "memory-screen-privacy",
+      "summary": "Do not save screen screenshots to long-term memory unless the user explicitly says 保存.",
+      "recallCues": ["截图", "长期记忆", "保存", "屏幕"],
+      "sourceTurnIds": ["turn-screen-privacy-1"],
+      "createdAt": "2026-06-27T01:01:00.000Z"
+    },
+    {
+      "id": "memory-release-noise",
+      "summary": "A release note mentioned roadmap wording and package metadata cleanup.",
+      "recallCues": ["release", "roadmap", "metadata"],
+      "sourceTurnIds": ["turn-release-noise-1"],
+      "createdAt": "2026-06-27T01:02:00.000Z"
+    }
+  ],
+  "recallCases": [
+    {
+      "id": "proper-noun-model-recall",
+      "description": "Proper noun model preference recalls the model memory and avoids CI noise.",
+      "input": "默认模型还是 Hiyori 吗？",
+      "expectedIds": ["memory-hiyori"],
+      "rejectedIds": ["memory-ci-noise"]
+    },
+    {
+      "id": "chinese-routine-recall",
+      "description": "Chinese routine question recalls the night-rest preference.",
+      "input": "我们之前说过夜间提醒和休息吗？",
+      "expectedIds": ["memory-night-rest"],
+      "rejectedIds": ["memory-hiyori", "memory-ci-noise"]
+    },
+    {
+      "id": "audio-issue-recall",
+      "description": "Audio defect question recalls TTS playback memory only.",
+      "input": "语音第一句爆音和拖音这个问题还记得吗？",
+      "expectedIds": ["memory-audio-fade"],
+      "rejectedIds": ["memory-hiyori", "memory-ci-noise"]
+    },
+    {
+      "id": "no-false-positive-for-unrelated-input",
+      "description": "Unrelated weather question should not pull any project memory.",
+      "input": "明天香港会不会下雨？",
+      "expectedIds": [],
+      "rejectedIds": ["memory-hiyori", "memory-night-rest", "memory-audio-fade", "memory-ci-noise", "memory-disabled-zeta", "memory-screen-privacy"]
+    },
+    {
+      "id": "disabled-summary-not-recalled",
+      "description": "Disabled memories are reported as skipped instead of injected.",
+      "input": "disabled-zeta 这个旧记忆还会注入吗？",
+      "expectedIds": [],
+      "rejectedIds": ["memory-disabled-zeta"],
+      "expectedSkipped": [{ "id": "memory-disabled-zeta", "reason": "disabled" }]
+    },
+    {
+      "id": "budget-keeps-best-match",
+      "description": "Item budget keeps the best matching model memory.",
+      "input": "Hiyori Live2D 默认模型偏好还在吗？",
+      "expectedIds": ["memory-hiyori"],
+      "rejectedIds": ["memory-night-rest", "memory-ci-noise"],
+      "maxItems": 1
+    },
+    {
+      "id": "conflict-prefers-corrected-title",
+      "description": "When old and new memories conflict, the corrected title wins within a one-item budget.",
+      "input": "之后称呼我博士，不要再叫老板，这个记得吗？",
+      "expectedIds": ["memory-title-new"],
+      "rejectedIds": ["memory-title-old"],
+      "expectedSkipped": [{ "id": "memory-title-old", "reason": "max_items" }],
+      "maxItems": 1
+    },
+    {
+      "id": "privacy-rule-recall",
+      "description": "Screen privacy rule is recalled for future screen-memory work.",
+      "input": "看屏幕以后，截图能不能自动进长期记忆？",
+      "expectedIds": ["memory-screen-privacy"],
+      "rejectedIds": ["memory-ci-noise", "memory-release-noise"],
+      "promptIncludes": ["memory-screen-privacy", "Source turns: turn-screen-privacy-1"],
+      "promptExcludes": ["memory-release-noise"]
+    },
+    {
+      "id": "prompt-character-budget-skips-second-match",
+      "description": "Prompt budget keeps one relevant memory and reports the next relevant item as skipped.",
+      "input": "22:30 休息提醒和 Hiyori 默认模型都记得吗？",
+      "expectedIds": ["memory-night-rest"],
+      "rejectedIds": ["memory-ci-noise"],
+      "expectedSkipped": [{ "id": "memory-hiyori", "reason": "max_characters" }],
+      "maxCharacters": 320,
+      "promptIncludes": ["Reason: cue:", "Source turns: turn-night-rest-1"],
+      "promptExcludes": ["memory-ci-noise"]
+    }
+  ]
+}

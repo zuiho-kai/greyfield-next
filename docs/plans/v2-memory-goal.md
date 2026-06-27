@@ -57,6 +57,23 @@ V2.0b moved from inspection to user control and is merged into `main` via [#67](
 - Delete removes the selected summary segment only; raw session JSONL remains the source of truth.
 - `harness:electron:memory-control` proves the ordinary Settings path: edit summary, export memory evidence, disable a summary, verify disabled memory is not recalled, delete the summary, and verify raw turns remain.
 
+## V2.0c Memory Evaluation Benchmark
+
+V2.0c is the guardrail slice before adding more memory features. It turns `pnpm harness:memory-benchmark` from a small hard-coded regression into a fixture-driven benchmark under `packages/dev-harness/src/fixtures/memory-benchmark.json`.
+
+The benchmark is intentionally local/fake and does not require external keys. It guards:
+
+- long-chat summary source traceability.
+- candidate-worthy facts that later memory-promotion UI will need.
+- UI/event noise rejection.
+- disabled memory not being injected.
+- conflict/update ranking where a corrected newer memory wins within budget.
+- false-positive rejection for unrelated inputs.
+- prompt visibility of reason and source turns.
+- prompt character budget skips that report the skipped item and reason.
+
+V2.0d/e work must extend this fixture before claiming automatic memory promotion, memory layering, or vector recall quality. A feature can add a new recall engine later, but it must keep the benchmark passing or explain the updated acceptance fixture in the same PR.
+
 Still not in this slice:
 
 - automatic pinned long-term memory.
@@ -66,7 +83,7 @@ Still not in this slice:
 
 ## Verification
 
-Current V2.0b verification:
+Current V2.0c verification:
 
 ```bash
 pnpm typecheck
@@ -80,6 +97,7 @@ pnpm harness:frontend-full
 CI guard:
 
 - `pnpm harness:memory-benchmark` runs in Fast checks, so memory summary/recall quality is guarded even when a PR does not trigger `frontend-full`.
+- The memory benchmark fixture is the required V2.0 acceptance gate for future memory feature PRs.
 - `pnpm harness:electron:memory-summary` and `pnpm harness:electron:memory-control` currently share `packages/dev-harness/src/electron-memory-summary-check.ts`; the former keeps the V2.0a summary foundation entrypoint stable, while the latter names the V2.0b edit/disable/delete/export gate.
 - `frontend-full-check.ts` runs `pnpm harness:electron:memory-control`, so frontend-visible memory regressions are covered by the aggregate gate.
 - Main run `28289995890` on head `731f951` passed Fast checks, including `pnpm harness:memory-benchmark`, and `frontend-full`, including the memory-control harness with `memoryEditVisible: true`, `memoryExportVisible: true`, `disabledMemorySkipped: true`, `deletedMemoryKeptRawTurns: true`, and `summaryIncludesSourceTurns: true`.

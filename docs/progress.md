@@ -26,7 +26,7 @@ Post-V1 roadmap: [Greyfield Next 版本产品书](plans/version-product-book.md)
 
 V2.0 memory research notes: [Clowder AI](research/v2-memory/clowder-ai.md), [SillyTavern](research/v2-memory/sillytavern.md), [MaiBot](research/v2-memory/maibot.md), and [Greyfield synthesis](research/v2-memory/synthesis.md).
 
-V2.0 memory implementation goal: [V2 Memory Goal](plans/v2-memory-goal.md) records the merged V2.0a raw-log, summary-segment, and recall-context foundation plus the V2.0b memory-control slice.
+V2.0 memory implementation goal: [V2 Memory Goal](plans/v2-memory-goal.md) records the merged V2.0a raw-log, summary-segment, and recall-context foundation, the V2.0b memory-control slice, and the V2.0c memory-evaluation benchmark gate.
 
 ## 2026-06-23
 
@@ -78,6 +78,7 @@ V2.0 memory implementation goal: [V2 Memory Goal](plans/v2-memory-goal.md) recor
 - V1 visible-experience evidence is now current on `main`; remaining non-current claims are credentialed external real LLM/TTS demo reruns and post-V1 model-management polish.
 - Merged #67 as the V2.0b memory-control slice: Settings Memory can edit summary text/cues, disable or re-enable a summary, delete a selected summary without deleting raw chat turns, and export memory evidence.
 - Added current-head guard coverage for V2.0b: `SummarySegmentStore.update`, disabled-summary recall skip, RuntimeService memory control methods, renderer IPC bridge commands/results, a disabled-memory benchmark case, and `pnpm harness:electron:memory-control` through main run `28289995890`.
+- V2.0c defines the next memory gate: `pnpm harness:memory-benchmark` is fixture-driven and must cover long-chat summary traceability, candidate-worthy facts, conflict/update ranking, noise rejection, disabled memory, false-positive rejection, prompt source visibility, and prompt budget skips before later memory promotion or layering work claims completion.
 
 ## 2026-05-23
 
