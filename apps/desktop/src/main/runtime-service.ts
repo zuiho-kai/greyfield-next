@@ -12,6 +12,8 @@ import {
   type SessionStore,
   type SummarySegment,
   type SummarySegmentStore,
+  normalizeSummarySegmentUpdate,
+  type UpdateSummarySegment,
   type RuntimeEventHandler,
   type RuntimeInputEvent,
   type RuntimeOutputEvent,
@@ -49,6 +51,21 @@ export interface VoiceTestResult {
   message: string;
   text?: string;
   data?: Uint8Array;
+}
+
+export interface MemoryControlResult {
+  ok: boolean;
+  message: string;
+  snapshot?: Awaited<ReturnType<RuntimeService["getMemoryDebugSnapshot"]>>;
+}
+
+export interface MemoryExportResult {
+  threadId: string;
+  sessionId: string;
+  recentTurns: Awaited<ReturnType<SessionStore["getRecent"]>>;
+  summarySegments: SummarySegment[];
+  lastRecallContext?: RecallContext;
+  exportedAt: string;
 }
 
 export class RuntimeService {
@@ -147,6 +164,62 @@ export class RuntimeService {
       summarySegments: (await this.summarySegmentStore?.list(this.threadId)) ?? [],
       ...(this.lastRecallContext ? { lastRecallContext: this.lastRecallContext } : {}),
       updatedAt: new Date().toISOString()
+    };
+  }
+
+  async updateMemorySummary(id: string, patch: UpdateSummarySegment): Promise<MemoryControlResult> {
+    if (!this.summarySegmentStore) {
+      return { ok: false, message: "Memory summaries are not available in this runtime." };
+    }
+    const normalized = normalizeSummarySegmentUpdate(patch);
+    if (normalized.summary !== undefined && normalized.summary.length === 0) {
+      return { ok: false, message: "Memory summary cannot be empty." };
+    }
+    if (
+      normalized.summary === undefined &&
+      normalized.recallCues === undefined &&
+      normalized.disabled === undefined
+    ) {
+      return { ok: false, message: "No memory change was provided." };
+    }
+
+    const updated = await this.summarySegmentStore.update(id, normalized);
+    if (!updated) {
+      return { ok: false, message: `Memory summary ${id} was not found.` };
+    }
+    this.lastRecallContext = undefined;
+    return {
+      ok: true,
+      message: updated.disabled ? `Memory ${id} disabled.` : `Memory ${id} saved.`,
+      snapshot: await this.getMemoryDebugSnapshot()
+    };
+  }
+
+  async deleteMemorySummary(id: string): Promise<MemoryControlResult> {
+    if (!this.summarySegmentStore) {
+      return { ok: false, message: "Memory summaries are not available in this runtime." };
+    }
+    const deleted = await this.summarySegmentStore.delete(id);
+    if (!deleted) {
+      return { ok: false, message: `Memory summary ${id} was not found.` };
+    }
+    this.lastRecallContext = undefined;
+    return {
+      ok: true,
+      message: `Memory ${id} deleted. Raw chat history was kept.`,
+      snapshot: await this.getMemoryDebugSnapshot()
+    };
+  }
+
+  async exportMemory(limit = 200): Promise<MemoryExportResult> {
+    const snapshot = await this.getMemoryDebugSnapshot(limit);
+    return {
+      threadId: snapshot.threadId,
+      sessionId: snapshot.sessionId,
+      recentTurns: snapshot.recentTurns,
+      summarySegments: snapshot.summarySegments,
+      ...(snapshot.lastRecallContext ? { lastRecallContext: snapshot.lastRecallContext } : {}),
+      exportedAt: new Date().toISOString()
     };
   }
 

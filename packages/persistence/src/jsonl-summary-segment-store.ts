@@ -1,6 +1,12 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { AppendSummarySegment, SummarySegment, SummarySegmentStore } from "@greyfield/core-runtime";
+import {
+  normalizeRecallCues,
+  type AppendSummarySegment,
+  type SummarySegment,
+  type SummarySegmentStore,
+  type UpdateSummarySegment
+} from "@greyfield/core-runtime";
 
 export class JsonlSummarySegmentStore implements SummarySegmentStore {
   private sequence = 0;
@@ -13,14 +19,17 @@ export class JsonlSummarySegmentStore implements SummarySegmentStore {
       const current = await this.readSegments();
       this.sequence = Math.max(this.sequence, ...current.map((item) => parseSequence(item.id)));
       this.sequence += 1;
+      const createdAt = segment.createdAt ?? new Date().toISOString();
       const stored: SummarySegment = {
         id: `summary-${this.sequence}`,
         threadId: segment.threadId,
         sessionId: segment.sessionId,
         summary: segment.summary,
-        recallCues: uniqueCleanStrings(segment.recallCues),
+        recallCues: normalizeRecallCues(segment.recallCues),
         sourceTurns: segment.sourceTurns,
-        createdAt: segment.createdAt ?? new Date().toISOString()
+        createdAt,
+        disabled: false,
+        updatedAt: createdAt
       };
       await this.writeSegments([...current, stored]);
       return stored;
@@ -31,6 +40,31 @@ export class JsonlSummarySegmentStore implements SummarySegmentStore {
     return (await this.readSegments())
       .filter((segment) => segment.threadId === threadId)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
+  async update(id: string, patch: UpdateSummarySegment): Promise<SummarySegment | null> {
+    return this.serializeMutation(async () => {
+      const current = await this.readSegments();
+      let updated: SummarySegment | null = null;
+      const next = current.map((segment) => {
+        if (segment.id !== id) {
+          return segment;
+        }
+        updated = {
+          ...segment,
+          ...(patch.summary !== undefined ? { summary: patch.summary } : {}),
+          ...(patch.recallCues !== undefined ? { recallCues: normalizeRecallCues(patch.recallCues) } : {}),
+          ...(patch.disabled !== undefined ? { disabled: patch.disabled } : {}),
+          updatedAt: patch.updatedAt ?? new Date().toISOString()
+        };
+        return updated;
+      });
+      if (!updated) {
+        return null;
+      }
+      await this.writeSegments(next);
+      return updated;
+    });
   }
 
   async delete(id: string): Promise<boolean> {
@@ -51,7 +85,7 @@ export class JsonlSummarySegmentStore implements SummarySegmentStore {
       return raw
         .split(/\r?\n/)
         .filter(Boolean)
-        .map((line) => JSON.parse(line) as SummarySegment);
+        .map((line) => normalizeSegment(JSON.parse(line) as SummarySegment));
     } catch (error) {
       if (isNotFoundError(error)) {
         return [];
@@ -81,13 +115,18 @@ export class JsonlSummarySegmentStore implements SummarySegmentStore {
   }
 }
 
+function normalizeSegment(segment: SummarySegment): SummarySegment {
+  return {
+    ...segment,
+    recallCues: normalizeRecallCues(segment.recallCues),
+    disabled: segment.disabled ?? false,
+    updatedAt: segment.updatedAt ?? segment.createdAt
+  };
+}
+
 function parseSequence(id: string): number {
   const match = /^summary-(\d+)$/.exec(id);
   return match ? Number(match[1]) : 0;
-}
-
-function uniqueCleanStrings(values: string[]): string[] {
-  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
 function isNotFoundError(error: unknown): boolean {

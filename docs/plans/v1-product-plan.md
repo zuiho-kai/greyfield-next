@@ -21,7 +21,7 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 | 桌面浮动控制 | #59 已在 main 新增独立可拖动 controls window，提供文本输入、麦克风输入、语音输出开关、Settings、Model Pass Through、隐藏/最小化和 Stop。 | V1 普通桌宠入口已收口，并由 main `frontend-full` 证据保护。 |
 | 气泡 | 宠物旁有短回复气泡，支持文本压缩、长度上限；位置固定在宠物窗口上方稳定槽位，不跟随模型移动，只在窗口/屏幕边缘内水平和垂直夹紧；长 streaming 回复会进气泡首 token、保持短文本，完整内容留在 Chat；右侧边缘和开关/点击穿透已有专门 harness 和截图证据；#59 修复新对话旧消息闪现和气泡覆盖模型；#65 修复长回复 harness 在入场动画中误判漂移。 | V1 气泡 QA 已在 main 有 current-head 证据。 |
 | 语音输入/输出 | 已有句子级 TTS 队列、默认静音、Settings `Speak replies`、Settings `Test Voice`、真实 TTS 播放、TTS 失败隔离、长回复 TTS budget；#55 已在 main 补齐 Chat 麦克风录音、OpenAI-compatible ASR `/audio/transcriptions`、transcript 走同一条 runtime text path、真实解码 PCM 电平驱动嘴型、Stop 同时取消麦克风/ASR/TTS/队列/嘴型；#59 已修复第一次播放爆音感和多句重叠播放。 | V1 语音闭环已在 main 有 current-head 证据；外部真实 LLM/TTS endpoint demo 仍需带凭据复跑。 |
-| CI | GitHub Actions workflow 已入仓；PR 跑 Fast checks、Desktop pet quick harness 和前端可见改动的 `frontend-full`；Fast checks 包含 memory benchmark；main head `b605321` 的 run `28287921556` 已通过 PR bot review gate、Change classifier、Fast checks、Desktop pet quick harness 和 `frontend-full`。 | 自动保护已恢复；继续控制 Electron harness 耗时和稳定性。 |
+| CI | GitHub Actions workflow 已入仓；PR 跑 Fast checks、Desktop pet quick harness 和前端可见改动的 `frontend-full`；Fast checks 包含 memory benchmark；latest V1 evidence head `b605321` 的 run `28287921556` 已通过 PR bot review gate、Change classifier、Fast checks、Desktop pet quick harness 和 `frontend-full`。 | 自动保护已恢复；继续控制 Electron harness 耗时和稳定性。 |
 
 ## 现在不能宣称什么
 
@@ -147,7 +147,7 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 11. `transcript.final` 会显示成用户消息，并复用文字输入的 runtime、上下文、错误处理、interrupt 和 session 持久化路径。
 12. renderer 播放真实音频时用 `AudioContext.decodeAudioData` 得到 PCM，并按音频能量时间线驱动 Live2D mouth-open。
 13. `pnpm harness:electron:voice-input` 用本地 ASR/LLM/TTS server 和麦克风 probe 证明麦克风 Stop 取消、ASR -> Chat -> TTS、波形嘴型、Stop 播放取消、队列清空和嘴型归零。
-14. main head `b605321` 已通过 GitHub Actions run `28287921556`：Fast checks、Desktop pet quick harness 和 `frontend-full` 均成功；`frontend-full` 17 checks passed in 3m 04s，覆盖麦克风 ASR、波形嘴型、Stop 音频、restart context 和 memory summary harness。
+14. latest V1 evidence head `b605321` 已通过 GitHub Actions run `28287921556`：Fast checks、Desktop pet quick harness 和 `frontend-full` 均成功；`frontend-full` 17 checks passed in 3m 04s，覆盖麦克风 ASR、波形嘴型、Stop 音频、restart context 和 memory summary harness。
 
 仍不放进 V1 的内容：
 
@@ -164,14 +164,15 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 
 ## 推荐下一步
 
-当前推荐进入 V2.0b 记忆用户控制：
+V2.0b 记忆用户控制的验收方向：
 
-1. 在 #63 的 V2.0a 基础上实现 Memory Panel：查看、编辑、禁用、删除、导出 summary/pinned memory。
-2. 补齐用户可控记忆的单测、memory benchmark 场景和 Electron/frontend harness。
-3. 提供 `GREYFIELD_REAL_LLM_BASE_URL` / `GREYFIELD_REAL_LLM_API_KEY` / `GREYFIELD_REAL_LLM_MODEL` 后，在最终目标分支复跑 `pnpm harness:electron:real-llm`。
-4. 提供 `GREYFIELD_REAL_TTS_BASE_URL` / `GREYFIELD_REAL_TTS_API_KEY`，或兼容的 `GREYFIELD_REAL_LLM_*` 后，在最终目标分支复跑 `pnpm harness:real-tts` 和 `pnpm harness:electron:real-tts`。
-5. 不再新增 V1 后功能，例如高级 VAD/唤醒词、桌面控制、浏览器控制、长期任务代理或完整模型管理。
-6. 每个后续 closeout PR 合入前，按 [V1 Completion Evidence Checklist](../v1-completion-evidence.md) 跑它触及路径的 harness；前端可见改动必须跑 `pnpm harness:frontend-full` 或等同 CI 证据。
+1. 在 #63 的 V2.0a 基础上，Settings Memory 支持查看、编辑、禁用、删除、导出 summary memory。
+2. 用户可控记忆必须有单测、memory benchmark 场景和 Electron/frontend harness；`pnpm harness:electron:memory-control` 是普通用户路径看护。
+3. 下一步才进入 pinned memory、候选记忆 review、角色/人设自定义记忆分层。
+4. 提供 `GREYFIELD_REAL_LLM_BASE_URL` / `GREYFIELD_REAL_LLM_API_KEY` / `GREYFIELD_REAL_LLM_MODEL` 后，在最终目标分支复跑 `pnpm harness:electron:real-llm`。
+5. 提供 `GREYFIELD_REAL_TTS_BASE_URL` / `GREYFIELD_REAL_TTS_API_KEY`，或兼容的 `GREYFIELD_REAL_LLM_*` 后，在最终目标分支复跑 `pnpm harness:real-tts` 和 `pnpm harness:electron:real-tts`。
+6. 不再新增 V1 后功能，例如高级 VAD/唤醒词、桌面控制、浏览器控制、长期任务代理或完整模型管理。
+7. 每个后续 closeout PR 合入前，按 [V1 Completion Evidence Checklist](../v1-completion-evidence.md) 跑它触及路径的 harness；前端可见改动必须跑 `pnpm harness:frontend-full` 或等同 CI 证据。
 
 ## V1 完成判定
 

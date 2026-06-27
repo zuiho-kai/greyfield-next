@@ -50,9 +50,25 @@ describe("JsonlSummarySegmentStore", () => {
         id: "summary-1",
         threadId: "thread-a",
         sessionId: "session-a",
-        recallCues: ["hiyori", "live2d"]
+        recallCues: ["hiyori", "live2d"],
+        disabled: false,
+        updatedAt: "2026-06-26T01:00:02.000Z"
       });
       expect(await summaries.list("thread-a")).toEqual([stored]);
+      const updated = await summaries.update(stored.id, {
+        summary: "Edited memory: User prefers Hiyori.",
+        recallCues: ["edited-hiyori", "live2d", "edited-hiyori"],
+        disabled: true,
+        updatedAt: "2026-06-26T01:00:03.000Z"
+      });
+      expect(updated).toMatchObject({
+        id: "summary-1",
+        summary: "Edited memory: User prefers Hiyori.",
+        recallCues: ["edited-hiyori", "live2d"],
+        disabled: true,
+        updatedAt: "2026-06-26T01:00:03.000Z"
+      });
+      expect(await summaries.update("missing-summary", { disabled: false })).toBeNull();
       expect(await summaries.delete(stored.id)).toBe(true);
       expect(await summaries.list("thread-a")).toEqual([]);
 

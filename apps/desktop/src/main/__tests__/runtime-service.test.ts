@@ -678,6 +678,57 @@ describe("RuntimeService", () => {
         "desktop-main-session-3",
         "desktop-main-session-4"
       ]);
+
+      const edited = await service.updateMemorySummary("summary-1", {
+        summary: "Edited memory: User prefers Hiyori.",
+        recallCues: ["edited-hiyori", "hiyori"]
+      });
+      expect(edited).toMatchObject({
+        ok: true,
+        message: "Memory summary-1 saved.",
+        snapshot: {
+          summarySegments: [
+            expect.objectContaining({
+              id: "summary-1",
+              summary: "Edited memory: User prefers Hiyori.",
+              recallCues: ["edited-hiyori", "hiyori"],
+              disabled: false
+            })
+          ]
+        }
+      });
+
+      const exported = await service.exportMemory();
+      expect(exported.summarySegments[0]).toMatchObject({
+        id: "summary-1",
+        summary: "Edited memory: User prefers Hiyori."
+      });
+      expect(exported.recentTurns.some((turn) => turn.content.includes("第一轮：我喜欢 Hiyori"))).toBe(true);
+
+      const disabled = await service.updateMemorySummary("summary-1", { disabled: true });
+      expect(disabled).toMatchObject({
+        ok: true,
+        message: "Memory summary-1 disabled.",
+        snapshot: {
+          summarySegments: [expect.objectContaining({ id: "summary-1", disabled: true })]
+        }
+      });
+      await service.handle({ type: "text.input", text: "edited-hiyori 这个记忆还在吗？" }, (event) => {
+        events.push(event);
+      });
+      const disabledSnapshot = await service.getMemoryDebugSnapshot();
+      expect(disabledSnapshot.lastRecallContext?.items.map((item) => item.id)).not.toContain("summary-1");
+      expect(disabledSnapshot.lastRecallContext?.skipped).toContainEqual({
+        kind: "summary-segment",
+        id: "summary-1",
+        reason: "disabled"
+      });
+
+      const deleted = await service.deleteMemorySummary("summary-1");
+      expect(deleted.ok).toBe(true);
+      expect(deleted.snapshot?.summarySegments.some((segment) => segment.id === "summary-1")).toBe(false);
+      const sessionJsonlAfterDelete = await readFile(join(dir, "sessions", "desktop-main-session.jsonl"), "utf8");
+      expect(sessionJsonlAfterDelete).toContain("第一轮：我喜欢 Hiyori。");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

@@ -1026,4 +1026,82 @@ describe("createDesktopRuntimeBridge", () => {
       }
     });
   });
+
+  it("sends memory summary control commands and records action results", () => {
+    const sent: Array<[string, unknown]> = [];
+    let memoryActionResult: ((result: import("../../shared/ipc").DesktopMemoryActionResult) => void) | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: (channel, payload) => sent.push([channel, payload]),
+      on: (channel, handler) => {
+        if (channel === "memory:action-result") {
+          memoryActionResult = handler as typeof memoryActionResult;
+        }
+        return () => undefined;
+      }
+    });
+
+    const saving = bridge.updateMemorySummary({
+      id: "summary-1",
+      summary: "Edited memory.",
+      recallCues: ["edited"]
+    });
+    memoryActionResult?.({ ok: true, message: "Memory summary-1 saved." });
+    bridge.updateMemorySummary({ id: "summary-1", disabled: true });
+    bridge.deleteMemorySummary("summary-1");
+
+    expect(saving.memoryDebug).toMatchObject({
+      actionStatus: "working",
+      actionMessage: "Saving memory..."
+    });
+    expect(sent).toContainEqual([
+      "memory:summary-update",
+      { id: "summary-1", summary: "Edited memory.", recallCues: ["edited"] }
+    ]);
+    expect(sent).toContainEqual(["memory:summary-update", { id: "summary-1", disabled: true }]);
+    expect(sent).toContainEqual(["memory:summary-delete", { id: "summary-1" }]);
+    expect(bridge.getState().memoryDebug).toMatchObject({
+      actionStatus: "working",
+      actionMessage: "Deleting memory..."
+    });
+  });
+
+  it("formats memory export results as copyable JSON", () => {
+    const sent: Array<[string, unknown]> = [];
+    let memoryExportResult:
+      | ((result: import("../../shared/ipc").DesktopIpcEventMap["memory:export-result"]) => void)
+      | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: (channel, payload) => sent.push([channel, payload]),
+      on: (channel, handler) => {
+        if (channel === "memory:export-result") {
+          memoryExportResult = handler as typeof memoryExportResult;
+        }
+        return () => undefined;
+      }
+    });
+
+    const exporting = bridge.exportMemory();
+    memoryExportResult?.({
+      ok: true,
+      message: "Memory export is ready.",
+      export: {
+        threadId: "thread-a",
+        sessionId: "session-a",
+        recentTurns: [],
+        summarySegments: [],
+        exportedAt: "2026-06-26T00:00:00.000Z"
+      }
+    });
+
+    expect(exporting.memoryDebug).toMatchObject({
+      actionStatus: "working",
+      actionMessage: "Preparing memory export..."
+    });
+    expect(sent).toContainEqual(["memory:export-request", {}]);
+    expect(bridge.getState().memoryDebug).toMatchObject({
+      actionStatus: "success",
+      actionMessage: "Memory export is ready."
+    });
+    expect(bridge.getState().memoryDebug.exportText).toContain('"threadId": "thread-a"');
+  });
 });

@@ -75,6 +75,22 @@ describe("memory context", () => {
     expect(context.skipped).toEqual([{ kind: "summary-segment", id: "summary-2", reason: "max_items" }]);
   });
 
+  it("skips disabled summary segments so user-disabled memory is not injected into prompts", () => {
+    const context = buildRecallContext({
+      input: "Hiyori 还是默认模型吗？",
+      summarySegments: [
+        {
+          ...makeSegment("summary-1", "The user prefers the Hiyori Live2D model.", ["hiyori"], ["session-a-1"]),
+          disabled: true
+        }
+      ]
+    });
+
+    expect(context.items).toEqual([]);
+    expect(context.skipped).toEqual([{ kind: "summary-segment", id: "summary-1", reason: "disabled" }]);
+    expect(formatRecallContextForPrompt(context)).toBe("");
+  });
+
   it("counts rendered metadata against the recall character budget", () => {
     const segment = makeSegment("summary-1", "Hiyori.", ["hiyori"], ["session-a-1"]);
     const renderedLength = formatRecallContextForPrompt({

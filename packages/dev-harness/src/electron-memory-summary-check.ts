@@ -11,6 +11,8 @@ const desktopRoot = join(workspaceRoot, "apps", "desktop");
 const executablePath = await getElectronExecutablePath(desktopRoot);
 const tempDir = await mkdtemp(join(tmpdir(), "greyfield-electron-memory-"));
 const configPath = join(tempDir, "greyfield.config.json");
+const sessionPath = join(tempDir, "sessions", "desktop-main-session.jsonl");
+const summaryPath = join(tempDir, "memory", "summary-segments.jsonl");
 const artifactDir = join(workspaceRoot, ".cache", "greyfield-memory-summary", "latest");
 const settingsScreenshotPath = join(artifactDir, "settings-memory.png");
 
@@ -54,11 +56,11 @@ try {
   await sendMessage(chat, "Hiyori 还是默认模型吗？");
   await waitForAssistantCount(chat, 4);
 
-  const sessionJsonl = await waitForFileContaining(join(tempDir, "sessions", "desktop-main-session.jsonl"), [
+  const sessionJsonl = await waitForFileContaining(sessionPath, [
     "第一轮：我喜欢 Hiyori。",
     "Hiyori 还是默认模型吗？"
   ]);
-  const summaryJsonl = await waitForFileContaining(join(tempDir, "memory", "summary-segments.jsonl"), [
+  const summaryJsonl = await waitForFileContaining(summaryPath, [
     "第一轮：我喜欢 Hiyori。",
     "desktop-main-session-1",
     "desktop-main-session-4"
@@ -91,11 +93,49 @@ try {
 
   const settings = await waitForRoleWindow(app, "settings");
   await settings.waitForSelector(".greyfield-shell");
-  await settings.locator(".memory-debug .settings-actions button").click();
+  await settings.getByRole("button", { name: "Refresh memory" }).click();
   await settings.locator(".memory-debug", { hasText: "Summaries 1" }).waitFor();
   await settings.locator(".memory-debug", { hasText: "desktop-main-session-1" }).waitFor();
   await settings.locator(".memory-debug", { hasText: "Last recall" }).waitFor();
   await settings.locator(".memory-debug", { hasText: "cue:hiyori" }).waitFor();
+
+  await settings.getByLabel("Memory summary summary-1").fill("Edited memory: User prefers Hiyori and Sakura.");
+  await settings.getByLabel("Memory cues summary-1").fill("edited-hiyori, hiyori, sakura");
+  await settings.getByRole("button", { name: "Save memory summary-1" }).click();
+  await settings.locator(".memory-debug", { hasText: "Memory summary-1 saved." }).waitFor();
+  const editedSummaryJsonl = await waitForFileContaining(summaryPath, [
+    "Edited memory: User prefers Hiyori and Sakura.",
+    "edited-hiyori"
+  ]);
+
+  await settings.getByRole("button", { name: "Export memory" }).click();
+  await settings.getByLabel("Memory export").waitFor();
+  const exportedMemoryText = await settings.getByLabel("Memory export").inputValue();
+  if (!exportedMemoryText.includes("Edited memory: User prefers Hiyori and Sakura.") || !exportedMemoryText.includes("第一轮：我喜欢 Hiyori。")) {
+    throw new Error(`Memory export missed edited summary or raw turn: ${exportedMemoryText}`);
+  }
+
+  await settings.getByRole("button", { name: "Disable memory summary-1" }).click();
+  await settings.locator(".memory-debug", { hasText: "Memory summary-1 disabled." }).waitFor();
+  await waitForFileContaining(summaryPath, ['"id":"summary-1"', '"disabled":true']);
+
+  await sendMessage(chat, "edited-hiyori 这个记忆还在吗？");
+  await waitForAssistantCount(chat, 5);
+  const disabledRecall = await getLatestMemoryRecallEvent(chat);
+  if (!disabledRecall) {
+    throw new Error("Missing memory.recall.context event after disabling summary-1");
+  }
+  if (disabledRecall.context.items.some((item) => item.id === "summary-1")) {
+    throw new Error(`Disabled summary-1 was still recalled: ${JSON.stringify(disabledRecall.context)}`);
+  }
+  if (!disabledRecall.context.skipped.some((item) => item.id === "summary-1" && item.reason === "disabled")) {
+    throw new Error(`Disabled summary-1 was not reported as skipped: ${JSON.stringify(disabledRecall.context)}`);
+  }
+
+  await settings.getByRole("button", { name: "Delete memory summary-1" }).click();
+  await settings.locator(".memory-debug", { hasText: "Memory summary-1 deleted. Raw chat history was kept." }).waitFor();
+  const summaryAfterDelete = await waitForFileNotContaining(summaryPath, '"id":"summary-1"');
+  const sessionAfterDelete = await waitForFileContaining(sessionPath, ["第一轮：我喜欢 Hiyori。"]);
   await settings.screenshot({ path: settingsScreenshotPath, fullPage: true });
 
   console.log(
@@ -104,8 +144,15 @@ try {
         ok: true,
         sessionLines: sessionJsonl.trim().split(/\r?\n/).length,
         summaryLines: summaryJsonl.trim().split(/\r?\n/).length,
+        editedSummaryLines: editedSummaryJsonl.trim().split(/\r?\n/).length,
+        summaryLinesAfterDelete: summaryAfterDelete.trim().length > 0 ? summaryAfterDelete.trim().split(/\r?\n/).length : 0,
+        sessionLinesAfterDelete: sessionAfterDelete.trim().split(/\r?\n/).length,
         summaryCreated,
         recallContext,
+        memoryEditVisible: true,
+        memoryExportVisible: true,
+        disabledMemorySkipped: true,
+        deletedMemoryKeptRawTurns: true,
         settingsMemoryVisible: true,
         settingsScreenshotPath,
         summaryIncludesSourceTurns: true
@@ -157,4 +204,36 @@ async function waitForFileContaining(path: string, expectedTexts: string[]): Pro
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Timed out waiting for ${path} to contain ${JSON.stringify(expectedTexts)}; content=${lastContent}`);
+}
+
+async function waitForFileNotContaining(path: string, forbiddenText: string): Promise<string> {
+  const started = Date.now();
+  let lastContent = "";
+  while (Date.now() - started < 5_000) {
+    lastContent = await readFile(path, "utf8").catch(() => "");
+    if (!lastContent.includes(forbiddenText)) {
+      return lastContent;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Timed out waiting for ${path} to stop containing ${forbiddenText}; content=${lastContent}`);
+}
+
+async function getLatestMemoryRecallEvent(page: Page): Promise<
+  | {
+      context: {
+        items: Array<{ id: string }>;
+        skipped: Array<{ id: string; reason: string }>;
+      };
+    }
+  | undefined
+> {
+  const events = await page.evaluate(() => {
+    return (window as typeof window & { __greyfieldMemoryEvents?: unknown[] }).__greyfieldMemoryEvents ?? [];
+  });
+  return events
+    .filter((event): event is { type: "memory.recall.context"; context: { items: Array<{ id: string }>; skipped: Array<{ id: string; reason: string }> } } => {
+      return typeof event === "object" && event !== null && "type" in event && event.type === "memory.recall.context";
+    })
+    .at(-1);
 }

@@ -316,7 +316,7 @@
           </div>
         </div>
 
-        <div class="settings-section memory-debug" aria-label="Memory debug">
+        <div class="settings-section memory-debug" aria-label="Memory">
           <header class="settings-section__header">
             <h2>Memory</h2>
             <span>{{ memoryStatusLabel }}</span>
@@ -326,10 +326,63 @@
             <span>Summaries {{ memorySummaryCount }}</span>
             <span>Recall {{ memoryRecallCount }}</span>
           </div>
-          <div v-if="latestSummary" class="memory-debug__block">
-            <strong>{{ latestSummary.id }}</strong>
-            <p>{{ latestSummary.summary }}</p>
-            <small>Sources {{ latestSummary.sourceTurns.map((turn) => turn.turnId).join(", ") }}</small>
+          <div v-if="memorySegments.length > 0" class="memory-debug__list" aria-label="Memory summaries">
+            <article
+              v-for="segment in memorySegments"
+              :key="segment.id"
+              class="memory-debug__segment"
+              :class="{ 'memory-debug__segment--disabled': segment.disabled }"
+            >
+              <header class="memory-debug__segment-header">
+                <strong>{{ segment.id }}</strong>
+                <span>{{ segment.disabled ? "Disabled" : "Active" }}</span>
+              </header>
+              <label class="memory-debug__editor">
+                <span>Summary</span>
+                <textarea
+                  :aria-label="`Memory summary ${segment.id}`"
+                  :value="memorySummaryDrafts[segment.id] ?? segment.summary"
+                  rows="3"
+                  spellcheck="false"
+                  @input="setMemorySummaryDraft(segment.id, $event)"
+                />
+              </label>
+              <label class="memory-debug__editor">
+                <span>Cues</span>
+                <input
+                  :aria-label="`Memory cues ${segment.id}`"
+                  :value="memoryCueDrafts[segment.id] ?? segment.recallCues.join(', ')"
+                  autocomplete="off"
+                  spellcheck="false"
+                  @input="setMemoryCueDraft(segment.id, $event)"
+                />
+              </label>
+              <small>Sources {{ segment.sourceTurns.map((turn) => turn.turnId).join(", ") }}</small>
+              <div class="memory-debug__actions">
+                <button
+                  type="button"
+                  :aria-label="`Save memory ${segment.id}`"
+                  @click="saveMemorySummary(segment)"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  :aria-label="`${segment.disabled ? 'Enable' : 'Disable'} memory ${segment.id}`"
+                  @click="toggleMemorySummary(segment)"
+                >
+                  {{ segment.disabled ? "Enable" : "Disable" }}
+                </button>
+                <button
+                  type="button"
+                  class="memory-debug__danger"
+                  :aria-label="`Delete memory ${segment.id}`"
+                  @click="$emit('memory-summary-delete', { id: segment.id })"
+                >
+                  Delete
+                </button>
+              </div>
+            </article>
           </div>
           <div v-else class="memory-debug__empty">No summary segments yet.</div>
           <div v-if="latestRecallItem" class="memory-debug__block memory-debug__block--recall">
@@ -337,10 +390,27 @@
             <p>{{ latestRecallItem.reason }}</p>
             <small>{{ latestRecallItem.sourceTurnIds.join(", ") }}</small>
           </div>
-          <div class="settings-actions settings-actions--single">
+          <p
+            v-if="state.memoryDebug.actionMessage"
+            class="provider-test-result"
+            :class="`provider-test-result--${memoryActionTone}`"
+            role="status"
+          >
+            {{ state.memoryDebug.actionMessage }}
+          </p>
+          <textarea
+            v-if="state.memoryDebug.exportText"
+            class="memory-debug__export"
+            aria-label="Memory export"
+            :value="state.memoryDebug.exportText"
+            readonly
+            rows="5"
+          />
+          <div class="settings-actions">
             <button type="button" @click="$emit('refresh-memory-debug')">
               {{ state.memoryDebug.status === "loading" ? "Refreshing..." : "Refresh memory" }}
             </button>
+            <button type="button" @click="$emit('memory-export')">Export memory</button>
           </div>
         </div>
 
@@ -395,7 +465,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import type { SummarySegment } from "@greyfield/core-runtime";
 import type { DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
 import {
   bundledLive2DModels,
@@ -427,6 +498,9 @@ const emit = defineEmits<{
   "preview-expression": [expression: string];
   "preview-motion": [group: string];
   "refresh-memory-debug": [];
+  "memory-summary-update": [payload: { id: string; summary?: string; recallCues?: string[]; disabled?: boolean }];
+  "memory-summary-delete": [payload: { id: string }];
+  "memory-export": [];
   "open-chat": [];
 }>();
 
@@ -450,6 +524,7 @@ const memorySnapshot = computed(() => props.state.memoryDebug.snapshot);
 const memoryRawCount = computed(() => memorySnapshot.value?.recentTurns.length ?? 0);
 const memorySummaryCount = computed(() => memorySnapshot.value?.summarySegments.length ?? 0);
 const memoryRecallCount = computed(() => memorySnapshot.value?.lastRecallContext?.items.length ?? 0);
+const memorySegments = computed(() => memorySnapshot.value?.summarySegments ?? []);
 const memoryStatusLabel = computed(() => {
   if (props.state.memoryDebug.status === "loading") {
     return "Refreshing";
@@ -459,8 +534,18 @@ const memoryStatusLabel = computed(() => {
   }
   return `${memorySummaryCount.value} summaries`;
 });
-const latestSummary = computed(() => memorySnapshot.value?.summarySegments.at(-1) ?? null);
 const latestRecallItem = computed(() => memorySnapshot.value?.lastRecallContext?.items[0] ?? null);
+const memoryActionTone = computed(() => {
+  if (props.state.memoryDebug.actionStatus === "error") {
+    return "error";
+  }
+  if (props.state.memoryDebug.actionStatus === "working") {
+    return "testing";
+  }
+  return "success";
+});
+const memorySummaryDrafts = ref<Record<string, string>>({});
+const memoryCueDrafts = ref<Record<string, string>>({});
 const currentBundledLive2DModel = computed(() => findBundledLive2DModel(props.state.settings.modelPath));
 const isCustomLive2DModel = computed(() => currentBundledLive2DModel.value === undefined);
 const selectedLive2DModel = computed(() =>
@@ -480,8 +565,27 @@ onMounted(() => {
   emit("refresh-memory-debug");
 });
 
+watch(
+  memorySegments,
+  (segments) => {
+    const nextSummaryDrafts: Record<string, string> = {};
+    const nextCueDrafts: Record<string, string> = {};
+    for (const segment of segments) {
+      nextSummaryDrafts[segment.id] = memorySummaryDrafts.value[segment.id] ?? segment.summary;
+      nextCueDrafts[segment.id] = memoryCueDrafts.value[segment.id] ?? segment.recallCues.join(", ");
+    }
+    memorySummaryDrafts.value = nextSummaryDrafts;
+    memoryCueDrafts.value = nextCueDrafts;
+  },
+  { immediate: true }
+);
+
 function valueFrom(event: Event): string {
-  return event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement ? event.target.value : "";
+  return event.target instanceof HTMLInputElement ||
+    event.target instanceof HTMLSelectElement ||
+    event.target instanceof HTMLTextAreaElement
+    ? event.target.value
+    : "";
 }
 
 function checkedFrom(event: Event): boolean {
@@ -497,6 +601,39 @@ function selectLive2DModel(modelPath: string): void {
     return;
   }
   emit("update-setting", "modelPath", model.modelPath);
+}
+
+function setMemorySummaryDraft(id: string, event: Event): void {
+  memorySummaryDrafts.value = {
+    ...memorySummaryDrafts.value,
+    [id]: valueFrom(event)
+  };
+}
+
+function setMemoryCueDraft(id: string, event: Event): void {
+  memoryCueDrafts.value = {
+    ...memoryCueDrafts.value,
+    [id]: valueFrom(event)
+  };
+}
+
+function saveMemorySummary(segment: SummarySegment): void {
+  emit("memory-summary-update", {
+    id: segment.id,
+    summary: memorySummaryDrafts.value[segment.id] ?? segment.summary,
+    recallCues: parseMemoryCues(memoryCueDrafts.value[segment.id] ?? segment.recallCues.join(", "))
+  });
+}
+
+function toggleMemorySummary(segment: SummarySegment): void {
+  emit("memory-summary-update", {
+    id: segment.id,
+    disabled: !segment.disabled
+  });
+}
+
+function parseMemoryCues(text: string): string[] {
+  return [...new Set(text.split(/[,，\n]/).map((cue) => cue.trim()).filter(Boolean))];
 }
 
 function describeVoiceBlockedReason(state: DesktopRendererState): string {

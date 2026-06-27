@@ -58,6 +58,7 @@ describe("GreyfieldRuntime", () => {
       append: async () => {
         throw new Error("not used");
       },
+      update: async () => null,
       delete: async () => false,
       list: async () => [
         {
@@ -125,6 +126,7 @@ describe("GreyfieldRuntime", () => {
         summaries.push(stored);
         return stored;
       },
+      update: async () => null,
       delete: async () => false,
       list: async () => summaries
     };
@@ -179,6 +181,7 @@ describe("GreyfieldRuntime", () => {
       append: async () => {
         throw new Error("not used");
       },
+      update: async () => null,
       delete: async () => false,
       list: async () => {
         throw new Error("summary list failed");
@@ -215,6 +218,7 @@ describe("GreyfieldRuntime", () => {
       append: async () => {
         throw new Error("summary append failed");
       },
+      update: async () => null,
       delete: async () => false,
       list: async () => []
     };

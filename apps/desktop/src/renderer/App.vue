@@ -59,6 +59,9 @@
     @preview-expression="previewExpression"
     @preview-motion="previewMotion"
     @refresh-memory-debug="refreshMemoryDebug"
+    @memory-summary-update="updateMemorySummary"
+    @memory-summary-delete="deleteMemorySummary"
+    @memory-export="exportMemory"
     @open-chat="openChat"
   />
 </template>
@@ -302,6 +305,18 @@ function testVoice(): void {
 
 function refreshMemoryDebug(): void {
   syncState(bridge.requestMemoryDebugSnapshot());
+}
+
+function updateMemorySummary(payload: { id: string; summary?: string; recallCues?: string[]; disabled?: boolean }): void {
+  syncState(bridge.updateMemorySummary(payload));
+}
+
+function deleteMemorySummary(payload: { id: string }): void {
+  syncState(bridge.deleteMemorySummary(payload.id));
+}
+
+function exportMemory(): void {
+  syncState(bridge.exportMemory());
 }
 
 function previewExpression(expression: string): void {
