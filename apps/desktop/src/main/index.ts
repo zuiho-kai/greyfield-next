@@ -141,8 +141,8 @@ function registerIpc(): void {
     void testLLMProvider();
   });
 
-  ipcMain.on("provider:test-voice", () => {
-    void testVoiceProvider();
+  ipcMain.on("provider:test-voice", (event) => {
+    void testVoiceProvider(event.sender);
   });
 
   ipcMain.on("window:set-click-through", (_event, payload: { enabled: boolean }) => {
@@ -258,10 +258,10 @@ async function testLLMProvider(): Promise<void> {
   }
 }
 
-async function testVoiceProvider(): Promise<void> {
+async function testVoiceProvider(sender: Electron.WebContents): Promise<void> {
   const result = await runtimeService?.testVoice();
   if (result) {
-    broadcastVoiceTestResult(result);
+    broadcastVoiceTestResult(sender, result);
   }
 }
 
@@ -398,9 +398,9 @@ function broadcastProviderTestResult(result: Awaited<ReturnType<RuntimeService["
   }
 }
 
-function broadcastVoiceTestResult(result: Awaited<ReturnType<RuntimeService["testVoice"]>>): void {
-  for (const window of BrowserWindow.getAllWindows()) {
-    window.webContents.send("provider:test-voice-result", result);
+function broadcastVoiceTestResult(sender: Electron.WebContents, result: Awaited<ReturnType<RuntimeService["testVoice"]>>): void {
+  if (!sender.isDestroyed()) {
+    sender.send("provider:test-voice-result", result);
   }
 }
 

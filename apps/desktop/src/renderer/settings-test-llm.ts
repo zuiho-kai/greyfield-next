@@ -2,6 +2,8 @@ export type SettingsStageStatus = "idle" | "listening" | "thinking" | "speaking"
 
 export const ACTIVE_CHAT_TEST_LLM_GUIDANCE =
   "LLM test is unavailable while a chat response is running. Stop the current reply or wait for it to finish, then retry.";
+export const ACTIVE_CHAT_TEST_VOICE_GUIDANCE =
+  "Voice test is unavailable while a chat response is running. Stop the current reply or wait for it to finish, then retry.";
 
 export interface TestLlmActionView {
   disabled: boolean;
@@ -38,6 +40,38 @@ export function describeTestLlmAction(
   }
 
   return { disabled: false, disableReason: "", label: "Test LLM", tone: "idle" };
+}
+
+export interface TestVoiceActionView {
+  disabled: boolean;
+  disableReason: string;
+  label: string;
+  tone: "idle" | "testing" | "blocked" | "active-chat";
+}
+
+export function describeTestVoiceAction(
+  stageStatus: SettingsStageStatus,
+  voiceTestStatus: "idle" | "testing" | "success" | "error",
+  voiceBlockedReason = ""
+): TestVoiceActionView {
+  if (voiceTestStatus === "testing") {
+    return { disabled: true, disableReason: "", label: "Testing voice...", tone: "testing" };
+  }
+
+  if (stageStatus === "thinking" || stageStatus === "speaking") {
+    return {
+      disabled: true,
+      disableReason: ACTIVE_CHAT_TEST_VOICE_GUIDANCE,
+      label: "Test Voice",
+      tone: "active-chat"
+    };
+  }
+
+  if (voiceBlockedReason.length > 0) {
+    return { disabled: true, disableReason: voiceBlockedReason, label: "Test Voice", tone: "blocked" };
+  }
+
+  return { disabled: false, disableReason: "", label: "Test Voice", tone: "idle" };
 }
 
 export interface ProviderTestStatusView {

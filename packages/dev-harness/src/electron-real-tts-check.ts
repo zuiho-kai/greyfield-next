@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
+import { isPlayableAudioHeader } from "./real-tts-audio-header";
 
 interface RealTTSHarnessConfig {
   baseUrl: string;
@@ -383,13 +384,4 @@ function redactRealTTSConfig(config: RealTTSHarnessConfig): RealTTSHarnessConfig
 
 function trimTrailingSlash(value: string): string {
   return value.trim().replace(/\/+$/g, "");
-}
-
-function isPlayableAudioHeader(headerHex: string): boolean {
-  return (
-    headerHex.startsWith("494433") ||
-    headerHex.startsWith("ff") ||
-    headerHex.startsWith("52494646") ||
-    headerHex.startsWith("4f676753")
-  );
 }

@@ -51,4 +51,22 @@ describe("SettingsController", () => {
     expect(finalConfig.provider.apiKey).toBe("new-key");
     expect(save).toHaveBeenLastCalledWith(expect.objectContaining({ provider: expect.objectContaining({ apiKey: "new-key" }) }));
   });
+
+  it("preserves existing UI settings when a partial UI patch is applied", async () => {
+    const save = vi.fn(async () => undefined);
+    const emit = vi.fn();
+    const controller = new SettingsController(
+      {
+        ...defaultGreyfieldConfig,
+        ui: { speechBubbleEnabled: false }
+      },
+      save,
+      emit
+    );
+
+    const next = await controller.update({ ui: {} });
+
+    expect(next.ui.speechBubbleEnabled).toBe(false);
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ ui: { speechBubbleEnabled: false } }));
+  });
 });

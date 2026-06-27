@@ -33,6 +33,7 @@ describe("v1-features.json", () => {
       expect(feature.package).toMatch(/^(apps|packages)\//);
       expect(feature.acceptance.length).toBeGreaterThan(0);
       expect(feature.qa.script.length).toBeGreaterThan(0);
+      expect(feature.qa.script).not.toMatch(/\boptional [^;]+:/i);
     }
 
     expect(manifest.qaProfiles["frontend-full"]).toMatchObject({

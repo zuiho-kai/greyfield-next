@@ -1,5 +1,16 @@
 # QA Retro: Desktop Pet Interaction Miss
 
+## 2026-06-26 Regression: Bot Review Findings Were Not Enforced
+
+A PR reached CI with bot-authored review findings still unresolved. Green build/test jobs were not enough because they did not encode the review thread state, so a submitted bot comment could be ignored without any machine blocker.
+
+How we avoid repeating it:
+
+- PR CI must fail on unresolved bot-authored inline review threads.
+- Fixing the code is preferred, but a false positive still needs an explicit GitHub thread resolution so the decision is auditable.
+- The gate is `scripts/check-pr-bot-review-threads.mjs`, wired into `.github/workflows/ci.yml` before the normal fast checks.
+- Do not treat a stale or outdated unresolved bot thread as harmless. Resolve it after verifying the finding no longer applies.
+
 The previous black-box tests missed the user's most important complaints because the test target was wrong.
 
 ## What Went Wrong
