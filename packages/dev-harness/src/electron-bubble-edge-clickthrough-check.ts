@@ -54,7 +54,7 @@ try {
 
     await chatWindow.getByLabel("Message").fill("请用一句话确认桌宠气泡。");
     await chatWindow.getByRole("button", { name: "Send" }).click();
-    await petWindow.locator(".speech-bubble").waitFor({ timeout: 10_000 });
+    await waitForSettledSpeechBubble(petWindow, 10_000);
 
     const bubble = await readBubbleState(petWindow);
     assertBubbleInsideViewport(bubble);
@@ -100,7 +100,7 @@ try {
 
     await petWindow.evaluate(() => window.greyfield?.send("settings:update", { ui: { speechBubbleEnabled: true } }));
     await waitForSpeechBubble(configPath, true);
-    await petWindow.locator(".speech-bubble").waitFor({ timeout: 5_000 });
+    await waitForSettledSpeechBubble(petWindow, 5_000);
     const bubbleBeforePassThrough = await readBubbleState(petWindow);
     await waitForShapeSample(
       app,
@@ -329,6 +329,21 @@ async function readBubbleState(page: Page): Promise<BubbleState> {
   });
 }
 
+async function waitForSettledSpeechBubble(page: Page, timeout: number): Promise<void> {
+  await page.locator(".speech-bubble").waitFor({ state: "visible", timeout });
+  await page.waitForFunction(
+    () => {
+      const bubble = document.querySelector<HTMLElement>(".speech-bubble");
+      if (!bubble) {
+        return false;
+      }
+      return bubble.getAnimations({ subtree: true }).every((animation) => animation.playState !== "running");
+    },
+    undefined,
+    { timeout }
+  );
+}
+
 function assertBubbleInsideViewport(bubble: BubbleState): void {
   if (
     bubble.x < 0 ||
@@ -353,7 +368,14 @@ function assertBubbleInsideScreen(bubble: BubbleState, workArea: Rect): void {
 
 function hasStandaloneBubbleRect(sample: ShapeSample, bubble: BubbleState): boolean {
   const bubbleArea = bubble.width * bubble.height;
-  return sample.rects.some((rect) => intersectionArea(rect, bubble) >= bubbleArea * 0.7);
+  return sample.rects.some((rect) => {
+    const sizeLooksLikeBubble =
+      rect.width >= bubble.width * 0.65 &&
+      rect.width <= bubble.width + 48 &&
+      rect.height >= bubble.height * 0.65 &&
+      rect.height <= bubble.height + 48;
+    return sizeLooksLikeBubble && intersectionArea(rect, bubble) >= bubbleArea * 0.45;
+  });
 }
 
 function intersectionArea(left: Rect, right: Rect): number {

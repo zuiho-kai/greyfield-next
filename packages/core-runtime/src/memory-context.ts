@@ -16,6 +16,8 @@ export interface SummarySegment {
   recallCues: string[];
   sourceTurns: MemorySourceTurnRef[];
   createdAt: string;
+  disabled?: boolean;
+  updatedAt?: string;
 }
 
 export interface AppendSummarySegment {
@@ -30,7 +32,15 @@ export interface AppendSummarySegment {
 export interface SummarySegmentStore {
   append(segment: AppendSummarySegment): Promise<SummarySegment>;
   list(threadId: string): Promise<SummarySegment[]>;
+  update(id: string, patch: UpdateSummarySegment): Promise<SummarySegment | null>;
   delete(id: string): Promise<boolean>;
+}
+
+export interface UpdateSummarySegment {
+  summary?: string;
+  recallCues?: string[];
+  disabled?: boolean;
+  updatedAt?: string;
 }
 
 export interface SummarySegmentDraft {
@@ -126,7 +136,15 @@ export function buildRecallContext(options: BuildRecallContextOptions): RecallCo
   const maxItems = options.maxItems ?? defaultMaxRecallItems;
   const maxCharacters = options.maxCharacters ?? defaultMaxRecallCharacters;
   const inputTokens = tokenize(options.input);
+  const skipped: RecallContext["skipped"] = options.summarySegments
+    .filter((segment) => segment.disabled)
+    .map((segment) => ({
+      kind: "summary-segment",
+      id: segment.id,
+      reason: "disabled"
+    }));
   const ranked = options.summarySegments
+    .filter((segment) => !segment.disabled)
     .map((segment) => {
       const cueMatches = segment.recallCues.filter((cue) => containsCue(options.input, cue));
       const summaryTokens = tokenList(segment.summary);
@@ -144,7 +162,6 @@ export function buildRecallContext(options: BuildRecallContextOptions): RecallCo
     .sort((a, b) => b.score - a.score || b.segment.createdAt.localeCompare(a.segment.createdAt));
 
   const items: RecallContextItem[] = [];
-  const skipped: RecallContext["skipped"] = [];
   let usedCharacters = 0;
 
   for (const item of ranked) {

@@ -5,7 +5,8 @@ import type {
   DesktopIpcEventMap,
   DesktopIpcRequestChannel,
   DesktopIpcRequestMap,
-  DesktopMemoryDebugSnapshot
+  DesktopMemoryDebugSnapshot,
+  DesktopMemorySummaryUpdate
 } from "../shared/ipc";
 import { isMaskedApiKey } from "../shared/secrets";
 import { createDefaultInteractionProfile } from "@greyfield/stage-live2d";
@@ -33,6 +34,9 @@ export interface DesktopRendererState {
   };
   memoryDebug: {
     status: "idle" | "loading" | "ready";
+    actionStatus: "idle" | "working" | "success" | "error";
+    actionMessage: string;
+    exportText: string;
     snapshot: DesktopMemoryDebugSnapshot | null;
   };
   inputDraft: string;
@@ -137,6 +141,7 @@ export class DesktopRuntimeBridge {
         this.state = {
           ...this.state,
           memoryDebug: {
+            ...this.state.memoryDebug,
             status: "ready",
             snapshot: {
               ...this.state.memoryDebug.snapshot,
@@ -201,8 +206,32 @@ export class DesktopRuntimeBridge {
       this.state = {
         ...this.state,
         memoryDebug: {
+          ...this.state.memoryDebug,
           status: "ready",
           snapshot
+        }
+      };
+      this.emitStateChange();
+    });
+    this.host?.on("memory:action-result", (result) => {
+      this.state = {
+        ...this.state,
+        memoryDebug: {
+          ...this.state.memoryDebug,
+          actionStatus: result.ok ? "success" : "error",
+          actionMessage: result.message
+        }
+      };
+      this.emitStateChange();
+    });
+    this.host?.on("memory:export-result", (result) => {
+      this.state = {
+        ...this.state,
+        memoryDebug: {
+          ...this.state.memoryDebug,
+          actionStatus: result.ok ? "success" : "error",
+          actionMessage: result.message,
+          exportText: result.export ? JSON.stringify(result.export, null, 2) : this.state.memoryDebug.exportText
         }
       };
       this.emitStateChange();
@@ -419,6 +448,7 @@ export class DesktopRuntimeBridge {
       this.state = {
         ...this.state,
         memoryDebug: {
+          ...this.state.memoryDebug,
           status: "ready",
           snapshot: {
             threadId: "preview-thread",
@@ -427,6 +457,85 @@ export class DesktopRuntimeBridge {
             summarySegments: [],
             updatedAt: new Date().toISOString()
           }
+        }
+      };
+    }
+    return this.getState();
+  }
+
+  updateMemorySummary(payload: DesktopMemorySummaryUpdate): DesktopRendererState {
+    this.state = {
+      ...this.state,
+      memoryDebug: {
+        ...this.state.memoryDebug,
+        actionStatus: "working",
+        actionMessage: "Saving memory...",
+        exportText: ""
+      }
+    };
+    this.host?.send("memory:summary-update", payload);
+    if (!this.host) {
+      this.state = {
+        ...this.state,
+        memoryDebug: {
+          ...this.state.memoryDebug,
+          actionStatus: "success",
+          actionMessage: "Memory saved in preview."
+        }
+      };
+    }
+    return this.getState();
+  }
+
+  deleteMemorySummary(id: string): DesktopRendererState {
+    this.state = {
+      ...this.state,
+      memoryDebug: {
+        ...this.state.memoryDebug,
+        actionStatus: "working",
+        actionMessage: "Deleting memory...",
+        exportText: ""
+      }
+    };
+    this.host?.send("memory:summary-delete", { id });
+    if (!this.host) {
+      this.state = {
+        ...this.state,
+        memoryDebug: {
+          ...this.state.memoryDebug,
+          actionStatus: "success",
+          actionMessage: "Memory deleted in preview."
+        }
+      };
+    }
+    return this.getState();
+  }
+
+  exportMemory(): DesktopRendererState {
+    this.state = {
+      ...this.state,
+      memoryDebug: {
+        ...this.state.memoryDebug,
+        actionStatus: "working",
+        actionMessage: "Preparing memory export..."
+      }
+    };
+    this.host?.send("memory:export-request", {});
+    if (!this.host) {
+      const previewExport = {
+        threadId: "preview-thread",
+        sessionId: "preview-session",
+        recentTurns: [],
+        summarySegments: [],
+        exportedAt: new Date().toISOString()
+      };
+      this.state = {
+        ...this.state,
+        memoryDebug: {
+          ...this.state.memoryDebug,
+          actionStatus: "success",
+          actionMessage: "Memory export is ready.",
+          exportText: JSON.stringify(previewExport, null, 2)
         }
       };
     }
@@ -609,6 +718,9 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
     },
     memoryDebug: {
       status: "idle",
+      actionStatus: "idle",
+      actionMessage: "",
+      exportText: "",
       snapshot: null
     },
     voiceInput: {

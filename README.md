@@ -20,7 +20,7 @@ Make the character feel alive first:
 
 V1 does not include desktop control, browser control, long-running task orchestration, multi-agent behavior, livestream support, Godot/VRM, message gateways, or self-generating skills.
 
-Current status: V1 visible-experience closeout is on `main`. The current main head `b605321` includes #59, #63, and #65, and GitHub Actions run `28287921556` passed Fast checks, Desktop pet quick harness, and `frontend-full` on 2026-06-27. V2.0a memory foundation is merged; the next V2 slice is the user-facing memory control panel.
+Current status: V1 visible-experience closeout is on `main`. The latest V1 evidence head `b605321` includes #59, #63, and #65, and GitHub Actions run `28287921556` passed Fast checks, Desktop pet quick harness, and `frontend-full` on 2026-06-27. V2.0a memory foundation is merged; V2.0b adds user-facing memory edit, disable, delete, and export controls.
 
 ## Workspace
 
@@ -129,6 +129,8 @@ pnpm harness:live2d
 pnpm harness:pet:quick
 pnpm harness:electron
 pnpm harness:electron:quick
+pnpm harness:electron:memory-control
+pnpm harness:memory-benchmark
 pnpm harness:frontend-full
 pnpm dev:live2d
 pnpm dev:live2d:fast
@@ -150,6 +152,8 @@ CI is split into layers:
 - frontend-visible gate: `pnpm harness:frontend-full` for changes touching desktop, Live2D, audio, dev-harness, workspace config, or CI
 
 Use `pnpm test:backend` for runtime, persistence, audio, and Electron main regressions. Use `pnpm test:frontend` for renderer, preload, stage, and dev-harness regressions. Use `pnpm harness:v1-visual` when a change needs human-verifiable desktop-pet artifacts; it writes screenshots and `summary.json` to `.cache/greyfield-v1-visual-acceptance/latest` unless `GREYFIELD_ACCEPTANCE_ARTIFACT_DIR` is set.
+
+Use `pnpm harness:memory-benchmark` for deterministic memory summary/recall quality, and `pnpm harness:electron:memory-control` for the ordinary Settings path that edits, disables, deletes, and exports memory while keeping raw chat turns intact.
 
 Use `pnpm harness:frontend-full` before handing off frontend-visible V1 work. It is the aggregate gate for Settings, Chat, Pet, controls, Live2D, speech bubble, Stop/audio, voice input, restart context, and optional credentialed real TTS coverage.
 

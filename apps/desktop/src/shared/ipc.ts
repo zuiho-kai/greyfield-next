@@ -24,12 +24,36 @@ export interface DesktopMemoryDebugSnapshot {
   updatedAt: string;
 }
 
+export interface DesktopMemorySummaryUpdate {
+  id: string;
+  summary?: string;
+  recallCues?: string[];
+  disabled?: boolean;
+}
+
+export interface DesktopMemoryActionResult {
+  ok: boolean;
+  message: string;
+}
+
+export interface DesktopMemoryExport {
+  threadId: string;
+  sessionId: string;
+  recentTurns: SessionTurn[];
+  summarySegments: SummarySegment[];
+  lastRecallContext?: RecallContext;
+  exportedAt: string;
+}
+
 export interface DesktopIpcRequestMap {
   "runtime:input": RuntimeInputEvent;
   "runtime:speech-playback": DesktopSpeechPlaybackEvent;
   "provider:test-llm": {};
   "provider:test-voice": {};
   "memory:debug-request": {};
+  "memory:summary-update": DesktopMemorySummaryUpdate;
+  "memory:summary-delete": { id: string };
+  "memory:export-request": {};
   "settings:update": GreyfieldConfigPatch;
   "window:set-click-through": { enabled: boolean };
   "window:set-hit-test": { passthrough: boolean; reason: "transparent-area" | "model-pass-through" | "model-hit" };
@@ -63,6 +87,8 @@ export interface DesktopIpcEventMap {
   };
   "provider:test-voice-result": DesktopVoiceTestResult;
   "memory:debug-snapshot": DesktopMemoryDebugSnapshot;
+  "memory:action-result": DesktopMemoryActionResult;
+  "memory:export-result": DesktopMemoryActionResult & { export?: DesktopMemoryExport };
   "settings:changed": RendererGreyfieldConfig;
   "window:state": {
     modelPassThrough: boolean;

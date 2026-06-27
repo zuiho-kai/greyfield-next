@@ -84,7 +84,13 @@ const recallSegments: SummarySegment[] = [
     "ci",
     "cache",
     "lint"
-  ])
+  ]),
+  makeSegment(
+    "memory-disabled-zeta",
+    "Disabled old memory says Zeta should be recalled from this segment.",
+    ["disabled-zeta", "zeta"],
+    { disabled: true }
+  )
 ];
 
 const recallCases: RecallBenchmarkCase[] = [
@@ -110,7 +116,13 @@ const recallCases: RecallBenchmarkCase[] = [
     id: "no-false-positive-for-unrelated-input",
     input: "明天香港会不会下雨？",
     expectedIds: [],
-    rejectedIds: ["memory-hiyori", "memory-night-rest", "memory-audio-fade", "memory-ci-noise"]
+    rejectedIds: ["memory-hiyori", "memory-night-rest", "memory-audio-fade", "memory-ci-noise", "memory-disabled-zeta"]
+  },
+  {
+    id: "disabled-summary-not-recalled",
+    input: "disabled-zeta 这个旧记忆还会注入吗？",
+    expectedIds: [],
+    rejectedIds: ["memory-disabled-zeta"]
   },
   {
     id: "budget-keeps-best-match",
@@ -237,7 +249,12 @@ function runRecallCase(testCase: RecallBenchmarkCase): CaseResult {
   };
 }
 
-function makeSegment(id: string, summary: string, recallCues: string[]): SummarySegment {
+function makeSegment(
+  id: string,
+  summary: string,
+  recallCues: string[],
+  options: { disabled?: boolean } = {}
+): SummarySegment {
   const suffix = id.replace(/^memory-/, "");
   return {
     id,
@@ -253,7 +270,8 @@ function makeSegment(id: string, summary: string, recallCues: string[]): Summary
         createdAt: "2026-06-26T01:00:00.000Z"
       }
     ],
-    createdAt: "2026-06-26T01:00:00.000Z"
+    createdAt: "2026-06-26T01:00:00.000Z",
+    disabled: options.disabled
   };
 }
 

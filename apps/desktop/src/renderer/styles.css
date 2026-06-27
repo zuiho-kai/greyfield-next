@@ -961,7 +961,8 @@ h1 {
 }
 
 .settings-panel input,
-.settings-panel select {
+.settings-panel select,
+.settings-panel textarea {
   min-width: 0;
   width: 100%;
   min-height: 36px;
@@ -974,7 +975,8 @@ h1 {
 }
 
 .settings-panel input:focus,
-.settings-panel select:focus {
+.settings-panel select:focus,
+.settings-panel textarea:focus {
   outline: 2px solid rgba(31, 122, 107, 0.22);
   border-color: rgba(31, 122, 107, 0.5);
   background: #ffffff;
@@ -982,6 +984,12 @@ h1 {
 
 .settings-panel select {
   cursor: pointer;
+}
+
+.settings-panel textarea {
+  resize: vertical;
+  min-height: 72px;
+  line-height: 1.45;
 }
 
 .live2d-model-note {
@@ -1155,6 +1163,98 @@ h1 {
   background: rgba(31, 122, 107, 0.08);
 }
 
+.memory-debug__list {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.memory-debug__segment {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(31, 41, 51, 0.12);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.memory-debug__segment--disabled {
+  border-style: dashed;
+  background: rgba(37, 56, 88, 0.06);
+}
+
+.memory-debug__segment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.memory-debug__segment-header strong {
+  min-width: 0;
+  color: #1f2933;
+  font-size: 12px;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-debug__segment-header span {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(31, 122, 107, 0.12);
+  color: #18594f;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.memory-debug__segment--disabled .memory-debug__segment-header span {
+  background: rgba(37, 56, 88, 0.11);
+  color: #465463;
+}
+
+.memory-debug__editor {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 4px !important;
+}
+
+.memory-debug__editor > span {
+  padding-top: 0 !important;
+}
+
+.memory-debug__actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.memory-debug__actions button {
+  min-height: 32px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: rgba(31, 122, 107, 0.12);
+  color: #18594f;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.memory-debug__actions .memory-debug__danger {
+  background: rgba(143, 49, 80, 0.12);
+  color: #7b2442;
+}
+
+.memory-debug__export {
+  min-height: 120px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+}
+
 .memory-debug__block strong {
   font-size: 12px;
   line-height: 1.25;
@@ -1170,6 +1270,13 @@ h1 {
 }
 
 .memory-debug__block small {
+  color: #607080;
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.memory-debug__segment small {
   color: #607080;
   font-size: 11px;
   line-height: 1.35;

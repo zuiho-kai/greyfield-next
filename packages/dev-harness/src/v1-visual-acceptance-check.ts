@@ -182,12 +182,9 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     await chatWindow.getByLabel("Message").fill("验收一下桌宠前端。");
     await chatWindow.getByRole("button", { name: "Send" }).click();
     await chatWindow.locator(".message-list .assistant", { hasText: "你好，我醒着。现在可以继续做桌宠了。" }).waitFor();
-    await petWindow.locator(".speech-bubble").waitFor();
+    await petWindow.locator(".speech-bubble").waitFor({ state: "visible" });
     const bubbleText = await petWindow.locator(".speech-bubble").textContent();
-    const bubbleProbe = await readSpeechBubbleModelOverlap(petWindow);
-    if (!bubbleProbe.visible || bubbleProbe.overlapsModel) {
-      throw new Error(`Speech bubble overlaps the model surface: ${JSON.stringify(bubbleProbe)}`);
-    }
+    const bubbleProbe = await waitForSpeechBubbleModelClear(petWindow);
     artifacts.push(await screenshot(petWindow, artifactDir, "pet-after-chat.png", "Pet bubble after a fake chat reply."));
     artifacts.push(await screenshot(chatWindow, artifactDir, "chat-after-reply.png", "Chat keeps the complete assistant reply."));
 
@@ -412,6 +409,24 @@ async function readSpeechBubbleModelOverlap(page: Page): Promise<{
       overlappingPoints
     };
   });
+}
+
+async function waitForSpeechBubbleModelClear(page: Page): Promise<{
+  visible: boolean;
+  overlapsModel: boolean;
+  rect?: { x: number; y: number; width: number; height: number };
+  overlappingPoints: Array<{ x: number; y: number }>;
+}> {
+  const started = Date.now();
+  let lastProbe: Awaited<ReturnType<typeof readSpeechBubbleModelOverlap>> | undefined;
+  while (Date.now() - started < 3_000) {
+    lastProbe = await readSpeechBubbleModelOverlap(page);
+    if (lastProbe.visible && !lastProbe.overlapsModel) {
+      return lastProbe;
+    }
+    await page.waitForTimeout(100);
+  }
+  throw new Error(`Speech bubble was not visible and clear of the model surface: ${JSON.stringify(lastProbe)}`);
 }
 
 async function readControlsSnapshot(page: Page): Promise<VisualAcceptanceSummaryInput["controls"]> {

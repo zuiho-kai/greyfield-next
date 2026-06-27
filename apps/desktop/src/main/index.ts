@@ -154,6 +154,18 @@ function registerIpc(): void {
     void broadcastMemoryDebugSnapshot();
   });
 
+  ipcMain.on("memory:summary-update", (_event, payload) => {
+    void updateMemorySummary(payload);
+  });
+
+  ipcMain.on("memory:summary-delete", (_event, payload) => {
+    void deleteMemorySummary(payload.id);
+  });
+
+  ipcMain.on("memory:export-request", (event) => {
+    void exportMemory(event.sender);
+  });
+
   ipcMain.on("window:set-click-through", (_event, payload: { enabled: boolean }) => {
     setModelPassThrough(payload.enabled);
   });
@@ -279,6 +291,55 @@ async function broadcastMemoryDebugSnapshot(): Promise<void> {
   if (!snapshot) {
     return;
   }
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send("memory:debug-snapshot", snapshot);
+  }
+}
+
+async function updateMemorySummary(payload: Parameters<NonNullable<typeof runtimeService>["updateMemorySummary"]>[1] & { id: string }): Promise<void> {
+  const result = await runtimeService?.updateMemorySummary(payload.id, payload);
+  if (!result) {
+    broadcastMemoryActionResult({ ok: false, message: "Memory runtime is not available." });
+    return;
+  }
+  broadcastMemoryActionResult({ ok: result.ok, message: result.message });
+  if (result.snapshot) {
+    broadcastMemoryDebugSnapshotPayload(result.snapshot);
+  }
+}
+
+async function deleteMemorySummary(id: string): Promise<void> {
+  const result = await runtimeService?.deleteMemorySummary(id);
+  if (!result) {
+    broadcastMemoryActionResult({ ok: false, message: "Memory runtime is not available." });
+    return;
+  }
+  broadcastMemoryActionResult({ ok: result.ok, message: result.message });
+  if (result.snapshot) {
+    broadcastMemoryDebugSnapshotPayload(result.snapshot);
+  }
+}
+
+async function exportMemory(sender: Electron.WebContents): Promise<void> {
+  const exported = await runtimeService?.exportMemory();
+  if (!exported) {
+    sender.send("memory:export-result", { ok: false, message: "Memory runtime is not available." });
+    return;
+  }
+  sender.send("memory:export-result", {
+    ok: true,
+    message: "Memory export is ready.",
+    export: exported
+  });
+}
+
+function broadcastMemoryActionResult(result: { ok: boolean; message: string }): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send("memory:action-result", result);
+  }
+}
+
+function broadcastMemoryDebugSnapshotPayload(snapshot: Awaited<ReturnType<NonNullable<typeof runtimeService>["getMemoryDebugSnapshot"]>>): void {
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send("memory:debug-snapshot", snapshot);
   }
