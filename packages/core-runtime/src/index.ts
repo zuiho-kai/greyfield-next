@@ -1,4 +1,5 @@
 export * from "./events";
+export * from "./memory-atoms";
 export * from "./memory-context";
 export * from "./openai-compatible-provider";
 export * from "./openai-compatible-tts-provider";
