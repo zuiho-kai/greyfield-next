@@ -1,12 +1,12 @@
 # V2 Memory Goal
 
-更新时间：2026-06-26
+更新时间：2026-06-27
 
 ## Goal
 
 Greyfield V2.0 memory should become a source-linked, user-correctable companion memory system.
 
-The first engineering goal is V2.0a:
+The first engineering goal, V2.0a, is merged into `main` via [#63](https://github.com/zuiho-kai/greyfield-next/pull/63):
 
 - keep raw chat turns as the source of truth.
 - add summary segments with source turn references.
@@ -22,9 +22,9 @@ The first engineering goal is V2.0a:
 - No Memory Panel UI yet.
 - No LLM-generated summary dependency in the first storage slice.
 
-## Current Slice
+## Current Main Slice
 
-Implemented package boundaries:
+Implemented package boundaries on main head `b605321`:
 
 - `packages/core-runtime/src/memory-context.ts`: summary segment types, extractive summary draft, lexical/cue recall, prompt formatting.
 - `packages/persistence/src/jsonl-summary-segment-store.ts`: source-linked JSONL summary segment persistence.
@@ -45,17 +45,19 @@ Acceptance covered by tests:
 - desktop runtime writes `memory/summary-segments.jsonl` under user data and exposes summary/debug state.
 - Electron Chat harness proves ordinary chat creates raw turns, one source-linked summary segment, a `memory.summary.created` event, a `memory.recall.context` event, and visible Settings Memory evidence.
 
-## Next Slice
+## Next Slice: V2.0b Memory Control
 
 V2.0a now has a minimal inspection loop. The next implementation slice should move from inspection to user control:
 
 - fake summarizer tests if/when LLM-generated summaries replace the extractive draft.
 - user-facing memory management: edit, disable, delete, and export.
 - pinned memory and candidate review flow.
+- ordinary Settings/Memory Panel path: users can see what was remembered, correct it, disable it without deleting raw chat history, delete selected memory, and export memory evidence.
+- benchmark guard for user control: disabled/deleted memory must not be recalled, edited memory must be recalled from the edited text with source evidence, and export must not require external credentials.
 
 ## Verification
 
-Current backend verification:
+Current V2.0a verification:
 
 ```bash
 pnpm exec vitest run packages/core-runtime packages/persistence
@@ -68,3 +70,4 @@ CI guard:
 
 - `pnpm harness:memory-benchmark` runs in Fast checks, so memory summary/recall quality is guarded even when a PR does not trigger `frontend-full`.
 - `pnpm harness:electron:memory-summary` remains the desktop product-path guard: normal Chat turns must create raw session JSONL, summary JSONL, recall events, and visible Settings Memory evidence.
+- Main run `28287921556` on head `b605321` passed Fast checks, including `pnpm harness:memory-benchmark`, and `frontend-full`, including the memory summary harness with `summaryCreated: true`, `recallContext: true`, `settingsMemoryVisible: true`, and `summaryIncludesSourceTurns: true`.
