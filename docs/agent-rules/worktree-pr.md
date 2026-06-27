@@ -30,6 +30,11 @@ git worktree add ../greyfield-next-main-runtime-persistence -b feature/main-runt
 - Each agent must read `AGENTS.md` and relevant guardrail docs inside its own worktree before editing.
 - Agents must report changed files, verification commands, and unresolved risks before handoff.
 - A coordinating agent merges results by PR review, not by copying unreviewed files between worktrees.
+- Split parallel work by disjoint write sets first, dependency order second. If one PR creates an interface and another consumes it, merge or rebase the provider PR before approving the consumer.
+- When a sibling PR merges while another PR is open, the coordinating agent must rebase the open PR and rerun its targeted verification before marking it ready.
+- Do not preserve merge-conflict docs or unrelated edits just because a subagent saw them. If a branch picked up stale roadmap/docs conflicts, drop or recreate that branch around its assigned code slice.
+- In each fresh worktree, run `pnpm install`, `pnpm typecheck`, and `pnpm` test/harness commands serially. Parallel agents may run in separate worktrees, but a single worktree must not run two `pnpm` commands concurrently.
+- Remote CI waiting should not occupy the main implementation loop. Use a low-frequency watcher or check once at merge readiness while the coordinator continues non-overlapping local work.
 
 ## Pull Request Rules
 

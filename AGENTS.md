@@ -29,6 +29,7 @@ Greyfield Next is a TypeScript monorepo for a Live2D desktop companion. This fil
 - PRs with unresolved bot-authored inline review threads are not mergeable. Fix the issue or explicitly resolve the thread as not applicable; CI enforces this with `scripts/check-pr-bot-review-threads.mjs`.
 - V1 completion claims require a manifest/product-plan audit plus merged main/current-head evidence. PR-local evidence can support review, but it cannot be release wording until rerun on the target branch.
 - Electron/browser harnesses that build desktop artifacts or launch windows must run serially unless isolation is explicitly proven. Parallelize unit/static checks, not shared Electron desktop flows.
+- In a fresh worktree, run dependency install, `pnpm` tests, and typecheck serially per worktree. Do not start two `pnpm` commands in the same worktree at the same time.
 - Prefer appending to existing knowledge docs over creating tiny one-off rule files.
 
 ## Required Reading Index
