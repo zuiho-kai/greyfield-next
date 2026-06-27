@@ -55,7 +55,16 @@ jobs:
       - name: Acceptance harness
         run: pnpm harness:acceptance
       - name: Memory benchmark
+        env:
+          GREYFIELD_MEMORY_BENCHMARK_ARTIFACT_DIR: .cache/greyfield-memory-benchmark/latest
         run: pnpm harness:memory-benchmark
+      - name: Upload memory benchmark summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-benchmark-summary
+          path: .cache/greyfield-memory-benchmark/latest/summary.json
+          if-no-files-found: error
 
   desktop-pet:
     name: Desktop pet quick harness
