@@ -174,6 +174,85 @@ describe("GreyfieldRuntime", () => {
     expect(await sessionStore.getRecent(6)).toHaveLength(6);
   });
 
+  it("keeps chat usable when summary recall storage is unavailable", async () => {
+    const summarySegmentStore: SummarySegmentStore = {
+      append: async () => {
+        throw new Error("not used");
+      },
+      delete: async () => false,
+      list: async () => {
+        throw new Error("summary list failed");
+      }
+    };
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* () {
+          yield "Reply survived.";
+        }
+      },
+      tts: { synthesize: async (text) => new Uint8Array([text.length]) },
+      memoryStore,
+      summarySegmentStore,
+      sessionStore: new InMemorySessionStore("session-recall-failure"),
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default",
+      threadId: "thread-recall-failure"
+    });
+    const events: RuntimeOutputEvent[] = [];
+
+    await runtime.handle({ type: "text.input", text: "Hiyori 还是默认模型吗？" }, (event) => {
+      events.push(event);
+    });
+
+    expect(events).toContainEqual({ type: "assistant.text.final", text: "Reply survived." });
+    expect(events).toContainEqual({ type: "assistant.audio.end" });
+    expect(events).toContainEqual({ type: "runtime.status", status: "idle" });
+  });
+
+  it("keeps chat usable when summary append fails after the turn is persisted", async () => {
+    const sessionStore = new InMemorySessionStore("session-summary-failure");
+    const summarySegmentStore: SummarySegmentStore = {
+      append: async () => {
+        throw new Error("summary append failed");
+      },
+      delete: async () => false,
+      list: async () => []
+    };
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* () {
+          yield "Stored reply.";
+        }
+      },
+      tts: { synthesize: async (text) => new Uint8Array([text.length]) },
+      memoryStore,
+      summarySegmentStore,
+      sessionStore,
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default",
+      threadId: "thread-summary-failure",
+      recentTurnLimit: 2,
+      summaryBatchTurnLimit: 4,
+      summaryMinTurns: 4
+    });
+    const events: RuntimeOutputEvent[] = [];
+
+    await runtime.handle({ type: "text.input", text: "第一轮：我喜欢 Hiyori。" }, (event) => {
+      events.push(event);
+    });
+    await runtime.handle({ type: "text.input", text: "第二轮：记住 Live2D 模型偏好。" }, (event) => {
+      events.push(event);
+    });
+    await runtime.handle({ type: "text.input", text: "第三轮：继续。" }, (event) => {
+      events.push(event);
+    });
+
+    expect(events).toContainEqual({ type: "assistant.text.final", text: "Stored reply." });
+    expect(events).toContainEqual({ type: "assistant.audio.end" });
+    expect(events).toContainEqual({ type: "runtime.status", status: "idle" });
+    expect(await sessionStore.getRecent(6)).toHaveLength(6);
+  });
+
   it("stops later model chunks after an interrupt", async () => {
     let runtime: GreyfieldRuntime;
     const sessionStore = new InMemorySessionStore("session-a");

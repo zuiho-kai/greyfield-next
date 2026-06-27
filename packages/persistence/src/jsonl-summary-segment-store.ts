@@ -4,24 +4,27 @@ import type { AppendSummarySegment, SummarySegment, SummarySegmentStore } from "
 
 export class JsonlSummarySegmentStore implements SummarySegmentStore {
   private sequence = 0;
+  private mutation = Promise.resolve();
 
   constructor(private readonly path: string) {}
 
   async append(segment: AppendSummarySegment): Promise<SummarySegment> {
-    const current = await this.readSegments();
-    this.sequence = Math.max(this.sequence, ...current.map((item) => parseSequence(item.id)));
-    this.sequence += 1;
-    const stored: SummarySegment = {
-      id: `summary-${this.sequence}`,
-      threadId: segment.threadId,
-      sessionId: segment.sessionId,
-      summary: segment.summary,
-      recallCues: uniqueCleanStrings(segment.recallCues),
-      sourceTurns: segment.sourceTurns,
-      createdAt: segment.createdAt ?? new Date().toISOString()
-    };
-    await this.writeSegments([...current, stored]);
-    return stored;
+    return this.serializeMutation(async () => {
+      const current = await this.readSegments();
+      this.sequence = Math.max(this.sequence, ...current.map((item) => parseSequence(item.id)));
+      this.sequence += 1;
+      const stored: SummarySegment = {
+        id: `summary-${this.sequence}`,
+        threadId: segment.threadId,
+        sessionId: segment.sessionId,
+        summary: segment.summary,
+        recallCues: uniqueCleanStrings(segment.recallCues),
+        sourceTurns: segment.sourceTurns,
+        createdAt: segment.createdAt ?? new Date().toISOString()
+      };
+      await this.writeSegments([...current, stored]);
+      return stored;
+    });
   }
 
   async list(threadId: string): Promise<SummarySegment[]> {
@@ -31,13 +34,15 @@ export class JsonlSummarySegmentStore implements SummarySegmentStore {
   }
 
   async delete(id: string): Promise<boolean> {
-    const current = await this.readSegments();
-    const next = current.filter((segment) => segment.id !== id);
-    if (next.length === current.length) {
-      return false;
-    }
-    await this.writeSegments(next);
-    return true;
+    return this.serializeMutation(async () => {
+      const current = await this.readSegments();
+      const next = current.filter((segment) => segment.id !== id);
+      if (next.length === current.length) {
+        return false;
+      }
+      await this.writeSegments(next);
+      return true;
+    });
   }
 
   private async readSegments(): Promise<SummarySegment[]> {
@@ -59,6 +64,20 @@ export class JsonlSummarySegmentStore implements SummarySegmentStore {
     await mkdir(dirname(this.path), { recursive: true });
     const body = segments.map((segment) => JSON.stringify(segment)).join("\n");
     await writeFile(this.path, body.length > 0 ? `${body}\n` : "", "utf8");
+  }
+
+  private async serializeMutation<T>(work: () => Promise<T>): Promise<T> {
+    const previous = this.mutation;
+    let release!: () => void;
+    this.mutation = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await work();
+    } finally {
+      release();
+    }
   }
 }
 

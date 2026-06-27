@@ -646,7 +646,7 @@ describe("RuntimeService", () => {
         expect.objectContaining({
           type: "memory.summary.created",
           segment: expect.objectContaining({
-            threadId: "local-desktop-thread",
+            threadId: "desktop:characters-test-yaml",
             sourceTurns: expect.arrayContaining([
               expect.objectContaining({ turnId: "desktop-main-session-1" }),
               expect.objectContaining({ turnId: "desktop-main-session-4" })
@@ -659,7 +659,7 @@ describe("RuntimeService", () => {
       });
 
       const snapshot = await service.getMemoryDebugSnapshot();
-      expect(snapshot.threadId).toBe("local-desktop-thread");
+      expect(snapshot.threadId).toBe("desktop:characters-test-yaml");
       expect(snapshot.recentTurns).toHaveLength(8);
       expect(snapshot.summarySegments).toHaveLength(1);
       expect(snapshot.lastRecallContext?.items[0]).toMatchObject({

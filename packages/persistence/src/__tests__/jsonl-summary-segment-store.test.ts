@@ -52,13 +52,59 @@ describe("JsonlSummarySegmentStore", () => {
         sessionId: "session-a",
         recallCues: ["hiyori", "live2d"]
       });
-      expect(await summaries.list("thread-a")).toHaveLength(1);
+      expect(await summaries.list("thread-a")).toEqual([stored]);
       expect(await summaries.delete(stored.id)).toBe(true);
       expect(await summaries.list("thread-a")).toEqual([]);
 
       const rawSessionLines = (await readFile(sessionPath, "utf8")).trim().split(/\r?\n/);
       expect(rawSessionLines).toHaveLength(2);
       expect(rawSessionLines.join("\n")).toContain("我喜欢 Hiyori 模型");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("serializes concurrent summary mutations without losing segments", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "greyfield-summary-segments-concurrent-"));
+    const summaryPath = join(dir, "summaries.jsonl");
+    try {
+      const summaries = new JsonlSummarySegmentStore(summaryPath);
+      const firstSourceTurn = {
+        sessionId: "session-a",
+        turnId: "turn-1",
+        role: "user" as const,
+        createdAt: "2026-06-26T01:00:00.000Z"
+      };
+      const secondSourceTurn = {
+        sessionId: "session-a",
+        turnId: "turn-2",
+        role: "assistant" as const,
+        createdAt: "2026-06-26T01:00:01.000Z"
+      };
+
+      const [first, second] = await Promise.all([
+        summaries.append({
+          threadId: "thread-a",
+          sessionId: "session-a",
+          summary: "First summary.",
+          recallCues: ["first"],
+          sourceTurns: [firstSourceTurn],
+          createdAt: "2026-06-26T01:00:02.000Z"
+        }),
+        summaries.append({
+          threadId: "thread-a",
+          sessionId: "session-a",
+          summary: "Second summary.",
+          recallCues: ["second"],
+          sourceTurns: [secondSourceTurn],
+          createdAt: "2026-06-26T01:00:03.000Z"
+        })
+      ]);
+
+      expect(new Set([first.id, second.id])).toEqual(new Set(["summary-1", "summary-2"]));
+      expect(await summaries.list("thread-a")).toHaveLength(2);
+      expect(await readFile(summaryPath, "utf8")).toContain("First summary.");
+      expect(await readFile(summaryPath, "utf8")).toContain("Second summary.");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

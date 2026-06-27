@@ -136,12 +136,12 @@ export class GreyfieldRuntime {
     this.activeAbortController = new AbortController();
     await emit({ type: "runtime.status", status: "thinking" });
 
-    const [memory, recent, handoff, summarySegments] = await Promise.all([
+    const [memory, recent, handoff] = await Promise.all([
       this.options.memoryStore.load(),
       this.options.sessionStore.getRecent(this.recentTurnLimit),
-      this.options.sessionStore.createHandoff(this.recentTurnLimit),
-      this.options.summarySegmentStore?.list(this.threadId) ?? Promise.resolve([])
+      this.options.sessionStore.createHandoff(this.recentTurnLimit)
     ]);
+    const summarySegments = await this.loadSummarySegments();
     const recallContext = this.options.summarySegmentStore
       ? buildRecallContext({
           input: text,
@@ -203,9 +203,13 @@ export class GreyfieldRuntime {
     if (finalText.length > 0) {
       await this.options.sessionStore.append({ role: "user", content: text });
       await this.options.sessionStore.append({ role: "assistant", content: finalText });
-      const createdSummary = await this.createSummaryForOldTurns();
-      if (createdSummary) {
-        await emit({ type: "memory.summary.created", segment: createdSummary });
+      try {
+        const createdSummary = await this.createSummaryForOldTurns();
+        if (createdSummary) {
+          await emit({ type: "memory.summary.created", segment: createdSummary });
+        }
+      } catch (error) {
+        console.warn(`Greyfield memory summary unavailable: ${formatError(error)}`);
       }
       await emit({ type: "assistant.text.final", text: finalText });
     }
@@ -245,6 +249,19 @@ export class GreyfieldRuntime {
       await emit({ type: "assistant.audio.error", text, message: `Voice playback failed: ${formatError(error)}` });
     }
     return budget.usedCharacters;
+  }
+
+  private async loadSummarySegments(): Promise<Awaited<ReturnType<SummarySegmentStore["list"]>>> {
+    const summarySegmentStore = this.options.summarySegmentStore;
+    if (!summarySegmentStore) {
+      return [];
+    }
+    try {
+      return await summarySegmentStore.list(this.threadId);
+    } catch (error) {
+      console.warn(`Greyfield memory recall unavailable: ${formatError(error)}`);
+      return [];
+    }
   }
 
   private requireASRProvider(): ASRProvider {

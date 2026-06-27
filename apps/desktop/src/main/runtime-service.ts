@@ -58,7 +58,6 @@ export class RuntimeService {
   private readonly sessionStore: SessionStore;
   private readonly summarySegmentStore: SummarySegmentStore | undefined;
   private readonly interactionProfile = createDefaultInteractionProfile();
-  private readonly threadId: string;
   private lastRecallContext: RecallContext | undefined;
   private activeRuntime: GreyfieldRuntime | undefined;
   private testingLLM = false;
@@ -69,7 +68,10 @@ export class RuntimeService {
     this.memoryStore = options.memoryStore ?? new MainFakeMemoryStore();
     this.sessionStore = options.sessionStore ?? new InMemorySessionStore("desktop-main-session");
     this.summarySegmentStore = options.summarySegmentStore;
-    this.threadId = options.threadId ?? "local-desktop-thread";
+  }
+
+  private get threadId(): string {
+    return this.options.threadId ?? deriveThreadId(this.config);
   }
 
   updateConfig(config: GreyfieldConfig): void {
@@ -415,4 +417,10 @@ class MainFakeMemoryStore implements MemoryStore {
   async consolidate(): Promise<string> {
     return "- Greyfield Next desktop runtime is using local fake providers.";
   }
+}
+
+function deriveThreadId(config: GreyfieldConfig): string {
+  const source = config.characterFile.trim() || "default-character";
+  const slug = source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return `desktop:${slug || "default-character"}`;
 }

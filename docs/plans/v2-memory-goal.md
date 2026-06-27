@@ -58,10 +58,10 @@ V2.0a now has a minimal inspection loop. The next implementation slice should mo
 Current backend verification:
 
 ```bash
-node_modules/.bin/vitest.cmd run packages/core-runtime packages/persistence
-node_modules/.bin/tsc.cmd -p tsconfig.typecheck.json --noEmit
-node_modules/.bin/tsx.cmd packages/dev-harness/src/memory-benchmark.ts
-node_modules/.bin/tsx.cmd packages/dev-harness/src/electron-memory-summary-check.ts
+pnpm exec vitest run packages/core-runtime packages/persistence
+pnpm exec tsc -p tsconfig.typecheck.json --noEmit
+pnpm harness:memory-benchmark
+pnpm exec tsx packages/dev-harness/src/electron-memory-summary-check.ts
 ```
 
 CI guard:

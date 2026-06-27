@@ -74,6 +74,34 @@ describe("memory context", () => {
     expect(context.items).toHaveLength(1);
     expect(context.skipped).toEqual([{ kind: "summary-segment", id: "summary-2", reason: "max_items" }]);
   });
+
+  it("counts rendered metadata against the recall character budget", () => {
+    const segment = makeSegment("summary-1", "Hiyori.", ["hiyori"], ["session-a-1"]);
+    const renderedLength = formatRecallContextForPrompt({
+      items: [
+        {
+          kind: "summary-segment",
+          id: segment.id,
+          summary: segment.summary,
+          recallCues: segment.recallCues,
+          sourceTurnIds: segment.sourceTurns.map((turn) => turn.turnId),
+          reason: "cue:hiyori",
+          score: 1
+        }
+      ],
+      skipped: []
+    }).length;
+
+    const context = buildRecallContext({
+      input: "Hiyori",
+      summarySegments: [segment],
+      maxCharacters: renderedLength - 1
+    });
+
+    expect(segment.summary.length).toBeLessThan(renderedLength - 1);
+    expect(context.items).toEqual([]);
+    expect(context.skipped).toEqual([{ kind: "summary-segment", id: "summary-1", reason: "max_characters" }]);
+  });
 });
 
 function makeSegment(id: string, summary: string, recallCues: string[], sourceTurnIds: string[]): SummarySegment {

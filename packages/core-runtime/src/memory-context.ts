@@ -148,7 +148,16 @@ export function buildRecallContext(options: BuildRecallContextOptions): RecallCo
   let usedCharacters = 0;
 
   for (const item of ranked) {
-    const nextCharacters = usedCharacters + item.segment.summary.length;
+    const candidate: RecallContextItem = {
+      kind: "summary-segment",
+      id: item.segment.id,
+      summary: item.segment.summary,
+      recallCues: item.segment.recallCues,
+      sourceTurnIds: item.segment.sourceTurns.map((turn) => turn.turnId),
+      reason: item.cueMatches.length > 0 ? `cue:${item.cueMatches.join(",")}` : "lexical",
+      score: item.score
+    };
+    const nextCharacters = usedCharacters + formatRecallContextForPrompt({ items: [candidate], skipped: [] }).length;
     if (items.length >= maxItems || nextCharacters > maxCharacters) {
       skipped.push({
         kind: "summary-segment",
@@ -157,15 +166,7 @@ export function buildRecallContext(options: BuildRecallContextOptions): RecallCo
       });
       continue;
     }
-    items.push({
-      kind: "summary-segment",
-      id: item.segment.id,
-      summary: item.segment.summary,
-      recallCues: item.segment.recallCues,
-      sourceTurnIds: item.segment.sourceTurns.map((turn) => turn.turnId),
-      reason: item.cueMatches.length > 0 ? `cue:${item.cueMatches.join(",")}` : "lexical",
-      score: item.score
-    });
+    items.push(candidate);
     usedCharacters = nextCharacters;
   }
 

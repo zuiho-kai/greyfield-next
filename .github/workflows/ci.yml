@@ -16,6 +16,8 @@ jobs:
     name: Fast checks
     runs-on: windows-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

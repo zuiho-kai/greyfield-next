@@ -14,25 +14,26 @@ const configPath = join(tempDir, "greyfield.config.json");
 const artifactDir = join(workspaceRoot, ".cache", "greyfield-memory-summary", "latest");
 const settingsScreenshotPath = join(artifactDir, "settings-memory.png");
 
-await writeFile(configPath, `${JSON.stringify(defaultGreyfieldConfig, null, 2)}\n`, "utf8");
-await mkdir(artifactDir, { recursive: true });
-
-const app = await electron.launch({
-  executablePath,
-  cwd: desktopRoot,
-  args: [join(desktopRoot, "dist-main", "index.mjs")],
-  env: {
-    ...process.env,
-    GREYFIELD_CONFIG_PATH: configPath,
-    GREYFIELD_PROJECT_ROOT: workspaceRoot,
-    GREYFIELD_USER_DATA_PATH: tempDir,
-    GREYFIELD_RECENT_TURN_LIMIT: "2",
-    GREYFIELD_SUMMARY_BATCH_TURN_LIMIT: "4",
-    GREYFIELD_SUMMARY_MIN_TURNS: "4"
-  }
-});
-
+let app: ElectronApplication | undefined;
 try {
+  await writeFile(configPath, `${JSON.stringify(defaultGreyfieldConfig, null, 2)}\n`, "utf8");
+  await mkdir(artifactDir, { recursive: true });
+
+  app = await electron.launch({
+    executablePath,
+    cwd: desktopRoot,
+    args: [join(desktopRoot, "dist-main", "index.mjs")],
+    env: {
+      ...process.env,
+      GREYFIELD_CONFIG_PATH: configPath,
+      GREYFIELD_PROJECT_ROOT: workspaceRoot,
+      GREYFIELD_USER_DATA_PATH: tempDir,
+      GREYFIELD_RECENT_TURN_LIMIT: "2",
+      GREYFIELD_SUMMARY_BATCH_TURN_LIMIT: "4",
+      GREYFIELD_SUMMARY_MIN_TURNS: "4"
+    }
+  });
+
   await app.firstWindow({ timeout: 10_000 });
   const chat = await waitForRoleWindow(app, "chat");
   await chat.waitForSelector(".chat-shell");
@@ -90,7 +91,7 @@ try {
 
   const settings = await waitForRoleWindow(app, "settings");
   await settings.waitForSelector(".greyfield-shell");
-  await settings.getByRole("button", { name: "Refresh memory" }).click();
+  await settings.locator(".memory-debug .settings-actions button").click();
   await settings.locator(".memory-debug", { hasText: "Summaries 1" }).waitFor();
   await settings.locator(".memory-debug", { hasText: "desktop-main-session-1" }).waitFor();
   await settings.locator(".memory-debug", { hasText: "Last recall" }).waitFor();
@@ -114,7 +115,7 @@ try {
     )
   );
 } finally {
-  await app.close();
+  await app?.close().catch(() => undefined);
   await rm(tempDir, { recursive: true, force: true });
 }
 
