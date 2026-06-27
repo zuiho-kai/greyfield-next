@@ -1,5 +1,12 @@
 import { splitCompleteSentences, takeTtsTextWithinBudget } from "@greyfield/audio-runtime";
 import type { RuntimeEventHandler, RuntimeInputEvent } from "./events";
+import {
+  buildMemoryAtomRecallContext,
+  DeterministicMemoryAtomExtractor,
+  type MemoryAtom,
+  type MemoryAtomExtractor,
+  type MemoryAtomStore
+} from "./memory-atoms";
 import { buildRecallContext, createSummarySegmentDraft, getSummarySegmentSourceTurnIds, type SummarySegmentStore } from "./memory-context";
 import { assemblePrompt } from "./prompt-assembler";
 import type { ASRProvider, LLMProvider, MemoryStore, TTSProvider } from "./providers";
@@ -13,6 +20,8 @@ export interface GreyfieldRuntimeOptions {
   tts: TTSProvider;
   memoryStore: MemoryStore;
   summarySegmentStore?: SummarySegmentStore;
+  memoryAtomStore?: MemoryAtomStore;
+  memoryAtomExtractor?: MemoryAtomExtractor;
   sessionStore: SessionStore;
   persona: CharacterPersona;
   voice: string;
@@ -21,6 +30,8 @@ export interface GreyfieldRuntimeOptions {
   recentTurnLimit?: number;
   recallMaxItems?: number;
   recallMaxCharacters?: number;
+  atomRecallMaxItems?: number;
+  atomRecallMaxCharacters?: number;
   summaryBatchTurnLimit?: number;
   summaryMinTurns?: number;
   ttsEnabled?: boolean;
@@ -136,10 +147,11 @@ export class GreyfieldRuntime {
     this.activeAbortController = new AbortController();
     await emit({ type: "runtime.status", status: "thinking" });
 
-    const [memory, recent, handoff] = await Promise.all([
+    const [memory, recent, handoff, memoryAtoms] = await Promise.all([
       this.options.memoryStore.load(),
       this.options.sessionStore.getRecent(this.recentTurnLimit),
-      this.options.sessionStore.createHandoff(this.recentTurnLimit)
+      this.options.sessionStore.createHandoff(this.recentTurnLimit),
+      this.loadMemoryAtoms()
     ]);
     const summarySegments = await this.loadSummarySegments();
     const recallContext = this.options.summarySegmentStore
@@ -153,6 +165,15 @@ export class GreyfieldRuntime {
     if (recallContext && (recallContext.items.length > 0 || recallContext.skipped.length > 0)) {
       await emit({ type: "memory.recall.context", context: recallContext });
     }
+    const atomRecallContext =
+      memoryAtoms.length > 0
+        ? buildMemoryAtomRecallContext({
+            input: text,
+            atoms: memoryAtoms,
+            maxItems: this.options.atomRecallMaxItems,
+            maxCharacters: this.options.atomRecallMaxCharacters
+          })
+        : undefined;
 
     const messages = assemblePrompt({
       persona: this.options.persona,
@@ -162,7 +183,8 @@ export class GreyfieldRuntime {
       input: text,
       sessionId: this.options.sessionStore.sessionId,
       threadId: this.threadId,
-      recallContext
+      recallContext,
+      atomRecallContext
     });
 
     let fullText = "";
@@ -201,8 +223,9 @@ export class GreyfieldRuntime {
     }
 
     if (finalText.length > 0) {
-      await this.options.sessionStore.append({ role: "user", content: text });
+      const userTurn = await this.options.sessionStore.append({ role: "user", content: text });
       await this.options.sessionStore.append({ role: "assistant", content: finalText });
+      await this.extractMemoryAtomsForTurn(text, userTurn.id);
       try {
         const createdSummary = await this.createSummaryForOldTurns();
         if (createdSummary) {
@@ -261,6 +284,40 @@ export class GreyfieldRuntime {
     } catch (error) {
       console.warn(`Greyfield memory recall unavailable: ${formatError(error)}`);
       return [];
+    }
+  }
+
+  private async loadMemoryAtoms(): Promise<MemoryAtom[]> {
+    const memoryAtomStore = this.options.memoryAtomStore;
+    if (!memoryAtomStore) {
+      return [];
+    }
+    try {
+      return await memoryAtomStore.list(this.threadId);
+    } catch (error) {
+      console.warn(`Greyfield memory atom recall unavailable: ${formatError(error)}`);
+      return [];
+    }
+  }
+
+  private async extractMemoryAtomsForTurn(text: string, sourceTurnId: string): Promise<void> {
+    const memoryAtomStore = this.options.memoryAtomStore;
+    if (!memoryAtomStore) {
+      return;
+    }
+    try {
+      const extractor = this.options.memoryAtomExtractor ?? new DeterministicMemoryAtomExtractor();
+      const atoms = await extractor.extract({
+        text,
+        threadId: this.threadId,
+        sourceTurnIds: [sourceTurnId],
+        sourceSessionId: this.options.sessionStore.sessionId
+      });
+      for (const atom of atoms) {
+        await memoryAtomStore.append(atom);
+      }
+    } catch (error) {
+      console.warn(`Greyfield memory atom extraction unavailable: ${formatError(error)}`);
     }
   }
 

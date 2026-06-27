@@ -1,6 +1,7 @@
 import type { CharacterPersona } from "./persona";
 import type { ChatMessage } from "./providers";
 import { formatRecallContextForPrompt, type RecallContext } from "./memory-context";
+import { formatMemoryAtomRecallContextForPrompt, type MemoryAtomRecallContext } from "./memory-atoms";
 import type { SessionTurn } from "./session-store";
 
 export interface PromptAssemblyInput {
@@ -12,6 +13,7 @@ export interface PromptAssemblyInput {
   sessionId: string;
   threadId: string;
   recallContext?: RecallContext;
+  atomRecallContext?: MemoryAtomRecallContext;
 }
 
 export function assemblePrompt(input: PromptAssemblyInput): ChatMessage[] {
@@ -27,6 +29,7 @@ export function assemblePrompt(input: PromptAssemblyInput): ChatMessage[] {
     `Thread: ${input.threadId}`,
     `Session: ${input.sessionId}`,
     input.memory.trim().length > 0 ? `Memory:\n${input.memory.trim()}` : "Memory: none yet.",
+    input.atomRecallContext ? formatAtomRecallContextSection(input.atomRecallContext) : "",
     input.recallContext ? formatRecallContextSection(input.recallContext) : "",
     input.handoff.trim().length > 0 ? `Recent handoff:\n${input.handoff.trim()}` : "Recent handoff: none yet."
   ].filter((section) => section.length > 0);
@@ -41,4 +44,9 @@ export function assemblePrompt(input: PromptAssemblyInput): ChatMessage[] {
 function formatRecallContextSection(context: RecallContext): string {
   const formatted = formatRecallContextForPrompt(context);
   return formatted.length > 0 ? `Recall context:\n${formatted}` : "Recall context: no relevant long-context summaries.";
+}
+
+function formatAtomRecallContextSection(context: MemoryAtomRecallContext): string {
+  const formatted = formatMemoryAtomRecallContextForPrompt(context);
+  return formatted.length > 0 ? `Atom recall context:\n${formatted}` : "Atom recall context: no relevant long-term memory atoms.";
 }
