@@ -21,6 +21,16 @@ const longChunks = [
   finalTail
 ];
 
+interface BubbleState {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  viewportWidth: number;
+  viewportHeight: number;
+}
+
 let requestCount = 0;
 const server = createServer(async (_request: IncomingMessage, response: ServerResponse) => {
   requestCount += 1;
@@ -168,91 +178,55 @@ async function sendMessage(page: Page, text: string): Promise<void> {
   await page.getByRole("button", { name: "Send" }).click();
 }
 
-async function readBubbleState(page: Page): Promise<{
-  text: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  viewportWidth: number;
-  viewportHeight: number;
-}> {
-  return page.locator(".speech-bubble").evaluate((element) => {
-    const rect = element.getBoundingClientRect();
-    return {
-      text: element.textContent?.trim() ?? "",
-      x: Math.round(rect.x),
-      y: Math.round(rect.y),
-      width: Math.round(rect.width),
-      height: Math.round(rect.height),
-      viewportWidth: window.innerWidth,
-      viewportHeight: window.innerHeight
-    };
-  });
+async function waitForBubbleState(
+  page: Page,
+  textCondition: { expectedText?: string; capped?: boolean }
+): Promise<BubbleState> {
+  const handle = await page.waitForFunction(
+    (condition) => {
+      const element = document.querySelector<HTMLElement>(".speech-bubble");
+      if (!element) {
+        return false;
+      }
+      const text = element.textContent?.trim() ?? "";
+      if (condition.expectedText && !text.includes(condition.expectedText)) {
+        return false;
+      }
+      if (condition.capped && !text.endsWith("...")) {
+        return false;
+      }
+      const rect = element.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) {
+        return false;
+      }
+      return {
+        text,
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight
+      };
+    },
+    textCondition,
+    { timeout: 10_000 }
+  );
+  return (await handle.jsonValue()) as BubbleState;
 }
 
 async function waitForLaidOutBubbleState(
   page: Page,
   expectedText = ""
-): Promise<{
-  text: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  viewportWidth: number;
-  viewportHeight: number;
-}> {
-  await page.waitForFunction(
-    (text) => {
-      const element = document.querySelector<HTMLElement>(".speech-bubble");
-      if (!element) {
-        return false;
-      }
-      const rect = element.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0 && (text.length === 0 || element.textContent?.includes(text));
-    },
-    expectedText,
-    { timeout: 10_000 }
-  );
-  return readBubbleState(page);
+): Promise<BubbleState> {
+  return waitForBubbleState(page, expectedText ? { expectedText } : {});
 }
 
-async function waitForCappedBubbleState(
-  page: Page
-): Promise<{
-  text: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  viewportWidth: number;
-  viewportHeight: number;
-}> {
-  await page.waitForFunction(
-    () => {
-      const element = document.querySelector<HTMLElement>(".speech-bubble");
-      if (!element) {
-        return false;
-      }
-      const rect = element.getBoundingClientRect();
-      const text = element.textContent?.trim() ?? "";
-      return rect.width > 0 && rect.height > 0 && text.endsWith("...");
-    },
-    undefined,
-    { timeout: 10_000 }
-  );
-  return readBubbleState(page);
+async function waitForCappedBubbleState(page: Page): Promise<BubbleState> {
+  return waitForBubbleState(page, { capped: true });
 }
 
-function assertBubbleInViewport(bubble: {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  viewportWidth: number;
-  viewportHeight: number;
-}): void {
+function assertBubbleInViewport(bubble: BubbleState): void {
   if (
     bubble.width <= 0 ||
     bubble.height <= 0 ||
