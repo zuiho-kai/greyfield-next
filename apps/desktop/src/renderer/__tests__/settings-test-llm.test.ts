@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { ACTIVE_CHAT_TEST_LLM_GUIDANCE, describeProviderTestStatus, describeTestLlmAction } from "../settings-test-llm";
+import {
+  ACTIVE_CHAT_TEST_LLM_GUIDANCE,
+  ACTIVE_CHAT_TEST_VOICE_GUIDANCE,
+  describeProviderTestStatus,
+  describeTestLlmAction,
+  describeTestVoiceAction
+} from "../settings-test-llm";
 
 describe("describeTestLlmAction", () => {
   it("disables Test LLM while a provider test is running", () => {
@@ -67,5 +73,46 @@ describe("describeTestLlmAction", () => {
       detail: "bad key"
     });
     expect(describeProviderTestStatus({ status: "idle", message: "" })).toBeNull();
+  });
+});
+
+describe("describeTestVoiceAction", () => {
+  it("disables Test Voice while a voice test is running", () => {
+    expect(describeTestVoiceAction("idle", "testing")).toEqual({
+      disabled: true,
+      disableReason: "",
+      label: "Testing voice...",
+      tone: "testing"
+    });
+  });
+
+  it("disables Test Voice during thinking or speaking with active-chat guidance", () => {
+    expect(describeTestVoiceAction("thinking", "idle")).toEqual({
+      disabled: true,
+      disableReason: ACTIVE_CHAT_TEST_VOICE_GUIDANCE,
+      label: "Test Voice",
+      tone: "active-chat"
+    });
+    expect(describeTestVoiceAction("speaking", "success")).toEqual({
+      disabled: true,
+      disableReason: ACTIVE_CHAT_TEST_VOICE_GUIDANCE,
+      label: "Test Voice",
+      tone: "active-chat"
+    });
+  });
+
+  it("keeps existing voice blocked reasons and idle state", () => {
+    expect(describeTestVoiceAction("idle", "idle", "Choose the voice before testing.")).toEqual({
+      disabled: true,
+      disableReason: "Choose the voice before testing.",
+      label: "Test Voice",
+      tone: "blocked"
+    });
+    expect(describeTestVoiceAction("listening", "error")).toEqual({
+      disabled: false,
+      disableReason: "",
+      label: "Test Voice",
+      tone: "idle"
+    });
   });
 });

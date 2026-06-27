@@ -25,6 +25,7 @@ Greyfield Next is a TypeScript monorepo for a Live2D desktop companion. This fil
 - New feature work should end as a pull request, not an untracked local patch. Do not push directly to `main`.
 - Never use vague "code check this" review framing. Use module-owner and project-owner review levels plus explicit audit dimensions.
 - Frontend-visible PRs are not mergeable on green tests alone. The agent must exercise the ordinary user path, inspect current screenshots, and run the relevant harness gate before asking the user to verify manually.
+- PRs with unresolved bot-authored inline review threads are not mergeable. Fix the issue or explicitly resolve the thread as not applicable; CI enforces this with `scripts/check-pr-bot-review-threads.mjs`.
 - V1 completion claims require a manifest/product-plan audit plus merged main/current-head evidence. PR-local evidence can support review, but it cannot be release wording until rerun on the target branch.
 - Electron/browser harnesses that build desktop artifacts or launch windows must run serially unless isolation is explicitly proven. Parallelize unit/static checks, not shared Electron desktop flows.
 - Prefer appending to existing knowledge docs over creating tiny one-off rule files.

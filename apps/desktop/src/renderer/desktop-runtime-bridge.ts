@@ -158,6 +158,8 @@ export class DesktopRuntimeBridge {
     });
     this.host?.on("provider:test-voice-result", (result) => {
       const text = result.text ?? "Voice test";
+      const returnedAudio = result.ok ? result.data : undefined;
+      const canPlayReturnedAudio = returnedAudio !== undefined && this.speechOutput !== undefined;
       this.state = {
         ...this.state,
         voiceTest: {
@@ -165,10 +167,10 @@ export class DesktopRuntimeBridge {
           message: formatVoiceTestMessage(result.message, result.ok)
         },
         voiceErrorMessage: result.ok ? "" : result.message,
-        audioQueue: result.ok && result.data ? [...this.state.audioQueue, text] : this.state.audioQueue
+        audioQueue: canPlayReturnedAudio ? [...this.state.audioQueue, text] : this.state.audioQueue
       };
-      if (result.ok && result.data) {
-        this.playSpeech(text, result.data, { force: true });
+      if (returnedAudio && this.speechOutput) {
+        this.playSpeech(text, returnedAudio, { force: true });
       }
       this.emitStateChange();
     });
@@ -358,13 +360,14 @@ export class DesktopRuntimeBridge {
     };
     this.host?.send("provider:test-voice", {});
     if (!this.host) {
+      const canPlayPreviewAudio = Boolean(this.speechOutput);
       this.state = {
         ...this.state,
         voiceTest: {
           status: "success",
           message: "Voice test succeeded."
         },
-        audioQueue: [...this.state.audioQueue, "你好，这是 Greyfield 的语音测试。"]
+        audioQueue: canPlayPreviewAudio ? [...this.state.audioQueue, "你好，这是 Greyfield 的语音测试。"] : this.state.audioQueue
       };
     }
     return this.getState();
