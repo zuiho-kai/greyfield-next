@@ -162,6 +162,10 @@ function registerIpc(): void {
     void deleteMemorySummary(payload.id);
   });
 
+  ipcMain.on("memory:summary-clear", () => {
+    void clearMemorySummaries();
+  });
+
   ipcMain.on("memory:export-request", (event) => {
     void exportMemory(event.sender);
   });
@@ -310,6 +314,18 @@ async function updateMemorySummary(payload: Parameters<NonNullable<typeof runtim
 
 async function deleteMemorySummary(id: string): Promise<void> {
   const result = await runtimeService?.deleteMemorySummary(id);
+  if (!result) {
+    broadcastMemoryActionResult({ ok: false, message: "Memory runtime is not available." });
+    return;
+  }
+  broadcastMemoryActionResult({ ok: result.ok, message: result.message });
+  if (result.snapshot) {
+    broadcastMemoryDebugSnapshotPayload(result.snapshot);
+  }
+}
+
+async function clearMemorySummaries(): Promise<void> {
+  const result = await runtimeService?.clearMemorySummaries();
   if (!result) {
     broadcastMemoryActionResult({ ok: false, message: "Memory runtime is not available." });
     return;

@@ -511,6 +511,30 @@ export class DesktopRuntimeBridge {
     return this.getState();
   }
 
+  clearMemorySummaries(): DesktopRendererState {
+    this.state = {
+      ...this.state,
+      memoryDebug: {
+        ...this.state.memoryDebug,
+        actionStatus: "working",
+        actionMessage: "Clearing summary memory...",
+        exportText: ""
+      }
+    };
+    this.host?.send("memory:summary-clear", {});
+    if (!this.host) {
+      this.state = {
+        ...this.state,
+        memoryDebug: {
+          ...this.state.memoryDebug,
+          actionStatus: "success",
+          actionMessage: "Summary memory cleared in preview."
+        }
+      };
+    }
+    return this.getState();
+  }
+
   exportMemory(): DesktopRendererState {
     this.state = {
       ...this.state,

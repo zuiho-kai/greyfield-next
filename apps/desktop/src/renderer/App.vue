@@ -61,6 +61,7 @@
     @refresh-memory-debug="refreshMemoryDebug"
     @memory-summary-update="updateMemorySummary"
     @memory-summary-delete="deleteMemorySummary"
+    @memory-summary-clear="clearMemorySummaries"
     @memory-export="exportMemory"
     @open-chat="openChat"
   />
@@ -313,6 +314,10 @@ function updateMemorySummary(payload: { id: string; summary?: string; recallCues
 
 function deleteMemorySummary(payload: { id: string }): void {
   syncState(bridge.deleteMemorySummary(payload.id));
+}
+
+function clearMemorySummaries(): void {
+  syncState(bridge.clearMemorySummaries());
 }
 
 function exportMemory(): void {

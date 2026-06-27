@@ -211,6 +211,30 @@ export class RuntimeService {
     };
   }
 
+  async clearMemorySummaries(): Promise<MemoryControlResult> {
+    if (!this.summarySegmentStore) {
+      return { ok: false, message: "Memory summaries are not available in this runtime." };
+    }
+    const summaries = await this.summarySegmentStore.list(this.threadId);
+    if (summaries.length === 0) {
+      return {
+        ok: true,
+        message: "No summary memory to clear.",
+        snapshot: await this.getMemoryDebugSnapshot()
+      };
+    }
+
+    for (const segment of summaries) {
+      await this.summarySegmentStore.delete(segment.id);
+    }
+    this.lastRecallContext = undefined;
+    return {
+      ok: true,
+      message: `Cleared ${summaries.length} summary ${summaries.length === 1 ? "memory" : "memories"}. Raw chat history was kept.`,
+      snapshot: await this.getMemoryDebugSnapshot()
+    };
+  }
+
   async exportMemory(limit = 200): Promise<MemoryExportResult> {
     const snapshot = await this.getMemoryDebugSnapshot(limit);
     return {

@@ -15,10 +15,25 @@ const sessionPath = join(tempDir, "sessions", "desktop-main-session.jsonl");
 const summaryPath = join(tempDir, "memory", "summary-segments.jsonl");
 const artifactDir = join(workspaceRoot, ".cache", "greyfield-memory-summary", "latest");
 const settingsScreenshotPath = join(artifactDir, "settings-memory.png");
+const providerSecret = "memory-library-provider-secret";
 
 let app: ElectronApplication | undefined;
 try {
-  await writeFile(configPath, `${JSON.stringify(defaultGreyfieldConfig, null, 2)}\n`, "utf8");
+  await writeFile(
+    configPath,
+    `${JSON.stringify(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          apiKey: providerSecret
+        }
+      },
+      null,
+      2
+    )}\n`,
+    "utf8"
+  );
   await mkdir(artifactDir, { recursive: true });
 
   app = await electron.launch({
@@ -94,29 +109,49 @@ try {
   const settings = await waitForRoleWindow(app, "settings");
   await settings.waitForSelector(".greyfield-shell");
   await settings.getByRole("button", { name: "Refresh memory" }).click();
-  await settings.locator(".memory-debug", { hasText: "Summaries 1" }).waitFor();
-  await settings.locator(".memory-debug", { hasText: "desktop-main-session-1" }).waitFor();
-  await settings.locator(".memory-debug", { hasText: "Last recall" }).waitFor();
-  await settings.locator(".memory-debug", { hasText: "cue:hiyori" }).waitFor();
+  const memoryLibrary = settings.locator('[aria-label="Memory Library"]');
+  await memoryLibrary.waitFor();
+  await memoryLibrary.locator(".memory-library__lane", { hasText: "Summary" }).waitFor();
+  await memoryLibrary.locator(".memory-library__lane", { hasText: "Facts" }).waitFor();
+  await memoryLibrary.locator(".memory-library__lane", { hasText: "Preferences" }).waitFor();
+  await memoryLibrary.locator(".memory-library__lane", { hasText: "Relationships" }).waitFor();
+  await memoryLibrary.locator(".memory-library__lane", { hasText: "Events" }).waitFor();
+  await memoryLibrary.locator(".memory-library__lane", { hasText: "Scenes" }).waitFor();
+  await memoryLibrary.locator(".memory-library__stats", { hasText: "Enabled 1" }).waitFor();
+  await memoryLibrary.locator(".memory-library__meta", { hasText: "desktop-main-session-1" }).waitFor();
+  await memoryLibrary.locator(".memory-library__block--recall", { hasText: "Last recalled memory" }).waitFor();
+  await memoryLibrary.locator(".memory-library__block--recall", { hasText: "cue:hiyori" }).waitFor();
+  const memoryLibraryText = ((await memoryLibrary.textContent()) ?? "").toLowerCase();
+  for (const forbidden of ["pending", "candidate", "approval"]) {
+    if (memoryLibraryText.includes(forbidden)) {
+      throw new Error(`Memory Library exposed forbidden ${forbidden} UI text: ${memoryLibraryText}`);
+    }
+  }
+  if (memoryLibraryText.includes(providerSecret)) {
+    throw new Error("Memory Library rendered the configured provider API key.");
+  }
 
-  await settings.getByLabel("Memory summary summary-1").fill("Edited memory: User prefers Hiyori and Sakura.");
-  await settings.getByLabel("Memory cues summary-1").fill("edited-hiyori, hiyori, sakura");
+  await settings.getByLabel("Memory text summary-1").fill("Edited memory: User prefers Hiyori and Sakura.");
+  await settings.getByLabel("Recall cues summary-1").fill("edited-hiyori, hiyori, sakura");
   await settings.getByRole("button", { name: "Save memory summary-1" }).click();
-  await settings.locator(".memory-debug", { hasText: "Memory summary-1 saved." }).waitFor();
+  await memoryLibrary.getByText("Memory summary-1 saved.").waitFor();
   const editedSummaryJsonl = await waitForFileContaining(summaryPath, [
     "Edited memory: User prefers Hiyori and Sakura.",
     "edited-hiyori"
   ]);
 
-  await settings.getByRole("button", { name: "Export memory" }).click();
-  await settings.getByLabel("Memory export").waitFor();
-  const exportedMemoryText = await settings.getByLabel("Memory export").inputValue();
+  await settings.getByRole("button", { name: "Export library" }).click();
+  await settings.getByLabel("Memory library export").waitFor();
+  const exportedMemoryText = await settings.getByLabel("Memory library export").inputValue();
   if (!exportedMemoryText.includes("Edited memory: User prefers Hiyori and Sakura.") || !exportedMemoryText.includes("第一轮：我喜欢 Hiyori。")) {
     throw new Error(`Memory export missed edited summary or raw turn: ${exportedMemoryText}`);
   }
+  if (exportedMemoryText.includes(providerSecret)) {
+    throw new Error("Memory export included the configured provider API key.");
+  }
 
   await settings.getByRole("button", { name: "Disable memory summary-1" }).click();
-  await settings.locator(".memory-debug", { hasText: "Memory summary-1 disabled." }).waitFor();
+  await memoryLibrary.getByText("Memory summary-1 disabled.").waitFor();
   await waitForFileContaining(summaryPath, ['"id":"summary-1"', '"disabled":true']);
 
   await sendMessage(chat, "edited-hiyori 这个记忆还在吗？");
@@ -133,9 +168,18 @@ try {
   }
 
   await settings.getByRole("button", { name: "Delete memory summary-1" }).click();
-  await settings.locator(".memory-debug", { hasText: "Memory summary-1 deleted. Raw chat history was kept." }).waitFor();
+  await memoryLibrary.getByText("Memory summary-1 deleted. Raw chat history was kept.").waitFor();
   const summaryAfterDelete = await waitForFileNotContaining(summaryPath, '"id":"summary-1"');
   const sessionAfterDelete = await waitForFileContaining(sessionPath, ["第一轮：我喜欢 Hiyori。"]);
+
+  await sendMessage(chat, "清空前再生成一条摘要。");
+  await waitForAssistantCount(chat, 6);
+  await waitForFileContaining(summaryPath, ['"id":"summary-2"']);
+  await settings.getByRole("button", { name: "Refresh memory" }).click();
+  await settings.locator('[aria-label="Summary memory summary-2"]').waitFor();
+  await settings.getByRole("button", { name: "Clear summary memory" }).click();
+  await memoryLibrary.getByText("Cleared 1 summary memory. Raw chat history was kept.").waitFor();
+  await waitForFileNotContaining(summaryPath, '"id":"summary-2"');
   await settings.screenshot({ path: settingsScreenshotPath, fullPage: true });
 
   console.log(
@@ -153,6 +197,9 @@ try {
         memoryExportVisible: true,
         disabledMemorySkipped: true,
         deletedMemoryKeptRawTurns: true,
+        clearedSummaryMemory: true,
+        noPendingCandidateApprovalUi: true,
+        memoryExportExcludedProviderSecret: true,
         settingsMemoryVisible: true,
         settingsScreenshotPath,
         summaryIncludesSourceTurns: true

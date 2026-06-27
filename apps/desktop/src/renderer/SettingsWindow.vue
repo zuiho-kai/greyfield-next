@@ -316,49 +316,87 @@
           </div>
         </div>
 
-        <div class="settings-section memory-debug" aria-label="Memory">
+        <div class="settings-section memory-library" aria-label="Memory Library">
           <header class="settings-section__header">
-            <h2>Memory</h2>
-            <span>{{ memoryStatusLabel }}</span>
+            <h2>Memory Library</h2>
+            <span>{{ memoryLibraryStatusLabel }}</span>
           </header>
-          <div class="memory-debug__stats">
-            <span>Raw {{ memoryRawCount }}</span>
-            <span>Summaries {{ memorySummaryCount }}</span>
-            <span>Recall {{ memoryRecallCount }}</span>
+
+          <div class="memory-library__privacy" role="note">
+            <strong>Local memory controls</strong>
+            <span>Exports include memory text and source turns. Provider credentials stay out of this library.</span>
           </div>
-          <div v-if="memorySegments.length > 0" class="memory-debug__list" aria-label="Memory summaries">
+
+          <div class="memory-library__lanes" aria-label="Memory types">
+            <span
+              v-for="lane in memoryTypeLanes"
+              :key="lane.label"
+              class="memory-library__lane"
+              :class="{ 'memory-library__lane--future': lane.future }"
+            >
+              <strong>{{ lane.label }}</strong>
+              <small>{{ lane.detail }}</small>
+            </span>
+          </div>
+
+          <div class="memory-library__stats">
+            <span>Raw turns {{ memoryRawCount }}</span>
+            <span>Enabled {{ memoryEnabledCount }}</span>
+            <span>Disabled {{ memoryDisabledCount }}</span>
+          </div>
+
+          <div v-if="memorySegments.length > 0" class="memory-library__list" aria-label="Summary memories">
             <article
               v-for="segment in memorySegments"
               :key="segment.id"
-              class="memory-debug__segment"
-              :class="{ 'memory-debug__segment--disabled': segment.disabled }"
+              class="memory-library__segment"
+              :class="{ 'memory-library__segment--disabled': segment.disabled }"
+              :aria-label="`Summary memory ${segment.id}`"
             >
-              <header class="memory-debug__segment-header">
-                <strong>{{ segment.id }}</strong>
-                <span>{{ segment.disabled ? "Disabled" : "Active" }}</span>
+              <header class="memory-library__segment-header">
+                <div>
+                  <small>Summary memory</small>
+                  <strong>{{ segment.summary }}</strong>
+                </div>
+                <span>{{ memorySegmentStatus(segment) }}</span>
               </header>
-              <label class="memory-debug__editor">
-                <span>Summary</span>
+
+              <dl class="memory-library__meta">
+                <div>
+                  <dt>Source</dt>
+                  <dd>{{ memorySourceLabel(segment) }}</dd>
+                </div>
+                <div>
+                  <dt>Last used</dt>
+                  <dd>{{ memoryLastUsedLabel(segment) }}</dd>
+                </div>
+                <div>
+                  <dt>Updated</dt>
+                  <dd>{{ memoryUpdatedLabel(segment) }}</dd>
+                </div>
+              </dl>
+
+              <label class="memory-library__editor">
+                <span>Memory text</span>
                 <textarea
-                  :aria-label="`Memory summary ${segment.id}`"
+                  :aria-label="`Memory text ${segment.id}`"
                   :value="memorySummaryDrafts[segment.id] ?? segment.summary"
                   rows="3"
                   spellcheck="false"
                   @input="setMemorySummaryDraft(segment.id, $event)"
                 />
               </label>
-              <label class="memory-debug__editor">
-                <span>Cues</span>
+              <label class="memory-library__editor">
+                <span>Recall cues</span>
                 <input
-                  :aria-label="`Memory cues ${segment.id}`"
+                  :aria-label="`Recall cues ${segment.id}`"
                   :value="memoryCueDrafts[segment.id] ?? segment.recallCues.join(', ')"
                   autocomplete="off"
                   spellcheck="false"
                   @input="setMemoryCueDraft(segment.id, $event)"
                 />
               </label>
-              <small>Sources {{ segment.sourceTurns.map((turn) => turn.turnId).join(", ") }}</small>
-              <div class="memory-debug__actions">
+              <div class="memory-library__actions">
                 <button
                   type="button"
                   :aria-label="`Save memory ${segment.id}`"
@@ -375,7 +413,7 @@
                 </button>
                 <button
                   type="button"
-                  class="memory-debug__danger"
+                  class="memory-library__danger"
                   :aria-label="`Delete memory ${segment.id}`"
                   @click="$emit('memory-summary-delete', { id: segment.id })"
                 >
@@ -384,9 +422,9 @@
               </div>
             </article>
           </div>
-          <div v-else class="memory-debug__empty">No summary segments yet.</div>
-          <div v-if="latestRecallItem" class="memory-debug__block memory-debug__block--recall">
-            <strong>Last recall</strong>
+          <div v-else class="memory-library__empty">No summary memories yet.</div>
+          <div v-if="latestRecallItem" class="memory-library__block memory-library__block--recall">
+            <strong>Last recalled memory</strong>
             <p>{{ latestRecallItem.reason }}</p>
             <small>{{ latestRecallItem.sourceTurnIds.join(", ") }}</small>
           </div>
@@ -400,8 +438,8 @@
           </p>
           <textarea
             v-if="state.memoryDebug.exportText"
-            class="memory-debug__export"
-            aria-label="Memory export"
+            class="memory-library__export"
+            aria-label="Memory library export"
             :value="state.memoryDebug.exportText"
             readonly
             rows="5"
@@ -410,7 +448,10 @@
             <button type="button" @click="$emit('refresh-memory-debug')">
               {{ state.memoryDebug.status === "loading" ? "Refreshing..." : "Refresh memory" }}
             </button>
-            <button type="button" @click="$emit('memory-export')">Export memory</button>
+            <button type="button" @click="$emit('memory-export')">Export library</button>
+            <button type="button" class="memory-library__danger-action" @click="$emit('memory-summary-clear')">
+              Clear summary memory
+            </button>
           </div>
         </div>
 
@@ -500,6 +541,7 @@ const emit = defineEmits<{
   "refresh-memory-debug": [];
   "memory-summary-update": [payload: { id: string; summary?: string; recallCues?: string[]; disabled?: boolean }];
   "memory-summary-delete": [payload: { id: string }];
+  "memory-summary-clear": [];
   "memory-export": [];
   "open-chat": [];
 }>();
@@ -523,18 +565,54 @@ const voiceTestStatus = computed(() => describeVoiceTestStatus(props.state.voice
 const memorySnapshot = computed(() => props.state.memoryDebug.snapshot);
 const memoryRawCount = computed(() => memorySnapshot.value?.recentTurns.length ?? 0);
 const memorySummaryCount = computed(() => memorySnapshot.value?.summarySegments.length ?? 0);
-const memoryRecallCount = computed(() => memorySnapshot.value?.lastRecallContext?.items.length ?? 0);
 const memorySegments = computed(() => memorySnapshot.value?.summarySegments ?? []);
-const memoryStatusLabel = computed(() => {
+const memoryEnabledCount = computed(() => memorySegments.value.filter((segment) => !segment.disabled).length);
+const memoryDisabledCount = computed(() => memorySegments.value.filter((segment) => segment.disabled).length);
+const memoryLibraryStatusLabel = computed(() => {
   if (props.state.memoryDebug.status === "loading") {
     return "Refreshing";
   }
   if (!memorySnapshot.value) {
     return "Not loaded";
   }
-  return `${memorySummaryCount.value} summaries`;
+  return `${memoryEnabledCount.value}/${memorySummaryCount.value} enabled`;
 });
 const latestRecallItem = computed(() => memorySnapshot.value?.lastRecallContext?.items[0] ?? null);
+const latestRecallById = computed(() => {
+  const entries = (memorySnapshot.value?.lastRecallContext?.items ?? []).map((item) => [item.id, item] as const);
+  return new Map(entries);
+});
+const memoryTypeLanes = computed<Array<{ label: string; detail: string; future?: boolean }>>(() => [
+  {
+    label: "Summary",
+    detail: `${memorySummaryCount.value} stored`
+  },
+  {
+    label: "Facts",
+    detail: "Future lane",
+    future: true
+  },
+  {
+    label: "Preferences",
+    detail: "Future lane",
+    future: true
+  },
+  {
+    label: "Relationships",
+    detail: "Future lane",
+    future: true
+  },
+  {
+    label: "Events",
+    detail: "Future lane",
+    future: true
+  },
+  {
+    label: "Scenes",
+    detail: "Future lane",
+    future: true
+  }
+]);
 const memoryActionTone = computed(() => {
   if (props.state.memoryDebug.actionStatus === "error") {
     return "error";
@@ -630,6 +708,33 @@ function toggleMemorySummary(segment: SummarySegment): void {
     id: segment.id,
     disabled: !segment.disabled
   });
+}
+
+function memorySegmentStatus(segment: SummarySegment): string {
+  return segment.disabled ? "Disabled" : "Enabled";
+}
+
+function memorySourceLabel(segment: SummarySegment): string {
+  const sourceIds = segment.sourceTurns.map((turn) => turn.turnId);
+  if (sourceIds.length === 0) {
+    return "No source turns";
+  }
+  return `${sourceIds.length} source ${sourceIds.length === 1 ? "turn" : "turns"}: ${sourceIds.join(", ")}`;
+}
+
+function memoryLastUsedLabel(segment: SummarySegment): string {
+  if (segment.disabled) {
+    return "Disabled";
+  }
+  const recall = latestRecallById.value.get(segment.id);
+  if (!recall) {
+    return "Not recalled this session";
+  }
+  return `Last recall: ${recall.reason}`;
+}
+
+function memoryUpdatedLabel(segment: SummarySegment): string {
+  return segment.updatedAt ?? segment.createdAt;
 }
 
 function parseMemoryCues(text: string): string[] {

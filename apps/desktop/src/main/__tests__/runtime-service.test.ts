@@ -3,8 +3,29 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it, vi } from "vitest";
 import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
+import type { SummarySegment } from "@greyfield/core-runtime";
 import { createDesktopRuntimeStoreOptions } from "../desktop-runtime-stores";
 import { RuntimeService } from "../runtime-service";
+
+function makeSummarySegment(id: string, threadId: string, summary: string): SummarySegment {
+  return {
+    id,
+    threadId,
+    sessionId: "desktop-main-session",
+    summary,
+    recallCues: [id],
+    sourceTurns: [
+      {
+        sessionId: "desktop-main-session",
+        turnId: `${id}-turn`,
+        role: "user",
+        createdAt: "2026-06-27T00:00:00.000Z"
+      }
+    ],
+    createdAt: "2026-06-27T00:00:00.000Z",
+    updatedAt: "2026-06-27T00:00:00.000Z"
+  };
+}
 
 describe("RuntimeService", () => {
   it("runs text input in the main-process runtime and emits fake provider events", async () => {
@@ -732,6 +753,43 @@ describe("RuntimeService", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  it("clears only the current character thread summary memories", async () => {
+    let summaries: SummarySegment[] = [
+      makeSummarySegment("summary-1", "desktop:characters-greyfield-yaml", "Current thread memory."),
+      makeSummarySegment("summary-2", "desktop:characters-greyfield-yaml", "Second current thread memory."),
+      makeSummarySegment("summary-other", "desktop:other-character", "Other character memory.")
+    ];
+    const service = new RuntimeService(defaultGreyfieldConfig, {
+      summarySegmentStore: {
+        async append() {
+          throw new Error("append is not used by this test");
+        },
+        async list(threadId) {
+          return summaries.filter((segment) => segment.threadId === threadId);
+        },
+        async update() {
+          throw new Error("update is not used by this test");
+        },
+        async delete(id) {
+          const before = summaries.length;
+          summaries = summaries.filter((segment) => segment.id !== id);
+          return summaries.length !== before;
+        }
+      }
+    });
+
+    const result = await service.clearMemorySummaries();
+
+    expect(result).toMatchObject({
+      ok: true,
+      message: "Cleared 2 summary memories. Raw chat history was kept.",
+      snapshot: {
+        summarySegments: []
+      }
+    });
+    expect(summaries.map((segment) => segment.id)).toEqual(["summary-other"]);
   });
 
   it("loads desktop persona, memory, and recent turns from file-backed stores", async () => {
