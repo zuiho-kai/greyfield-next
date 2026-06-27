@@ -74,7 +74,7 @@ The benchmark is intentionally local/fake and does not require external keys. It
 
 V2.1 work must extend this fixture before claiming memory atom extraction, scene memory, calendar recall, evidence drilldown, memory layering, or vector recall quality. A feature can add a new recall engine later, but it must keep the benchmark passing or explain the updated acceptance fixture in the same PR.
 
-The current V2.0c benchmark separates narrow regression scores from product readiness. `summaryRegressionScore` and `recallRegressionScore` are locked at `1`, while `productReadinessScore` is locked at `0.16` and `v21aScenarioScore` is locked at `0.05` because memory atom extraction, scene memory, calendar recall, evidence drilldown, memory layering, role isolation, and semantic recall are not implemented yet. The current computed output is `productReadiness.score: 0.163`, `capabilityScore: 0.211`, and `scenarioScore: 0.05`. CI fails if any score drops below the recorded baseline. When future PRs intentionally add harder cases or improve the product, they must update the fixture baseline in the same PR and explain the new accepted score.
+The current V2.1g benchmark locks `summaryRegressionScore: 1`, `recallRegressionScore: 1`, `atomExtractionScore: 0.82`, `atomRecallScore: 0.61`, `productReadinessScore: 0.27`, and `v21aScenarioScore: 0.2`; the computed output is `atomExtractionScore: 0.825`, `atomRecallScore: 0.617`, `productReadiness.score: 0.277`, `capabilityScore: 0.311`, and `scenarioScore: 0.201`, with calendar recall, scene proactive trigger, LLM extraction, semantic recall, and source passage drilldown still below full implementation.
 
 Still not in this slice:
 
