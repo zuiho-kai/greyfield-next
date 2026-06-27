@@ -17,6 +17,7 @@ interface MemoryBenchmarkFixture {
     summaryRegressionScore: number;
     recallRegressionScore: number;
     productReadinessScore: number;
+    v21aScenarioScore: number;
   };
   productReadiness: ProductReadinessFixture;
   sessionId: string;
@@ -28,15 +29,44 @@ interface MemoryBenchmarkFixture {
 
 interface ProductReadinessFixture {
   targetScore: number;
+  capabilityWeight: number;
+  scenarioWeight: number;
   capabilities: ProductCapabilityFixture[];
+  scenarios: ProductScenarioFixture[];
 }
+
+type ProductReadinessStatus = "implemented" | "partial" | "not_implemented";
 
 interface ProductCapabilityFixture {
   id: string;
   description: string;
+  status: ProductReadinessStatus;
   score: number;
   weight: number;
   evidence: string;
+}
+
+interface ProductScenarioFixture {
+  id: string;
+  title: string;
+  description: string;
+  status: ProductReadinessStatus;
+  score: number;
+  weight: number;
+  dimensions: string[];
+  probeInput: string;
+  turns: Array<{
+    id: string;
+    role: SessionTurn["role"];
+    content: string;
+    createdAt?: string;
+  }>;
+  expectedBehavior: string[];
+  currentGap: string;
+  sourceExpectations: {
+    sourceTurnIds: string[];
+    exactFragments: string[];
+  };
 }
 
 interface SummaryBenchmarkCase {
@@ -92,6 +122,18 @@ interface CaseResult {
 }
 
 const defaultCreatedAt = "2026-06-26T01:00:00.000Z";
+const requiredV21aCapabilityIds = [
+  "memory-atom-extraction",
+  "calendar-recall",
+  "source-evidence-drilldown",
+  "scene-proactive-trigger",
+  "privacy-noise"
+] as const;
+const requiredV21aScenarioIds = [
+  "birthday-first-meeting-rose",
+  "game-negative-review-source-drilldown",
+  "rainy-home-hotpot-proactive-trigger"
+] as const;
 const fixture = await loadFixture();
 const recallSegments = fixture.recallSegments.map((segment) => makeSegment(segment, fixture));
 const summaryResults = fixture.summaryCases.map((testCase) => runSummaryCase(testCase, fixture));
@@ -100,12 +142,13 @@ const summaryScore = average(summaryResults.map((result) => result.score));
 const recallScore = average(recallResults.map((result) => result.score));
 const productReadinessResult = scoreProductReadiness(fixture.productReadiness);
 const ok =
-  fixture.version === 2 &&
+  fixture.version === 3 &&
   summaryScore >= fixture.thresholds.summaryScore &&
   recallScore >= fixture.thresholds.recallScore &&
   summaryScore >= fixture.baselineScores.summaryRegressionScore &&
   recallScore >= fixture.baselineScores.recallRegressionScore &&
   productReadinessResult.score >= fixture.baselineScores.productReadinessScore &&
+  productReadinessResult.scenarioScore >= fixture.baselineScores.v21aScenarioScore &&
   summaryResults.every((result) => result.passed) &&
   recallResults.every((result) => result.passed);
 
@@ -144,7 +187,7 @@ async function loadFixture(): Promise<MemoryBenchmarkFixture> {
 }
 
 function validateFixture(candidate: MemoryBenchmarkFixture): void {
-  if (candidate.version !== 2) {
+  if (candidate.version !== 3) {
     throw new Error(`Unsupported memory benchmark fixture version: ${candidate.version}`);
   }
   validateScore("thresholds.summaryScore", candidate.thresholds.summaryScore);
@@ -152,6 +195,7 @@ function validateFixture(candidate: MemoryBenchmarkFixture): void {
   validateScore("baselineScores.summaryRegressionScore", candidate.baselineScores.summaryRegressionScore);
   validateScore("baselineScores.recallRegressionScore", candidate.baselineScores.recallRegressionScore);
   validateScore("baselineScores.productReadinessScore", candidate.baselineScores.productReadinessScore);
+  validateScore("baselineScores.v21aScenarioScore", candidate.baselineScores.v21aScenarioScore);
   validateProductReadiness(candidate.productReadiness);
   if (candidate.baselineScores.summaryRegressionScore < candidate.thresholds.summaryScore) {
     throw new Error("baselineScores.summaryRegressionScore must be greater than or equal to thresholds.summaryScore");
@@ -174,18 +218,78 @@ function validateFixture(candidate: MemoryBenchmarkFixture): void {
 
 function validateProductReadiness(productReadiness: ProductReadinessFixture): void {
   validateScore("productReadiness.targetScore", productReadiness.targetScore);
+  validateScore("productReadiness.capabilityWeight", productReadiness.capabilityWeight);
+  validateScore("productReadiness.scenarioWeight", productReadiness.scenarioWeight);
   assertUnique("product capability", productReadiness.capabilities.map((capability) => capability.id));
-  const totalWeight = productReadiness.capabilities.reduce((total, capability) => total + capability.weight, 0);
+  assertUnique("product scenario", productReadiness.scenarios.map((scenario) => scenario.id));
+  const capabilityIds = new Set(productReadiness.capabilities.map((capability) => capability.id));
+  for (const id of requiredV21aCapabilityIds) {
+    if (!capabilityIds.has(id)) {
+      throw new Error(`Missing V2.1a product capability: ${id}`);
+    }
+  }
+  const scenarioIds = new Set(productReadiness.scenarios.map((scenario) => scenario.id));
+  for (const id of requiredV21aScenarioIds) {
+    if (!scenarioIds.has(id)) {
+      throw new Error(`Missing V2.1a product scenario: ${id}`);
+    }
+  }
+  const totalProductWeight = productReadiness.capabilityWeight + productReadiness.scenarioWeight;
+  if (Math.abs(totalProductWeight - 1) > 0.000_001) {
+    throw new Error(`productReadiness capability/scenario weights must add up to 1, got ${totalProductWeight}`);
+  }
+  const totalCapabilityWeight = productReadiness.capabilities.reduce((total, capability) => total + capability.weight, 0);
+  const totalScenarioWeight = productReadiness.scenarios.reduce((total, scenario) => total + scenario.weight, 0);
   if (productReadiness.capabilities.length === 0) {
     throw new Error("productReadiness.capabilities must not be empty");
   }
-  if (Math.abs(totalWeight - 1) > 0.000_001) {
-    throw new Error(`productReadiness capability weights must add up to 1, got ${totalWeight}`);
+  if (productReadiness.scenarios.length === 0) {
+    throw new Error("productReadiness.scenarios must not be empty");
+  }
+  if (Math.abs(totalCapabilityWeight - 1) > 0.000_001) {
+    throw new Error(`productReadiness capability weights must add up to 1, got ${totalCapabilityWeight}`);
+  }
+  if (Math.abs(totalScenarioWeight - 1) > 0.000_001) {
+    throw new Error(`productReadiness scenario weights must add up to 1, got ${totalScenarioWeight}`);
   }
   for (const capability of productReadiness.capabilities) {
     validateScore(`productReadiness.${capability.id}.score`, capability.score);
+    validateReadinessStatusScore(`productReadiness.${capability.id}`, capability.status, capability.score);
     if (!Number.isFinite(capability.weight) || capability.weight <= 0 || capability.weight > 1) {
       throw new Error(`productReadiness.${capability.id}.weight must be a finite positive weight`);
+    }
+    if (capability.evidence.trim().length === 0) {
+      throw new Error(`productReadiness.${capability.id}.evidence must not be empty`);
+    }
+  }
+  for (const scenario of productReadiness.scenarios) {
+    validateScore(`productReadiness.${scenario.id}.score`, scenario.score);
+    validateReadinessStatusScore(`productReadiness.${scenario.id}`, scenario.status, scenario.score);
+    if (!Number.isFinite(scenario.weight) || scenario.weight <= 0 || scenario.weight > 1) {
+      throw new Error(`productReadiness.${scenario.id}.weight must be a finite positive weight`);
+    }
+    if (scenario.dimensions.length === 0) {
+      throw new Error(`productReadiness.${scenario.id}.dimensions must not be empty`);
+    }
+    for (const dimension of scenario.dimensions) {
+      if (!capabilityIds.has(dimension)) {
+        throw new Error(`productReadiness.${scenario.id} references missing dimension ${dimension}`);
+      }
+    }
+    if (scenario.turns.length === 0) {
+      throw new Error(`productReadiness.${scenario.id}.turns must not be empty`);
+    }
+    if (scenario.expectedBehavior.length === 0) {
+      throw new Error(`productReadiness.${scenario.id}.expectedBehavior must not be empty`);
+    }
+    if (scenario.currentGap.trim().length === 0) {
+      throw new Error(`productReadiness.${scenario.id}.currentGap must not be empty`);
+    }
+    if (scenario.sourceExpectations.sourceTurnIds.length === 0) {
+      throw new Error(`productReadiness.${scenario.id}.sourceExpectations.sourceTurnIds must not be empty`);
+    }
+    if (scenario.sourceExpectations.exactFragments.length === 0) {
+      throw new Error(`productReadiness.${scenario.id}.sourceExpectations.exactFragments must not be empty`);
     }
   }
 }
@@ -206,15 +310,45 @@ function assertUnique(label: string, values: string[]): void {
   }
 }
 
+function validateReadinessStatusScore(label: string, status: ProductReadinessStatus, score: number): void {
+  if (status === "not_implemented" && score !== 0) {
+    throw new Error(`${label} is not implemented and must keep score 0`);
+  }
+  if (status === "partial" && (score <= 0 || score > 0.6)) {
+    throw new Error(`${label} is partial and must keep a low score from 0 to 0.6`);
+  }
+  if (status === "implemented" && score < 0.75) {
+    throw new Error(`${label} is implemented and must have score >= 0.75`);
+  }
+}
+
 function scoreProductReadiness(productReadiness: ProductReadinessFixture): {
   score: number;
   targetScore: number;
+  capabilityScore: number;
+  scenarioScore: number;
+  capabilityWeight: number;
+  scenarioWeight: number;
   capabilities: ProductCapabilityFixture[];
+  scenarios: ProductScenarioFixture[];
 } {
+  const capabilityScore = weightedAverage(
+    productReadiness.capabilities.map((capability): [number, number] => [capability.score, capability.weight])
+  );
+  const scenarioScore = weightedAverage(
+    productReadiness.scenarios.map((scenario): [number, number] => [scenario.score, scenario.weight])
+  );
   return {
-    score: roundScore(productReadiness.capabilities.reduce((total, capability) => total + capability.score * capability.weight, 0)),
+    score: roundScore(
+      capabilityScore * productReadiness.capabilityWeight + scenarioScore * productReadiness.scenarioWeight
+    ),
     targetScore: productReadiness.targetScore,
-    capabilities: productReadiness.capabilities
+    capabilityScore: roundScore(capabilityScore),
+    scenarioScore: roundScore(scenarioScore),
+    capabilityWeight: productReadiness.capabilityWeight,
+    scenarioWeight: productReadiness.scenarioWeight,
+    capabilities: productReadiness.capabilities,
+    scenarios: productReadiness.scenarios
   };
 }
 

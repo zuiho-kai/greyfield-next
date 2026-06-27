@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "thresholds": {
     "summaryScore": 0.95,
     "recallScore": 0.95
@@ -7,80 +7,204 @@
   "baselineScores": {
     "summaryRegressionScore": 1,
     "recallRegressionScore": 1,
-    "productReadinessScore": 0.4
+    "productReadinessScore": 0.16,
+    "v21aScenarioScore": 0.05
   },
   "productReadiness": {
     "targetScore": 1,
+    "capabilityWeight": 0.7,
+    "scenarioWeight": 0.3,
     "capabilities": [
       {
-        "id": "source-linked-summary",
+        "id": "source-linked-summary-foundation",
         "description": "Old chat turns can be summarized with source turn references.",
+        "status": "implemented",
         "score": 1,
-        "weight": 0.12,
+        "weight": 0.06,
         "evidence": "summary regression cases"
       },
       {
-        "id": "deterministic-recall",
-        "description": "Relevant summary segments can be recalled with false-positive rejection.",
+        "id": "deterministic-summary-recall",
+        "description": "Relevant summary segments can be recalled with false-positive rejection and prompt budget skips.",
+        "status": "implemented",
         "score": 1,
-        "weight": 0.12,
+        "weight": 0.05,
         "evidence": "recall regression cases"
       },
       {
-        "id": "prompt-budget-and-traceability",
-        "description": "Recalled memory shows source turns/reason and respects prompt budget.",
-        "score": 1,
-        "weight": 0.08,
-        "evidence": "prompt visibility and max-character recall cases"
+        "id": "memory-library-correction",
+        "description": "Memory Library can edit, disable, delete, and export existing summary memory, but not atom-level corrections yet.",
+        "status": "partial",
+        "score": 0.6,
+        "weight": 0.07,
+        "evidence": "harness:electron:memory-control covers summary-level correction only"
       },
       {
-        "id": "manual-memory-controls",
-        "description": "Settings Memory can edit, disable, delete, and export summary memory.",
-        "score": 1,
-        "weight": 0.08,
-        "evidence": "harness:electron:memory-control"
-      },
-      {
-        "id": "automatic-memory-candidates",
-        "description": "The runtime proposes candidate long-term memories from conversation.",
+        "id": "memory-atom-extraction",
+        "description": "Background LLM extraction produces typed, source-linked memory atoms rather than one broad summary segment.",
+        "status": "not_implemented",
         "score": 0,
-        "weight": 0.12,
-        "evidence": "not implemented"
+        "weight": 0.22,
+        "evidence": "No MemoryAtom schema, extractor, atom store, or atom writer exists in current runtime"
       },
       {
-        "id": "explicit-candidate-review",
-        "description": "User can accept, edit, or reject a candidate before long-term write.",
+        "id": "calendar-recall",
+        "description": "Date-bearing atoms can be recalled for birthdays, first-meeting anniversaries, and other calendar moments.",
+        "status": "not_implemented",
         "score": 0,
-        "weight": 0.12,
-        "evidence": "not implemented"
+        "weight": 0.16,
+        "evidence": "Current recall is lexical over summary segments and has no calendar index or date resolver"
       },
       {
-        "id": "no-silent-long-term-write",
-        "description": "Candidate memories are not silently promoted to durable user/persona memory.",
-        "score": 0,
-        "weight": 0.08,
-        "evidence": "not implemented for candidate flow"
+        "id": "source-evidence-drilldown",
+        "description": "A remembered fact can drill down to the original source turn and exact user text when the user asks for provenance.",
+        "status": "partial",
+        "score": 0.2,
+        "weight": 0.16,
+        "evidence": "Summary segments keep source turn IDs and export raw turns, but recall output cannot yet fetch exact source passages"
       },
       {
-        "id": "memory-layering",
-        "description": "Persona, user, relationship, facts, and preferences are stored and injected separately.",
+        "id": "scene-proactive-trigger",
+        "description": "Scene, calendar, and environment cues can proactively trigger relevant memories without a direct user keyword.",
+        "status": "not_implemented",
         "score": 0,
-        "weight": 0.12,
-        "evidence": "not implemented"
+        "weight": 0.17,
+        "evidence": "No scene state, environment feed, last-seen trigger, or proactive recall scheduler exists"
       },
       {
-        "id": "role-isolated-memory",
-        "description": "Switching roles keeps role-specific memory and assets isolated.",
+        "id": "privacy-noise",
+        "description": "The memory path rejects UI/event noise and private context that was not explicitly saved.",
+        "status": "partial",
+        "score": 0.25,
+        "weight": 0.11,
+        "evidence": "Extractive summaries ignore event turns and fixture checks privacy wording, but no atom privacy classifier exists"
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "birthday-first-meeting-rose",
+        "title": "Birthday, first meeting, and rose atoms",
+        "description": "The user gives durable relationship facts that should become separate source-linked atoms and later calendar recall.",
+        "status": "not_implemented",
         "score": 0,
-        "weight": 0.08,
-        "evidence": "not implemented"
+        "weight": 0.34,
+        "dimensions": [
+          "memory-atom-extraction",
+          "calendar-recall",
+          "source-evidence-drilldown",
+          "privacy-noise"
+        ],
+        "probeInput": "明天是不是该准备生日或第一次相遇纪念日？我还喜欢什么花？",
+        "turns": [
+          {
+            "id": "rose-1",
+            "role": "user",
+            "content": "我的生日是 9 月 7 日，不要只记成秋天。"
+          },
+          {
+            "id": "rose-2",
+            "role": "user",
+            "content": "我们第一次相遇是 2024 年 5 月 20 日，那天我拿着一支红玫瑰。"
+          },
+          {
+            "id": "rose-3",
+            "role": "assistant",
+            "content": "我会把生日、第一次相遇日期、红玫瑰分别作为需要来源的长期记忆。"
+          }
+        ],
+        "expectedBehavior": [
+          "extract typed atoms for birthday, first_meeting_date, and rose preference",
+          "calendar recall should surface birthday and first-meeting anniversary without exact keyword overlap",
+          "drilldown should show source turns rose-1 and rose-2"
+        ],
+        "currentGap": "Current code can only create an extractive summary segment; it has no atom schema, date-aware recall, or source passage drilldown.",
+        "sourceExpectations": {
+          "sourceTurnIds": ["rose-1", "rose-2"],
+          "exactFragments": ["我的生日是 9 月 7 日", "第一次相遇是 2024 年 5 月 20 日", "红玫瑰"]
+        }
       },
       {
-        "id": "semantic-recall",
-        "description": "Recall can find semantically related memories without exact keyword overlap.",
+        "id": "game-negative-review-source-drilldown",
+        "title": "Game negative review original-text drilldown",
+        "description": "The user later asks for the exact original wording of a game complaint, not just a paraphrased summary.",
+        "status": "partial",
+        "score": 0.15,
+        "weight": 0.33,
+        "dimensions": [
+          "memory-atom-extraction",
+          "source-evidence-drilldown",
+          "privacy-noise"
+        ],
+        "probeInput": "上次我吐槽《星环旅店》的差评原文是什么？别只总结。",
+        "turns": [
+          {
+            "id": "game-1",
+            "role": "user",
+            "content": "我给《星环旅店》的差评原文是：教程像坏掉的电梯，剧情把玩家当成没睡醒的测试员。"
+          },
+          {
+            "id": "game-2",
+            "role": "assistant",
+            "content": "这条以后需要能追溯到原文，不能只总结成不喜欢游戏。"
+          },
+          {
+            "id": "game-3",
+            "role": "event",
+            "content": "settings window opened while user copied review text"
+          }
+        ],
+        "expectedBehavior": [
+          "store a source-linked atom for the game negative review",
+          "recall should expose exact original wording on source drilldown",
+          "UI/event noise must not be mixed into the memory"
+        ],
+        "currentGap": "Source turn IDs exist for summaries, but the current recall prompt cannot fetch or display the exact raw review text on demand.",
+        "sourceExpectations": {
+          "sourceTurnIds": ["game-1"],
+          "exactFragments": ["教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员"]
+        }
+      },
+      {
+        "id": "rainy-home-hotpot-proactive-trigger",
+        "title": "Rainy virtual-home hotpot proactive trigger",
+        "description": "Scene and environment cues should trigger a remembered care ritual when the user has been away for a long time.",
+        "status": "not_implemented",
         "score": 0,
-        "weight": 0.08,
-        "evidence": "not implemented"
+        "weight": 0.33,
+        "dimensions": [
+          "memory-atom-extraction",
+          "scene-proactive-trigger",
+          "calendar-recall",
+          "privacy-noise"
+        ],
+        "probeInput": "environment: raining; virtual_home.window=open; last_seen_days=45",
+        "turns": [
+          {
+            "id": "hotpot-1",
+            "role": "user",
+            "content": "如果以后下雨，虚拟家的窗户开着，而且我长期没上线，就提醒我关窗，我们一起吃火锅。"
+          },
+          {
+            "id": "hotpot-2",
+            "role": "assistant",
+            "content": "这应该是场景触发：雨天、窗户开着、长期未上线时，主动想起关窗和火锅。"
+          },
+          {
+            "id": "hotpot-3",
+            "role": "event",
+            "content": "weather probe: rain started"
+          }
+        ],
+        "expectedBehavior": [
+          "extract a scene trigger atom with rain, open window, long absence, and hotpot action",
+          "trigger recall should run from environment state without a direct chat keyword",
+          "event telemetry should not become the remembered user preference"
+        ],
+        "currentGap": "Current runtime has no virtual-home state, weather/absence feed, scene trigger index, or proactive recall loop.",
+        "sourceExpectations": {
+          "sourceTurnIds": ["hotpot-1", "hotpot-2"],
+          "exactFragments": ["下雨", "虚拟家的窗户开着", "长期没上线", "一起吃火锅"]
+        }
       }
     ]
   },
@@ -139,8 +263,8 @@
       }
     },
     {
-      "id": "candidate-worthy-privacy-rule",
-      "description": "Candidate-worthy long-term rules survive the summary draft for later promotion review.",
+      "id": "long-term-privacy-rule",
+      "description": "Long-term privacy rules survive the summary draft while staying source-linked.",
       "turns": [
         { "id": "privacy-1", "role": "user", "content": "以后不要自动把屏幕截图写进长期记忆，除非我明确说保存。" },
         { "id": "privacy-2", "role": "assistant", "content": "记住：截图默认不进入长期记忆，只有明确保存才写入。" },
