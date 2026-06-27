@@ -1,6 +1,6 @@
-# Greyfield V2.0 Memory Synthesis
+# Greyfield V2.1 Memory Synthesis
 
-更新时间：2026-06-26
+更新时间：2026-06-28
 
 This document distills the memory lessons from:
 
@@ -8,197 +8,199 @@ This document distills the memory lessons from:
 - [SillyTavern](sillytavern.md)
 - [MaiBot](maibot.md)
 
-It is a product/architecture synthesis for Greyfield V2.0, not an implementation spec.
+It is a product/architecture synthesis for Greyfield V2.1 memory. The detailed roadmap lives in [Version Product Book](../../plans/version-product-book.md).
 
 ## One-Sentence Direction
 
-Greyfield V2.0 memory should be a source-linked, user-correctable character memory system:
+Greyfield memory should feel like shared history, not a debug panel:
 
 ```text
 Raw chat stays intact.
-Summary segments compress long context.
-Pinned memories are user-controlled durable facts.
-Hybrid recall brings back a small, visible set of relevant context.
+Summary compresses long context.
+LLM extraction writes source-linked memory atoms.
+Trigger recall uses keywords, semantics, dates, environment, and scene cues.
+Source drilldown recovers original detail when summary is not enough.
+Users can inspect, correct, delete, export, or disable memory.
 ```
+
+## Reference Takeaways
+
+| Reference | Useful Lesson | Greyfield Rule |
+| --- | --- | --- |
+| Clowder AI | Raw conversation remains recoverable even after summary | Never replace original turns with summaries. |
+| SillyTavern | Lorebook/World Info triggers make memory appear at the right moment | Memory needs trigger keys, aliases, secondary cues, and insertion rules. |
+| MaiBot | Long chat memory should become structured concepts/relationships, not only text blobs | Use LLM extraction for atoms and scene memories. |
 
 ## Core Abstractions
 
-| Abstraction | Meaning | Source Inspiration | Greyfield Rule |
-| --- | --- | --- | --- |
-| Raw Chat Log | Append-only original conversation turns | Clowder transcript/session truth; MaiBot source messages | Never replace this with summary. |
-| Summary Segment | Compressed episode of a time range | Clowder summary segment ledger; MaiBot mid-term memory | Must include source message IDs. |
-| Recall Cue | Natural-language retrieval handle | MaiBot `recall_cues`; SillyTavern vector queries | Store alongside every summary segment. |
-| Pinned Memory | User-owned durable memory/lore | SillyTavern World Info; Clowder materialized knowledge | Editable, deletable, typed, source-linked. |
-| Memory Candidate | Proposed long-term memory awaiting confirmation | Clowder marker/materialization gate | V2.0 should not silently pin memories. |
-| Recall Context | Per-turn selected memories inserted into prompt | SillyTavern prompt insertion; Clowder summary-first search | Visible in UI and capped by budget. |
-| Recall Trace | What was recalled and why | Clowder recall events | Useful for debugging, not truth scoring. |
+| Abstraction | Meaning | Required Fields |
+| --- | --- | --- |
+| Raw Chat Turn | Original user/assistant message | `turnId`, `sessionId`, `role`, `text`, `createdAt` |
+| Summary Segment | Compressed episode for token budget | `summary`, `sourceTurnIds`, `recallCues`, `timeRange` |
+| Memory Atom | Durable fact/opinion/preference/event/promise | `type`, `naturalText`, `structured`, `triggerKeys`, `sourceTurnIds` |
+| Scene Memory | Shared emotional scene | `place`, `weather`, `objects`, `mood`, `relationshipMeaning`, `sourceTurnIds` |
+| Trigger Rule | Why memory should be recalled | `exactKeys`, `aliases`, `semanticCues`, `calendar`, `environment`, `priority` |
+| Recall Trace | What entered the prompt and why | `memoryId`, `reason`, `sourceTurnIds`, `budgetDecision` |
 
-## Proposed Greyfield V2.0 Data Flow
+## Data Flow
 
 ```text
 1. User/assistant turns append to Raw Chat Log.
-2. When live context grows too large, old turns become a Summary Segment.
-3. Summary Segment stores summary + recall cues + source message IDs.
-4. Candidate extractor proposes durable memories from explicit user statements and summaries.
-5. User confirms, edits, rejects, or disables candidates.
-6. Confirmed memories become Pinned Memory.
-7. Each new prompt uses hybrid recall over pinned memories + summary segments.
-8. UI shows the small recall set used for this turn.
-9. User corrections update or delete pinned memories; raw logs remain intact.
+2. Older turns are summarized into source-linked Summary Segments.
+3. LLM extractor scans new turns and summaries for durable Memory Atoms and Scene Memories.
+4. Explicit save language writes memory immediately.
+5. Background extraction writes only when importance, confidence, cooldown, and dedupe pass.
+6. Each prompt recalls recent turns + relevant atoms + relevant summaries.
+7. If an atom is too compressed for the current question, Source Drilldown fetches raw turns.
+8. Settings Memory Library lets the user inspect, edit, disable, delete, and export.
 ```
 
 ## Memory Types
 
-Greyfield should not store every memory as the same shape.
+| Type | Example | Trigger Style |
+| --- | --- | --- |
+| User fact | "User works in Hong Kong timezone." | schedule/location mentions |
+| Preference | "User dislikes being called boss." | style/persona prompt assembly |
+| Opinion | "User strongly disliked xxx game because of pacing, monetization, and story." | target name, similar game, negative comparison |
+| Boundary | "Do not read screen by default." | always-on guard |
+| Relationship event | "2026-06-28 was our first meeting day." | date, anniversary, user asks about today |
+| Promise / ritual | "Give a rose or gift on the yearly anniversary." | yearly calendar trigger |
+| Scene memory | "Rainy virtual home, open window, hotpot together." | rain, home, window, hotpot, long absence |
+| Summary segment | "The last work session focused on V1 voice QA." | semantic/lexical recall with lower priority |
 
-| Type | Example | Write Policy | Recall Bias |
-| --- | --- | --- | --- |
-| User fact | "User works in Hong Kong timezone." | Candidate + confirm, or explicit user save | High when conversation references schedule/location |
-| User preference | "User dislikes being called boss." | Candidate + confirm | High for style/persona prompts |
-| Relationship memory | "We decided Hiyori is the default companion." | Candidate + confirm | High for identity/continuity |
-| Important event | "On June 26, V1 closeout was reviewed." | Summary-derived candidate | Medium, recency-sensitive |
-| Character setting | "Character calls the user by a chosen nickname." | Character card edit | Always available for that character |
-| Boundary / taboo | "Do not read screen by default." | Explicit user setting | High priority, keyword + always-on |
-| Summary segment | "Conversation from X to Y covered..." | Automatic when trimming context | Semantic recall, lower priority than pinned memory |
+## Explicit Examples
+
+### Anniversary / Rose
+
+User says:
+
+```text
+今天是我们第一次遇到的日子。我送你一朵玫瑰，明年也记得送我礼物或者玫瑰。
+```
+
+The extractor should create a relationship memory:
+
+```json
+{
+  "type": "relationship_event",
+  "naturalText": "2026-06-28 is the first meeting anniversary; the user gave a rose and expects a rose or gift every year.",
+  "structured": {
+    "event": "first_meeting_anniversary",
+    "eventDate": "2026-06-28",
+    "recurrence": "yearly",
+    "ritualAction": ["rose", "gift"]
+  },
+  "triggerKeys": ["第一次遇到", "纪念日", "玫瑰", "礼物"],
+  "sourceTurnIds": ["..."]
+}
+```
+
+On 2027-06-28, calendar recall should bring this into context even if the user does not repeat the exact words.
+
+### Game Critique With Source Drilldown
+
+User says a game is bad and lists detailed reasons. The durable atom can stay short:
+
+```json
+{
+  "type": "opinion",
+  "naturalText": "The user strongly disliked xxx game and compared future bad games against it.",
+  "structured": {
+    "target": "xxx_game",
+    "sentiment": "strong_negative",
+    "reasonSummary": ["pacing", "monetization", "story"]
+  },
+  "triggerKeys": ["xxx", "游戏", "很傻逼", "缺点"],
+  "sourceTurnIds": ["turn-1", "turn-2", "turn-3"]
+}
+```
+
+If the user later says another game feels similar, the atom should recall first, then Source Drilldown should fetch the original turns to recover concrete details.
+
+### Rainy Home Hotpot Scene
+
+User describes:
+
+```text
+某天下雨，我们在虚拟世界的家里开着窗吃火锅。
+```
+
+The extractor should create a scene memory:
+
+```json
+{
+  "type": "episodic_scene",
+  "naturalText": "A shared rainy virtual-home scene: open window, hotpot, quiet intimate mood.",
+  "structured": {
+    "place": "virtual_home",
+    "weather": "rain",
+    "objects": ["window", "hotpot"],
+    "mood": ["quiet", "intimate", "nostalgic"],
+    "relationshipMeaning": "shared_memory"
+  },
+  "triggerKeys": ["下雨", "窗", "火锅", "家", "很久没回来"],
+  "sourceTurnIds": ["..."]
+}
+```
+
+If the virtual world is raining and the user has been absent for a long time, proactive recall may generate a low-frequency message in character voice.
 
 ## Retrieval Plan
 
-### V2.0 Minimum
+Use multiple recall lanes, then fuse with budget:
 
-Use three recall lanes:
+1. Recent raw turns.
+2. High-priority boundaries and explicit user saves.
+3. Keyword/alias trigger for memory atoms.
+4. Semantic recall over atom text, cues, and summaries.
+5. Calendar recall for anniversaries, birthdays, promises, and rituals.
+6. Environment recall for scene cues such as rain, home, window, and long absence.
+7. Source drilldown when the recalled atom is relevant but lacks detail.
 
-1. Recent context: latest raw turns.
-2. Pinned memory: keyword/alias match plus type priority.
-3. Summary segment: vector or fallback lexical recall over summaries and recall cues.
-
-Then fuse results by a simple deterministic ranking:
-
-```text
-score =
-  explicit pin / boundary boost
-  + keyword match boost
-  + semantic similarity
-  + recency boost for summary segments
-  - disabled / stale / superseded penalty
-```
-
-Do not implement consumption-weighted ranking in V2.0. First make recall visible and correct.
-
-### V2.x Later
-
-Only after enough telemetry exists:
-
-- consumption signals.
-- graph relationships.
-- cross-character memory federation.
-- L2 rollups.
-- automatic candidate promotion rules.
+Prompt injection must record why each item was included or skipped.
 
 ## UI Requirements
 
-### Memory Panel
+The user should not see a daily pending-candidate approval queue.
 
-The user should see:
+Settings should provide a Memory Library:
 
-- pinned memories grouped by type.
-- pending candidates.
-- summary segments.
+- grouped memory list: facts, preferences, opinions, relationship, events, scenes, summaries.
+- natural-language memory text.
 - source links back to chat turns.
-- enabled/disabled state.
-- edit/delete/export controls.
-- embedding/index status if semantic recall is enabled.
+- last used time and recall reason.
+- edit, disable, delete, export, and clear controls.
+- character/user/session isolation.
 
-### Per-Turn Recall Feed
-
-During or after a reply, the user should be able to inspect:
-
-- which memories were used.
-- whether each item was pinned memory, summary segment, or recent context.
-- why it was recalled: keyword, semantic, always-on, recent.
-- whether any high-scoring item was skipped due to prompt budget.
-
-This prevents the "black-box RAG" feeling.
+Per-turn recall trace can be a debug or advanced view, not the primary product surface.
 
 ## Safety And Privacy Rules
 
-- No silent long-term memory writes in V2.0.
-- Every pinned memory must be editable and deletable.
-- Every pinned memory must have provenance or be explicitly user-authored.
-- Embeddings are optional. If disabled, keyword/lexical recall still works.
-- Logs and diagnostic bundles must redact provider secrets and should not include raw private memories unless explicitly exported.
+- Explicit save language must write memory.
+- Background writes require importance, confidence, dedupe, and cooldown.
+- All durable memory must have provenance or be user-authored.
+- Users can edit, disable, delete, export, or turn off memory.
+- Embeddings are optional; lexical recall must still work.
+- Diagnostic bundles redact provider secrets and do not include raw private memory unless explicitly exported.
+- Screen captures do not become long-term memory unless the user explicitly saves them.
 - Character memory and user memory are separate stores.
-- Summary segments cannot be treated as verified facts.
-
-## V2.0 Implementation Phases
-
-### V2.0a: Raw Log + Summary Segments
-
-Deliver:
-
-- summary segment schema.
-- summary prompt.
-- automatic summary when old messages leave live context.
-- source message IDs.
-- recall cues.
-- UI list with "jump to source".
-
-Acceptance:
-
-- A long fake conversation produces one or more summary segments.
-- Raw turns remain available.
-- Deleting a summary segment does not delete raw chat.
-- Summary prompt tests check no fabrication and required fields.
-
-### V2.0b: Memory Candidates + Pinned Memory
-
-Deliver:
-
-- candidate extractor.
-- candidate queue UI.
-- memory type schema.
-- confirm/edit/reject flow.
-- pinned memory list.
-
-Acceptance:
-
-- Explicit user preference creates a candidate, not an automatic pinned memory.
-- Confirmed memory appears in pinned list and survives restart.
-- Rejected memory is not recalled.
-- Edited/deleted memory updates recall behavior.
-
-### V2.0c: Hybrid Recall + Recall Feed
-
-Deliver:
-
-- keyword/alias recall for pinned memories.
-- vector or lexical fallback recall for summary segments.
-- deterministic prompt budget cap.
-- per-turn recall feed.
-
-Acceptance:
-
-- Proper noun / taboo memory is recalled by keyword.
-- Semantically similar query recalls a summary segment when embeddings are enabled.
-- With embeddings disabled, lexical recall still works and UI shows degraded state.
-- Recall feed shows memory type, reason, and source.
+- Summary segments are compressed evidence, not verified facts.
 
 ## Test And Harness Bar
 
-V2.0 is memory-sensitive, so tests must cover both storage and product trust:
+Memory work is not complete without benchmark evidence:
 
-- unit tests for schemas and prompt assembly.
-- store tests for raw log, summary segment, candidate, pinned memory.
-- fake LLM summary/candidate extractor tests.
-- renderer tests for Memory Panel state.
-- Electron harness for create/edit/delete/recall ordinary user path.
-- privacy tests for export/delete/redaction.
-- recall fixture tests with expected memories and expected non-recalls.
+- extraction cases for explicit save, anniversary/rose, game critique, and rainy home hotpot scene.
+- trigger cases for keyword, alias, semantic, calendar, environment, and false positives.
+- source drilldown cases that require raw-turn details.
+- privacy cases for disable/delete/export and secret redaction.
+- role isolation cases.
+- prompt budget cases where skipped memories are reported.
+
+The benchmark should start low while features are missing, then raise baselines as real capability lands.
 
 ## Final Product Shape
 
-The user should experience V2.0 as:
+The user should experience V2.1 as:
 
-> "It remembers me, but I can see what it remembers, correct it, and trace where it came from."
-
-That is the difference between a trustworthy companion memory and a hidden prompt stuffing system.
-
+> "It remembers what we lived through together, can naturally bring it back later, and lets me correct or delete anything wrong."
