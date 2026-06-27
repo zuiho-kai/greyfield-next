@@ -1,6 +1,6 @@
 # Greyfield Next V1 产品计划
 
-更新时间：2026-06-26
+更新时间：2026-06-27
 
 ## 一句话目标
 
@@ -16,19 +16,19 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 | 文字输入 | Chat 窗口可以输入文本，消息经 renderer -> preload IPC -> Electron main -> runtime；runtime 报错后会把上一条用户输入恢复到草稿，方便重试。 | 主链路已打通，基础失败恢复已可用。 |
 | 文字输出 | 支持流式输出、最终回复、错误提示；默认 fake provider 稳定回复，OpenAI-compatible provider 已在 main process 接入；provider 失败会显示错误、恢复草稿且不写半截 session；Stop 已证明会关闭 active provider HTTP 请求；Chat 状态、Stop、失败重试和集成验收已随 #41 合入 main。 | 文字链路可作为 V1 文本能力；真实 provider 仍需带 env 的 release 前复跑。 |
 | 最近上下文 | 已接入角色 YAML、`data/memory.md`、JSONL session；重启后能把上一轮 user/assistant turn 带入下一次 prompt。 | V1 的“最近上下文连续性”已成立。 |
-| 设置页 | 已有 provider/model/key、角色文件、模型路径、语音/麦克风等设置入口；Test LLM 走 main process；provider 配置会显示 Preview / blocked / ready-to-test 状态；测试中、成功、失败、active chat 被拒绝均有用户可读 UI 和 harness 证据；#45 已修 Settings 视觉可读性和关闭/恢复稳定性；#59 PR-local 证据修复窄窗口 Scale/X/Y 控件变形。 | V1 provider/Test LLM 产品化已在 main；#59 合入并复跑 main 后，设置页可进入 V1 release 口径。模型管理 UX 可留到 V1 后。 |
+| 设置页 | 已有 provider/model/key、角色文件、模型路径、语音/麦克风等设置入口；Test LLM 走 main process；provider 配置会显示 Preview / blocked / ready-to-test 状态；测试中、成功、失败、active chat 被拒绝均有用户可读 UI 和 harness 证据；#45 已修 Settings 视觉可读性和关闭/恢复稳定性；#59 已在 main 修复窄窗口 Scale/X/Y 控件变形。 | V1 provider/Test LLM 产品化和 Settings 可读性已在 main 有 current-head 证据。模型管理 UX 可留到 V1 后。 |
 | 聊天窗口 | 已从宠物窗口拆出，能显示消息、状态、错误；Waiting / Generating / Stopped / Failed / Retry-ready 状态已产品化；Stop 能打断文字流，也能在语音队列仍播放时保持可点击。 | V1 Chat polish 已在 main；后续只做缺陷修复，不再扩功能。 |
-| 桌面浮动控制 | #59 PR-local 新增独立可拖动 controls window，提供文本输入、麦克风输入、语音输出开关、Settings、Model Pass Through、隐藏/最小化和 Stop。 | 这是 V1 普通桌宠入口的最后可见体验收口；合入并在 main 复跑 `frontend-full` 后进入 release 证据。 |
-| 气泡 | 宠物旁有短回复气泡，支持文本压缩、长度上限；位置固定在宠物窗口上方稳定槽位，不跟随模型移动，只在窗口/屏幕边缘内水平和垂直夹紧；长 streaming 回复会进气泡首 token、保持短文本，完整内容留在 Chat；右侧边缘和开关/点击穿透已有专门 harness 和截图证据；#59 PR-local 修复新对话旧消息闪现和气泡覆盖模型。 | V1 气泡 QA 主体已在 main；#59 合入后把 `speechBubbleAvoidsModel: true` 升级成 main release 证据。 |
-| 语音输入/输出 | 已有句子级 TTS 队列、默认静音、Settings `Speak replies`、Settings `Test Voice`、真实 TTS 播放、TTS 失败隔离、长回复 TTS budget；#55 已在 main 补齐 Chat 麦克风录音、OpenAI-compatible ASR `/audio/transcriptions`、transcript 走同一条 runtime text path、真实解码 PCM 电平驱动嘴型、Stop 同时取消麦克风/ASR/TTS/队列/嘴型；#59 PR-local 修复第一次播放爆音感和多句重叠播放。 | V1 语音闭环已在 main 有 current-head 证据；#59 合入并复跑后，非重叠播放和 WebAudio fade-in 才能写成 main release 证据。外部真实 LLM/TTS endpoint demo 仍需带凭据复跑。 |
-| CI | GitHub Actions workflow 已入仓；PR 跑 Fast checks、Desktop pet quick harness 和前端可见改动的 `frontend-full`；main / manual dispatch 额外跑 Full checkpoint harness；#46 已修复 #45 合入后暴露的 Stop audio harness 同步 race，并且 main run `28072461072` 已通过 Fast checks、Desktop pet quick 和 `frontend-full`。 | 自动保护已恢复；继续控制 Electron harness 耗时和稳定性。 |
+| 桌面浮动控制 | #59 已在 main 新增独立可拖动 controls window，提供文本输入、麦克风输入、语音输出开关、Settings、Model Pass Through、隐藏/最小化和 Stop。 | V1 普通桌宠入口已收口，并由 main `frontend-full` 证据保护。 |
+| 气泡 | 宠物旁有短回复气泡，支持文本压缩、长度上限；位置固定在宠物窗口上方稳定槽位，不跟随模型移动，只在窗口/屏幕边缘内水平和垂直夹紧；长 streaming 回复会进气泡首 token、保持短文本，完整内容留在 Chat；右侧边缘和开关/点击穿透已有专门 harness 和截图证据；#59 修复新对话旧消息闪现和气泡覆盖模型；#65 修复长回复 harness 在入场动画中误判漂移。 | V1 气泡 QA 已在 main 有 current-head 证据。 |
+| 语音输入/输出 | 已有句子级 TTS 队列、默认静音、Settings `Speak replies`、Settings `Test Voice`、真实 TTS 播放、TTS 失败隔离、长回复 TTS budget；#55 已在 main 补齐 Chat 麦克风录音、OpenAI-compatible ASR `/audio/transcriptions`、transcript 走同一条 runtime text path、真实解码 PCM 电平驱动嘴型、Stop 同时取消麦克风/ASR/TTS/队列/嘴型；#59 已修复第一次播放爆音感和多句重叠播放。 | V1 语音闭环已在 main 有 current-head 证据；外部真实 LLM/TTS endpoint demo 仍需带凭据复跑。 |
+| CI | GitHub Actions workflow 已入仓；PR 跑 Fast checks、Desktop pet quick harness 和前端可见改动的 `frontend-full`；Fast checks 包含 memory benchmark；main head `b605321` 的 run `28287921556` 已通过 PR bot review gate、Change classifier、Fast checks、Desktop pet quick harness 和 `frontend-full`。 | 自动保护已恢复；继续控制 Electron harness 耗时和稳定性。 |
 
 ## 现在不能宣称什么
 
-- 不能宣称“V1 release 已最终完成”：#59 仍是 PR-local 候选证据，必须合入后在 `main` 复跑 `pnpm harness:frontend-full`。
 - 不能宣称“真实 LLM release 证据是当前的”：当前环境没有 `GREYFIELD_REAL_LLM_*`，所以 `pnpm harness:electron:real-llm` 仍需在有凭据时复跑。
 - 不能宣称“外部真实 LLM/TTS endpoint demo 是当前证据”：当前环境缺少 `GREYFIELD_REAL_LLM_*` / `GREYFIELD_REAL_TTS_*` 凭据；fake、failure、abort、local OpenAI-compatible ASR/LLM/TTS 语音链路已在 main 有 current-head 证据。
 - 不能宣称“模型管理 UX 完成”：Settings provider/Test LLM 已产品化，模型管理和更完整设置体验可留到 V1 后。
+- 不能宣称“V2 记忆产品化完成”：#63 只完成 V2.0a 记忆基础和最小可检查 loop，用户可编辑/禁用/删除/导出的 Memory Panel 是 V2.0b。
 - 不能把桌面控制、浏览器控制、屏幕读取、长期任务、多智能体、直播、VRM/Godot 放进 V1。
 
 ## V1 剩余工作
@@ -147,7 +147,7 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 11. `transcript.final` 会显示成用户消息，并复用文字输入的 runtime、上下文、错误处理、interrupt 和 session 持久化路径。
 12. renderer 播放真实音频时用 `AudioContext.decodeAudioData` 得到 PCM，并按音频能量时间线驱动 Live2D mouth-open。
 13. `pnpm harness:electron:voice-input` 用本地 ASR/LLM/TTS server 和麦克风 probe 证明麦克风 Stop 取消、ASR -> Chat -> TTS、波形嘴型、Stop 播放取消、队列清空和嘴型归零。
-14. main head `4479c262` 已复跑 `pnpm typecheck`、`pnpm test:backend`、`pnpm test:frontend`、`pnpm harness:acceptance`、`pnpm harness:electron:voice-input`、`pnpm harness:frontend-full`；最新 `frontend-full` 16 checks passed in 2m 39s。
+14. main head `b605321` 已通过 GitHub Actions run `28287921556`：Fast checks、Desktop pet quick harness 和 `frontend-full` 均成功；`frontend-full` 17 checks passed in 3m 04s，覆盖麦克风 ASR、波形嘴型、Stop 音频、restart context 和 memory summary harness。
 
 仍不放进 V1 的内容：
 
@@ -164,15 +164,14 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 
 ## 推荐下一步
 
-当前推荐完成 V1 release 证据收口：
+当前推荐进入 V2.0b 记忆用户控制：
 
-1. 合入 #59。
-2. 在合入后的 `main` 上复跑 `pnpm harness:frontend-full`，并打开最新视觉产物做一次人工视觉确认。
-3. 把 #59 的 PR-local 字段升级为 main current-head evidence：`controls.draggable: true`、`controls.activeButtonContrastOk: true`、`speechBubbleAvoidsModel: true`、`voiceToggleKeptLive2DTransform: true`、`noOverlappingSpeech: true`。
-4. 提供 `GREYFIELD_REAL_LLM_BASE_URL` / `GREYFIELD_REAL_LLM_API_KEY` / `GREYFIELD_REAL_LLM_MODEL` 后，在最终目标分支复跑 `pnpm harness:electron:real-llm`。
-5. 提供 `GREYFIELD_REAL_TTS_BASE_URL` / `GREYFIELD_REAL_TTS_API_KEY`，或兼容的 `GREYFIELD_REAL_LLM_*` 后，在最终目标分支复跑 `pnpm harness:real-tts` 和 `pnpm harness:electron:real-tts`。
-6. 不再新增 V1 后功能，例如高级 VAD/唤醒词、桌面控制、浏览器控制、长期任务代理或完整模型管理。
-7. 每个后续 closeout PR 合入前，按 [V1 Completion Evidence Checklist](../v1-completion-evidence.md) 跑它触及路径的 harness；前端可见改动必须跑 `pnpm harness:frontend-full` 或等同 CI 证据。
+1. 在 #63 的 V2.0a 基础上实现 Memory Panel：查看、编辑、禁用、删除、导出 summary/pinned memory。
+2. 补齐用户可控记忆的单测、memory benchmark 场景和 Electron/frontend harness。
+3. 提供 `GREYFIELD_REAL_LLM_BASE_URL` / `GREYFIELD_REAL_LLM_API_KEY` / `GREYFIELD_REAL_LLM_MODEL` 后，在最终目标分支复跑 `pnpm harness:electron:real-llm`。
+4. 提供 `GREYFIELD_REAL_TTS_BASE_URL` / `GREYFIELD_REAL_TTS_API_KEY`，或兼容的 `GREYFIELD_REAL_LLM_*` 后，在最终目标分支复跑 `pnpm harness:real-tts` 和 `pnpm harness:electron:real-tts`。
+5. 不再新增 V1 后功能，例如高级 VAD/唤醒词、桌面控制、浏览器控制、长期任务代理或完整模型管理。
+6. 每个后续 closeout PR 合入前，按 [V1 Completion Evidence Checklist](../v1-completion-evidence.md) 跑它触及路径的 harness；前端可见改动必须跑 `pnpm harness:frontend-full` 或等同 CI 证据。
 
 ## V1 完成判定
 

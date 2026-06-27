@@ -20,7 +20,7 @@ Make the character feel alive first:
 
 V1 does not include desktop control, browser control, long-running task orchestration, multi-agent behavior, livestream support, Godot/VRM, message gateways, or self-generating skills.
 
-Current status: V1 is in final closeout. `main` has the core V1 evidence through #55, and PR #59 is the current visible-experience closeout candidate for floating desktop controls, speech-bubble placement, voice-toggle stability, and non-overlapping speech playback. Do not describe a final V1 release as complete until #59 is merged and the release branch has a fresh current-head `pnpm harness:frontend-full` record.
+Current status: V1 visible-experience closeout is on `main`. The current main head `b605321` includes #59, #63, and #65, and GitHub Actions run `28287921556` passed Fast checks, Desktop pet quick harness, and `frontend-full` on 2026-06-27. V2.0a memory foundation is merged; the next V2 slice is the user-facing memory control panel.
 
 ## Workspace
 
@@ -145,9 +145,9 @@ Use `pnpm dev:live2d:fast` for the tight visual loop when main/preload did not c
 
 CI is split into layers:
 
-- fast checks: `pnpm typecheck`, `pnpm test`, `pnpm harness:acceptance`
+- fast checks: `pnpm typecheck`, `pnpm test`, `pnpm harness:acceptance`, `pnpm harness:memory-benchmark`
 - desktop pet quick: one desktop build plus `pnpm harness:pet:quick`
-- checkpoint: one desktop build plus `pnpm harness:electron:quick`, run on main or manual dispatch
+- frontend-visible gate: `pnpm harness:frontend-full` for changes touching desktop, Live2D, audio, dev-harness, workspace config, or CI
 
 Use `pnpm test:backend` for runtime, persistence, audio, and Electron main regressions. Use `pnpm test:frontend` for renderer, preload, stage, and dev-harness regressions. Use `pnpm harness:v1-visual` when a change needs human-verifiable desktop-pet artifacts; it writes screenshots and `summary.json` to `.cache/greyfield-v1-visual-acceptance/latest` unless `GREYFIELD_ACCEPTANCE_ARTIFACT_DIR` is set.
 
