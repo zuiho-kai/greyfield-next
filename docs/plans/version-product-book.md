@@ -1,294 +1,418 @@
-# Greyfield Next 版本产品书
+# Greyfield Next Version Product Book
 
-更新时间：2026-06-26
+更新时间：2026-06-28
 
 ## 产品定位
 
-Greyfield Next 要从一个稳定的 Live2D 桌面桌宠，逐步发展成一个可长期陪伴、可理解用户工作上下文、可在用户授权下辅助操作电脑的本地 AI 伴侣。
+Greyfield Next 的目标不是普通聊天壳，而是一个长期存在在桌面上的 Live2D AI 伴侣。它要先像桌宠一样稳定可控，再逐步拥有记忆、角色、人设、屏幕感知、语音人格和受控电脑操作。
 
-产品不能变成普通聊天壳，也不能一口气变成失控的自动 agent。每个版本都必须保持三个约束：
+产品推进遵守三条硬规则：
 
-1. 桌宠本体始终是第一入口：透明、低打扰、可拖动、可隐藏、可恢复。
-2. 智能能力必须可解释、可关闭、可审计。
-3. 每个版本的完成标准必须能被测试、harness、截图或人工验收步骤证明。
+1. 桌宠入口优先：透明、可拖动、可隐藏、可恢复、低打扰。
+2. 能力必须可关、可查、可删、可测试。
+3. 每个版本必须有 issue、验收口径和自动化看护，不能靠聊天感觉宣布完成。
+
+## 版本编号规则
+
+- 大版本表示产品层级：V1 是可用桌宠，V2 是长期伴侣，V3 是可扩展平台。
+- 小版本表示一个用户价值闭环，例如 V2.1 是长期记忆。
+- 字母阶段表示可派工的子目标，例如 V2.1c 是长期记忆抽取与写入。
+- 每个阶段必须写清楚：背景、要做什么、预期效果、验收看护、不做什么。
 
 ## 版本总览
 
-| Version | 版本名 | 用户价值 | 核心能力 | 不做什么 |
-| --- | --- | --- | --- | --- |
-| V1.0 | 活着的桌宠底座 | 用户能看到、移动、聊天、听到声音，并且不会被打扰或卡死 | Live2D 桌宠、透明穿透、文字聊天、语音输入输出、Stop、最近上下文 | 不做读屏、电脑操控、长期任务、多 agent、语音克隆 |
-| V1.1 | 可交付桌宠产品化 | 普通用户能稳定安装、配置、恢复、排错 | 安装/更新、模型管理 UX、设置 polish、日志/诊断、真实 provider release 证据 | 不新增大能力，不改变 V1 主链路 |
-| V2.0 | 角色与长期记忆 | 用户感觉它认识自己、记得关系和偏好 | 记忆分层、记忆编辑、角色卡、人设自定义、角色资产绑定 | 不做屏幕读取和电脑执行 |
-| V2.1 | 屏幕感知伴侣 | 用户主动让它看当前屏幕/窗口并解释 | 截图分析、窗口选择、读屏状态、隐私提示、视觉问答 | 不默认持续监控，不自动操作电脑 |
-| V2.2 | 受控电脑操控 | 用户确认后，它能执行小而明确的桌面动作 | 操作计划、用户确认、受限点击/输入/打开应用、停止/回滚/日志 | 不做无人值守长期自动化，不绕过确认 |
-| V2.3 | 高级语音与声音人格 | 用户能给角色选择或训练更贴合的人声 | TTS provider 管理、声音 profile、试听、语音克隆导入/同意/删除 | 不无授权克隆真人声音，不把音频上传行为藏起来 |
-| V3.0 | 可扩展伴侣平台 | 高级用户能组合角色、工具和内容包 | 插件/技能沙箱、多角色、内容包、权限模型、社区资产策略 | 不牺牲本地隐私和桌宠低打扰体验 |
+| Version | 版本名 | 用户价值 | 当前优先级 |
+| --- | --- | --- | --- |
+| V1.0 | 活着的桌宠底座 | 能看见、能拖动、能聊天、能听说、能 Stop | 已完成，后续只做回归 |
+| V1.1 | 产品化收尾 | 普通用户能安装、配置、恢复、排错 | 后台推进，不阻塞 V2 设计 |
+| V2.1 | 长期记忆与关系连续性 | 它记得用户、关系、共同经历，并能在未来自然想起 | 最高优先级 |
+| V2.2 | 角色与人设自定义 | 用户能塑造角色，而不是只改模型文件 | V2.1 稳定后 |
+| V2.3 | 屏幕感知伴侣 | 用户主动授权后，它能看懂屏幕/窗口 | V2.1/V2.2 后 |
+| V2.4 | 受控电脑操作 | 用户确认后，它能做小而明确的桌面动作 | V2.3 后 |
+| V2.5 | 声音人格与语音克隆 | 角色声音更稳定、更贴合、更可控 | 可与 V2.2 局部并行 |
+| V3.0 | 可扩展伴侣平台 | 角色包、工具包、内容包和插件生态 | V2 能力稳定后 |
 
 ## V1.0：活着的桌宠底座
 
-### 一句话目标
+### 背景
 
-交付一个真正像桌宠的 Live2D AI 伴侣：透明站在桌面上，可拖动、可穿透、可文字/语音聊天、会记住最近上下文，并且 Stop 能停止文字、声音、嘴型和队列。
+V1 解决的是“这是不是一个真正的桌宠”。如果透明、拖动、输入、语音、Stop、Settings 这些基础体验不稳定，后续智能能力没有意义。
 
-### 核心用户故事
+### 要做什么
 
-- 用户打开应用，看到的是桌面上的 Live2D 角色，不是一个网页窗口。
-- 用户能拖动、缩放、隐藏、恢复桌宠，不影响桌面正常使用。
-- 用户能输入文字或语音，收到流式回复、短气泡和完整 Chat 历史。
-- 用户能随时 Stop，且不会继续追加旧回复、重叠播放语音或嘴型卡住。
-- 用户能配置 OpenAI-compatible provider，并看懂失败原因。
+- Live2D 模型站在桌面上，而不是网页窗口里。
+- 透明区域穿透，模型区域可拖动。
+- 桌面浮动输入控件支持文字、麦克风、语音输出、设置、穿透、隐藏、Stop。
+- OpenAI-compatible LLM/TTS/ASR 能走真实链路。
+- Stop 能停止文字、语音、嘴型和队列。
 
-### 验收
+### 预期效果
 
-- `docs/plans/v1-product-plan.md` 和 `docs/v1-completion-evidence.md` 是 V1 的具体完成依据。
-- 前端可见改动必须跑 `pnpm harness:frontend-full` 或等价 CI 证据。
-- V1 完成口径只能来自 merged `main` current-head evidence，不来自 PR-local evidence。
+用户打开应用后，不需要先打开 Chat 或 Settings，就能直接和桌宠互动；出错时也能停止和恢复。
 
-## V1.1：可交付桌宠产品化
+### 验收看护
 
-### 一句话目标
-
-把 V1 从“工程上可用”打磨成“普通用户可安装、可配置、可恢复、可排错”的小产品。
-
-### 核心能力
-
-| 能力 | 产品要求 | 验收方式 |
-| --- | --- | --- |
-| 安装与启动 | Windows 用户能下载/启动，不需要手动安装开发依赖 | 打包产物 smoke；首次启动截图；安装失败提示 |
-| 模型管理 | Settings 有模型列表、导入、当前模型、重置、错误提示 | 用户路径 harness；导入有效/无效 `.model3.json` fixture |
-| Provider 配置 | LLM/TTS/ASR 配置分区清楚，fake/real 状态不混淆 | Settings provider harness；真实 env smoke |
-| 日志与诊断 | 用户能导出诊断包，秘密被 redacted | 日志 redaction test；诊断包结构测试 |
-| 恢复能力 | 设置窗口、Chat、controls、tray 都能恢复应用控制 | Electron lifecycle harness |
-| 发布证据 | release checklist 明确当前 head、命令、产物、截图 | release doc update + CI link |
+- `packages/dev-harness/v1-features.json`
+- `pnpm harness:frontend-full`
+- `docs/v1-completion-evidence.md`
+- 只用 merged `main` current-head evidence 写完成口径。
 
 ### 不做什么
 
-- 不新增读屏、电脑操控、插件市场。
+- 不做长期记忆、读屏、电脑操作、插件市场。
+- 不把 V2 能力塞进 V1 完成标准。
+
+## V1.1：产品化收尾
+
+### 背景
+
+V1 已经证明桌宠主链路可用，但普通用户还需要更稳定的安装、配置、诊断和模型管理体验。
+
+### 要做什么
+
+- 打包和首次启动 smoke。
+- Settings 模型列表、导入、当前模型、重置和错误提示。
+- Provider 配置分区，fake/real 状态不混淆。
+- 诊断包和日志 redaction。
+- 设置、Chat、controls、tray 的窗口恢复。
+
+### 预期效果
+
+用户不需要开发环境，也能启动、配置、排错；遇到问题能导出不含密钥的诊断信息。
+
+### 验收看护
+
+- 打包产物 smoke。
+- Settings 普通用户路径 harness。
+- 日志 redaction test。
+- release checklist 写明 head、命令、产物和截图。
+
+### 不做什么
+
+- 不新增大智能能力。
 - 不把打包当成重构入口。
-- 不把更多模型/声音资源硬编码进源码。
 
-## V2.0：角色与长期记忆
-
-### 一句话目标
-
-让 Greyfield 从“能聊天的桌宠”变成“有连续关系的角色”：它记得用户、记得自己、能被用户编辑人设，并且记忆行为可审计。
-
-参考研究：
-
-- [Clowder AI memory notes](../research/v2-memory/clowder-ai.md)
-- [SillyTavern memory notes](../research/v2-memory/sillytavern.md)
-- [MaiBot memory notes](../research/v2-memory/maibot.md)
-- [Greyfield V2.0 memory synthesis](../research/v2-memory/synthesis.md)
-- [V2 memory implementation goal](v2-memory-goal.md)
-
-### 能力拆分
-
-| 模块 | 产品形态 | 必须看护 |
-| --- | --- | --- |
-| 角色卡 | name、称呼、性格、背景、边界、问候语、说话风格 | schema test；Settings 编辑/保存/恢复 harness |
-| 人设绑定 | 角色绑定 Live2D 模型、声音、provider 默认值、气泡风格 | 切换角色后模型/声音/人设一致 |
-| 记忆分层 | persona memory、user memory、relationship memory、facts、preferences | 不同 memory 类型单独显示、编辑、删除 |
-| 自动记忆 | 从对话中提出候选记忆，用户确认后写入 | 没有确认不能静默写长期记忆 |
-| 摘要记忆 | 长对话压缩成可读摘要，保持最近上下文预算 | memory benchmark fixture；source traceability；token budget test |
-| 记忆检索 | 根据当前对话召回少量相关记忆 | recall ranking fixture；false-positive rejection；不会注入无关大段历史 |
-| 隐私控制 | 查看、导出、删除、禁用记忆 | export/delete tests；UI 明确状态 |
-
-### 用户故事
-
-- 用户能创建一个新角色，填写人设和称呼，绑定 Hiyori 或导入模型。
-- 用户能告诉桌宠“我不喜欢它叫我老板”，系统会生成记忆候选，用户确认后长期生效。
-- 用户能打开记忆页，看见它记住了什么，并删除错误记忆。
-- 用户能切换角色，角色 A 的记忆不会污染角色 B。
-
-### 验收标准
-
-- 记忆写入必须有测试覆盖：自动候选、用户确认、拒绝、编辑、删除。
-- Prompt 组装必须证明 persona、user memory、recent turns 分层注入且有 token 上限。
-- UI harness 必须覆盖普通用户路径：创建角色、修改人设、确认记忆、删除记忆、重启后仍生效。
-- 自动记忆、记忆分层、向量召回等后续 V2.0 能力必须先扩展并通过 `pnpm harness:memory-benchmark`，不能只靠人工聊天感觉验收。
-
-## V2.1：屏幕感知伴侣
+## V2.1：长期记忆与关系连续性
 
 ### 一句话目标
 
-让用户可以主动把当前屏幕、窗口或区域交给桌宠理解，但不让应用默认持续监控屏幕。
+让 Greyfield 从“会聊天”变成“和用户有共同历史”：它能记住事实、偏好、纪念日、承诺、情绪场景和原始聊天证据，并在未来相关时自然想起。
 
-### 能力拆分
+### 产品原则
 
-| 阶段 | 能力 | 产品边界 |
-| --- | --- | --- |
-| V2.1a | 手动截图问答 | 用户点击“看屏幕”后截一次图并提问 |
-| V2.1b | 选择窗口/区域 | 用户选择窗口、显示器或矩形区域，截图前有预览 |
-| V2.1c | 屏幕上下文摘要 | 用户允许后，对当前截图生成短上下文供下一轮对话使用 |
-| V2.1d | 可见读屏状态 | 桌宠/controls 显示是否正在看屏幕、看哪块区域、何时停止 |
+1. 用户不应该每天审批“候选记忆”。后台负责抽取，用户负责纠错、删除、关闭和明确保存。
+2. 明确说“记住、以后、每年、别忘了、不要再”时，必须写入长期记忆。
+3. 记忆不是只有 summary。压缩记忆必须能回查原始聊天。
+4. 触发不只靠关键词，还包括日期、环境、语义相似、角色关系和场景意象。
+5. Benchmark 分数必须从低分开始，功能提升后再提高 baseline，禁止用满分伪装完成。
 
-### 隐私边界
+### V2.1a：记忆 Benchmark 与验收骨架
 
-- 默认不读屏。
-- 不后台持续截图。
-- 不把截图写入长期记忆，除非用户明确保存。
-- 截图、OCR、视觉模型调用必须显示本地/云端状态。
-- 日志和诊断包不能包含原始截图，除非用户主动导出并确认。
+**背景**
+记忆效果用户很难每次手工验收，尤其是一年后召回、原文追溯、场景触发和错误写入。没有 benchmark，就会出现“功能没做完但测试满分”的假完成。
 
-### 用户故事
+**要做什么**
 
-- 用户点击 controls 的“看屏幕”，选择当前窗口，问“这个报错是什么意思”。
-- 桌宠用气泡给短解释，Chat 里给完整分析。
-- 用户能点 Stop 或关闭读屏状态，之后不会继续引用旧截图。
+- 建立 fixture-driven memory benchmark。
+- 分数拆成 summary、extraction、trigger recall、calendar recall、evidence drilldown、noise rejection、privacy/delete。
+- Fixture 必须包含低分基线，未实现能力不能拿满分。
+- CI 跑 benchmark，后续 PR 不能低于当前 baseline。
 
-### 验收标准
+**预期效果**
+每次记忆改动都能知道“哪些能力变好了，哪些还没做”，用户不需要靠人工聊天判断。
 
-- UI harness 覆盖截图按钮、预览、确认、取消、Stop。
-- Provider harness 覆盖 fake vision path 和至少一个 OpenAI-compatible vision path。
-- 隐私测试证明截图不会进入 session/diagnostic，除非显式保存。
+**验收看护**
 
-## V2.2：受控电脑操控
+- `pnpm harness:memory-benchmark`
+- baseline scores 写在 fixture 中。
+- CI 低于 baseline 失败。
+- 新能力 PR 必须同时更新 case 和 accepted score。
 
-### 一句话目标
+**不做什么**
+不把 benchmark 写成硬编码台账，不用一条假 summary 覆盖所有记忆能力。
 
-在用户授权下，让桌宠能执行小而明确的电脑动作，但每一步都可见、可确认、可停止、可审计。
+### V2.1b：原始聊天索引与层级记忆
 
-### 操作分级
+**背景**
+长期记忆如果只存摘要，会丢失细节。用户一年后提到“那个很烂的游戏”，系统需要先命中压缩记忆，再回查当时原话找具体缺点。
 
-| 等级 | 能力 | 是否需要确认 | 示例 |
+**要做什么**
+
+- 保留 append-only raw chat turns。
+- 每条 summary、memory atom、scene memory 都带 `sourceTurnIds`。
+- 建立 source index，支持从记忆回查原始聊天片段。
+- 长对话按时间段生成 summary segment，summary 不替代原文。
+
+**预期效果**
+系统能用 summary 节省上下文，也能在需要细节时找回原始证据。
+
+**验收看护**
+
+- 删除 summary 不删除 raw turns。
+- 记忆召回能返回 source turn id。
+- evidence drilldown benchmark 验证能找回原始细节。
+
+**不做什么**
+不把 summary 当事实真相，不让原始聊天被压缩覆盖。
+
+### V2.1c：长期记忆抽取与写入
+
+**背景**
+长期记忆不能停留在“手动编辑一段 memory.md”。Greyfield 需要像 MaiBot/A_Memorix 那样从对话里抽取概念、关系和事件，但不能打扰用户审批每条候选。
+
+**要做什么**
+
+- 用 LLM 抽取 memory atom，而不是只靠关键词规则。
+- 支持事实、偏好、观点、禁忌、承诺、关系事件、重要日期、情境场景。
+- 明确保存语句必须直接写入长期记忆。
+- 后台自动写入要有重要性阈值、冷却和去重。
+- 每条记忆保留简短自然语言、结构化字段、trigger keys、source turn ids。
+
+**预期效果**
+用户说“以后叫我博士”“我今天生日”“我送你一朵玫瑰”“我讨厌这个游戏的付费和剧情”，系统能转成可召回的长期记忆。
+
+**验收看护**
+
+- extraction benchmark 覆盖明确保存、生日/纪念日、游戏观点、临时噪声不写入。
+- store tests 覆盖写入、更新、去重、删除。
+- prompt tests 证明只有相关记忆进入上下文。
+
+**不做什么**
+不做 Settings 里的 pending approval 列表；不要求用户逐条确认后台提取结果。
+
+### V2.1d：触发召回与原文追溯
+
+**背景**
+酒馆 World Info 的价值在于“相关时自动触发”。Greyfield 记忆也必须能通过关键词、别名、语义、日期和环境触发，而不是只有用户问“你记得吗”。
+
+**要做什么**
+
+- 建立 trigger lanes：exact/alias、secondary keys、semantic、calendar、environment、relationship graph。
+- 支持 source drilldown：压缩记忆命中后，必要时回查 raw turns 补足细节。
+- Prompt 注入要有预算和 trace，避免塞入无关历史。
+
+**预期效果**
+一年后用户说“这个新游戏也很傻逼，好像之前某个游戏”，系统能想起旧游戏，并回查当时提到的具体缺点，例如节奏、付费、剧情。
+
+**验收看护**
+
+- trigger recall benchmark 覆盖别名、语义相似、false positive。
+- evidence drilldown benchmark 要求回答材料包含原始缺点。
+- prompt budget test 证明无关记忆被跳过且有原因。
+
+**不做什么**
+不把所有历史都塞进 prompt；不靠最近聊天碰巧命中。
+
+### V2.1e：情境记忆与主动关系触发
+
+**背景**
+长期陪伴的核心不是背事实，而是像小说一样记得共同经历：某天下雨，虚拟世界的家里开着窗吃火锅。很久以后又下雨，它应该能自然想起，而不是等用户输入关键词。
+
+**要做什么**
+
+- 抽取 `episodic_scene`：地点、天气、物品、动作、情绪、关系意义、时间。
+- 支持环境触发：虚拟世界下雨、用户长期未上线、当前场景是家/窗边。
+- 支持低打扰主动消息：有冷却、有重要性阈值、可关闭。
+- 主动消息用角色语言表达，不暴露 memory id 或数据库术语。
+
+**预期效果**
+用户很久没上，虚拟世界下雨时，桌宠可以发出类似“窗外又下雨了，我想起那次我们在家里开着窗吃火锅”的消息。
+
+**验收看护**
+
+- scene extraction benchmark 覆盖雨、窗、火锅、虚拟家、共同经历。
+- proactive trigger benchmark 覆盖“30 天未上线 + 下雨”命中。
+- 负例覆盖“昨天刚上线”或“普通天气变化”不打扰。
+
+**不做什么**
+不做高频通知，不做未经允许的外部推送，不把环境触发写成硬编码彩蛋。
+
+### V2.1f：记忆管理 UX 与隐私
+
+**背景**
+用户不应该审批候选，但必须能看见、修改、删除、导出、关闭记忆。信任来自可纠错，而不是每条都打扰。
+
+**要做什么**
+
+- Settings 提供 Memory Library：事实、偏好、关系、事件、场景、summary 分组。
+- 每条记忆显示自然语言、来源、最近使用、启用状态。
+- 支持编辑、删除、禁用、导出、清空角色记忆。
+- 角色/用户/会话记忆隔离。
+
+**预期效果**
+系统平时自动记，用户发现不对时能修；换角色时不会串记忆。
+
+**验收看护**
+
+- Electron harness 覆盖编辑、禁用、删除、导出、重启后持久化。
+- privacy tests 覆盖导出不含 API key，删除不残留可召回数据。
+- role isolation test 覆盖角色 A/B 记忆不互相污染。
+
+**不做什么**
+不做 pending candidates 区，不把 Settings 变成调试面板。
+
+### V2.1g：记忆分数门禁与回归流程
+
+**背景**
+记忆是主观体验，但工程上必须有可回归分数。否则每次重构都会退化成“我感觉还行”。
+
+**要做什么**
+
+- 记录每个 benchmark 维度的 baseline。
+- 每个 PR 改记忆能力时必须说明分数变化。
+- 分数提升后更新 baseline；分数下降必须解释并修复。
+- 合入前看 CI/CodeRabbit，开发过程中不因远端等待卡住主线。
+
+**预期效果**
+记忆能力像 vLLM Omni 的 benchmark 一样可追踪，sub agent 可以按分数和 issue 拆工。
+
+**验收看护**
+
+- CI 跑 `pnpm harness:memory-benchmark`。
+- PR body 写当前分数、变化原因和未覆盖能力。
+- `docs/progress.md` 记录当前 main 分数。
+
+**不做什么**
+不在开发中长时间刷 CI；等待远端检查交给低频 watcher 或 sub agent。
+
+## V2.2：角色与人设自定义
+
+### 背景
+
+长期记忆需要落在具体角色上。用户不是在配置一个 LLM，而是在养一个有名字、说话方式、模型、声音和边界的角色。
+
+### 子目标
+
+| ID | 目标 | 要做什么 | 验收看护 |
 | --- | --- | --- | --- |
-| L0 | 只建议，不执行 | 不需要 | “你可以点击右上角设置” |
-| L1 | 低风险本应用操作 | 需要轻确认 | 打开 Greyfield Settings、切换静音 |
-| L2 | 系统 UI 操作 | 需要明确确认 | 点击指定窗口按钮、输入一段用户给的文本 |
-| L3 | 文件/网页/应用操作 | 需要计划确认和日志 | 打开应用、保存文件、复制内容 |
-| L4 | 长任务/跨应用自动化 | V2.2 不做 | 无人值守整理文件、自动发消息 |
+| V2.2a | 角色卡 schema | name、称呼、背景、性格、边界、问候语、说话风格 | schema tests；import/export tests |
+| V2.2b | 角色资产绑定 | Live2D 模型、voice profile、provider 默认值、气泡风格绑定角色 | 切换角色后资产一致 |
+| V2.2c | 人设注入与风格稳定 | persona、memory、recent turns 分层组装 prompt | prompt snapshot；token budget |
+| V2.2d | Settings 角色编辑 | 普通用户能创建、编辑、切换、删除角色 | Electron harness；视觉截图 |
 
-### 产品形态
+### 预期效果
 
-- 操作前显示计划：要操作哪个窗口、做几步、可能影响什么。
-- 用户确认后执行，执行中 controls 显示“正在操作”。
-- 每一步有日志：观察、计划、动作、结果。
-- Stop 必须立即停止后续动作。
-- 高风险动作需要二次确认或禁止。
-
-### 安全边界
-
-- 不绕过系统权限。
-- 不输入隐藏密码。
-- 不自动发送消息、付款、删除文件。
-- 不在未知窗口盲点。
-- 不持续后台操作。
-
-### 验收标准
-
-- fake desktop environment harness 覆盖观察、计划、确认、动作、Stop、日志。
-- 真实 Windows smoke 只覆盖低风险动作，例如打开 Settings 或点击测试窗口按钮。
-- 每个 action adapter 都有权限声明和 redaction 测试。
-
-## V2.3：高级语音与声音人格
-
-### 一句话目标
-
-让角色声音从“能发声”升级为“符合角色的人声”，同时保护用户和第三方声音权益。
-
-### 能力拆分
-
-| 能力 | 产品要求 | 风险控制 |
-| --- | --- | --- |
-| TTS provider 管理 | 支持 provider 列表、speaker 列表、试听、健康检查 | 错误可读；不阻塞文字聊天 |
-| 声音 profile | 角色绑定 voice id、语言、语速、情绪参数 | profile 和角色卡一起导出/导入 |
-| 本地 TTS adapter | 支持本地 VITS/GPT-SoVITS/CosyVoice 类服务 | 本地服务状态清楚，不强制安装 |
-| 语音克隆导入 | 用户导入授权音频，生成或选择声音 profile | 必须有同意声明、删除入口、用途提示 |
-| 语音质量 QA | 首句不爆音、不重叠、可 Stop、嘴型同步 | 继承 V1 stop-audio + waveform mouth harness |
+用户能塑造“这个桌宠是谁”，并且角色记忆、声音和模型不会串。
 
 ### 不做什么
 
-- 不内置无授权真人声音。
-- 不把用户音频默认上传到云端。
-- 不把语音克隆做成隐藏功能。
-- 不让 TTS 失败破坏文字回复。
+不做多角色同时在线，不做插件化角色市场。
 
-### 验收标准
+## V2.3：屏幕感知伴侣
 
-- Settings 覆盖 provider health、speaker list、Test Voice、失败回退。
-- 声音 profile 导入/导出不泄露 API key。
-- 克隆音频删除后，相关本地文件和 profile 引用都被清理。
+### 背景
+
+用户希望桌宠能理解当前工作/网页/错误，但屏幕是高隐私区域，必须默认不读屏。
+
+### 子目标
+
+| ID | 目标 | 要做什么 | 验收看护 |
+| --- | --- | --- | --- |
+| V2.3a | 手动截图问答 | 用户点击“看屏幕”后截一次图并提问 | fake vision harness |
+| V2.3b | 窗口/区域选择 | 选择窗口、显示器或矩形区域，截图前预览 | UI harness |
+| V2.3c | 可见隐私状态 | 显示正在看哪里、何时停止、本地/云端调用 | privacy harness |
+| V2.3d | 屏幕内容与记忆边界 | 截图默认不进长期记忆，显式保存才写入 | redaction/export tests |
+
+### 预期效果
+
+用户主动让它看屏幕时，它能解释当前内容；用户关闭后，它不会继续引用旧截图。
+
+### 不做什么
+
+不默认持续截图，不后台监控，不无提示上传截图。
+
+## V2.4：受控电脑操作
+
+### 背景
+
+桌宠可以帮助用户操作电脑，但必须像“可停、可审计的小助手”，不是无人值守 agent。
+
+### 子目标
+
+| ID | 目标 | 要做什么 | 验收看护 |
+| --- | --- | --- | --- |
+| V2.4a | 操作计划 UI | 执行前显示窗口、步骤、风险、确认按钮 | UI harness |
+| V2.4b | 本应用低风险动作 | 打开 Settings、切换静音、隐藏/恢复桌宠 | Electron harness |
+| V2.4c | 外部窗口点击/输入 | 用户确认后对指定窗口执行小动作 | fake desktop harness |
+| V2.4d | 权限、Stop、日志 | 每步记录观察/动作/结果，Stop 立即停止 | action log tests |
+
+### 预期效果
+
+用户能让它做明确的小任务，并随时看到它要做什么、正在做什么、做了什么。
+
+### 不做什么
+
+不自动发消息、付款、删文件、输入密码，不做长期无人值守任务。
+
+## V2.5：声音人格与语音克隆
+
+### 背景
+
+V1 解决“能发声”。V2.5 解决“声音像这个角色”，同时要保护用户和第三方声音权益。
+
+### 子目标
+
+| ID | 目标 | 要做什么 | 验收看护 |
+| --- | --- | --- | --- |
+| V2.5a | TTS provider/speaker 管理 | provider 列表、speaker 列表、试听、健康检查 | Settings harness |
+| V2.5b | Voice profile | 角色绑定 voice id、语言、语速、情绪参数 | import/export tests |
+| V2.5c | 本地 TTS 服务 | 支持本地 VITS/GPT-SoVITS/CosyVoice 类服务 | local fake service harness |
+| V2.5d | 授权语音克隆 | 导入授权音频、同意声明、删除入口、用途提示 | redaction/delete tests |
+
+### 预期效果
+
+角色声音稳定、可试听、可切换、可删除，TTS 失败不破坏文字聊天。
+
+### 不做什么
+
+不内置无授权真人声音，不隐藏上传行为，不把克隆做成默认路径。
 
 ## V3.0：可扩展伴侣平台
 
-### 一句话目标
+### 背景
 
-在 V1/V2 的稳定桌宠、记忆、屏幕感知和受控操作基础上，开放角色包、工具包和社区扩展，但不牺牲隐私和控制感。
+只有当桌宠、记忆、角色、屏幕感知、操作和声音都稳定后，Greyfield 才适合开放内容包和工具生态。
 
-### 可能能力
+### 要做什么
 
-- 多角色同时显示或切换。
-- 角色包：Live2D 模型、人设、声音、动作、气泡样式、默认 provider。
-- 工具包：受限工具声明、权限、UI、测试夹具。
-- 内容包导入：世界书、知识库、台词库。
-- 本地 sandbox 或权限系统。
-- 资产 license 检查和社区内容策略。
+- 角色包：Live2D、人设、声音、动作、气泡样式。
+- 内容包：世界书、知识库、台词库。
+- 工具包：权限声明、测试夹具、UI 声明。
+- 本地 sandbox 和资产 license 检查。
 
-### 进入条件
+### 预期效果
 
-- V2.0 记忆和角色卡稳定。
-- V2.1 屏幕感知隐私边界稳定。
-- V2.2 操作权限和日志稳定。
-- V2.3 声音权益和 provider 管理稳定。
+高级用户能组合自己的伴侣，而不是修改源码。
 
-## 对标参考维度
+### 不做什么
 
-Greyfield 对标常见 AI 桌宠/虚拟伴侣项目时，比较维度应该是产品能力矩阵，不是照搬技术栈。
+不牺牲本地隐私，不开放无权限工具执行，不在 V2 未稳定前做插件市场。
 
-| 维度 | Greyfield 目标 | 参考启发 |
-| --- | --- | --- |
-| 桌宠存在感 | 透明、低打扰、可恢复、可交互 | AIRI Tamagotchi-style stage、Desktop Mate 类桌面角色 |
-| 角色表现 | Live2D、动作、表情、触摸、嘴型、气泡 | AIRI Live2D/VRM 角色体，ZcChat/ZcChat2 角色表现 |
-| 对话与语音 | LLM/TTS/ASR provider、流式响应、Stop 一致 | LogChat 类组合产品，VITS/Whisper adapter 形态 |
-| 长期记忆 | 可编辑、可删除、可审计、可分层 | Letta 的 persona/human memory 分离 |
-| 资产与角色 | 模型、声音、人设、记忆绑定成角色 | 桌宠/VTuber 资产包思路 |
-| 屏幕感知 | 主动授权截图/窗口理解 | AI companion 的视觉上下文能力 |
-| 电脑操控 | 计划确认、受限动作、日志、Stop | agent 工具调用，但收紧到桌面产品安全边界 |
+## Issue 跟踪规则
 
-## 版本推进规则
+1. 每个小版本开一个主 issue，每个字母阶段开一个子 issue 或独立 issue。
+2. Issue body 必须包含背景、要做什么、预期效果、验收看护、不做什么。
+3. Sub agent 拆工时只认 issue 范围，不从长聊天里猜需求。
+4. 涉及前端可见体验的 issue 必须写明需要 `pnpm harness:frontend-full` 或截图验收。
+5. 涉及记忆的 issue 必须写明 `pnpm harness:memory-benchmark` 维度和分数变化。
 
-1. 每个版本先写产品书，再写 manifest/issue，再实现。
-2. 每个版本都要有 fake/local harness，不能依赖外部 key 才能验收。
-3. 每个会碰用户隐私的能力都要有可见状态、关闭入口、导出/删除策略。
-4. 每个会操作电脑的能力都要有确认、停止、日志和禁止动作清单。
-5. 不允许把下一个版本的能力偷塞进当前版本的完成口径。
-6. 用户手工发现的问题必须补最近的 harness 或验收步骤。
+## 已开 Issue
 
-## 推荐 Issue 拆分
+| Issue | 跟踪内容 |
+| --- | --- |
+| [#79](https://github.com/zuiho-kai/greyfield-next/issues/79) | V2.1 长期记忆与关系连续性 roadmap |
+| [#72](https://github.com/zuiho-kai/greyfield-next/issues/72) | V2.1a Memory benchmark 与低分基线 |
+| [#73](https://github.com/zuiho-kai/greyfield-next/issues/73) | V2.1b 原始聊天索引与 source drilldown |
+| [#74](https://github.com/zuiho-kai/greyfield-next/issues/74) | V2.1c 长期 memory atom 抽取与写入 |
+| [#75](https://github.com/zuiho-kai/greyfield-next/issues/75) | V2.1d 触发召回、日期召回与原文追溯 |
+| [#76](https://github.com/zuiho-kai/greyfield-next/issues/76) | V2.1e 情境记忆与低打扰主动触发 |
+| [#77](https://github.com/zuiho-kai/greyfield-next/issues/77) | V2.1f Memory Library UX 与隐私控制 |
+| [#78](https://github.com/zuiho-kai/greyfield-next/issues/78) | V2.1g 记忆分数门禁与 PR 回归流程 |
 
-### V1.1
+## 当前优先队列
 
-- V1.1 安装/启动 smoke 与 release checklist。
-- V1.1 模型管理 UX：模型列表、导入、当前模型、错误提示。
-- V1.1 诊断包与日志 redaction。
-- V1.1 provider release evidence：真实 LLM/TTS/ASR env rerun。
-
-### V2.0
-
-- V2.0 角色卡 schema 与 Settings 编辑 UI。
-- V2.0c 记忆评测 benchmark：长聊摘要、冲突更新、噪声过滤、禁用/删除、召回排序、false positive、prompt budget、source traceability。
-- V2.0 长期记忆分层 store、编辑、删除、导出。
-- V2.0 自动记忆候选与用户确认。
-- V2.0 prompt memory injection 与 token budget harness。
-- V2.0 角色资产绑定：模型、声音、人设、气泡风格。
-
-### V2.1
-
-- V2.1 手动截图问答与 fake vision harness。
-- V2.1 窗口/区域选择和截图预览。
-- V2.1 屏幕感知隐私状态与 Stop。
-- V2.1 视觉上下文不进长期记忆的隐私测试。
-
-### V2.2
-
-- V2.2 action plan UI：计划、确认、执行、Stop、日志。
-- V2.2 本应用低风险操作 adapter。
-- V2.2 Windows 测试窗口点击/输入 harness。
-- V2.2 禁止动作和权限声明测试。
-
-### V2.3
-
-- V2.3 TTS provider/speaker 管理。
-- V2.3 voice profile schema 与角色绑定。
-- V2.3 本地 TTS service adapter。
-- V2.3 语音克隆导入、同意、删除与 redaction。
+1. V2.1a：把 memory benchmark 变成真实低分基线和 CI gate。
+2. V2.1b：补强 raw evidence/source drilldown 设计和看护。
+3. V2.1c：实现长期 memory atom 抽取与写入。
+4. V2.1d：实现触发召回、日期召回、原文追溯。
+5. V2.1e：实现雨天/家/窗/火锅这类情境记忆和低打扰主动触发。

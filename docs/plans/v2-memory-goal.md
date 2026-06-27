@@ -1,10 +1,10 @@
 # V2 Memory Goal
 
-更新时间：2026-06-27
+更新时间：2026-06-28
 
 ## Goal
 
-Greyfield V2.0 memory should become a source-linked, user-correctable companion memory system.
+Greyfield memory should become a source-linked, user-correctable companion memory system. The merged V2.0 slices are the storage/control foundation; the product roadmap now continues as V2.1 in [Version Product Book](version-product-book.md).
 
 The first engineering goal, V2.0a, is merged into `main` via [#63](https://github.com/zuiho-kai/greyfield-next/pull/63):
 
@@ -64,7 +64,7 @@ V2.0c is the guardrail slice before adding more memory features. It turns `pnpm 
 The benchmark is intentionally local/fake and does not require external keys. It guards:
 
 - long-chat summary source traceability.
-- candidate-worthy facts that later memory-promotion UI will need.
+- durable memory extraction cases that later Memory Atom work must satisfy.
 - UI/event noise rejection.
 - disabled memory not being injected.
 - conflict/update ranking where a corrected newer memory wins within budget.
@@ -72,16 +72,30 @@ The benchmark is intentionally local/fake and does not require external keys. It
 - prompt visibility of reason and source turns.
 - prompt character budget skips that report the skipped item and reason.
 
-V2.0d/e work must extend this fixture before claiming automatic memory promotion, memory layering, or vector recall quality. A feature can add a new recall engine later, but it must keep the benchmark passing or explain the updated acceptance fixture in the same PR.
+V2.1 work must extend this fixture before claiming memory atom extraction, scene memory, calendar recall, evidence drilldown, memory layering, or vector recall quality. A feature can add a new recall engine later, but it must keep the benchmark passing or explain the updated acceptance fixture in the same PR.
 
-The current V2.0c benchmark separates narrow regression scores from product readiness. `summaryRegressionScore` and `recallRegressionScore` are locked at `1`, while `productReadinessScore` is locked at `0.4` because automatic candidates, explicit review, memory layering, role isolation, and semantic recall are not implemented yet. CI fails if any score drops below the recorded baseline. When future PRs intentionally add harder cases or improve the product, they must update the fixture baseline in the same PR and explain the new accepted score.
+The current V2.0c benchmark separates narrow regression scores from product readiness. `summaryRegressionScore` and `recallRegressionScore` are locked at `1`, while `productReadinessScore` is locked at `0.4` because memory atom extraction, scene memory, calendar recall, evidence drilldown, memory layering, role isolation, and semantic recall are not implemented yet. CI fails if any score drops below the recorded baseline. When future PRs intentionally add harder cases or improve the product, they must update the fixture baseline in the same PR and explain the new accepted score.
 
 Still not in this slice:
 
-- automatic pinned long-term memory.
-- memory candidate review and promotion.
+- memory atom extraction and durable write policy.
+- explicit-save long-term memory writes.
+- relationship dates, rituals, and scene memories.
+- calendar/environment trigger recall.
+- source drilldown from compressed memory back to raw chat details.
 - LLM-generated summarizer replacement for the extractive draft.
 - vector database recall.
+
+## V2.1 Product Direction
+
+V2.1 is not a pending-candidate approval product. Users should not review a daily queue before Greyfield can remember. The intended product shape is:
+
+- background LLM extraction for facts, preferences, opinions, boundaries, relationship events, promises, and scene memories.
+- explicit save language writes memory directly.
+- automatic writes are conservative and source-linked.
+- Settings exposes Memory Library controls for inspect, edit, disable, delete, export, and clear.
+- trigger recall uses keywords, aliases, semantic cues, calendar dates, environment cues, and source drilldown.
+- benchmark cases include anniversary/rose, game critique with raw evidence drilldown, and rainy virtual-home hotpot scene recall.
 
 ## Verification
 

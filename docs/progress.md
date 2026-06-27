@@ -22,11 +22,11 @@
 
 Current product plan: [Greyfield Next V1 产品计划](plans/v1-product-plan.md).
 
-Post-V1 roadmap: [Greyfield Next 版本产品书](plans/version-product-book.md) defines V1.1 productization, V2 memory/persona, V2 screen awareness, V2 controlled desktop operation, V2 advanced voice, and the later platform direction.
+Post-V1 roadmap: [Greyfield Next 版本产品书](plans/version-product-book.md) defines V1.1 productization, V2.1 long-term memory and relationship continuity, V2.2 character/persona customization, V2.3 screen awareness, V2.4 controlled desktop operation, V2.5 voice identity, and the later platform direction.
 
-V2.0 memory research notes: [Clowder AI](research/v2-memory/clowder-ai.md), [SillyTavern](research/v2-memory/sillytavern.md), [MaiBot](research/v2-memory/maibot.md), and [Greyfield synthesis](research/v2-memory/synthesis.md).
+V2.1 memory research notes: [Clowder AI](research/v2-memory/clowder-ai.md), [SillyTavern](research/v2-memory/sillytavern.md), [MaiBot](research/v2-memory/maibot.md), and [Greyfield synthesis](research/v2-memory/synthesis.md).
 
-V2.0 memory implementation goal: [V2 Memory Goal](plans/v2-memory-goal.md) records the merged V2.0a raw-log, summary-segment, and recall-context foundation, the V2.0b memory-control slice, and the V2.0c memory-evaluation benchmark gate.
+V2 memory implementation goal: [V2 Memory Goal](plans/v2-memory-goal.md) records the merged V2.0 raw-log, summary-segment, recall-context, memory-control, and memory benchmark foundation. Future memory product work is tracked as V2.1 in the version product book.
 
 ## 2026-06-23
 
@@ -78,7 +78,9 @@ V2.0 memory implementation goal: [V2 Memory Goal](plans/v2-memory-goal.md) recor
 - V1 visible-experience evidence is now current on `main`; remaining non-current claims are credentialed external real LLM/TTS demo reruns and post-V1 model-management polish.
 - Merged #67 as the V2.0b memory-control slice: Settings Memory can edit summary text/cues, disable or re-enable a summary, delete a selected summary without deleting raw chat turns, and export memory evidence.
 - Added current-head guard coverage for V2.0b: `SummarySegmentStore.update`, disabled-summary recall skip, RuntimeService memory control methods, renderer IPC bridge commands/results, a disabled-memory benchmark case, and `pnpm harness:electron:memory-control` through main run `28289995890`.
-- V2.0c defines the next memory gate: `pnpm harness:memory-benchmark` is fixture-driven and must cover long-chat summary traceability, candidate-worthy facts, conflict/update ranking, noise rejection, disabled memory, false-positive rejection, prompt source visibility, and prompt budget skips before later memory promotion or layering work claims completion. The current locked baselines are `summaryRegressionScore: 1`, `recallRegressionScore: 1`, and `productReadinessScore: 0.4`; CI fails below the recorded fixture baselines.
+- V2.0c defines the current memory gate: `pnpm harness:memory-benchmark` is fixture-driven and must cover long-chat summary traceability, durable memory extraction readiness, conflict/update ranking, noise rejection, disabled memory, false-positive rejection, prompt source visibility, and prompt budget skips before later memory atom extraction, scene memory, calendar recall, evidence drilldown, or layering work claims completion. The current locked baselines are `summaryRegressionScore: 1`, `recallRegressionScore: 1`, and `productReadinessScore: 0.4`; CI fails below the recorded fixture baselines.
+- Rewrote the post-V1 product book around V2.1 staged memory work: benchmark gate, raw evidence/source drilldown, long-term memory atoms, trigger recall, emotional scene memory, memory library/privacy, and score-gated CI workflow.
+- Opened V2.1 tracking issues: #79 roadmap, #72 benchmark, #73 raw evidence/source drilldown, #74 memory atom extraction, #75 trigger/calendar/evidence recall, #76 scene/proactive recall, #77 Memory Library/privacy, and #78 score-gated PR workflow.
 
 ## 2026-05-23
 
