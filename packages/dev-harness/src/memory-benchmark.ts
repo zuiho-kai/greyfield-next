@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import {
   buildRecallContext,
   createSummarySegmentDraft,
@@ -6,20 +7,62 @@ import {
 } from "@greyfield/core-runtime";
 import type { SessionTurn } from "@greyfield/core-runtime";
 
+interface MemoryBenchmarkFixture {
+  version: number;
+  thresholds: {
+    summaryScore: number;
+    recallScore: number;
+  };
+  sessionId: string;
+  threadId: string;
+  summaryCases: SummaryBenchmarkCase[];
+  recallSegments: RecallSegmentFixture[];
+  recallCases: RecallBenchmarkCase[];
+}
+
 interface SummaryBenchmarkCase {
   id: string;
-  turns: SessionTurn[];
-  expectedFacts: string[];
-  expectedSourceTurnIds: string[];
-  forbiddenFragments: string[];
+  description?: string;
+  turns: Array<{
+    id: string;
+    role: SessionTurn["role"];
+    content: string;
+    createdAt?: string;
+  }>;
+  maxSummaryCharacters?: number;
+  expectations: {
+    facts: string[];
+    sourceTurnIds: string[];
+    forbiddenFragments: string[];
+    recallCueFragments: string[];
+  };
+}
+
+interface RecallSegmentFixture {
+  id: string;
+  summary: string;
+  recallCues: string[];
+  sourceTurnIds?: string[];
+  createdAt?: string;
+  disabled?: boolean;
+}
+
+interface ExpectedSkipped {
+  id: string;
+  reason: string;
 }
 
 interface RecallBenchmarkCase {
   id: string;
+  description?: string;
   input: string;
   expectedIds: string[];
   rejectedIds: string[];
+  expectedSkipped?: ExpectedSkipped[];
   maxItems?: number;
+  maxCharacters?: number;
+  promptIncludes?: string[];
+  promptExcludes?: string[];
 }
 
 interface CaseResult {
@@ -29,117 +72,17 @@ interface CaseResult {
   details: Record<string, unknown>;
 }
 
-const minimumSummaryScore = 0.95;
-const minimumRecallScore = 0.95;
-const benchmarkSessionId = "memory-benchmark-session";
-const benchmarkThreadId = "memory-benchmark-thread";
-
-const summaryCases: SummaryBenchmarkCase[] = [
-  {
-    id: "model-preference-with-ui-noise",
-    turns: [
-      userTurn("model-1", "我喜欢 Hiyori，当默认 Live2D 模型比较舒服。"),
-      assistantTurn("model-2", "记住：默认模型偏好是 Hiyori。"),
-      eventTurn("model-3", "window blurred while user moved the settings panel"),
-      userTurn("model-4", "Mao 先不要作为默认模型。")
-    ],
-    expectedFacts: ["Hiyori", "默认 Live2D 模型", "Mao"],
-    expectedSourceTurnIds: ["model-1", "model-2", "model-4"],
-    forbiddenFragments: ["window blurred", "settings panel"]
-  },
-  {
-    id: "routine-preference-with-short-aside",
-    turns: [
-      userTurn("routine-1", "以后晚上 22:30 以后提醒我休息，不要继续催我加班。"),
-      assistantTurn("routine-2", "明白，夜间提醒会偏向休息，而不是继续工作。"),
-      userTurn("routine-3", "顺便这个按钮颜色以后再说。")
-    ],
-    expectedFacts: ["22:30", "提醒我休息", "不要继续催我加班"],
-    expectedSourceTurnIds: ["routine-1", "routine-2", "routine-3"],
-    forbiddenFragments: []
-  }
-];
-
-const recallSegments: SummarySegment[] = [
-  makeSegment("memory-hiyori", "User prefers Hiyori as the default Live2D model and does not want Mao as default.", [
-    "hiyori",
-    "live2d",
-    "mao",
-    "default"
-  ]),
-  makeSegment("memory-night-rest", "User wants reminders after 22:30 to encourage rest instead of more work.", [
-    "22:30",
-    "提醒",
-    "休息",
-    "加班"
-  ]),
-  makeSegment("memory-audio-fade", "First TTS playback used to pop and drag; audio fade-in and serialized queue are required.", [
-    "tts",
-    "语音",
-    "爆音",
-    "拖音",
-    "队列"
-  ]),
-  makeSegment("memory-ci-noise", "The team discussed CI checkout cache cleanup and unrelated lint timing.", [
-    "ci",
-    "cache",
-    "lint"
-  ]),
-  makeSegment(
-    "memory-disabled-zeta",
-    "Disabled old memory says Zeta should be recalled from this segment.",
-    ["disabled-zeta", "zeta"],
-    { disabled: true }
-  )
-];
-
-const recallCases: RecallBenchmarkCase[] = [
-  {
-    id: "proper-noun-model-recall",
-    input: "默认模型还是 Hiyori 吗？",
-    expectedIds: ["memory-hiyori"],
-    rejectedIds: ["memory-ci-noise"]
-  },
-  {
-    id: "chinese-routine-recall",
-    input: "我们之前说过夜间提醒和休息吗？",
-    expectedIds: ["memory-night-rest"],
-    rejectedIds: ["memory-hiyori", "memory-ci-noise"]
-  },
-  {
-    id: "audio-issue-recall",
-    input: "语音第一句爆音和拖音这个问题还记得吗？",
-    expectedIds: ["memory-audio-fade"],
-    rejectedIds: ["memory-hiyori", "memory-ci-noise"]
-  },
-  {
-    id: "no-false-positive-for-unrelated-input",
-    input: "明天香港会不会下雨？",
-    expectedIds: [],
-    rejectedIds: ["memory-hiyori", "memory-night-rest", "memory-audio-fade", "memory-ci-noise", "memory-disabled-zeta"]
-  },
-  {
-    id: "disabled-summary-not-recalled",
-    input: "disabled-zeta 这个旧记忆还会注入吗？",
-    expectedIds: [],
-    rejectedIds: ["memory-disabled-zeta"]
-  },
-  {
-    id: "budget-keeps-best-match",
-    input: "Hiyori Live2D 默认模型偏好还在吗？",
-    expectedIds: ["memory-hiyori"],
-    rejectedIds: ["memory-night-rest", "memory-ci-noise"],
-    maxItems: 1
-  }
-];
-
-const summaryResults = summaryCases.map(runSummaryCase);
-const recallResults = recallCases.map(runRecallCase);
+const defaultCreatedAt = "2026-06-26T01:00:00.000Z";
+const fixture = await loadFixture();
+const recallSegments = fixture.recallSegments.map((segment) => makeSegment(segment, fixture));
+const summaryResults = fixture.summaryCases.map((testCase) => runSummaryCase(testCase, fixture));
+const recallResults = fixture.recallCases.map((testCase) => runRecallCase(testCase));
 const summaryScore = average(summaryResults.map((result) => result.score));
 const recallScore = average(recallResults.map((result) => result.score));
 const ok =
-  summaryScore >= minimumSummaryScore &&
-  recallScore >= minimumRecallScore &&
+  fixture.version === 2 &&
+  summaryScore >= fixture.thresholds.summaryScore &&
+  recallScore >= fixture.thresholds.recallScore &&
   summaryResults.every((result) => result.passed) &&
   recallResults.every((result) => result.passed);
 
@@ -147,10 +90,8 @@ console.log(
   JSON.stringify(
     {
       ok,
-      thresholds: {
-        summaryScore: minimumSummaryScore,
-        recallScore: minimumRecallScore
-      },
+      fixtureVersion: fixture.version,
+      thresholds: fixture.thresholds,
       summary: {
         score: roundScore(summaryScore),
         cases: summaryResults
@@ -169,39 +110,91 @@ if (!ok) {
   process.exitCode = 1;
 }
 
-function runSummaryCase(testCase: SummaryBenchmarkCase): CaseResult {
+async function loadFixture(): Promise<MemoryBenchmarkFixture> {
+  const fixtureUrl = new URL("./fixtures/memory-benchmark.json", import.meta.url);
+  const raw = await readFile(fixtureUrl, "utf8");
+  const parsed = JSON.parse(raw) as MemoryBenchmarkFixture;
+  validateFixture(parsed);
+  return parsed;
+}
+
+function validateFixture(candidate: MemoryBenchmarkFixture): void {
+  if (candidate.version !== 2) {
+    throw new Error(`Unsupported memory benchmark fixture version: ${candidate.version}`);
+  }
+  assertUnique("summary case", candidate.summaryCases.map((testCase) => testCase.id));
+  assertUnique("recall segment", candidate.recallSegments.map((segment) => segment.id));
+  assertUnique("recall case", candidate.recallCases.map((testCase) => testCase.id));
+  const segmentIds = new Set(candidate.recallSegments.map((segment) => segment.id));
+  for (const testCase of candidate.recallCases) {
+    for (const id of [...testCase.expectedIds, ...testCase.rejectedIds, ...(testCase.expectedSkipped ?? []).map((item) => item.id)]) {
+      if (!segmentIds.has(id)) {
+        throw new Error(`Recall case ${testCase.id} references missing segment ${id}`);
+      }
+    }
+  }
+}
+
+function assertUnique(label: string, values: string[]): void {
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (seen.has(value)) {
+      throw new Error(`Duplicate ${label} id: ${value}`);
+    }
+    seen.add(value);
+  }
+}
+
+function runSummaryCase(testCase: SummaryBenchmarkCase, loadedFixture: MemoryBenchmarkFixture): CaseResult {
   const draft = createSummarySegmentDraft({
-    sessionId: benchmarkSessionId,
-    turns: testCase.turns
+    sessionId: loadedFixture.sessionId,
+    turns: testCase.turns.map((turn) => ({
+      id: turn.id,
+      role: turn.role,
+      content: turn.content,
+      createdAt: turn.createdAt ?? defaultCreatedAt
+    })),
+    maxSummaryCharacters: testCase.maxSummaryCharacters
   });
   const summaryLower = draft.summary.toLowerCase();
-  const presentFacts = testCase.expectedFacts.filter((fact) => summaryLower.includes(fact.toLowerCase()));
-  const missingFacts = testCase.expectedFacts.filter((fact) => !summaryLower.includes(fact.toLowerCase()));
+  const presentFacts = testCase.expectations.facts.filter((fact) => summaryLower.includes(fact.toLowerCase()));
+  const missingFacts = testCase.expectations.facts.filter((fact) => !summaryLower.includes(fact.toLowerCase()));
   const sourceTurnIds = draft.sourceTurns.map((turn) => turn.turnId);
-  const missingSources = testCase.expectedSourceTurnIds.filter((turnId) => !sourceTurnIds.includes(turnId));
-  const forbiddenHits = testCase.forbiddenFragments.filter((fragment) =>
+  const missingSources = testCase.expectations.sourceTurnIds.filter((turnId) => !sourceTurnIds.includes(turnId));
+  const forbiddenHits = testCase.expectations.forbiddenFragments.filter((fragment) =>
     summaryLower.includes(fragment.toLowerCase())
   );
-  const recallCueHit = draft.recallCues.some((cue) => /hiyori|22:30|休息|提醒|语音|tts/i.test(cue));
-  const factScore = ratio(presentFacts.length, testCase.expectedFacts.length);
-  const sourceScore = ratio(testCase.expectedSourceTurnIds.length - missingSources.length, testCase.expectedSourceTurnIds.length);
-  const noiseScore = testCase.forbiddenFragments.length === 0 ? 1 : forbiddenHits.length === 0 ? 1 : 0;
-  const cueScore = recallCueHit ? 1 : 0;
+  const missingRecallCueFragments = testCase.expectations.recallCueFragments.filter(
+    (fragment) => !draft.recallCues.some((cue) => cue.toLowerCase().includes(fragment.toLowerCase()))
+  );
+  const factScore = ratio(presentFacts.length, testCase.expectations.facts.length);
+  const sourceScore = ratio(testCase.expectations.sourceTurnIds.length - missingSources.length, testCase.expectations.sourceTurnIds.length);
+  const noiseScore = testCase.expectations.forbiddenFragments.length === 0 ? 1 : forbiddenHits.length === 0 ? 1 : 0;
+  const cueScore = ratio(
+    testCase.expectations.recallCueFragments.length - missingRecallCueFragments.length,
+    testCase.expectations.recallCueFragments.length
+  );
   const score = weightedAverage([
-    [factScore, 0.45],
+    [factScore, 0.4],
     [sourceScore, 0.3],
     [noiseScore, 0.15],
-    [cueScore, 0.1]
+    [cueScore, 0.15]
   ]);
 
   return {
     id: testCase.id,
-    passed: missingFacts.length === 0 && missingSources.length === 0 && forbiddenHits.length === 0 && recallCueHit,
+    passed:
+      missingFacts.length === 0 &&
+      missingSources.length === 0 &&
+      forbiddenHits.length === 0 &&
+      missingRecallCueFragments.length === 0,
     score: roundScore(score),
     details: {
+      description: testCase.description,
       missingFacts,
       missingSources,
       forbiddenHits,
+      missingRecallCueFragments,
       recallCues: draft.recallCues,
       sourceTurnIds
     }
@@ -212,14 +205,20 @@ function runRecallCase(testCase: RecallBenchmarkCase): CaseResult {
   const context = buildRecallContext({
     input: testCase.input,
     summarySegments: recallSegments,
-    maxItems: testCase.maxItems
+    maxItems: testCase.maxItems,
+    maxCharacters: testCase.maxCharacters
   });
   const actualIds = context.items.map((item) => item.id);
   const missingExpected = testCase.expectedIds.filter((id) => !actualIds.includes(id));
   const rejectedHits = testCase.rejectedIds.filter((id) => actualIds.includes(id));
+  const missingSkipped = (testCase.expectedSkipped ?? []).filter(
+    (expected) => !context.skipped.some((skipped) => skipped.id === expected.id && skipped.reason === expected.reason)
+  );
   const promptText = formatRecallContextForPrompt(context);
   const sourceVisible = context.items.every((item) => item.sourceTurnIds.every((turnId) => promptText.includes(turnId)));
   const reasonVisible = context.items.every((item) => item.reason.length > 0 && promptText.includes(item.reason));
+  const missingPromptFragments = (testCase.promptIncludes ?? []).filter((fragment) => !promptText.includes(fragment));
+  const unexpectedPromptFragments = (testCase.promptExcludes ?? []).filter((fragment) => promptText.includes(fragment));
   const hitScore =
     testCase.expectedIds.length === 0
       ? actualIds.length === 0
@@ -228,20 +227,44 @@ function runRecallCase(testCase: RecallBenchmarkCase): CaseResult {
       : ratio(testCase.expectedIds.length - missingExpected.length, testCase.expectedIds.length);
   const rejectionScore = ratio(testCase.rejectedIds.length - rejectedHits.length, Math.max(1, testCase.rejectedIds.length));
   const visibilityScore = sourceVisible && reasonVisible ? 1 : 0;
+  const skippedScore =
+    (testCase.expectedSkipped ?? []).length === 0
+      ? 1
+      : ratio((testCase.expectedSkipped ?? []).length - missingSkipped.length, (testCase.expectedSkipped ?? []).length);
+  const promptScore =
+    (testCase.promptIncludes ?? []).length + (testCase.promptExcludes ?? []).length === 0
+      ? 1
+      : missingPromptFragments.length === 0 && unexpectedPromptFragments.length === 0
+        ? 1
+        : 0;
   const score = weightedAverage([
-    [hitScore, 0.5],
-    [rejectionScore, 0.35],
-    [visibilityScore, 0.15]
+    [hitScore, 0.4],
+    [rejectionScore, 0.25],
+    [visibilityScore, 0.15],
+    [skippedScore, 0.1],
+    [promptScore, 0.1]
   ]);
 
   return {
     id: testCase.id,
-    passed: missingExpected.length === 0 && rejectedHits.length === 0 && sourceVisible && reasonVisible,
+    passed:
+      missingExpected.length === 0 &&
+      rejectedHits.length === 0 &&
+      sourceVisible &&
+      reasonVisible &&
+      missingSkipped.length === 0 &&
+      missingPromptFragments.length === 0 &&
+      unexpectedPromptFragments.length === 0,
     score: roundScore(score),
     details: {
+      description: testCase.description,
       actualIds,
+      skipped: context.skipped,
       missingExpected,
       rejectedHits,
+      missingSkipped,
+      missingPromptFragments,
+      unexpectedPromptFragments,
       reasons: context.items.map((item) => ({ id: item.id, reason: item.reason, score: item.score })),
       sourceVisible,
       reasonVisible
@@ -249,50 +272,21 @@ function runRecallCase(testCase: RecallBenchmarkCase): CaseResult {
   };
 }
 
-function makeSegment(
-  id: string,
-  summary: string,
-  recallCues: string[],
-  options: { disabled?: boolean } = {}
-): SummarySegment {
-  const suffix = id.replace(/^memory-/, "");
+function makeSegment(segment: RecallSegmentFixture, loadedFixture: MemoryBenchmarkFixture): SummarySegment {
   return {
-    id,
-    threadId: benchmarkThreadId,
-    sessionId: benchmarkSessionId,
-    summary,
-    recallCues,
-    sourceTurns: [
-      {
-        sessionId: benchmarkSessionId,
-        turnId: `turn-${suffix}-1`,
-        role: "user",
-        createdAt: "2026-06-26T01:00:00.000Z"
-      }
-    ],
-    createdAt: "2026-06-26T01:00:00.000Z",
-    disabled: options.disabled
-  };
-}
-
-function userTurn(id: string, content: string): SessionTurn {
-  return makeTurn(id, "user", content);
-}
-
-function assistantTurn(id: string, content: string): SessionTurn {
-  return makeTurn(id, "assistant", content);
-}
-
-function eventTurn(id: string, content: string): SessionTurn {
-  return makeTurn(id, "event", content);
-}
-
-function makeTurn(id: string, role: SessionTurn["role"], content: string): SessionTurn {
-  return {
-    id,
-    role,
-    content,
-    createdAt: "2026-06-26T01:00:00.000Z"
+    id: segment.id,
+    threadId: loadedFixture.threadId,
+    sessionId: loadedFixture.sessionId,
+    summary: segment.summary,
+    recallCues: segment.recallCues,
+    sourceTurns: (segment.sourceTurnIds ?? [`turn-${segment.id.replace(/^memory-/, "")}-1`]).map((turnId) => ({
+      sessionId: loadedFixture.sessionId,
+      turnId,
+      role: "user",
+      createdAt: segment.createdAt ?? defaultCreatedAt
+    })),
+    createdAt: segment.createdAt ?? defaultCreatedAt,
+    disabled: segment.disabled
   };
 }
 
