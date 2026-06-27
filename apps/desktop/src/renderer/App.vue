@@ -125,9 +125,10 @@ const bubbleText = computed(() =>
 );
 const visibleBubbleText = ref("");
 const speechBubbleFading = ref(false);
+const lockedBubblePlacement = ref<ReturnType<typeof placeSpeechBubble> | null>(null);
 let speechBubbleHoldTimer: ReturnType<typeof setTimeout> | null = null;
 let speechBubbleFadeTimer: ReturnType<typeof setTimeout> | null = null;
-const bubblePlacement = computed(() =>
+const liveBubblePlacement = computed(() =>
   placeSpeechBubble({
     modelBounds: lastModelBounds.value ?? { x: 120, y: 120, width: 180, height: 360 },
     modelShape: lastModelShape.value,
@@ -136,6 +137,7 @@ const bubblePlacement = computed(() =>
     bubbleSize: speechBubbleSize
   })
 );
+const bubblePlacement = computed(() => lockedBubblePlacement.value ?? liveBubblePlacement.value);
 const bubbleShapeRect = computed<Rect | null>(() => {
   if (!isPetWindow || !state.settings.speechBubbleEnabled || !visibleBubbleText.value) {
     return null;
@@ -461,9 +463,13 @@ function updateSpeechBubbleLifecycle(): void {
   if (!nextText) {
     visibleBubbleText.value = "";
     speechBubbleFading.value = false;
+    lockedBubblePlacement.value = null;
     return;
   }
 
+  if (!lockedBubblePlacement.value) {
+    lockedBubblePlacement.value = liveBubblePlacement.value;
+  }
   visibleBubbleText.value = nextText;
   speechBubbleFading.value = false;
   if (state.assistantDraft || state.status === "generating") {
@@ -475,6 +481,7 @@ function updateSpeechBubbleLifecycle(): void {
     speechBubbleFadeTimer = setTimeout(() => {
       visibleBubbleText.value = "";
       speechBubbleFading.value = false;
+      lockedBubblePlacement.value = null;
       syncPetWindowShape();
     }, speechBubbleFadeMs);
   }, speechBubbleHoldMs);

@@ -235,21 +235,21 @@ describe("GreyfieldRuntime", () => {
       summaryBatchTurnLimit: 4,
       summaryMinTurns: 4
     });
-    const events: RuntimeOutputEvent[] = [];
+    const runTurn = async (text: string): Promise<RuntimeOutputEvent[]> => {
+      const events: RuntimeOutputEvent[] = [];
+      await runtime.handle({ type: "text.input", text }, (event) => {
+        events.push(event);
+      });
+      return events;
+    };
 
-    await runtime.handle({ type: "text.input", text: "第一轮：我喜欢 Hiyori。" }, (event) => {
-      events.push(event);
-    });
-    await runtime.handle({ type: "text.input", text: "第二轮：记住 Live2D 模型偏好。" }, (event) => {
-      events.push(event);
-    });
-    await runtime.handle({ type: "text.input", text: "第三轮：继续。" }, (event) => {
-      events.push(event);
-    });
+    await runTurn("第一轮：我喜欢 Hiyori。");
+    await runTurn("第二轮：记住 Live2D 模型偏好。");
+    const appendFailureTurnEvents = await runTurn("第三轮：继续。");
 
-    expect(events).toContainEqual({ type: "assistant.text.final", text: "Stored reply." });
-    expect(events).toContainEqual({ type: "assistant.audio.end" });
-    expect(events).toContainEqual({ type: "runtime.status", status: "idle" });
+    expect(appendFailureTurnEvents).toContainEqual({ type: "assistant.text.final", text: "Stored reply." });
+    expect(appendFailureTurnEvents).toContainEqual({ type: "assistant.audio.end" });
+    expect(appendFailureTurnEvents).toContainEqual({ type: "runtime.status", status: "idle" });
     expect(await sessionStore.getRecent(6)).toHaveLength(6);
   });
 
