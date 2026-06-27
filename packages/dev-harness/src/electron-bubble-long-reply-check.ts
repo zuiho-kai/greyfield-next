@@ -199,6 +199,11 @@ async function waitForBubbleState(
       if (rect.width <= 0 || rect.height <= 0) {
         return false;
       }
+      const animations =
+        typeof element.getAnimations === "function" ? element.getAnimations() : [];
+      if (animations.some((animation) => animation.playState === "running")) {
+        return false;
+      }
       return {
         text,
         x: Math.round(rect.x),
