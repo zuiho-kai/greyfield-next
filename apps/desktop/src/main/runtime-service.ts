@@ -12,6 +12,7 @@ import {
   type SessionStore,
   type SummarySegment,
   type SummarySegmentStore,
+  normalizeSummarySegmentUpdate,
   type UpdateSummarySegment,
   type RuntimeEventHandler,
   type RuntimeInputEvent,
@@ -170,7 +171,7 @@ export class RuntimeService {
     if (!this.summarySegmentStore) {
       return { ok: false, message: "Memory summaries are not available in this runtime." };
     }
-    const normalized = normalizeMemorySummaryPatch(patch);
+    const normalized = normalizeSummarySegmentUpdate(patch);
     if (normalized.summary !== undefined && normalized.summary.length === 0) {
       return { ok: false, message: "Memory summary cannot be empty." };
     }
@@ -453,18 +454,6 @@ export class RuntimeService {
     }
     return "";
   }
-}
-
-function normalizeMemorySummaryPatch(patch: UpdateSummarySegment): UpdateSummarySegment {
-  return {
-    ...(patch.summary !== undefined ? { summary: patch.summary.trim() } : {}),
-    ...(patch.recallCues !== undefined ? { recallCues: uniqueCleanStrings(patch.recallCues) } : {}),
-    ...(patch.disabled !== undefined ? { disabled: patch.disabled } : {})
-  };
-}
-
-function uniqueCleanStrings(values: string[]): string[] {
-  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
 class MainFakeLLMProvider implements LLMProvider {

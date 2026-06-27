@@ -80,7 +80,6 @@ pnpm harness:frontend-full
 CI guard:
 
 - `pnpm harness:memory-benchmark` runs in Fast checks, so memory summary/recall quality is guarded even when a PR does not trigger `frontend-full`.
-- `pnpm harness:electron:memory-summary` remains the desktop product-path guard for the V2.0a foundation.
-- `pnpm harness:electron:memory-control` is the V2.0b product-path guard for user edit/disable/delete/export.
-- `frontend-full` runs the memory control harness so frontend-visible memory regressions are covered by the aggregate gate.
+- `pnpm harness:electron:memory-summary` and `pnpm harness:electron:memory-control` currently share `packages/dev-harness/src/electron-memory-summary-check.ts`; the former keeps the V2.0a summary foundation entrypoint stable, while the latter names the V2.0b edit/disable/delete/export gate.
+- `frontend-full-check.ts` runs `pnpm harness:electron:memory-control`, so frontend-visible memory regressions are covered by the aggregate gate.
 - Main run `28287921556` on head `b605321` passed Fast checks, including `pnpm harness:memory-benchmark`, and `frontend-full`, including the memory summary harness with `summaryCreated: true`, `recallContext: true`, `settingsMemoryVisible: true`, and `summaryIncludesSourceTurns: true`.

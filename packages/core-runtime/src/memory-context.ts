@@ -43,6 +43,19 @@ export interface UpdateSummarySegment {
   updatedAt?: string;
 }
 
+export function normalizeRecallCues(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+export function normalizeSummarySegmentUpdate(patch: UpdateSummarySegment): UpdateSummarySegment {
+  return {
+    ...(patch.summary !== undefined ? { summary: patch.summary.trim() } : {}),
+    ...(patch.recallCues !== undefined ? { recallCues: normalizeRecallCues(patch.recallCues) } : {}),
+    ...(patch.disabled !== undefined ? { disabled: patch.disabled } : {}),
+    ...(patch.updatedAt !== undefined ? { updatedAt: patch.updatedAt } : {})
+  };
+}
+
 export interface SummarySegmentDraft {
   summary: string;
   recallCues: string[];

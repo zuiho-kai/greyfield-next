@@ -1,6 +1,12 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { AppendSummarySegment, SummarySegment, SummarySegmentStore, UpdateSummarySegment } from "@greyfield/core-runtime";
+import {
+  normalizeRecallCues,
+  type AppendSummarySegment,
+  type SummarySegment,
+  type SummarySegmentStore,
+  type UpdateSummarySegment
+} from "@greyfield/core-runtime";
 
 export class JsonlSummarySegmentStore implements SummarySegmentStore {
   private sequence = 0;
@@ -19,7 +25,7 @@ export class JsonlSummarySegmentStore implements SummarySegmentStore {
         threadId: segment.threadId,
         sessionId: segment.sessionId,
         summary: segment.summary,
-        recallCues: uniqueCleanStrings(segment.recallCues),
+        recallCues: normalizeRecallCues(segment.recallCues),
         sourceTurns: segment.sourceTurns,
         createdAt,
         disabled: false,
@@ -47,7 +53,7 @@ export class JsonlSummarySegmentStore implements SummarySegmentStore {
         updated = {
           ...segment,
           ...(patch.summary !== undefined ? { summary: patch.summary } : {}),
-          ...(patch.recallCues !== undefined ? { recallCues: uniqueCleanStrings(patch.recallCues) } : {}),
+          ...(patch.recallCues !== undefined ? { recallCues: normalizeRecallCues(patch.recallCues) } : {}),
           ...(patch.disabled !== undefined ? { disabled: patch.disabled } : {}),
           updatedAt: patch.updatedAt ?? new Date().toISOString()
         };
@@ -112,7 +118,7 @@ export class JsonlSummarySegmentStore implements SummarySegmentStore {
 function normalizeSegment(segment: SummarySegment): SummarySegment {
   return {
     ...segment,
-    recallCues: uniqueCleanStrings(segment.recallCues),
+    recallCues: normalizeRecallCues(segment.recallCues),
     disabled: segment.disabled ?? false,
     updatedAt: segment.updatedAt ?? segment.createdAt
   };
@@ -121,10 +127,6 @@ function normalizeSegment(segment: SummarySegment): SummarySegment {
 function parseSequence(id: string): number {
   const match = /^summary-(\d+)$/.exec(id);
   return match ? Number(match[1]) : 0;
-}
-
-function uniqueCleanStrings(values: string[]): string[] {
-  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
 function isNotFoundError(error: unknown): boolean {
