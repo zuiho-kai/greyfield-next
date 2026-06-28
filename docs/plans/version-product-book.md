@@ -1,6 +1,6 @@
 # Greyfield Next Version Product Book
 
-更新时间：2026-06-28
+更新时间：2026-06-29
 
 ## 产品定位
 
