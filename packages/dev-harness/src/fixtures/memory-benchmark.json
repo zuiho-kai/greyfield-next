@@ -993,7 +993,7 @@
       "recallMinScore": 0.05,
       "extraction": {
         "sourceTurnIds": ["hotpot-1", "hotpot-3", "hotpot-4"],
-        "rejectedSourceTurnIds": ["hotpot-3", "hotpot-4"],
+        "rejectedSourceTurnIds": ["hotpot-3"],
         "expectedAtoms": [
           {
             "id": "rainy-hotpot-scene",
@@ -1011,6 +1011,15 @@
             "textIncludes": ["open window", "long absence", "关窗", "hotpot"],
             "triggerIncludes": ["虚拟家的窗户开着", "长期没上线", "关窗"],
             "metadata": { "windowState": "open", "action": "close_window", "longAbsence": true, "longAbsenceDays": 30, "sharedExperience": true }
+          },
+          {
+            "id": "non-shared-window-action",
+            "type": "episodic_scene",
+            "sourceTurnIds": ["hotpot-4"],
+            "textIncludes": ["open window", "long absence", "关窗"],
+            "triggerIncludes": ["虚拟家的窗户开着", "长期没上线", "关窗"],
+            "subject": "user",
+            "metadata": { "windowState": "open", "action": "close_window", "longAbsence": true, "longAbsenceDays": 30, "sharedExperience": false }
           }
         ]
       },
@@ -1040,6 +1049,7 @@
           "minImportance": 0.7
         },
         "expectedAtomExpectationIds": ["rainy-hotpot-scene", "window-long-absence-action"],
+        "rejectedAtomExpectationIds": ["non-shared-window-action"],
         "candidateIncludes": ["外面在下雨", "虚拟家的窗户还开着", "45 天没上线", "关窗", "吃火锅"],
         "candidateExcludes": ["memory-atom", "source-turn", "hotpot-1", "atom-", "database", "storage"],
         "negativeCases": [
@@ -1062,7 +1072,7 @@
               "objects": [{ "kind": "window", "state": "open" }, { "kind": "hotpot" }],
               "absenceDays": 45
             },
-            "expectedSkippedReasons": ["virtual_home_missing"]
+            "expectedSkippedReasons": ["virtual_home_missing", "no_shared_scene"]
           },
           {
             "id": "missing-window-state",

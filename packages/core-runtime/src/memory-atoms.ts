@@ -1649,7 +1649,7 @@ function extractEpisodicSceneAtom(
     return;
   }
   const attributes = extractSceneAttributes(text);
-  if (!attributes.sharedExperience) {
+  if (!attributes.sharedExperience && !attributes.action && !attributes.longAbsence) {
     return;
   }
   if (countSceneSignals(attributes) < 2) {
@@ -1665,7 +1665,7 @@ function extractEpisodicSceneAtom(
     type: "episodic_scene",
     text: formatSceneMemoryText(attributes),
     importance: attributes.action || attributes.longAbsence ? 0.82 : 0.76,
-    subject: "user_and_greyfield",
+    subject: attributes.sharedExperience ? "user_and_greyfield" : "user",
     object: buildSceneObject(attributes),
     eventDate,
     triggers: {
@@ -1675,7 +1675,7 @@ function extractEpisodicSceneAtom(
       ...(dateKey ? { calendar: [dateKey] } : {}),
       environment: triggerParts.environment,
       semantic: triggerParts.semantic,
-      relationship: ["user_and_greyfield", "shared_scene"]
+      ...(attributes.sharedExperience ? { relationship: ["user_and_greyfield", "shared_scene"] } : {})
     },
     metadata: buildSceneMetadata(attributes)
   };
