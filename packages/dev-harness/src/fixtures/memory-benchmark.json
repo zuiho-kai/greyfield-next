@@ -47,8 +47,16 @@
         "description": "Hybrid LLM-backed extraction can produce validated, source-linked atoms while deterministic extraction remains the fallback.",
         "status": "partial",
         "score": 0.6,
-        "weight": 0.22,
+        "weight": 0.2,
         "evidence": "atomExtraction benchmark dynamically runs LLMBackedMemoryAtomExtractor with scripted providers for rose preference and game-review reasons, proves invalid LLM output falls back deterministically, and runtime tests cover the explicit hybrid path. Real provider UX enabling remains explicit and not default."
+      },
+      {
+        "id": "source-linked-promise-memory",
+        "description": "User/Greyfield commitments can be stored as typed promise atoms with subject, action object, source turns, semantic recall concepts, and unrelated project-promise rejection.",
+        "status": "partial",
+        "score": 0.58,
+        "weight": 0.04,
+        "evidence": "atomExtraction and atomRecall benchmark dynamically extract a Greyfield desk-cleanup promise with subject/action metadata, recall it through semantic promise cues with lexical lanes disabled, keep source evidence, and reject customer/project promise prompts. No pending approval UI, Settings UX, renderer source-drilldown, scheduler, or ritual expansion is included."
       },
       {
         "id": "calendar-recall",
@@ -71,7 +79,7 @@
         "description": "A remembered fact can drill down to the original source turn and exact user text when the user asks for provenance.",
         "status": "partial",
         "score": 0.55,
-        "weight": 0.16,
+        "weight": 0.14,
         "evidence": "atomRecall benchmark dynamically injects bounded raw source fragments for the game-review atom through vague negative-game cues; this is prompt material only, not a separate renderer drilldown UI"
       },
       {
@@ -98,7 +106,7 @@
         "description": "The user gives durable relationship facts that should become separate source-linked atoms and later calendar recall.",
         "status": "partial",
         "score": 0.6,
-        "weight": 0.25,
+        "weight": 0.2,
         "dimensions": [
           "memory-atom-extraction",
           "calendar-recall",
@@ -140,7 +148,7 @@
         "description": "A relationship event should be recalled from vague important-day and gift-ritual language without exact first-meeting or rose trigger overlap.",
         "status": "partial",
         "score": 0.6,
-        "weight": 0.25,
+        "weight": 0.2,
         "dimensions": [
           "memory-atom-extraction",
           "semantic-relationship-recall",
@@ -182,7 +190,7 @@
         "description": "The user later asks for the exact original wording of a game complaint, not just a paraphrased summary.",
         "status": "partial",
         "score": 0.6,
-        "weight": 0.25,
+        "weight": 0.2,
         "dimensions": [
           "memory-atom-extraction",
           "source-evidence-drilldown",
@@ -223,12 +231,55 @@
         }
       },
       {
+        "id": "user-greyfield-promise-recall",
+        "title": "Source-linked user and Greyfield promise recall",
+        "description": "A commitment between the user and Greyfield should become a typed promise atom that can be recalled from meaning-level cues without mixing in project/customer promises.",
+        "status": "partial",
+        "score": 0.58,
+        "weight": 0.2,
+        "dimensions": [
+          "memory-atom-extraction",
+          "source-linked-promise-memory",
+          "semantic-relationship-recall",
+          "source-evidence-drilldown",
+          "privacy-noise"
+        ],
+        "probeInput": "你之前说好要帮我整理的那件事是什么？",
+        "turns": [
+          {
+            "id": "promise-1",
+            "role": "user",
+            "content": "记住，你答应以后帮我整理书桌；这个承诺以后要能从之前说好要帮我整理的那件事想起来。"
+          },
+          {
+            "id": "promise-2",
+            "role": "assistant",
+            "content": "我会把这个承诺保存成来源清楚的记忆：主体是 Greyfield，动作是整理书桌。"
+          },
+          {
+            "id": "promise-3",
+            "role": "user",
+            "content": "项目里的客户承诺不要和我们之间的承诺混在一起。"
+          }
+        ],
+        "expectedBehavior": [
+          "extract a typed promise atom with subject Greyfield, action/object metadata, and source turn promise-1",
+          "recall through semantic promise and organization cues when exact, alias, and secondary lanes are disabled",
+          "source drilldown should include the raw promise turn and unrelated project/customer promise prompts must not inject it"
+        ],
+        "currentGap": "This proves the core source-linked promise-memory slice only. It does not add pending approval UI, Settings UX, renderer source-drilldown, recurring ritual expansion, shared-scene expansion, scheduler behavior, or hard-erasure semantics.",
+        "sourceExpectations": {
+          "sourceTurnIds": ["promise-1"],
+          "exactFragments": ["你答应以后帮我整理书桌", "这个承诺", "之前说好要帮我整理"]
+        }
+      },
+      {
         "id": "rainy-home-hotpot-proactive-trigger",
         "title": "Rainy virtual-home hotpot proactive trigger",
         "description": "Scene and environment cues should trigger a remembered care ritual when the user has been away for a long time.",
         "status": "partial",
         "score": 0.45,
-        "weight": 0.25,
+        "weight": 0.2,
         "dimensions": [
           "memory-atom-extraction",
           "scene-proactive-trigger",
@@ -717,6 +768,64 @@
             "input": "这个新游戏叫《月桥档案》，玩法挺普通，帮我想一个推荐语。",
             "rejectedAtomExpectationIds": ["game-negative-review"],
             "promptExcludes": ["星环旅店", "教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "source-linked-promise-atoms",
+      "description": "Dynamically extracts a typed Greyfield promise atom, recalls it through semantic promise cues with lexical lanes disabled, and rejects unrelated project/customer promise prompts.",
+      "scenarioId": "user-greyfield-promise-recall",
+      "extractionMinScore": 0.95,
+      "recallMinScore": 0.95,
+      "extraction": {
+        "sourceTurnIds": ["promise-1", "promise-3"],
+        "rejectedSourceTurnIds": ["promise-3"],
+        "expectedAtoms": [
+          {
+            "id": "greyfield-desk-promise",
+            "type": "promise",
+            "sourceTurnIds": ["promise-1"],
+            "textIncludes": ["Promise", "Greyfield", "organize"],
+            "triggerIncludes": ["promise memory", "help commitment", "organization promise", "desk organization promise", "user_and_greyfield", "greyfield_commitment"],
+            "subject": "greyfield",
+            "object": "desk_cleanup",
+            "metadata": {
+              "promiseType": "commitment",
+              "promiseSubject": "greyfield",
+              "promiseAction": "organize_desk",
+              "actionText": "整理书桌",
+              "promiseObject": "desk_cleanup"
+            }
+          }
+        ]
+      },
+      "recall": {
+        "input": "你之前说好要帮我整理的那件事是什么？",
+        "expectedAtomExpectationIds": ["greyfield-desk-promise"],
+        "disabledTriggerLanes": ["exact", "aliases", "secondary"],
+        "sourcePassageMode": "always",
+        "promptIncludes": [
+          "Source-linked promise memory",
+          "Source turns: promise-1",
+          "semantic:",
+          "promise memory",
+          "help commitment",
+          "organization promise",
+          "Source fragments:",
+          "你答应以后帮我整理书桌"
+        ],
+        "promptExcludes": ["exact:", "alias:", "secondary:", "promise-3", "客户承诺"],
+        "sourceEvidence": {
+          "expectedClass": "memory_hit_with_raw_source_evidence",
+          "requiredFragments": ["你答应以后帮我整理书桌", "之前说好要帮我整理"]
+        },
+        "falsePositiveCases": [
+          {
+            "id": "project-customer-promise-does-not-inject-greyfield-promise",
+            "input": "这个项目里客户承诺的整理事项是什么？",
+            "rejectedAtomExpectationIds": ["greyfield-desk-promise"],
+            "promptExcludes": ["promise-1", "你答应以后帮我整理书桌", "Source-linked promise memory"]
           }
         ]
       }
