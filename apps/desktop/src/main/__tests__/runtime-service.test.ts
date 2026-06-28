@@ -38,6 +38,17 @@ function makeSummarySegment(id: string, threadId: string, summary: string): Summ
   };
 }
 
+const redactedSecretPlaceholder = "[redacted-secret]";
+
+function expectNoSecrets(value: unknown, secrets: string[]): void {
+  const serialized = JSON.stringify(value) ?? "";
+  for (const secret of secrets) {
+    expect(serialized).not.toContain(secret);
+  }
+  expect(serialized).not.toMatch(/\bsk-[A-Za-z0-9_-]{8,}\b/u);
+  expect(serialized).toContain(redactedSecretPlaceholder);
+}
+
 describe("RuntimeService", () => {
   it("runs text input in the main-process runtime and emits fake provider events", async () => {
     const service = new RuntimeService(defaultGreyfieldConfig);
@@ -1161,6 +1172,165 @@ describe("RuntimeService", () => {
     });
     expect(JSON.stringify(exported)).toContain("unavailable");
     expect(JSON.stringify(exported)).not.toContain(currentSessionCollisionText);
+  });
+
+  it("redacts configured provider keys and provider-style tokens from memory snapshots and exports", async () => {
+    const providerSecret = "configured-provider-secret-101";
+    const skSecret = "sk-redactionGate_1234567890";
+    const secrets = [providerSecret, skSecret];
+    const sessionStore = new TestSessionStore("redaction-session", [
+      {
+        id: "turn-secret-raw",
+        role: "user",
+        content: `raw turn has ${providerSecret} and ${skSecret}`,
+        createdAt: "2026-06-28T01:00:00.000Z",
+        meta: {
+          note: `turn metadata has ${skSecret}`
+        }
+      }
+    ]);
+    const summarySegmentStore = new TestSummarySegmentStore([
+      {
+        id: "summary-secret",
+        threadId: "thread-a",
+        sessionId: "redaction-session",
+        summary: `summary has ${providerSecret}`,
+        recallCues: ["needle", `cue has ${skSecret}`],
+        sourceTurns: [
+          {
+            sessionId: "redaction-session",
+            turnId: "turn-secret-raw",
+            role: "user",
+            createdAt: "2026-06-28T01:00:00.000Z"
+          }
+        ],
+        sourceTurnIds: ["turn-secret-raw"],
+        createdAt: "2026-06-28T01:01:00.000Z",
+        updatedAt: "2026-06-28T01:01:00.000Z"
+      }
+    ]);
+    const memoryAtomStore = new TestMemoryAtomStore([
+      makeMemoryAtom({
+        id: "atom-secret",
+        threadId: "thread-a",
+        text: `atom text has ${skSecret}`,
+        sourceTurnIds: ["turn-secret-raw"],
+        triggerKeys: [`trigger has ${providerSecret}`],
+        triggers: {
+          exact: [`exact has ${skSecret}`],
+          aliases: [`alias has ${providerSecret}`],
+          secondary: []
+        },
+        eventDate: {
+          kind: "absolute",
+          sourceText: `event date has ${skSecret}`,
+          precision: "day",
+          isoDate: "2026-06-28"
+        },
+        recurrence: {
+          frequency: "annual",
+          sourceText: `recurrence has ${providerSecret}`
+        },
+        ritualAction: `ritual action has ${skSecret}`,
+        subject: `subject has ${providerSecret}`,
+        object: `object has ${skSecret}`,
+        metadata: {
+          note: `metadata has ${providerSecret}`,
+          tags: [`metadata tag has ${skSecret}`],
+          count: 1
+        }
+      })
+    ]);
+    const events: unknown[] = [];
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          apiKey: providerSecret
+        }
+      },
+      {
+        threadId: "thread-a",
+        sessionStore,
+        summarySegmentStore,
+        memoryAtomStore
+      }
+    );
+
+    await service.handle({ type: "text.input", text: "needle recall please" }, (event) => {
+      events.push(event);
+    });
+
+    const recallEvent = events.find(
+      (event): event is { type: "memory.recall.context"; context: unknown } =>
+        typeof event === "object" && event !== null && "type" in event && event.type === "memory.recall.context"
+    );
+    expect(recallEvent).toBeDefined();
+    expectNoSecrets(recallEvent?.context, secrets);
+
+    const snapshot = await service.getMemoryLibrarySnapshot();
+    expectNoSecrets(snapshot, secrets);
+    expect(snapshot.recentTurns.find((turn) => turn.id === "turn-secret-raw")?.content).toContain(redactedSecretPlaceholder);
+    expect(snapshot.summarySegments[0]).toMatchObject({
+      id: "summary-secret",
+      sourceTurnIds: ["turn-secret-raw"],
+      summary: `summary has ${redactedSecretPlaceholder}`
+    });
+    expect(snapshot.summarySegments[0]?.recallCues).toContain(`cue has ${redactedSecretPlaceholder}`);
+    expect(snapshot.summarySegments[0]?.sourcePassages[0]).toMatchObject({
+      turnId: "turn-secret-raw",
+      text: `raw turn has ${redactedSecretPlaceholder} and ${redactedSecretPlaceholder}`
+    });
+    expect(snapshot.memoryAtoms[0]).toMatchObject({
+      id: "atom-secret",
+      sourceTurnIds: ["turn-secret-raw"],
+      text: `atom text has ${redactedSecretPlaceholder}`,
+      triggerKeys: [`trigger has ${redactedSecretPlaceholder}`],
+      triggers: {
+        exact: [`exact has ${redactedSecretPlaceholder}`],
+        aliases: [`alias has ${redactedSecretPlaceholder}`]
+      },
+      eventDate: {
+        sourceText: `event date has ${redactedSecretPlaceholder}`
+      },
+      recurrence: {
+        sourceText: `recurrence has ${redactedSecretPlaceholder}`
+      },
+      ritualAction: `ritual action has ${redactedSecretPlaceholder}`,
+      subject: `subject has ${redactedSecretPlaceholder}`,
+      object: `object has ${redactedSecretPlaceholder}`,
+      metadata: {
+        note: `metadata has ${redactedSecretPlaceholder}`,
+        tags: [`metadata tag has ${redactedSecretPlaceholder}`]
+      }
+    });
+    expect(snapshot.lastRecallContext?.items[0]).toMatchObject({
+      id: "summary-secret",
+      sourceTurnIds: ["turn-secret-raw"],
+      summary: `summary has ${redactedSecretPlaceholder}`,
+      recallCues: ["needle", `cue has ${redactedSecretPlaceholder}`]
+    });
+
+    const exported = await service.exportMemory();
+    expectNoSecrets(exported, secrets);
+    expect(exported.summarySegments[0]?.sourcePassages[0]?.turnId).toBe("turn-secret-raw");
+
+    const atomExport = await service.exportMemoryAtom("atom-secret");
+    expectNoSecrets(atomExport, secrets);
+    expect(atomExport).toMatchObject({
+      recentTurns: [],
+      summarySegments: [],
+      memoryAtoms: [
+        expect.objectContaining({
+          id: "atom-secret",
+          text: `atom text has ${redactedSecretPlaceholder}`
+        })
+      ]
+    });
+    expect(atomExport?.memoryAtoms[0]?.sourcePassages[0]?.text).toBe(
+      `raw turn has ${redactedSecretPlaceholder} and ${redactedSecretPlaceholder}`
+    );
   });
 
   it("keeps disabled and deleted memory atoms out of prompt recall", async () => {
