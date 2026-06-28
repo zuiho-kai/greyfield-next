@@ -7,11 +7,11 @@
   "baselineScores": {
     "summaryRegressionScore": 1,
     "recallRegressionScore": 1,
-    "atomExtractionScore": 0.9,
-    "atomRecallScore": 0.61,
-    "proactiveTriggerScore": 0.95,
-    "productReadinessScore": 0.33,
-    "v21aScenarioScore": 0.29
+    "atomExtractionScore": 0.925,
+    "atomRecallScore": 0.75,
+    "proactiveTriggerScore": 1,
+    "productReadinessScore": 0.51,
+    "v21aScenarioScore": 0.5
   },
   "productReadiness": {
     "targetScore": 1,
@@ -36,7 +36,7 @@
       },
       {
         "id": "memory-library-correction",
-        "description": "Memory Library can edit, disable, delete, export, and clear existing summary memory plus current-role atom memory; atom clear keeps raw turns and summaries, and source drilldown is still not implemented.",
+        "description": "Memory Library can edit, disable, delete, export, and clear existing summary memory plus current-role atom memory; atom clear keeps raw turns and summaries, and renderer-level source drilldown is still not implemented.",
         "status": "partial",
         "score": 0.6,
         "weight": 0.07,
@@ -44,27 +44,27 @@
       },
       {
         "id": "memory-atom-extraction",
-        "description": "Deterministic extraction can produce typed, source-linked memory atoms for a narrow set of V2.1 scenarios, but LLM extraction, calendar/source drilldown, and desktop proactive scheduling are not complete.",
+        "description": "Deterministic extraction can produce typed, source-linked memory atoms for a narrow set of V2.1 scenarios, but LLM extraction/write policy and desktop proactive scheduling are not complete.",
         "status": "partial",
-        "score": 0.45,
+        "score": 0.5,
         "weight": 0.22,
-        "evidence": "atomExtraction benchmark dynamically runs extractDeterministicMemoryAtoms over birthday/first-meeting rose, game negative review, and rainy hotpot cases; desktop chat can write and recall deterministic atoms, but LLM extraction, calendar/source drilldown, and desktop proactive scheduling remain incomplete"
+        "evidence": "atomExtraction benchmark dynamically runs extractDeterministicMemoryAtoms over birthday/first-meeting rose, game negative review, and rainy hotpot cases; desktop chat can write and recall deterministic atoms, but LLM extraction/write policy and desktop proactive scheduling remain incomplete"
       },
       {
         "id": "calendar-recall",
         "description": "Date-bearing atoms can be recalled for birthdays, first-meeting anniversaries, and other calendar moments.",
-        "status": "not_implemented",
-        "score": 0,
+        "status": "partial",
+        "score": 0.55,
         "weight": 0.16,
-        "evidence": "Current recall is lexical over summary segments and has no calendar index or date resolver"
+        "evidence": "atomRecall benchmark dynamically recalls birthday and first-meeting atoms by dates rather than lexical birthday/anniversary terms, while rejecting unrelated weather questions near those dates; coverage is still deterministic and not a full calendar index"
       },
       {
         "id": "source-evidence-drilldown",
         "description": "A remembered fact can drill down to the original source turn and exact user text when the user asks for provenance.",
         "status": "partial",
-        "score": 0.2,
+        "score": 0.55,
         "weight": 0.16,
-        "evidence": "Summary segments and memory atoms keep source turn IDs, but recall output cannot yet fetch exact source passages"
+        "evidence": "atomRecall benchmark dynamically injects bounded raw source fragments for the game-review atom through vague negative-game cues; this is prompt material only, not a separate renderer drilldown UI"
       },
       {
         "id": "scene-proactive-trigger",
@@ -89,7 +89,7 @@
         "title": "Birthday, first meeting, and rose atoms",
         "description": "The user gives durable relationship facts that should become separate source-linked atoms and later calendar recall.",
         "status": "partial",
-        "score": 0.25,
+        "score": 0.55,
         "weight": 0.34,
         "dimensions": [
           "memory-atom-extraction",
@@ -120,7 +120,7 @@
           "calendar recall should surface birthday and first-meeting anniversary without exact keyword overlap",
           "drilldown should show source turns rose-1 and rose-2"
         ],
-        "currentGap": "Current main can write and recall deterministic birthday and first-meeting rose atoms from the desktop chat path, and Settings can manage existing current-role atoms in Memory Library. It still cannot run date-aware recall, extract a separate rose preference, perform source passage drilldown, or erase raw turns/summaries through atom clear.",
+        "currentGap": "Current main can write and recall deterministic birthday and first-meeting rose atoms from the desktop chat path, date-aware atom recall can surface annual events, and Settings can manage existing current-role atoms in Memory Library. It still cannot extract a separate rose preference, run LLM-backed write policy, or erase raw turns/summaries through atom clear.",
         "sourceExpectations": {
           "sourceTurnIds": ["rose-1", "rose-2"],
           "exactFragments": ["我的生日是 9 月 7 日", "第一次相遇是 2024 年 5 月 20 日", "红玫瑰"]
@@ -131,14 +131,14 @@
         "title": "Game negative review original-text drilldown",
         "description": "The user later asks for the exact original wording of a game complaint, not just a paraphrased summary.",
         "status": "partial",
-        "score": 0.25,
+        "score": 0.55,
         "weight": 0.33,
         "dimensions": [
           "memory-atom-extraction",
           "source-evidence-drilldown",
           "privacy-noise"
         ],
-        "probeInput": "上次我吐槽《星环旅店》的差评原文是什么？别只总结。",
+        "probeInput": "这个新游戏也很傻逼，好像之前某个游戏，之前为什么这么说？",
         "turns": [
           {
             "id": "game-1",
@@ -161,7 +161,7 @@
           "recall should expose exact original wording on source drilldown",
           "UI/event noise must not be mixed into the memory"
         ],
-        "currentGap": "Deterministic atom extraction and direct trigger recall can preserve the source turn ID for the game complaint, but the current recall prompt cannot fetch or display the exact raw review text on demand.",
+        "currentGap": "Deterministic atom extraction and vague negative-game cue recall preserve the source turn ID for the game complaint, and atom recall can inject bounded raw source fragments on provenance-style prompts. LLM-backed extraction/write policy and a renderer drilldown surface remain future work.",
         "sourceExpectations": {
           "sourceTurnIds": ["game-1"],
           "exactFragments": ["教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员"]
@@ -203,7 +203,7 @@
           "trigger recall should run from environment state without a direct chat keyword",
           "event telemetry should not become the remembered user preference"
         ],
-        "currentGap": "Deterministic extraction can form a rainy virtual-home hotpot scene atom, and pure core proactive candidate generation now handles the matching environment plus quiet negative gates. Current runtime still has no desktop proactive scheduler, notification surface, real virtual-home state feed, external weather integration, or source-passage drilldown.",
+        "currentGap": "Deterministic extraction can form a rainy virtual-home hotpot scene atom, and pure core proactive candidate generation now handles the matching environment plus quiet negative gates. Current runtime still has no desktop proactive scheduler, notification surface, real virtual-home state feed, or external weather integration.",
         "sourceExpectations": {
           "sourceTurnIds": ["hotpot-1", "hotpot-2"],
           "exactFragments": ["下雨", "虚拟家的窗户开着", "长期没上线", "一起吃火锅"]
@@ -425,7 +425,7 @@
   "atomCases": [
     {
       "id": "birthday-first-meeting-rose-atoms",
-      "description": "Dynamically extracts birthday and first-meeting rose atoms while showing that a separate rose preference and calendar recall are not complete.",
+      "description": "Dynamically extracts birthday and first-meeting rose atoms, then recalls them through calendar dates while separate rose preference extraction remains incomplete.",
       "scenarioId": "birthday-first-meeting-rose",
       "extractionMinScore": 0.6,
       "recallMinScore": 0.95,
@@ -450,7 +450,8 @@
             "sourceTurnIds": ["rose-2"],
             "textIncludes": ["relationship event", "rose"],
             "triggerIncludes": ["相遇纪念日", "玫瑰"],
-            "eventDate": { "kind": "month_day", "month": 5, "day": 20 },
+            "eventDate": { "kind": "absolute", "isoDate": "2024-05-20" },
+            "recurrenceFrequency": "annual",
             "ritualAction": "送玫瑰",
             "object": "first_meeting_anniversary",
             "metadata": { "eventType": "first_meeting_anniversary", "gift": "rose" }
@@ -467,23 +468,54 @@
         ]
       },
       "recall": {
-        "input": "明天是不是该准备生日或第一次相遇纪念日？我还喜欢什么花？",
+        "input": "9月7日和5月20日这两个日子要准备什么？",
+        "now": "2027-01-15T00:00:00.000Z",
         "expectedAtomExpectationIds": ["birthday", "first-meeting-rose"],
         "rejectedAtomExpectationIds": ["separate-rose-preference"],
-        "promptIncludes": ["Source turns: rose-1", "Source turns: rose-2", "Ritual action: 送玫瑰"],
+        "promptIncludes": ["Reason: calendar", "Source turns: rose-1", "Source turns: rose-2", "Ritual action: 送玫瑰"],
         "unsupportedGaps": [
-          "calendar recall for tomorrow or annual anniversaries is not implemented",
           "separate rose preference extraction is not implemented",
-          "source passage drilldown is not implemented"
+          "LLM extraction/write policy is not implemented"
         ]
       }
     },
     {
+      "id": "birthday-calendar-weather-false-positive",
+      "description": "Rejects unrelated weather questions even when a birthday atom falls on tomorrow.",
+      "scenarioId": "birthday-first-meeting-rose",
+      "extractionMinScore": 0.95,
+      "recallMinScore": 0.95,
+      "extraction": {
+        "sourceTurnIds": ["rose-1"],
+        "rejectedSourceTurnIds": [],
+        "expectedAtoms": [
+          {
+            "id": "birthday",
+            "type": "fact",
+            "sourceTurnIds": ["rose-1"],
+            "textIncludes": ["birthday", "09-07"],
+            "triggerIncludes": ["生日", "09-07"],
+            "eventDate": { "kind": "month_day", "month": 9, "day": 7 },
+            "recurrenceFrequency": "annual",
+            "object": "birthday",
+            "metadata": { "factType": "birthday" }
+          }
+        ]
+      },
+      "recall": {
+        "input": "明天香港会不会下雨？",
+        "now": "2027-09-06T00:00:00.000Z",
+        "expectedAtomExpectationIds": [],
+        "rejectedAtomExpectationIds": ["birthday"],
+        "promptExcludes": ["Source turns: rose-1", "birthday"]
+      }
+    },
+    {
       "id": "game-negative-review-atoms",
-      "description": "Dynamically extracts and recalls a negative game-review atom while keeping exact source-passage drilldown unimplemented.",
+      "description": "Dynamically extracts and recalls a negative game-review atom from vague negative-game cues with exact source-passage prompt material.",
       "scenarioId": "game-negative-review-source-drilldown",
       "extractionMinScore": 0.9,
-      "recallMinScore": 0.75,
+      "recallMinScore": 0.95,
       "extraction": {
         "sourceTurnIds": ["game-1", "game-3"],
         "rejectedSourceTurnIds": ["game-3"],
@@ -493,7 +525,7 @@
             "type": "opinion",
             "sourceTurnIds": ["game-1"],
             "textIncludes": ["negative opinion", "星环旅店", "剧情"],
-            "triggerIncludes": ["星环旅店", "剧情", "游戏差评"],
+            "triggerIncludes": ["星环旅店", "剧情", "游戏差评", "某个游戏", "傻逼", "像之前"],
             "object": "星环旅店",
             "sentiment": "negative",
             "metadata": { "target": "星环旅店", "reasons": ["剧情"], "opinionType": "game_review" }
@@ -501,11 +533,11 @@
         ]
       },
       "recall": {
-        "input": "上次我吐槽《星环旅店》的差评原文是什么？别只总结。",
+        "input": "这个新游戏也很傻逼，好像之前某个游戏，之前为什么这么说？",
         "expectedAtomExpectationIds": ["game-negative-review"],
-        "promptIncludes": ["Source turns: game-1", "教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员"],
+        "promptIncludes": ["Source turns: game-1", "Source fragments:", "教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员"],
+        "promptExcludes": ["exact:星环旅店"],
         "unsupportedGaps": [
-          "exact source passage drilldown is not implemented",
           "LLM extraction that preserves arbitrary complaint wording is not implemented"
         ]
       }
