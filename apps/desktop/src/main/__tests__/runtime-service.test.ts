@@ -940,10 +940,13 @@ describe("RuntimeService", () => {
 
       const messages = JSON.parse(requestBody).messages as Array<{ role: string; content: string }>;
       const system = messages[0]?.content ?? "";
-      expect(system).toContain("Atom recall context:");
-      expect(system).toContain("relationship_event");
+      expect(system).toContain("Long-term recall context:");
+      expect(system).toContain("Source-linked relationship memory");
       expect(system).toContain("Source turns: desktop-main-session-1");
       expect(system).toContain("Ritual action: 送玫瑰");
+      expect(system).not.toContain("memory-atom");
+      expect(system).not.toMatch(/\batom-(?:fact|preference|opinion|relationship_event|episodic_scene)-[\w-]+/u);
+      expect(system).not.toContain("database");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
