@@ -26,11 +26,29 @@ export interface DesktopMemoryDebugSnapshot {
   threadId: string;
   sessionId: string;
   recentTurns: SessionTurn[];
-  summarySegments: SummarySegment[];
-  memoryAtoms: MemoryAtom[];
+  summarySegments: DesktopMemorySummarySegment[];
+  memoryAtoms: DesktopMemoryAtom[];
   lastRecallContext?: RecallContext;
   updatedAt: string;
 }
+
+export interface DesktopMemorySourcePassage {
+  sessionId: string;
+  turnId: string;
+  status: "available" | "missing" | "unavailable";
+  role?: SessionTurn["role"];
+  text?: string;
+  createdAt?: string;
+  message?: string;
+}
+
+export type DesktopMemorySummarySegment = SummarySegment & {
+  sourcePassages?: DesktopMemorySourcePassage[];
+};
+
+export type DesktopMemoryAtom = MemoryAtom & {
+  sourcePassages?: DesktopMemorySourcePassage[];
+};
 
 export interface DesktopMemorySummaryUpdate {
   id: string;
@@ -54,8 +72,8 @@ export interface DesktopMemoryExport {
   threadId: string;
   sessionId: string;
   recentTurns: SessionTurn[];
-  summarySegments: SummarySegment[];
-  memoryAtoms: MemoryAtom[];
+  summarySegments: DesktopMemorySummarySegment[];
+  memoryAtoms: DesktopMemoryAtom[];
   lastRecallContext?: RecallContext;
   exportedAt: string;
 }
