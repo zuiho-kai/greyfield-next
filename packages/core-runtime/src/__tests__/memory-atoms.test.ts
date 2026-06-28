@@ -306,9 +306,10 @@ describe("memory atoms", () => {
     expect(atom?.triggers.exact).toEqual(expect.arrayContaining(["星海边境", "《星海边境》"]));
     expect(atom?.triggers.aliases).toEqual(expect.arrayContaining(["某个游戏", "之前那个游戏", "旧游戏"]));
     expect(atom?.triggers.secondary).toEqual(expect.arrayContaining(["付费", "剧情", "游戏差评", "差评", "吐槽", "傻逼", "垃圾", "像之前"]));
+    expect(atom?.triggers.semantic).toEqual(expect.arrayContaining(["negative game analogy", "game complaint source"]));
   });
 
-  it("extracts a rainy hotpot episodic scene atom without pretending semantic recall is implemented", () => {
+  it("extracts a rainy hotpot episodic scene atom with semantic scene concepts", () => {
     const [atom] = extractDeterministicMemoryAtoms({
       ...baseInput,
       sourceTurnIds: ["turn-hotpot"],
@@ -419,6 +420,41 @@ describe("memory atoms", () => {
     });
     expect(secondary.items[0]?.matchedKeys).toContain("付费");
     expect(formatMemoryAtomRecallContextForPrompt(secondary)).toContain("Source turns: turn-game");
+  });
+
+  it("recalls negative game atoms through semantic concepts without title or keyword stuffing", () => {
+    const [atom] = extractDeterministicMemoryAtoms({
+      ...baseInput,
+      sourceTurnIds: ["turn-game"],
+      text: "不要再推荐《星海边境》了，我讨厌这个游戏的付费和剧情。"
+    });
+    const semanticOnlyAtom: MemoryAtom = {
+      ...atom!,
+      triggers: {
+        ...atom!.triggers,
+        aliases: [],
+        secondary: []
+      },
+      triggerKeys: atom!.triggers.exact
+    };
+
+    const context = buildMemoryAtomRecallContext({
+      input: "这个新游戏也很傻逼，好像之前某个游戏，之前为什么这么说？",
+      atoms: [semanticOnlyAtom]
+    });
+
+    expect(context.items[0]).toMatchObject({
+      type: "opinion",
+      sourceTurnIds: ["turn-game"],
+      reason: expect.stringContaining("semantic:negative game analogy")
+    });
+    expect(context.items[0]?.matchedKeys).toContain("game complaint source");
+
+    const unrelated = buildMemoryAtomRecallContext({
+      input: "这个新游戏玩法挺普通，帮我想一个推荐语。",
+      atoms: [semanticOnlyAtom]
+    });
+    expect(unrelated.items).toEqual([]);
   });
 
   it("recalls annual birthday and first-meeting atoms by calendar dates without lexical overlap", () => {

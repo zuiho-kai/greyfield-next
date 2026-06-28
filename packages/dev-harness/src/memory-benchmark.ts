@@ -117,6 +117,15 @@ interface ExpectedSkipped {
   reason: string;
 }
 
+type AtomRecallSourceEvidenceClass = "no_recall" | "memory_hit_without_raw_evidence" | "memory_hit_with_raw_source_evidence";
+
+interface AtomRecallFalsePositiveCase {
+  id: string;
+  input: string;
+  rejectedAtomExpectationIds: string[];
+  promptExcludes?: string[];
+}
+
 interface RecallBenchmarkCase {
   id: string;
   description?: string;
@@ -156,6 +165,11 @@ interface AtomBenchmarkCase {
     sourcePassageMaxTurnsPerAtom?: number;
     promptIncludes?: string[];
     promptExcludes?: string[];
+    sourceEvidence?: {
+      expectedClass: AtomRecallSourceEvidenceClass;
+      requiredFragments?: string[];
+    };
+    falsePositiveCases?: AtomRecallFalsePositiveCase[];
     unsupportedGaps?: string[];
   };
   proactive?: ProactiveBenchmarkCase;
@@ -459,6 +473,7 @@ function validateAtomCase(testCase: AtomBenchmarkCase, loadedFixture: MemoryBenc
   for (const expectationId of [
     ...testCase.recall.expectedAtomExpectationIds,
     ...(testCase.recall.rejectedAtomExpectationIds ?? []),
+    ...(testCase.recall.falsePositiveCases ?? []).flatMap((negativeCase) => negativeCase.rejectedAtomExpectationIds),
     ...(testCase.proactive?.expectedAtomExpectationIds ?? []),
     ...(testCase.proactive?.rejectedAtomExpectationIds ?? [])
   ]) {
@@ -472,6 +487,15 @@ function validateAtomCase(testCase: AtomBenchmarkCase, loadedFixture: MemoryBenc
       `proactive negative case for ${testCase.id}`,
       testCase.proactive.negativeCases.map((negativeCase) => negativeCase.id)
     );
+  }
+  if (testCase.recall.sourceEvidence) {
+    const requiredFragments = testCase.recall.sourceEvidence.requiredFragments ?? [];
+    if (
+      testCase.recall.sourceEvidence.expectedClass === "memory_hit_with_raw_source_evidence" &&
+      requiredFragments.length === 0
+    ) {
+      throw new Error(`Atom case ${testCase.id} sourceEvidence.requiredFragments must prove raw evidence`);
+    }
   }
 }
 
@@ -731,6 +755,10 @@ async function runAtomRecallCase(testCase: AtomBenchmarkCase, loadedFixture: Mem
   const missingPromptFragments = (testCase.recall.promptIncludes ?? []).filter((fragment) => !promptText.includes(fragment));
   const unexpectedPromptFragments = (testCase.recall.promptExcludes ?? []).filter((fragment) => promptText.includes(fragment));
   const internalPromptLeaks = promptTextInternalLeaks(promptText);
+  const sourceEvidence = classifyAtomRecallSourceEvidence(testCase, context.items, promptText, missingRecall.length > 0);
+  const falsePositiveResults = (testCase.recall.falsePositiveCases ?? []).map((negativeCase) =>
+    runAtomRecallFalsePositiveCase(negativeCase, atoms, expectationMatches, testCase, loadedFixture)
+  );
   const expectedCount = testCase.recall.expectedAtomExpectationIds.length;
   const hitScore =
     expectedCount === 0
@@ -739,8 +767,13 @@ async function runAtomRecallCase(testCase: AtomBenchmarkCase, loadedFixture: Mem
         : 0
       : ratio(expectedCount - missingExtraction.length - missingRecall.length, expectedCount);
   const rejectedExpectationCount = (testCase.recall.rejectedAtomExpectationIds ?? []).length;
-  const rejectionScore =
+  const primaryRejectionScore =
     rejectedExpectationCount === 0 ? 1 : ratio(rejectedExpectationCount - rejectedHits.length, rejectedExpectationCount);
+  const falsePositiveScore =
+    falsePositiveResults.length === 0
+      ? 1
+      : ratio(falsePositiveResults.filter((negativeResult) => negativeResult.passed).length, falsePositiveResults.length);
+  const rejectionScore = average([primaryRejectionScore, falsePositiveScore]);
   const visibilityScore = context.items.length > 0 && sourceVisible && reasonVisible ? 1 : 0;
   const promptScore =
     (testCase.recall.promptIncludes ?? []).length + (testCase.recall.promptExcludes ?? []).length === 0
@@ -750,16 +783,22 @@ async function runAtomRecallCase(testCase: AtomBenchmarkCase, loadedFixture: Mem
       : missingPromptFragments.length === 0 && unexpectedPromptFragments.length === 0 && internalPromptLeaks.length === 0
         ? 1
         : 0;
+  const sourceEvidenceScore = scoreAtomRecallSourceEvidence(testCase, sourceEvidence.classification);
   const score = weightedAverage([
-    [hitScore, 0.7],
-    [promptScore, 0.2],
-    [rejectionScore, 0.05],
+    [hitScore, 0.5],
+    [sourceEvidenceScore, 0.25],
+    [promptScore, 0.1],
+    [rejectionScore, 0.1],
     [visibilityScore, 0.05]
   ]);
 
   return {
     id: testCase.id,
-    passed: score >= testCase.recallMinScore && internalPromptLeaks.length === 0,
+    passed:
+      score >= testCase.recallMinScore &&
+      internalPromptLeaks.length === 0 &&
+      sourceEvidence.expectedClassSatisfied &&
+      falsePositiveResults.every((negativeResult) => negativeResult.passed),
     score: roundScore(score),
     details: {
       description: testCase.description,
@@ -775,12 +814,100 @@ async function runAtomRecallCase(testCase: AtomBenchmarkCase, loadedFixture: Mem
       missingPromptFragments,
       unexpectedPromptFragments,
       internalPromptLeaks,
+      sourceEvidenceClass: sourceEvidence.classification,
+      expectedSourceEvidenceClass: testCase.recall.sourceEvidence?.expectedClass,
+      missingSourceEvidenceFragments: sourceEvidence.missingFragments,
+      falsePositiveResults,
       unsupportedGaps: testCase.recall.unsupportedGaps ?? [],
       reasons: context.items.map((item) => ({ id: item.id, reason: item.reason, score: item.score })),
       sourceVisible,
       reasonVisible
     }
   };
+}
+
+function runAtomRecallFalsePositiveCase(
+  negativeCase: AtomRecallFalsePositiveCase,
+  atoms: MemoryAtom[],
+  expectationMatches: Map<string, ReturnType<typeof findBestAtomForExpectation>>,
+  testCase: AtomBenchmarkCase,
+  loadedFixture: MemoryBenchmarkFixture
+): {
+  id: string;
+  passed: boolean;
+  actualIds: string[];
+  rejectedHits: Array<{ expectationId: string; atomId?: string }>;
+  unexpectedPromptFragments: string[];
+} {
+  const context = buildMemoryAtomRecallContext({
+    input: negativeCase.input,
+    atoms,
+    maxItems: testCase.recall.maxItems,
+    maxCharacters: testCase.recall.maxCharacters,
+    now: testCase.recall.now,
+    sourceTurns: collectAtomCaseSourceTurns(testCase, loadedFixture),
+    sourcePassageMode: testCase.recall.sourcePassageMode,
+    sourcePassageMaxCharacters: testCase.recall.sourcePassageMaxCharacters,
+    sourcePassageMaxCharactersPerTurn: testCase.recall.sourcePassageMaxCharactersPerTurn,
+    sourcePassageMaxTurnsPerAtom: testCase.recall.sourcePassageMaxTurnsPerAtom
+  });
+  const actualIds = context.items.map((item) => item.id);
+  const actualIdSet = new Set(actualIds);
+  const rejectedHits = negativeCase.rejectedAtomExpectationIds
+    .map((expectationId) => ({ expectationId, atom: expectationMatches.get(expectationId)?.atom }))
+    .filter((match) => match.atom && actualIdSet.has(match.atom.id))
+    .map((match) => ({ expectationId: match.expectationId, atomId: match.atom?.id }));
+  const promptText = formatMemoryAtomRecallContextForPrompt(context);
+  const unexpectedPromptFragments = (negativeCase.promptExcludes ?? []).filter((fragment) => promptText.includes(fragment));
+  return {
+    id: negativeCase.id,
+    passed: actualIds.length === 0 && rejectedHits.length === 0 && unexpectedPromptFragments.length === 0,
+    actualIds,
+    rejectedHits,
+    unexpectedPromptFragments
+  };
+}
+
+function classifyAtomRecallSourceEvidence(
+  testCase: AtomBenchmarkCase,
+  items: ReturnType<typeof buildMemoryAtomRecallContext>["items"],
+  promptText: string,
+  hasMissingExpectedRecall: boolean
+): {
+  classification: AtomRecallSourceEvidenceClass;
+  missingFragments: string[];
+  expectedClassSatisfied: boolean;
+} {
+  const requiredFragments = testCase.recall.sourceEvidence?.requiredFragments ?? [];
+  const missingFragments = requiredFragments.filter((fragment) => !promptText.includes(fragment));
+  const classification =
+    items.length === 0 || hasMissingExpectedRecall
+      ? "no_recall"
+      : items.some((item) => (item.sourcePassages ?? []).length > 0) && missingFragments.length === 0
+        ? "memory_hit_with_raw_source_evidence"
+        : "memory_hit_without_raw_evidence";
+  const expected = testCase.recall.sourceEvidence?.expectedClass;
+  return {
+    classification,
+    missingFragments,
+    expectedClassSatisfied: expected === undefined || classification === expected
+  };
+}
+
+function scoreAtomRecallSourceEvidence(
+  testCase: AtomBenchmarkCase,
+  classification: AtomRecallSourceEvidenceClass
+): number {
+  if (!testCase.recall.sourceEvidence) {
+    return 1;
+  }
+  if (classification === "memory_hit_with_raw_source_evidence") {
+    return 1;
+  }
+  if (classification === "memory_hit_without_raw_evidence") {
+    return 0.5;
+  }
+  return 0;
 }
 
 function hasProactiveBenchmarkCase(testCase: AtomBenchmarkCase): testCase is AtomBenchmarkCase & { proactive: ProactiveBenchmarkCase } {
