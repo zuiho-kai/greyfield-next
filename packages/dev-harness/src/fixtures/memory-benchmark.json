@@ -593,7 +593,8 @@
                 "triggers": {
                   "exact": ["星环旅店", "《星环旅店》"],
                   "aliases": ["某个游戏", "之前那个游戏", "旧游戏"],
-                  "secondary": ["教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员", "剧情", "游戏差评", "傻逼", "像之前"]
+                  "secondary": ["教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员", "剧情", "游戏差评", "傻逼", "像之前"],
+                  "semantic": ["negative game opinion", "negative game analogy", "game complaint source", "disliked old game"]
                 },
                 "metadata": {
                   "target": "星环旅店",
@@ -644,7 +645,7 @@
             "type": "opinion",
             "sourceTurnIds": ["game-1"],
             "textIncludes": ["negative opinion", "星环旅店", "broken elevator", "sleepy testers"],
-            "triggerIncludes": ["星环旅店", "剧情", "游戏差评", "某个游戏", "傻逼", "像之前", "教程像坏掉的电梯"],
+            "triggerIncludes": ["星环旅店", "剧情", "游戏差评", "某个游戏", "傻逼", "像之前", "教程像坏掉的电梯", "negative game analogy", "game complaint source"],
             "object": "星环旅店",
             "sentiment": "negative",
             "metadata": { "target": "星环旅店", "reasons": ["教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员"], "opinionType": "game_review" }
@@ -654,8 +655,20 @@
       "recall": {
         "input": "这个新游戏也很傻逼，好像之前某个游戏，之前为什么这么说？",
         "expectedAtomExpectationIds": ["game-negative-review"],
-        "promptIncludes": ["Source turns: game-1", "Source fragments:", "教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员"],
-        "promptExcludes": ["exact:星环旅店"]
+        "promptIncludes": ["Source turns: game-1", "semantic:negative game analogy", "Source fragments:", "《星环旅店》", "教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员"],
+        "promptExcludes": ["exact:星环旅店"],
+        "sourceEvidence": {
+          "expectedClass": "memory_hit_with_raw_source_evidence",
+          "requiredFragments": ["《星环旅店》", "教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员"]
+        },
+        "falsePositiveCases": [
+          {
+            "id": "unrelated-new-game-does-not-inject-old-review",
+            "input": "这个新游戏叫《月桥档案》，玩法挺普通，帮我想一个推荐语。",
+            "rejectedAtomExpectationIds": ["game-negative-review"],
+            "promptExcludes": ["星环旅店", "教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员"]
+          }
+        ]
       }
     },
     {

@@ -242,6 +242,7 @@ const defaultMaxAtomRecallCharacters = 1400;
 
 const exactLaneScore = 100;
 const aliasLaneScore = 70;
+const semanticLaneScore = 58;
 const secondaryLaneScore = 40;
 const calendarLaneScore = 82;
 const defaultCalendarWindowDays = 1;
@@ -411,6 +412,7 @@ export function buildMemoryAtomRecallContext(options: BuildMemoryAtomRecallConte
         ...matchTriggerLane(options.input, atom.triggers.aliases, "alias", aliasLaneScore),
         ...matchTriggerLane(options.input, atom.triggers.secondary, "secondary", secondaryLaneScore),
         ...matchCalendarLane(options.input, atom, options),
+        ...matchSemanticLane(options.input, atom),
         ...(options.resolvers ?? []).flatMap((resolver) => resolver.match(options.input, atom, options))
       ];
       const uniqueMatches = dedupeMatches(matches);
@@ -1097,7 +1099,8 @@ function extractGameOpinionAtom(
         "不要推荐",
         "游戏付费",
         "游戏剧情"
-      ])
+      ]),
+      semantic: ["negative game opinion", "negative game analogy", "game complaint source", "disliked old game"]
     },
     metadata: {
       target,
@@ -1593,6 +1596,35 @@ function matchCalendarLane(
     }
   }
   return matches;
+}
+
+function matchSemanticLane(input: string, atom: MemoryAtom): MemoryAtomRecallMatch[] {
+  const atomConcepts = new Set((atom.triggers.semantic ?? []).map(normalizeSemanticConcept).filter(Boolean));
+  if (atomConcepts.size === 0) {
+    return [];
+  }
+  const queryConcepts = extractSemanticRecallConcepts(input);
+  return [...queryConcepts]
+    .filter((concept) => atomConcepts.has(concept))
+    .map((concept) => ({ lane: "semantic", key: concept, score: semanticLaneScore + Math.min(8, concept.length / 3) }));
+}
+
+function extractSemanticRecallConcepts(input: string): Set<string> {
+  const concepts = new Set<string>();
+  const text = input.toLowerCase();
+  const asksAboutGame = /游戏|game/u.test(text);
+  const negativeCue = /(傻逼|垃圾|差评|吐槽|讨厌|不喜欢|烂|坏|烦|难受|dislike|complaint|bad|awful)/iu.test(text);
+  const analogyCue = /(之前|以前|旧|某个|那个|好像|像|记得|想起|回忆|为什么|原因|source|why|before|old)/iu.test(text);
+  if (asksAboutGame && negativeCue && analogyCue) {
+    concepts.add("negative game analogy");
+    concepts.add("game complaint source");
+    concepts.add("disliked old game");
+  }
+  return concepts;
+}
+
+function normalizeSemanticConcept(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 interface CalendarQuery {
