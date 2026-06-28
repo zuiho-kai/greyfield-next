@@ -49,10 +49,19 @@ try {
     const petWindow = await waitForRoleWindow(app, "pet");
     const settingsWindow = await waitForRoleWindow(app, "settings");
     const chatWindow = await waitForRoleWindow(app, "chat");
-    await attachProactiveEventProbe(petWindow);
+    const controlsWindow = await waitForRoleWindow(app, "controls");
+    await Promise.all([
+      attachProactiveEventProbe(petWindow),
+      attachProactiveEventProbe(settingsWindow),
+      attachProactiveEventProbe(chatWindow),
+      attachProactiveEventProbe(controlsWindow)
+    ]);
 
     await triggerProactiveCheck(petWindow);
     const firstEvent = await waitForProactiveEvent(petWindow, 1);
+    await assertProactiveEventCount(settingsWindow, 0, "settings window received proactive message");
+    await assertProactiveEventCount(chatWindow, 0, "chat window received proactive message");
+    await assertProactiveEventCount(controlsWindow, 0, "controls window received proactive message");
     const firstBubble = await waitForBubbleText(petWindow);
     assertNaturalText(firstEvent.text, { exact: true });
     assertNaturalText(firstBubble, { exact: true });
@@ -62,20 +71,12 @@ try {
     await petWindow.screenshot({ path: screenshotPath });
 
     await triggerProactiveCheck(petWindow);
-    await petWindow.waitForTimeout(500);
-    const afterCooldownCount = await proactiveEventCount(petWindow);
-    if (afterCooldownCount !== 1) {
-      throw new Error(`Cooldown did not block repeated proactive display; eventCount=${afterCooldownCount}`);
-    }
+    await assertProactiveEventCountStays(petWindow, 1, "cooldown did not block repeated proactive display");
 
     await settingsWindow.getByLabel("Remembered moments").setChecked(false);
     await petWindow.locator(".speech-bubble").waitFor({ state: "detached", timeout: 5_000 });
     await triggerProactiveCheck(petWindow);
-    await petWindow.waitForTimeout(500);
-    const afterDisableCount = await proactiveEventCount(petWindow);
-    if (afterDisableCount !== 1) {
-      throw new Error(`Global disable did not block proactive display; eventCount=${afterDisableCount}`);
-    }
+    await assertProactiveEventCountStays(petWindow, 1, "global disable did not block proactive display");
     await petWindow.locator(".speech-bubble").waitFor({ state: "detached", timeout: 1_000 });
 
     console.log(
@@ -83,6 +84,7 @@ try {
         {
           ok: true,
           displayedNaturalBubble: true,
+          scopedToPetWindow: true,
           cooldownBlockedRepeat: true,
           globalDisableBlockedDisplay: true,
           chatHistoryUnchanged: true,
@@ -126,13 +128,22 @@ async function launchApp(): Promise<ElectronApplication> {
   return app;
 }
 
-async function waitForRoleWindow(app: ElectronApplication, roleName: "pet" | "settings" | "chat"): Promise<Page> {
+async function waitForRoleWindow(app: ElectronApplication, roleName: "pet" | "settings" | "chat" | "controls"): Promise<Page> {
   const started = Date.now();
   while (Date.now() - started < 5_000) {
     for (const page of app.windows()) {
       const role = await page.evaluate(() => new URLSearchParams(window.location.search).get("window")).catch(() => null);
       if (role === roleName) {
-        await page.waitForSelector(roleName === "pet" ? ".pet-shell" : roleName === "settings" ? ".greyfield-shell" : ".chat-shell");
+        await page.waitForSelector(
+          roleName === "pet"
+            ? ".pet-shell"
+            : roleName === "settings"
+              ? ".greyfield-shell"
+              : roleName === "chat"
+                ? ".chat-shell"
+                : ".desktop-controls-shell",
+          { state: "attached" }
+        );
         return page;
       }
     }
@@ -209,6 +220,21 @@ async function proactiveEventCount(page: Page): Promise<number> {
       }).__greyfieldProactiveEvents?.length ?? 0
     );
   });
+}
+
+async function assertProactiveEventCount(page: Page, expectedCount: number, message: string): Promise<void> {
+  const actualCount = await proactiveEventCount(page);
+  if (actualCount !== expectedCount) {
+    throw new Error(`${message}; expected=${expectedCount}; actual=${actualCount}`);
+  }
+}
+
+async function assertProactiveEventCountStays(page: Page, expectedCount: number, message: string): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < 800) {
+    await assertProactiveEventCount(page, expectedCount, message);
+    await delay(50);
+  }
 }
 
 async function assertNoChatMessages(page: Page): Promise<void> {

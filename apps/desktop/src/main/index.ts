@@ -424,12 +424,11 @@ async function exportMemoryAtom(sender: Electron.WebContents, id: string): Promi
 
 async function checkProactiveMemory(payload: DesktopProactiveCheckRequest): Promise<void> {
   const result = await runtimeService?.checkProactiveMemory(payload.sceneContext);
-  if (!result?.message) {
+  const window = getUsableWindow(petWindow);
+  if (!result?.message || !window) {
     return;
   }
-  for (const window of BrowserWindow.getAllWindows()) {
-    window.webContents.send("proactive:message", result.message);
-  }
+  window.webContents.send("proactive:message", result.message);
 }
 
 function broadcastMemoryActionResult(result: { ok: boolean; message: string }): void {
