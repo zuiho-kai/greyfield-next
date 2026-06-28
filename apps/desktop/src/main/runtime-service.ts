@@ -669,8 +669,9 @@ export class RuntimeService {
       })),
       skipped: context.skipped.map((item) => ({
         ...item,
-        reason: this.redactSecretText(item.reason)
-      }))
+        reason: item.reason
+      })),
+      budget: context.budget
     };
   }
 

@@ -408,7 +408,7 @@
       "input": "之后称呼我博士，不要再叫老板，这个记得吗？",
       "expectedIds": ["memory-title-new"],
       "rejectedIds": ["memory-title-old"],
-      "expectedSkipped": [{ "id": "memory-title-old", "reason": "max_items" }],
+      "expectedSkipped": [{ "id": "memory-title-old", "reason": "over budget" }],
       "maxItems": 1
     },
     {
@@ -426,7 +426,7 @@
       "input": "22:30 休息提醒和 Hiyori 默认模型都记得吗？",
       "expectedIds": ["memory-night-rest"],
       "rejectedIds": ["memory-ci-noise"],
-      "expectedSkipped": [{ "id": "memory-hiyori", "reason": "max_characters" }],
+      "expectedSkipped": [{ "id": "memory-hiyori", "reason": "over budget" }],
       "maxCharacters": 320,
       "promptIncludes": ["Reason: cue:", "Source turns: turn-night-rest-1"],
       "promptExcludes": ["memory-ci-noise"]

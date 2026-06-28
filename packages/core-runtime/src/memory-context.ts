@@ -130,8 +130,31 @@ export interface RecallContext {
   skipped: Array<{
     kind: RecallContextItem["kind"];
     id: string;
-    reason: string;
+    reason: RecallSkipReason;
   }>;
+  budget: RecallPromptBudgetTrace;
+}
+
+export type RecallSkipReason = "disabled" | "low score" | "over budget" | "irrelevant";
+
+export interface RecallPromptBudgetTrace {
+  itemCount: {
+    used: number;
+    limit: number;
+    skipped: number;
+  };
+  characters: {
+    used: number;
+    limit: number;
+    skipped: number;
+  };
+  sourcePassages: {
+    usedCharacters: number;
+    limitCharacters: number;
+    usedCount: number;
+    limitCount: number;
+    skippedCount: number;
+  };
 }
 
 export interface BuildRecallContextOptions {
@@ -139,6 +162,7 @@ export interface BuildRecallContextOptions {
   summarySegments: SummarySegment[];
   maxItems?: number;
   maxCharacters?: number;
+  minScore?: number;
 }
 
 export type MemorySourceDrilldownRequest =
@@ -209,8 +233,9 @@ export function createSummarySegmentDraft(options: CreateSummarySegmentDraftOpti
 }
 
 export function buildRecallContext(options: BuildRecallContextOptions): RecallContext {
-  const maxItems = options.maxItems ?? defaultMaxRecallItems;
-  const maxCharacters = options.maxCharacters ?? defaultMaxRecallCharacters;
+  const maxItems = Math.max(0, options.maxItems ?? defaultMaxRecallItems);
+  const maxCharacters = Math.max(0, options.maxCharacters ?? defaultMaxRecallCharacters);
+  const minScore = Math.max(0, options.minScore ?? 0);
   const inputTokens = tokenize(options.input);
   const skipped: RecallContext["skipped"] = options.summarySegments
     .filter((segment) => segment.disabled)
@@ -219,7 +244,7 @@ export function buildRecallContext(options: BuildRecallContextOptions): RecallCo
       id: segment.id,
       reason: "disabled"
     }));
-  const ranked = options.summarySegments
+  const scored = options.summarySegments
     .filter((segment) => !segment.disabled)
     .map((segment) => {
       const cueMatches = segment.recallCues.filter((cue) => containsCue(options.input, cue));
@@ -233,12 +258,23 @@ export function buildRecallContext(options: BuildRecallContextOptions): RecallCo
         tokenMatches,
         score
       };
-    })
-    .filter((item) => item.score > 0)
+    });
+  for (const item of scored) {
+    if (item.score <= 0) {
+      skipped.push({ kind: "summary-segment", id: item.segment.id, reason: "irrelevant" });
+      continue;
+    }
+    if (item.score < minScore) {
+      skipped.push({ kind: "summary-segment", id: item.segment.id, reason: "low score" });
+    }
+  }
+  const ranked = scored
+    .filter((item) => item.score > 0 && item.score >= minScore)
     .sort((a, b) => b.score - a.score || b.segment.createdAt.localeCompare(a.segment.createdAt));
 
   const items: RecallContextItem[] = [];
   let usedCharacters = 0;
+  let overBudgetSkipped = 0;
 
   for (const item of ranked) {
     const candidate: RecallContextItem = {
@@ -250,20 +286,43 @@ export function buildRecallContext(options: BuildRecallContextOptions): RecallCo
       reason: item.cueMatches.length > 0 ? `cue:${item.cueMatches.join(",")}` : "lexical",
       score: item.score
     };
-    const nextCharacters = usedCharacters + formatRecallContextForPrompt({ items: [candidate], skipped: [] }).length;
+    const nextCharacters = formatRecallContextForPrompt({ items: [...items, candidate] }).length;
     if (items.length >= maxItems || nextCharacters > maxCharacters) {
       skipped.push({
         kind: "summary-segment",
         id: item.segment.id,
-        reason: items.length >= maxItems ? "max_items" : "max_characters"
+        reason: "over budget"
       });
+      overBudgetSkipped += 1;
       continue;
     }
     items.push(candidate);
     usedCharacters = nextCharacters;
   }
 
-  return { items, skipped };
+  return {
+    items,
+    skipped,
+    budget: {
+      itemCount: {
+        used: items.length,
+        limit: maxItems,
+        skipped: overBudgetSkipped
+      },
+      characters: {
+        used: usedCharacters,
+        limit: maxCharacters,
+        skipped: overBudgetSkipped
+      },
+      sourcePassages: {
+        usedCharacters: 0,
+        limitCharacters: 0,
+        usedCount: 0,
+        limitCount: 0,
+        skippedCount: 0
+      }
+    }
+  };
 }
 
 export function buildMemorySourceDrilldownResult(options: {
@@ -281,7 +340,9 @@ export function buildMemorySourceDrilldownResult(options: {
   };
 }
 
-export function formatRecallContextForPrompt(context: RecallContext): string {
+export function formatRecallContextForPrompt(
+  context: Pick<RecallContext, "items"> & Partial<Pick<RecallContext, "skipped" | "budget">>
+): string {
   if (context.items.length === 0) {
     return "";
   }
