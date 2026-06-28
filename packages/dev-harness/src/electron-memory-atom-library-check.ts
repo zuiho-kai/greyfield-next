@@ -176,62 +176,62 @@ try {
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Promises" }).waitFor();
   await memoryLibrary.locator(".memory-library__stats", { hasText: "Enabled 6" }).waitFor();
   await memoryLibrary.locator('[aria-label="Fact memory atom-fact"]', { hasText: "User birthday is June 12." }).waitFor();
-  await memoryLibrary.locator('[aria-label="Preference memory atom-preference"]', { hasText: "desktop-main-session-preference" }).waitFor();
+  await memoryLibrary.locator('[aria-label="Preference memory atom-preference"]', { hasText: "1 source passage ready" }).waitFor();
   await memoryLibrary.locator('[aria-label="Opinion memory atom-opinion"]', { hasText: "User dislikes pay-to-win game loops." }).waitFor();
   await memoryLibrary.locator('[aria-label="Relationship memory atom-relationship"]', { hasText: "First meeting anniversary ritual is giving roses." }).waitFor();
   await memoryLibrary.locator('[aria-label="Scene memory atom-scene"]', { hasText: "Shared rainy hotpot evening memory." }).waitFor();
   await memoryLibrary.locator('[aria-label="Promise memory atom-promise"]', { hasText: atomPromiseText }).waitFor();
   await memoryLibrary.locator('[aria-label="Promises memories"]', { hasText: "1 stored" }).waitFor();
-  const availableSource = await openSourcePassage(memoryLibrary, "Source passage for Fact memory atom-fact");
+  const availableSource = await openSourceDrilldown(memoryLibrary, '[aria-label="Fact memory atom-fact"]');
   await availableSource.getByText("User birthday source says June 12.").waitFor();
-  await availableSource.getByText("Turn").waitFor();
-  await availableSource.getByText("desktop-main-session-fact").waitFor();
-  await availableSource.getByText("Role").waitFor();
-  await availableSource.getByText("User").first().waitFor();
+  await availableSource.getByText("From you").first().waitFor();
+  await availableSource.getByText("Saved locally").first().waitFor();
   await assertSourceStateText(availableSource, {
-    includes: ["User", "desktop-main-session-fact"],
-    excludes: ["Unknown role"]
+    includes: ["From you", "Saved from conversation", "User birthday source says June 12."],
+    excludes: ["Unknown role", "desktop-main-session-fact", "Turn"]
   });
-  const availableEmptySource = await openSourcePassage(memoryLibrary, "Source passage for Preference memory atom-preference");
-  await availableEmptySource.getByText("Source passage").first().waitFor();
-  await availableEmptySource.getByText("desktop-main-session-preference").waitFor();
-  await availableEmptySource.getByText("Greyfield").first().waitFor();
+  await assertNoHorizontalOverflow(settings, '[aria-label="Memory source drilldown"]');
+  await captureSourceState(settings, availableSource, availableSourceScreenshotPath);
+  const availableEmptySource = await openSourceDrilldown(memoryLibrary, '[aria-label="Preference memory atom-preference"]');
+  await availableEmptySource.getByText("From Greyfield").first().waitFor();
+  await availableEmptySource.getByText("No message text is saved for this source.").waitFor();
   await assertSourceStateText(availableEmptySource, {
-    includes: ["Source passage", "Greyfield", "desktop-main-session-preference"],
-    excludes: ["Source unavailable in this local session store", "Unknown role"]
+    includes: ["Saved locally", "From Greyfield", "No message text is saved for this source."],
+    excludes: ["Source unavailable in this local session store", "Unknown role", "desktop-main-session-preference"]
   });
-  const missingSource = await openSourcePassage(memoryLibrary, "Source passage for Opinion memory atom-opinion");
-  await missingSource.getByText("Source unavailable in this local session store").first().waitFor();
-  await missingSource.getByText("desktop-main-session-opinion").waitFor();
+  const missingSource = await openSourceDrilldown(memoryLibrary, '[aria-label="Opinion memory atom-opinion"]');
+  await missingSource.getByText("Original message not found").first().waitFor();
   await assertSourceStateText(missingSource, {
     includes: [
-      "Source unavailable in this local session store",
+      "Original message unavailable",
+      "Original message not found",
       "Source turn is missing from the current session store.",
-      "Not available"
+      "Greyfield saved a source link"
     ],
-    excludes: ["Unknown role"]
+    excludes: ["Unknown role", "desktop-main-session-opinion"]
   });
-  const unavailableSource = await openSourcePassage(memoryLibrary, "Source passage for Relationship memory atom-relationship");
-  await unavailableSource.getByText("Source unavailable in this local session store").first().waitFor();
-  await unavailableSource.getByText("desktop-main-session-relationship").waitFor();
+  await captureSourceState(settings, missingSource, missingSourceScreenshotPath);
+  const unavailableSource = await openSourceDrilldown(memoryLibrary, '[aria-label="Relationship memory atom-relationship"]');
+  await unavailableSource.getByText("Not available in this session").first().waitFor();
   await assertSourceStateText(unavailableSource, {
     includes: [
-      "Source unavailable in this local session store",
+      "Original message unavailable",
+      "Not available in this session",
       "Source turn belongs to another session and is unavailable in the current local store.",
-      "Not available"
+      "another local session"
     ],
-    excludes: ["Unknown role"]
+    excludes: ["Unknown role", "desktop-main-session-relationship"]
   });
-  const noSource = await openSourcePassage(memoryLibrary, "Source passage for Scene memory atom-scene");
-  await noSource.getByText("No passage").first().waitFor();
-  await assertSourceStateText(noSource, {
-    includes: ["No passage"],
-    excludes: ["Unknown role"]
-  });
-  await captureSourceState(settings, availableSource, availableSourceScreenshotPath);
-  await captureSourceState(settings, missingSource, missingSourceScreenshotPath);
   await captureSourceState(settings, unavailableSource, unavailableSourceScreenshotPath);
+  const noSource = await openSourceDrilldown(memoryLibrary, '[aria-label="Scene memory atom-scene"]');
+  await noSource.getByText("No original message is linked to this memory.").first().waitFor();
+  await assertSourceStateText(noSource, {
+    includes: ["No saved source", "No original message is linked to this memory."],
+    excludes: ["Unknown role"]
+  });
+  await assertNoHorizontalOverflow(settings, '[aria-label="Memory source drilldown"]');
   await captureSourceState(settings, noSource, noSourceScreenshotPath);
+  await closeSourceDrilldown(memoryLibrary);
 
   const initialLibraryText = (await memoryLibrary.textContent()) ?? "";
   assertTextDoesNotExposeForbiddenMemoryUi(initialLibraryText);
@@ -368,6 +368,9 @@ try {
         clearCurrentRoleKeptOtherRoleAtom: true,
         roleBMemoryIsolated: true,
         reloadPersistence: true,
+        sourceDrilldownOpened: true,
+        sourceDrilldownClosed: true,
+        sourceDrilldownNoOverflow: true,
         memoryDomExcludedProviderSecret: true,
         settingsPageTextAndInputsExcludedProviderSecret: true,
         memoryExportExcludedProviderSecret: true,
@@ -540,10 +543,18 @@ async function waitForMissingAtom(id: string): Promise<void> {
   throw new Error(`Timed out waiting for atom ${id} to be removed; atoms=${JSON.stringify(lastAtoms)}`);
 }
 
-async function openSourcePassage(memoryLibrary: Locator, label: string): Promise<Locator> {
-  const source = memoryLibrary.locator(`[aria-label="${label}"]`);
-  await source.locator("summary").click();
+async function openSourceDrilldown(memoryLibrary: Locator, cardSelector: string): Promise<Locator> {
+  const card = memoryLibrary.locator(cardSelector);
+  await card.getByRole("button", { name: /View source/iu }).click();
+  const source = memoryLibrary.locator('[aria-label="Memory source drilldown"]');
+  await source.waitFor();
   return source;
+}
+
+async function closeSourceDrilldown(memoryLibrary: Locator): Promise<void> {
+  const source = memoryLibrary.locator('[aria-label="Memory source drilldown"]');
+  await source.getByRole("button", { name: "Close source drilldown" }).click();
+  await source.waitFor({ state: "detached" });
 }
 
 async function captureSourceState(page: Page, source: Locator, path: string): Promise<void> {
@@ -571,10 +582,36 @@ async function assertSourceStateText(
 
 function assertTextDoesNotExposeForbiddenMemoryUi(text: string): void {
   const normalized = text.toLowerCase();
-  for (const forbidden of ["pending", "candidate", "approval", "triggerkeys", "memory-atom-library-provider-secret"]) {
+  for (const forbidden of [
+    "pending",
+    "candidate",
+    "approval",
+    "triggerkeys",
+    "memory-atom-library-provider-secret",
+    "desktop-main-session-"
+  ]) {
     if (normalized.includes(forbidden)) {
       throw new Error(`Memory Library exposed forbidden ${forbidden} UI text: ${text}`);
     }
+  }
+}
+
+async function assertNoHorizontalOverflow(page: Page, selector: string): Promise<void> {
+  const overflow = await page.locator(selector).evaluateAll((elements) =>
+    elements
+      .map((element) => {
+        const box = element.getBoundingClientRect();
+        return {
+          text: element.textContent ?? "",
+          scrollWidth: element.scrollWidth,
+          clientWidth: element.clientWidth,
+          boxWidth: box.width
+        };
+      })
+      .filter((item) => item.scrollWidth > item.clientWidth + 1 || item.boxWidth > window.innerWidth + 1)
+  );
+  if (overflow.length > 0) {
+    throw new Error(`Memory source drilldown overflowed horizontally: ${JSON.stringify(overflow)}`);
   }
 }
 

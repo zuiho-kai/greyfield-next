@@ -106,20 +106,21 @@ try {
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Relationships" }).waitFor();
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Scenes" }).waitFor();
   await memoryLibrary.locator(".memory-library__stats", { hasText: "Enabled" }).waitFor();
-  await memoryLibrary.locator(".memory-library__meta", { hasText: "desktop-main-session-1" }).waitFor();
-  const summarySource = await openSourcePassage(memoryLibrary, "Source passage for summary summary-1");
-  await summarySource.getByText("Source passage").first().waitFor();
-  await summarySource.getByText("desktop-main-session-1").waitFor();
-  await summarySource.getByText("User").first().waitFor();
-  await summarySource.getByText("第一轮：我喜欢 Hiyori。").waitFor();
+  await memoryLibrary.locator(".memory-library__source-link", { hasText: "source passages ready" }).waitFor();
+  const summarySource = await openSourceDrilldown(memoryLibrary, '[aria-label="Summary memory summary-1"]');
+  await summarySource.getByText("From you").first().waitFor();
+  await summarySource.getByText("Saved locally").first().waitFor();
+  await summarySource.locator(".memory-library__source-row p", { hasText: "第一轮：我喜欢 Hiyori。" }).waitFor();
   await assertSourceStateText(summarySource, {
-    includes: ["User", "desktop-main-session-1", "第一轮：我喜欢 Hiyori。"],
-    excludes: ["Unknown role", summaryBoundedTail]
+    includes: ["From you", "Saved from conversation", "第一轮：我喜欢 Hiyori。"],
+    excludes: ["Unknown role", "desktop-main-session-1", "Turn", summaryBoundedTail]
   });
-  await memoryLibrary.locator(".memory-library__block--recall", { hasText: "Last recalled memory" }).waitFor();
-  await memoryLibrary.locator(".memory-library__block--recall", { hasText: "cue:hiyori" }).waitFor();
-  await assertMemoryLibraryTextSafe(memoryLibrary);
+  await assertNoHorizontalOverflow(settings, '[aria-label="Memory source drilldown"]');
   await settings.screenshot({ path: settingsSourceScreenshotPath, fullPage: true });
+  await closeSourceDrilldown(memoryLibrary);
+  await memoryLibrary.locator(".memory-library__block--recall", { hasText: "Last recalled memory" }).waitFor();
+  await memoryLibrary.locator(".memory-library__block--recall", { hasText: 'Matched recall cue "hiyori"' }).waitFor();
+  await assertMemoryLibraryTextSafe(memoryLibrary);
 
   await settings.getByLabel("Memory text summary-1").fill("Edited memory: User prefers Hiyori and Sakura.");
   await settings.getByLabel("Recall cues summary-1").fill("edited-hiyori, hiyori, sakura");
@@ -248,6 +249,9 @@ try {
         clearedSummaryMemory: true,
         roleBMemoryIsolated: true,
         reloadPersistence: true,
+        sourceDrilldownOpened: true,
+        sourceDrilldownClosed: true,
+        sourceDrilldownNoOverflow: true,
         noPendingCandidateApprovalUi: true,
         memoryExportExcludedProviderSecret: true,
         rawChatRetentionCopyVisible: true,
@@ -356,10 +360,18 @@ function isMemoryRecallEvent(
   return typeof event === "object" && event !== null && "type" in event && event.type === "memory.recall.context";
 }
 
-async function openSourcePassage(memoryLibrary: Locator, label: string): Promise<Locator> {
-  const source = memoryLibrary.locator(`[aria-label="${label}"]`);
-  await source.locator("summary").click();
+async function openSourceDrilldown(memoryLibrary: Locator, cardSelector: string): Promise<Locator> {
+  const card = memoryLibrary.locator(cardSelector);
+  await card.getByRole("button", { name: /View source/iu }).click();
+  const source = memoryLibrary.locator('[aria-label="Memory source drilldown"]');
+  await source.waitFor();
   return source;
+}
+
+async function closeSourceDrilldown(memoryLibrary: Locator): Promise<void> {
+  const source = memoryLibrary.locator('[aria-label="Memory source drilldown"]');
+  await source.getByRole("button", { name: "Close source drilldown" }).click();
+  await source.waitFor({ state: "detached" });
 }
 
 async function assertSourceStateText(
@@ -421,6 +433,28 @@ async function assertMemoryLibraryTextSafe(memoryLibrary: Locator): Promise<void
   }
   if (text.includes(summaryBoundedTail.toLowerCase())) {
     throw new Error("Memory Library rendered source text beyond the bounded passage display.");
+  }
+  if (text.includes("desktop-main-session-")) {
+    throw new Error(`Memory Library exposed raw source turn ids in visible text: ${text}`);
+  }
+}
+
+async function assertNoHorizontalOverflow(page: Page, selector: string): Promise<void> {
+  const overflow = await page.locator(selector).evaluateAll((elements) =>
+    elements
+      .map((element) => {
+        const box = element.getBoundingClientRect();
+        return {
+          text: element.textContent ?? "",
+          scrollWidth: element.scrollWidth,
+          clientWidth: element.clientWidth,
+          boxWidth: box.width
+        };
+      })
+      .filter((item) => item.scrollWidth > item.clientWidth + 1 || item.boxWidth > window.innerWidth + 1)
+  );
+  if (overflow.length > 0) {
+    throw new Error(`Memory source drilldown overflowed horizontally: ${JSON.stringify(overflow)}`);
   }
 }
 
