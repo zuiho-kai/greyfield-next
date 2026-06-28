@@ -156,6 +156,45 @@ describe("GreyfieldRuntime", () => {
     expect(capturedMessages[0]?.content).toContain("Ritual action: 送玫瑰");
   });
 
+  it("hydrates recalled atom prompt material with bounded source fragments", async () => {
+    const memoryAtomStore = new TestMemoryAtomStore();
+    const sessionStore = new InMemorySessionStore("session-atom-source");
+    let capturedMessages: Parameters<LLMProvider["stream"]>[0] = [];
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* (messages) {
+          capturedMessages = messages;
+          yield "Stored.";
+        }
+      },
+      tts: { synthesize: async (text) => new Uint8Array([text.length]) },
+      memoryStore,
+      memoryAtomStore,
+      sessionStore,
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default",
+      threadId: "thread-atom-source"
+    });
+
+    await runtime.handle(
+      {
+        type: "text.input",
+        text: "我给《星环旅店》的差评原文是：教程像坏掉的电梯，剧情把玩家当成没睡醒的测试员。"
+      },
+      () => undefined
+    );
+    await runtime.handle(
+      { type: "text.input", text: "这个新游戏也很傻逼，好像之前某个游戏，之前为什么这么说？" },
+      () => undefined
+    );
+
+    const system = capturedMessages[0]?.content ?? "";
+    expect(system).toContain("Atom recall context:");
+    expect(system).toContain("Source fragments:");
+    expect(system).toContain("教程像坏掉的电梯");
+    expect(system).toContain("剧情把玩家当成没睡醒的测试员");
+  });
+
   it("keeps chat usable when memory atom storage is unavailable", async () => {
     const runtime = new GreyfieldRuntime({
       llm: {

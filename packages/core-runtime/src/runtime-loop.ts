@@ -11,7 +11,7 @@ import { buildRecallContext, createSummarySegmentDraft, getSummarySegmentSourceT
 import { assemblePrompt } from "./prompt-assembler";
 import type { ASRProvider, LLMProvider, MemoryStore, TTSProvider } from "./providers";
 import type { CharacterPersona } from "./persona";
-import type { SessionStore } from "./session-store";
+import type { SessionStore, SessionTurn, SessionTurnLookup } from "./session-store";
 import type { StageDriver } from "./stage-driver";
 
 export interface GreyfieldRuntimeOptions {
@@ -165,7 +165,7 @@ export class GreyfieldRuntime {
     if (recallContext && (recallContext.items.length > 0 || recallContext.skipped.length > 0)) {
       await emit({ type: "memory.recall.context", context: recallContext });
     }
-    const atomRecallContext =
+    let atomRecallContext =
       memoryAtoms.length > 0
         ? buildMemoryAtomRecallContext({
             input: text,
@@ -174,6 +174,16 @@ export class GreyfieldRuntime {
             maxCharacters: this.options.atomRecallMaxCharacters
           })
         : undefined;
+    const atomSourceTurns = atomRecallContext ? await this.loadSourceTurnsForAtomRecall(atomRecallContext) : undefined;
+    if (atomSourceTurns) {
+      atomRecallContext = buildMemoryAtomRecallContext({
+        input: text,
+        atoms: memoryAtoms,
+        maxItems: this.options.atomRecallMaxItems,
+        maxCharacters: this.options.atomRecallMaxCharacters,
+        sourceTurns: atomSourceTurns
+      });
+    }
 
     const messages = assemblePrompt({
       persona: this.options.persona,
@@ -300,6 +310,22 @@ export class GreyfieldRuntime {
     }
   }
 
+  private async loadSourceTurnsForAtomRecall(context: ReturnType<typeof buildMemoryAtomRecallContext>): Promise<SessionTurn[] | undefined> {
+    if (context.items.length === 0 || !hasSessionTurnLookup(this.options.sessionStore)) {
+      return;
+    }
+    const sourceTurnIds = [...new Set(context.items.flatMap((item) => item.sourceTurnIds))];
+    if (sourceTurnIds.length === 0) {
+      return;
+    }
+    try {
+      return await this.options.sessionStore.getByIds(sourceTurnIds);
+    } catch (error) {
+      console.warn(`Greyfield memory atom source drilldown unavailable: ${formatError(error)}`);
+      return;
+    }
+  }
+
   private async extractMemoryAtomsForTurn(text: string, sourceTurnId: string): Promise<void> {
     const memoryAtomStore = this.options.memoryAtomStore;
     if (!memoryAtomStore) {
@@ -384,4 +410,8 @@ function concatAudioChunks(chunks: Uint8Array[]): Uint8Array {
 
 function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function hasSessionTurnLookup(store: SessionStore): store is SessionStore & SessionTurnLookup {
+  return typeof (store as { getByIds?: unknown }).getByIds === "function";
 }

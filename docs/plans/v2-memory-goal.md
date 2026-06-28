@@ -74,15 +74,15 @@ The benchmark is intentionally local/fake and does not require external keys. It
 
 V2.1 work must extend this fixture before claiming memory atom extraction, scene memory, calendar recall, evidence drilldown, memory layering, or vector recall quality. A feature can add a new recall engine later, but it must keep the benchmark passing or explain the updated acceptance fixture in the same PR.
 
-The current V2.1f benchmark locks `summaryRegressionScore: 1`, `recallRegressionScore: 1`, `atomExtractionScore: 0.9`, `atomRecallScore: 0.61`, `proactiveTriggerScore: 0.95`, `productReadinessScore: 0.33`, and `v21aScenarioScore: 0.29`; the computed output is `atomExtractionScore: 0.9`, `atomRecallScore: 0.617`, `proactiveTriggerScore: 1`, `productReadinessScore: 0.349`, `productReadinessCapabilityScore: 0.37`, and `v21aScenarioScore: 0.3`. Summary and current-role atom Memory Library controls are proved by `pnpm harness:electron:memory-control`, `pnpm harness:electron:memory-atom-library`, and `pnpm harness:frontend-full`; `pnpm harness:memory-benchmark` remains a non-UI gate. Calendar recall, desktop proactive scheduling, external weather integration, semantic recall, LLM extraction, and source passage drilldown still remain below full implementation, and atom clear does not erase raw turns or summaries.
+The current V2.1 benchmark locks `summaryRegressionScore: 1`, `recallRegressionScore: 1`, `atomExtractionScore: 0.925`, `atomRecallScore: 0.75`, `proactiveTriggerScore: 1`, `productReadinessScore: 0.51`, and `v21aScenarioScore: 0.5`; the computed output is `atomExtractionScore: 0.925`, `atomRecallScore: 0.75`, `proactiveTriggerScore: 1`, `productReadinessScore: 0.518`, `productReadinessCapabilityScore: 0.525`, and `v21aScenarioScore: 0.501`. Summary and current-role atom Memory Library controls are proved by `pnpm harness:electron:memory-control`, `pnpm harness:electron:memory-atom-library`, and `pnpm harness:frontend-full`; `pnpm harness:memory-benchmark` remains a non-UI gate. Calendar-aware atom recall, unrelated weather false-positive rejection, Chinese full-date anniversary extraction, and atom source-passage prompt material from vague negative-game cues are now covered by dynamic benchmark cases, while desktop proactive scheduling, external weather integration, semantic recall, LLM extraction/write policy, and renderer-level source drilldown remain below full implementation. Atom clear does not erase raw turns or summaries.
 
 Still incomplete after these V2.1 slices:
 
 - LLM-based memory atom extraction and broader durable write policy.
 - explicit-save long-term memory writes.
 - complete relationship dates, rituals, and scene memory coverage.
-- calendar/environment trigger recall in the desktop runtime.
-- source drilldown from compressed memory back to raw chat details.
+- environment trigger recall in the desktop runtime and desktop proactive scheduling.
+- renderer-level source drilldown UI; atom prompt material can already include bounded source fragments.
 - LLM-generated summarizer replacement for the extractive draft.
 - vector database recall.
 
@@ -99,7 +99,7 @@ V2.1 is not a pending-candidate approval product. Users should not review a dail
 
 ## Verification
 
-Current V2.0c verification:
+Current memory verification:
 
 ```bash
 pnpm typecheck

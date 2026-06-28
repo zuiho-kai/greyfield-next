@@ -141,10 +141,15 @@ interface AtomBenchmarkCase {
   };
   recall: {
     input: string;
+    now?: string;
     expectedAtomExpectationIds: string[];
     rejectedAtomExpectationIds?: string[];
     maxItems?: number;
     maxCharacters?: number;
+    sourcePassageMode?: "auto" | "always" | "never";
+    sourcePassageMaxCharacters?: number;
+    sourcePassageMaxCharactersPerTurn?: number;
+    sourcePassageMaxTurnsPerAtom?: number;
     promptIncludes?: string[];
     promptExcludes?: string[];
     unsupportedGaps?: string[];
@@ -690,7 +695,13 @@ function runAtomRecallCase(testCase: AtomBenchmarkCase, loadedFixture: MemoryBen
     input: testCase.recall.input,
     atoms,
     maxItems: testCase.recall.maxItems,
-    maxCharacters: testCase.recall.maxCharacters
+    maxCharacters: testCase.recall.maxCharacters,
+    now: testCase.recall.now,
+    sourceTurns: collectAtomCaseSourceTurns(testCase, loadedFixture),
+    sourcePassageMode: testCase.recall.sourcePassageMode,
+    sourcePassageMaxCharacters: testCase.recall.sourcePassageMaxCharacters,
+    sourcePassageMaxCharactersPerTurn: testCase.recall.sourcePassageMaxCharactersPerTurn,
+    sourcePassageMaxTurnsPerAtom: testCase.recall.sourcePassageMaxTurnsPerAtom
   });
   const promptText = formatMemoryAtomRecallContextForPrompt(context);
   const actualIds = context.items.map((item) => item.id);
@@ -920,6 +931,19 @@ function collectAtomCaseAtoms(testCase: AtomBenchmarkCase, loadedFixture: Memory
       now: turn.createdAt ?? defaultCreatedAt
     });
   });
+}
+
+function collectAtomCaseSourceTurns(testCase: AtomBenchmarkCase, loadedFixture: MemoryBenchmarkFixture): SessionTurn[] {
+  const scenario = findScenario(testCase.scenarioId, loadedFixture);
+  if (!scenario) {
+    throw new Error(`Atom case ${testCase.id} references missing scenario ${testCase.scenarioId}`);
+  }
+  return scenario.turns.map((turn) => ({
+    id: turn.id,
+    role: turn.role,
+    content: turn.content,
+    createdAt: turn.createdAt ?? defaultCreatedAt
+  }));
 }
 
 function scoreAtomExpectation(expectation: AtomExpectation, atoms: MemoryAtom[]): {
