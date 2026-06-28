@@ -467,6 +467,46 @@ describe("memory atoms", () => {
     expect(atom?.triggers.semantic).toEqual(expect.arrayContaining(["rain hotpot memory", "shared scene memory"]));
   });
 
+  it("preserves source-linked shared scene attributes beyond the hotpot fixture", () => {
+    const [atom] = extractDeterministicMemoryAtoms({
+      ...baseInput,
+      sourceTurnIds: ["turn-rainy-home"],
+      text: "那天下雨，我们在虚拟家里开着窗一起吃火锅，这像我们的避风港，记住当时的雨声、窗户和火锅。"
+    });
+
+    expect(atom).toMatchObject({
+      type: "episodic_scene",
+      sourceTurnIds: ["turn-rainy-home"],
+      subject: "user_and_greyfield",
+      object: "rainy_hotpot_scene",
+      metadata: {
+        sceneType: "shared_meal",
+        weather: "rain",
+        place: "virtual_home",
+        windowState: "open",
+        activity: "hotpot",
+        relationshipMeaning: "safe_harbor",
+        sharedExperience: true,
+        sensoryDetails: ["rain_sound"]
+      }
+    });
+    expect(atom?.text).toContain("safe harbor");
+    expect(atom?.text).toContain("rain sounds");
+    expect(atom?.triggers.relationship).toEqual(expect.arrayContaining(["user_and_greyfield", "shared_scene"]));
+    expect(atom?.triggers.semantic).toEqual(
+      expect.arrayContaining([
+        "scene memory",
+        "shared scene memory",
+        "rainy scene",
+        "virtual home scene",
+        "open window scene",
+        "shared meal scene",
+        "rain sound scene",
+        "safe harbor"
+      ])
+    );
+  });
+
   it("extracts a non-hotpot episodic scene with weather, place, object, meaning, and time", () => {
     const [atom] = extractDeterministicMemoryAtoms({
       ...baseInput,
@@ -512,6 +552,114 @@ describe("memory atoms", () => {
       id: atom.id,
       reason: expect.stringContaining("calendar:今天")
     });
+  });
+
+  it("recalls vague shared-scene questions with raw source fragments", () => {
+    const sourceTurns: SessionTurn[] = [
+      {
+        id: "turn-rainy-home",
+        role: "user",
+        content: "那天下雨，我们在虚拟家里开着窗一起吃火锅，这像我们的避风港，记住当时的雨声、窗户和火锅。",
+        createdAt: "2026-06-28T00:00:00.000Z"
+      }
+    ];
+    const [atom] = extractDeterministicMemoryAtoms({
+      ...baseInput,
+      sourceTurnIds: ["turn-rainy-home"],
+      text: sourceTurns[0]!.content
+    });
+
+    const chineseContext = buildMemoryAtomRecallContext({
+      input: "那个下雨开窗一起吃东西的场景原文是什么？",
+      atoms: [atom],
+      sourceTurns
+    });
+    const chinesePrompt = formatMemoryAtomRecallContextForPrompt(chineseContext);
+
+    expect(chineseContext.items[0]).toMatchObject({
+      id: atom.id,
+      type: "episodic_scene",
+      sourceTurnIds: ["turn-rainy-home"],
+      reason: expect.stringContaining("semantic:")
+    });
+    expect(chineseContext.items[0]?.matchedKeys).toEqual(
+      expect.arrayContaining(["shared scene memory", "rainy scene", "open window scene", "shared meal scene"])
+    );
+    expect(chinesePrompt).toContain("Source fragments:");
+    expect(chinesePrompt).toContain("虚拟家里开着窗一起吃火锅");
+    expect(chinesePrompt).toContain("避风港");
+    expect(chinesePrompt).toContain("雨声、窗户和火锅");
+
+    const englishContext = buildMemoryAtomRecallContext({
+      input: "what was that rainy home moment when we opened the window and ate together, source quote?",
+      atoms: [atom],
+      sourceTurns
+    });
+    expect(englishContext.items[0]?.id).toBe(atom.id);
+  });
+
+  it("rejects telemetry-only and non-shared scene false positives", () => {
+    const telemetryAtoms = extractDeterministicMemoryAtoms({
+      ...baseInput,
+      sourceTurnIds: ["turn-weather-probe"],
+      text: "weather probe: rain started"
+    });
+    expect(telemetryAtoms).toEqual([]);
+
+    const [sharedScene] = extractDeterministicMemoryAtoms({
+      ...baseInput,
+      sourceTurnIds: ["turn-rainy-home"],
+      text: "那天下雨，我们在虚拟家里开着窗一起吃火锅，这像我们的避风港，记住当时的雨声、窗户和火锅。"
+    });
+    const coworkerSceneAtoms = extractDeterministicMemoryAtoms({
+      ...baseInput,
+      sourceTurnIds: ["turn-coworker-dinner"],
+      text: "记住那天下雨，我和同事在家里开着窗一起吃饭。"
+    });
+    const genericWeatherSceneAtoms = extractDeterministicMemoryAtoms({
+      ...baseInput,
+      sourceTurnIds: ["turn-generic-weather"],
+      text: "记住那天下雨，我在家里开着窗吃饭。"
+    });
+
+    expect(coworkerSceneAtoms).toEqual([]);
+    expect(genericWeatherSceneAtoms).toEqual([]);
+
+    const { relationship: _relationship, semantic: legacySemantic, ...legacyTriggers } = sharedScene!.triggers;
+    const legacyNonSharedScene: MemoryAtom = {
+      ...sharedScene!,
+      id: "atom-legacy-non-shared-scene",
+      sourceTurnIds: ["turn-coworker-dinner"],
+      subject: "user",
+      triggers: {
+        ...legacyTriggers,
+        semantic: legacySemantic?.filter((key) => key !== "shared scene memory") ?? []
+      },
+      metadata: {
+        ...sharedScene!.metadata,
+        sharedExperience: false
+      }
+    };
+
+    const coworkerContext = buildMemoryAtomRecallContext({
+      input: "那个下雨开窗一起吃东西的场景原文是什么？",
+      atoms: [legacyNonSharedScene],
+      sourceTurns: [
+        {
+          id: "turn-coworker-dinner",
+          role: "user",
+          content: "记住那天下雨，我和同事在家里开着窗一起吃饭。",
+          createdAt: "2026-06-28T00:00:00.000Z"
+        }
+      ]
+    });
+    expect(coworkerContext.items).toEqual([]);
+
+    const weatherContext = buildMemoryAtomRecallContext({
+      input: "明天香港会不会下雨？",
+      atoms: [sharedScene]
+    });
+    expect(weatherContext.items).toEqual([]);
   });
 
   it("recalls atoms through exact, alias, and secondary trigger lanes", () => {
