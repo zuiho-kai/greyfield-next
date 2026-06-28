@@ -1,4 +1,5 @@
 import type { RecallContext, SummarySegment } from "./memory-context";
+import type { MemoryAtomExtractionStatus } from "./memory-atoms";
 
 export type RuntimeInputEvent =
   | { type: "text.input"; text: string }
@@ -21,6 +22,7 @@ export type RuntimeOutputEvent =
   | { type: "assistant.audio.end" }
   | { type: "memory.recall.context"; context: RecallContext }
   | { type: "memory.summary.created"; segment: SummarySegment }
+  | { type: "memory.atom.extraction.status"; status: MemoryAtomExtractionStatus }
   | { type: "stage.expression"; id: string }
   | { type: "stage.motion"; group: string; index?: number }
   | { type: "error"; message: string; cause?: unknown };

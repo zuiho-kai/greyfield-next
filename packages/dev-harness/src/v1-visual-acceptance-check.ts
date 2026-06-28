@@ -51,6 +51,9 @@ type VisualAcceptanceSummaryInput = {
   };
   settings: {
     providerPreviewVisible: boolean;
+    memoryExtractionVisible: boolean;
+    memoryExtractionToggleVisible: boolean;
+    memoryExtractionManualCandidateControlsAbsent: boolean;
     settingsShellVisible: boolean;
     noHorizontalOverflow: boolean;
     narrowNoHorizontalOverflow: boolean;
@@ -79,6 +82,7 @@ export function buildV1VisualAcceptanceSummary(input: VisualAcceptanceSummaryInp
       "Open pet-after-chat.png and confirm the speech bubble reads like a short subtitle and does not cover the model.",
       "Open chat-after-reply.png and confirm the full assistant reply stays in the Chat window.",
       "Open settings-provider-preview.png and confirm Settings reads like a product surface, not a debug console.",
+      "Open settings-memory-extraction.png and confirm Better memory is a normal toggle/status section without Accept/Reject candidate review controls.",
       "Open settings-window-controls.png and confirm Window scale/position controls are readable and not collapsed."
     ]
   };
@@ -200,6 +204,13 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     if (!settingsLayout.noHorizontalOverflow || !settingsLayout.windowControlsUsable) {
       throw new Error(`Settings window has horizontal overflow: ${JSON.stringify(settingsLayout)}`);
     }
+    if (
+      !settingsLayout.memoryExtractionVisible ||
+      !settingsLayout.memoryExtractionToggleVisible ||
+      !settingsLayout.memoryExtractionManualCandidateControlsAbsent
+    ) {
+      throw new Error(`Settings Memory extraction section is incomplete: ${JSON.stringify(settingsLayout)}`);
+    }
     await resizeElectronWindow(app, "settings", 520, 620);
     await settingsWindow.waitForTimeout(100);
     const narrowSettingsLayout = await readSettingsLayout(settingsWindow);
@@ -212,6 +223,10 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     };
     artifacts.push(
       await screenshot(settingsWindow, artifactDir, "settings-provider-preview.png", "Settings provider preview state.")
+    );
+    await settingsWindow.getByLabel("Memory extraction", { exact: true }).scrollIntoViewIfNeeded();
+    artifacts.push(
+      await screenshot(settingsWindow, artifactDir, "settings-memory-extraction.png", "Settings Memory extraction section.")
     );
     await settingsWindow.getByLabel("Scale").scrollIntoViewIfNeeded();
     artifacts.push(
@@ -564,6 +579,8 @@ async function readSettingsLayout(page: Page): Promise<VisualAcceptanceSummaryIn
   return page.evaluate(() => {
     const scrollWidth = document.scrollingElement?.scrollWidth ?? document.documentElement.scrollWidth;
     const compactInputs = Array.from(document.querySelectorAll<HTMLInputElement>(".settings-fields--compact input"));
+    const memorySection = document.querySelector<HTMLElement>('[aria-label="Memory extraction"]');
+    const memoryText = memorySection?.textContent ?? "";
     const windowControlsUsable =
       compactInputs.length >= 4 &&
       compactInputs.every((input) => {
@@ -584,6 +601,9 @@ async function readSettingsLayout(page: Page): Promise<VisualAcceptanceSummaryIn
       });
     return {
       providerPreviewVisible: document.querySelector(".provider-status--preview") !== null,
+      memoryExtractionVisible: memorySection !== null,
+      memoryExtractionToggleVisible: memorySection?.querySelector('input[aria-label="Better memory extraction"]') != null,
+      memoryExtractionManualCandidateControlsAbsent: !/\b(accept|reject|candidate|pending)\b/i.test(memoryText),
       settingsShellVisible: document.querySelector(".greyfield-shell") !== null,
       viewportWidth: window.innerWidth,
       scrollWidth,

@@ -1,0 +1,167 @@
+import { describe, expect, it } from "vitest";
+import type { MemoryAtomExtractionStatus } from "@greyfield/core-runtime";
+import { createInitialDesktopRendererState, type DesktopRendererState } from "../desktop-runtime-bridge";
+import { describeMemoryExtractionStatus } from "../settings-memory-extraction-status";
+
+describe("describeMemoryExtractionStatus", () => {
+  it("explains that better memory off keeps standard local memory on", () => {
+    const status = describeMemoryExtractionStatus(createInitialDesktopRendererState());
+
+    expect(status).toEqual({
+      tone: "standard",
+      label: "Standard memory",
+      detail: "Better extraction is off. Greyfield still saves simple local memories such as names, dates, and preferences."
+    });
+  });
+
+  it("shows standard fallback wording when the chat provider is not OpenAI-compatible", () => {
+    const status = describeMemoryExtractionStatus(enabledState());
+
+    expect(status).toMatchObject({
+      tone: "fallback",
+      label: "Standard fallback"
+    });
+    expect(status.detail).toContain("OpenAI-compatible chat provider");
+    expect(status.detail).toContain("Standard local memory stays on");
+  });
+
+  it("shows provider requirement wording for missing Base URL, API key, and model", () => {
+    const baseState = enabledState({
+      providerLLM: "openai-compatible",
+      providerBaseUrl: "",
+      providerApiKey: "",
+      providerHasApiKey: false,
+      providerModel: ""
+    });
+
+    expect(describeMemoryExtractionStatus(baseState).detail).toContain("Base URL");
+    expect(describeMemoryExtractionStatus(providerReadyState({ providerApiKey: "", providerHasApiKey: false })).detail).toContain(
+      "saved API key"
+    );
+    expect(describeMemoryExtractionStatus(providerReadyState({ providerModel: "" })).detail).toContain("chat model name");
+  });
+
+  it("shows ready wording when better memory is enabled and the provider is complete", () => {
+    const status = describeMemoryExtractionStatus(providerReadyState());
+
+    expect(status).toEqual({
+      tone: "ready",
+      label: "Ready for better memory",
+      detail: "Greyfield can use the chat provider to notice richer memories. If it fails, standard local memory keeps running."
+    });
+  });
+
+  it("shows standard fallback wording for provider failure", () => {
+    const status = describeMemoryExtractionStatus(
+      providerReadyState({
+        memoryExtraction: extractionStatus({
+          reason: "provider-failure",
+          message: "Better memory could not use the chat provider for this message, so Greyfield used standard local memory instead."
+        })
+      })
+    );
+
+    expect(status).toEqual({
+      tone: "fallback",
+      label: "Standard fallback",
+      detail: "Better memory could not use the chat provider for this message, so Greyfield used standard local memory instead."
+    });
+  });
+
+  it("shows standard fallback wording for invalid provider output", () => {
+    const status = describeMemoryExtractionStatus(
+      providerReadyState({
+        memoryExtraction: extractionStatus({
+          reason: "invalid-output",
+          message: "The chat provider did not return usable memory for this message, so Greyfield used standard local memory instead."
+        })
+      })
+    );
+
+    expect(status).toEqual({
+      tone: "fallback",
+      label: "Standard fallback",
+      detail: "The chat provider did not return usable memory for this message, so Greyfield used standard local memory instead."
+    });
+  });
+
+  it("shows better memory wording only after the provider was used", () => {
+    const status = describeMemoryExtractionStatus(
+      providerReadyState({
+        memoryExtraction: {
+          status: "better",
+          reason: "provider-used",
+          message: "Better memory checked this message.",
+          savedAtomCount: 1,
+          llmAttempted: true,
+          fallbackUsed: true
+        }
+      })
+    );
+
+    expect(status).toEqual({
+      tone: "success",
+      label: "Better memory used",
+      detail: "The last message was checked with the chat provider. Standard local memory stayed available."
+    });
+  });
+
+  it("does not describe skipped noise as provider usage", () => {
+    const status = describeMemoryExtractionStatus(
+      providerReadyState({
+        memoryExtraction: {
+          status: "standard",
+          reason: "skipped-noise",
+          message: "Greyfield did not find durable memory in this message, so nothing new was saved.",
+          savedAtomCount: 0,
+          llmAttempted: false,
+          fallbackUsed: false
+        }
+      })
+    );
+
+    expect(status).toEqual({
+      tone: "standard",
+      label: "No memory saved",
+      detail: "Greyfield did not find durable memory in this message, so nothing new was saved."
+    });
+  });
+});
+
+function enabledState(settings: Partial<DesktopRendererState["settings"]> = {}): DesktopRendererState {
+  const state = createInitialDesktopRendererState();
+  state.settings = {
+    ...state.settings,
+    llmAtomExtractionEnabled: true,
+    ...settings
+  };
+  return state;
+}
+
+function providerReadyState(
+  overrides: Partial<DesktopRendererState["settings"]> & { memoryExtraction?: MemoryAtomExtractionStatus | null } = {}
+): DesktopRendererState {
+  const { memoryExtraction, ...settings } = overrides;
+  const state = enabledState({
+    providerLLM: "openai-compatible",
+    providerBaseUrl: "https://llm.example/v1",
+    providerApiKey: "",
+    providerHasApiKey: true,
+    providerModel: "remote-model",
+    ...settings
+  });
+  state.memoryExtraction = memoryExtraction ?? null;
+  return state;
+}
+
+function extractionStatus(overrides: Partial<MemoryAtomExtractionStatus>): MemoryAtomExtractionStatus {
+  return {
+    status: "fallback",
+    reason: "provider-failure",
+    message: "Better memory could not use the chat provider for this message, so Greyfield used standard local memory instead.",
+    savedAtomCount: 1,
+    llmAttempted: true,
+    fallbackUsed: true,
+    ...overrides
+  };
+}

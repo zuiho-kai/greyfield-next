@@ -40,6 +40,9 @@ describe("V1 visual acceptance summary", () => {
       },
       settings: {
         providerPreviewVisible: true,
+        memoryExtractionVisible: true,
+        memoryExtractionToggleVisible: true,
+        memoryExtractionManualCandidateControlsAbsent: true,
         settingsShellVisible: true,
         noHorizontalOverflow: true,
         narrowNoHorizontalOverflow: true,
@@ -58,6 +61,11 @@ describe("V1 visual acceptance summary", () => {
           review: "Provider preview"
         },
         {
+          name: "settings-memory-extraction.png",
+          path: "artifact-root/settings-memory-extraction.png",
+          review: "Memory extraction"
+        },
+        {
           name: "settings-window-controls.png",
           path: "artifact-root/settings-window-controls.png",
           review: "Window controls"
@@ -73,6 +81,7 @@ describe("V1 visual acceptance summary", () => {
     expect(summary.visualReviewRequired.join("\n")).toContain("controls-initial.png");
     expect(summary.visualReviewRequired.join("\n")).toContain("controls-active-state.png");
     expect(summary.visualReviewRequired.join("\n")).toContain("settings-provider-preview.png");
+    expect(summary.visualReviewRequired.join("\n")).toContain("settings-memory-extraction.png");
     expect(summary.visualReviewRequired.join("\n")).toContain("settings-window-controls.png");
   });
 

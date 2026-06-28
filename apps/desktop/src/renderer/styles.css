@@ -1057,6 +1057,30 @@ h1 {
   background: rgba(37, 56, 88, 0.08);
 }
 
+.memory-extraction-toggle {
+  align-items: center;
+}
+
+.memory-extraction-toggle input[type="checkbox"] {
+  margin-top: 0;
+}
+
+.memory-extraction-status--ready,
+.memory-extraction-status--success {
+  border-color: rgba(31, 122, 107, 0.28);
+  background: rgba(31, 122, 107, 0.1);
+}
+
+.memory-extraction-status--fallback {
+  border-color: rgba(143, 49, 80, 0.26);
+  background: rgba(143, 49, 80, 0.1);
+}
+
+.memory-extraction-status--standard {
+  border-color: rgba(37, 56, 88, 0.18);
+  background: rgba(37, 56, 88, 0.08);
+}
+
 .settings-actions button,
 .model-inspector button {
   min-height: 36px;

@@ -96,11 +96,50 @@ export interface MemoryAtomExtractionInput {
 
 export interface MemoryAtomExtractor {
   extract(input: MemoryAtomExtractionInput): Promise<MemoryAtom[]>;
+  getLastReport?(): MemoryAtomExtractionReport | undefined;
 }
 
+export type MemoryAtomExtractionStatusKind = "standard" | "better" | "fallback";
+export type MemoryAtomExtractionStatusReason =
+  | "standard-only"
+  | "disabled"
+  | "provider-unavailable"
+  | "skipped-noise"
+  | "provider-used"
+  | "provider-failure"
+  | "invalid-output";
+
+export interface MemoryAtomExtractionStatus {
+  status: MemoryAtomExtractionStatusKind;
+  reason: MemoryAtomExtractionStatusReason;
+  message: string;
+  savedAtomCount: number;
+  llmAttempted: boolean;
+  fallbackUsed: boolean;
+}
+
+export type MemoryAtomExtractionReport = Omit<MemoryAtomExtractionStatus, "savedAtomCount"> & {
+  atomCount: number;
+};
+
 export class DeterministicMemoryAtomExtractor implements MemoryAtomExtractor {
+  private lastReport: MemoryAtomExtractionReport | undefined;
+
   async extract(input: MemoryAtomExtractionInput): Promise<MemoryAtom[]> {
-    return extractDeterministicMemoryAtoms(input);
+    const atoms = extractDeterministicMemoryAtoms(input);
+    this.lastReport = {
+      status: "standard",
+      reason: "standard-only",
+      message: "Standard local memory checked this message.",
+      atomCount: atoms.length,
+      llmAttempted: false,
+      fallbackUsed: false
+    };
+    return atoms;
+  }
+
+  getLastReport(): MemoryAtomExtractionReport | undefined {
+    return this.lastReport;
   }
 }
 
@@ -126,6 +165,7 @@ export interface MemoryAtomWritePolicyOptions {
 
 export class LLMBackedMemoryAtomExtractor implements MemoryAtomExtractor {
   private readonly fallbackExtractor: MemoryAtomExtractor | false;
+  private lastReport: MemoryAtomExtractionReport | undefined;
 
   constructor(private readonly options: LLMBackedMemoryAtomExtractorOptions) {
     this.fallbackExtractor = options.fallbackExtractor === undefined ? new DeterministicMemoryAtomExtractor() : options.fallbackExtractor;
@@ -134,19 +174,52 @@ export class LLMBackedMemoryAtomExtractor implements MemoryAtomExtractor {
   async extract(input: MemoryAtomExtractionInput): Promise<MemoryAtom[]> {
     const fallbackAtoms = this.options.mode === "llm" ? [] : await this.extractFallback(input);
     if (shouldSkipBackgroundMemoryWrite(input)) {
+      this.lastReport = {
+        status: "standard",
+        reason: "skipped-noise",
+        message: "Greyfield did not find durable memory in this message, so nothing new was saved.",
+        atomCount: 0,
+        llmAttempted: false,
+        fallbackUsed: false
+      };
       return [];
     }
 
     let llmAtoms: MemoryAtom[] | undefined;
     try {
       llmAtoms = await this.extractWithLLM(input);
-    } catch {
+    } catch (error) {
       const degraded = this.options.mode === "llm" ? await this.extractFallback(input) : fallbackAtoms;
-      return filterMemoryAtomsForAutomaticWrite(input, degraded, this.options);
+      const filtered = filterMemoryAtomsForAutomaticWrite(input, degraded, this.options);
+      const reason: MemoryAtomExtractionStatusReason = error instanceof InvalidLLMAtomExtractionOutputError
+        ? "invalid-output"
+        : "provider-failure";
+      this.lastReport = {
+        status: "fallback",
+        reason,
+        message: memoryAtomExtractionMessage(reason),
+        atomCount: filtered.length,
+        llmAttempted: true,
+        fallbackUsed: true
+      };
+      return filtered;
     }
 
     const atoms = this.options.mode === "llm" ? llmAtoms : [...llmAtoms, ...fallbackAtoms];
-    return filterMemoryAtomsForAutomaticWrite(input, dedupeAtomsByWriteKey(atoms), this.options);
+    const filtered = filterMemoryAtomsForAutomaticWrite(input, dedupeAtomsByWriteKey(atoms), this.options);
+    this.lastReport = {
+      status: "better",
+      reason: "provider-used",
+      message: "Better memory checked this message.",
+      atomCount: filtered.length,
+      llmAttempted: true,
+      fallbackUsed: this.options.mode !== "llm"
+    };
+    return filtered;
+  }
+
+  getLastReport(): MemoryAtomExtractionReport | undefined {
+    return this.lastReport;
   }
 
   private async extractFallback(input: MemoryAtomExtractionInput): Promise<MemoryAtom[]> {
@@ -677,13 +750,51 @@ function parseLLMAtomResponse(response: string): { atoms?: unknown[] } {
   const start = unfenced.indexOf("{");
   const end = unfenced.lastIndexOf("}");
   if (start < 0 || end < start) {
-    throw new Error("Memory atom LLM response did not contain a JSON object.");
+    throw new InvalidLLMAtomExtractionOutputError("Memory atom LLM response did not contain a JSON object.");
   }
-  const parsed = JSON.parse(unfenced.slice(start, end + 1)) as unknown;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(unfenced.slice(start, end + 1)) as unknown;
+  } catch (error) {
+    throw new InvalidLLMAtomExtractionOutputError(`Memory atom LLM response was not valid JSON: ${formatUnknownError(error)}`);
+  }
   if (!isRecord(parsed)) {
-    throw new Error("Memory atom LLM response was not an object.");
+    throw new InvalidLLMAtomExtractionOutputError("Memory atom LLM response was not an object.");
   }
   return parsed as { atoms?: unknown[] };
+}
+
+class InvalidLLMAtomExtractionOutputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidLLMAtomExtractionOutputError";
+  }
+}
+
+function memoryAtomExtractionMessage(reason: MemoryAtomExtractionStatusReason): string {
+  if (reason === "provider-failure") {
+    return "Better memory could not use the chat provider for this message, so Greyfield used standard local memory instead.";
+  }
+  if (reason === "invalid-output") {
+    return "The chat provider did not return usable memory for this message, so Greyfield used standard local memory instead.";
+  }
+  if (reason === "provider-unavailable") {
+    return "Better memory needs a ready chat provider, so Greyfield used standard local memory for this message.";
+  }
+  if (reason === "skipped-noise") {
+    return "Greyfield did not find durable memory in this message, so nothing new was saved.";
+  }
+  if (reason === "disabled") {
+    return "Better memory is off, so Greyfield used standard local memory for this message.";
+  }
+  if (reason === "provider-used") {
+    return "Better memory checked this message.";
+  }
+  return "Standard local memory checked this message.";
+}
+
+function formatUnknownError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function normalizeLLMAtomDraft(

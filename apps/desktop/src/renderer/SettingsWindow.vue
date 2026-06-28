@@ -325,6 +325,30 @@
           </div>
         </div>
 
+        <div class="settings-section" aria-label="Memory extraction">
+          <header class="settings-section__header">
+            <h2>Memory extraction</h2>
+            <span>{{ memoryExtractionStatus.label }}</span>
+          </header>
+          <label class="memory-extraction-toggle">
+            <span>Better memory</span>
+            <input
+              :checked="state.settings.llmAtomExtractionEnabled"
+              aria-label="Better memory extraction"
+              type="checkbox"
+              @change="$emit('update-boolean-setting', 'llmAtomExtractionEnabled', checkedFrom($event))"
+            />
+          </label>
+          <div
+            class="provider-status memory-extraction-status"
+            :class="`memory-extraction-status--${memoryExtractionStatus.tone}`"
+            role="status"
+          >
+            <strong>{{ memoryExtractionStatus.label }}</strong>
+            <span>{{ memoryExtractionStatus.detail }}</span>
+          </div>
+        </div>
+
         <div class="settings-section memory-library" aria-label="Memory Library">
           <header class="settings-section__header">
             <h2>Memory Library</h2>
@@ -752,6 +776,7 @@ import {
   isSourcePassageShortened
 } from "./memory-source-display";
 import { describeProviderStatus } from "./settings-provider-status";
+import { describeMemoryExtractionStatus } from "./settings-memory-extraction-status";
 import { describeProviderTestStatus, describeTestLlmAction, describeTestVoiceAction } from "./settings-test-llm";
 
 const props = defineProps<{
@@ -765,7 +790,10 @@ const props = defineProps<{
 const emit = defineEmits<{
   "update-setting": [key: keyof DesktopSettingsState, value: string];
   "update-numeric-setting": [key: "modelScale" | "modelX" | "modelY" | "voiceVolume", value: string];
-  "update-boolean-setting": [key: "speechBubbleEnabled" | "voiceSpeechEnabled" | "proactiveMemoryEnabled", value: boolean];
+  "update-boolean-setting": [
+    key: "speechBubbleEnabled" | "voiceSpeechEnabled" | "proactiveMemoryEnabled" | "llmAtomExtractionEnabled",
+    value: boolean
+  ];
   "update:model-pass-through": [value: boolean];
   "update:locked": [value: boolean];
   "choose-model": [];
@@ -803,6 +831,7 @@ const testVoiceAction = computed(() =>
 );
 const voiceTestStatus = computed(() => describeVoiceTestStatus(props.state.voiceTest));
 const memorySnapshot = computed(() => props.state.memoryDebug.snapshot);
+const memoryExtractionStatus = computed(() => describeMemoryExtractionStatus(props.state));
 const memoryRawCount = computed(() => memorySnapshot.value?.recentTurns.length ?? 0);
 const memorySummaryCount = computed(() => memorySnapshot.value?.summarySegments.length ?? 0);
 const memorySegments = computed(() => memorySnapshot.value?.summarySegments ?? []);

@@ -185,7 +185,8 @@ if (typeof window !== "undefined") {
       modelX: config.live2d.x,
       modelY: config.live2d.y,
       speechBubbleEnabled: config.ui.speechBubbleEnabled,
-      proactiveMemoryEnabled: config.ui.proactiveMemoryEnabled
+      proactiveMemoryEnabled: config.ui.proactiveMemoryEnabled,
+      llmAtomExtractionEnabled: config.memory.llmAtomExtractionEnabled
     });
     state.window.modelPassThrough = config.window.modelPassThrough;
     syncPetWindowShape();
@@ -277,7 +278,10 @@ function updateNumericSetting(key: "modelScale" | "modelX" | "modelY" | "voiceVo
   }
 }
 
-function updateBooleanSetting(key: "speechBubbleEnabled" | "voiceSpeechEnabled" | "proactiveMemoryEnabled", value: boolean): void {
+function updateBooleanSetting(
+  key: "speechBubbleEnabled" | "voiceSpeechEnabled" | "proactiveMemoryEnabled" | "llmAtomExtractionEnabled",
+  value: boolean
+): void {
   syncState(bridge.updateSettings({ [key]: value }));
 }
 

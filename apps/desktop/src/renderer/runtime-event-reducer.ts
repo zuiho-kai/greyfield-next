@@ -147,6 +147,13 @@ export function reduceRuntimeEvent(
     };
   }
 
+  if (event.type === "memory.atom.extraction.status") {
+    return {
+      ...state,
+      memoryExtraction: event.status
+    };
+  }
+
   return state;
 }
 
