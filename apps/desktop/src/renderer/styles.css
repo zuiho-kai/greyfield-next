@@ -1196,6 +1196,72 @@ h1 {
   background: rgba(31, 122, 107, 0.08);
 }
 
+.memory-library__drilldown {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(31, 122, 107, 0.24);
+  border-radius: 8px;
+  background: #f5fbf9;
+  box-shadow: inset 3px 0 0 rgba(31, 122, 107, 0.35);
+}
+
+.memory-library__drilldown-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.memory-library__drilldown-header div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.memory-library__drilldown-header small {
+  color: #607080;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.memory-library__drilldown-header h3 {
+  margin: 0;
+  color: #1f2933;
+  font-size: 13px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.memory-library__drilldown-header button {
+  min-height: 30px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: rgba(37, 56, 88, 0.08);
+  color: #465463;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.memory-library__drilldown-summary,
+.memory-library__source-empty {
+  margin: 0;
+  color: #465463;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.memory-library__drilldown-controls {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 2px;
+}
+
 .memory-library__list {
   display: grid;
   gap: 8px;
@@ -1344,6 +1410,38 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.memory-library__source-link {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 8px 9px;
+  border: 1px solid rgba(31, 122, 107, 0.16);
+  border-radius: 8px;
+  background: rgba(31, 122, 107, 0.06);
+  color: #18594f;
+  text-align: left;
+}
+
+.memory-library__source-link span {
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.memory-library__source-link strong {
+  color: #18594f;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
 .memory-library__source-list {
   display: grid;
   gap: 8px;
@@ -1386,6 +1484,14 @@ h1 {
 .memory-library__source-row--missing header span,
 .memory-library__source-row--unavailable header span {
   color: #7b2442;
+}
+
+.memory-library__source-row > small {
+  color: #607080;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .memory-library__source-row dl {
@@ -1441,6 +1547,10 @@ h1 {
 
 .memory-library__actions--atom {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.memory-library__actions--drilldown {
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
 }
 
 .memory-library__actions button {

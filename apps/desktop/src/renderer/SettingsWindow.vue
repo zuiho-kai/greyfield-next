@@ -353,6 +353,122 @@
             <span>Disabled {{ memoryDisabledCount }}</span>
           </div>
 
+          <section
+            v-if="selectedSourceDrilldown"
+            class="memory-library__drilldown"
+            aria-label="Memory source drilldown"
+          >
+            <header class="memory-library__drilldown-header">
+              <div>
+                <small>{{ selectedSourceKindLabel }}</small>
+                <h3>{{ selectedSourceTitle }}</h3>
+              </div>
+              <button type="button" aria-label="Close source drilldown" @click="closeSourceDrilldown">Close</button>
+            </header>
+            <p class="memory-library__drilldown-summary">{{ selectedSourceSummary }}</p>
+
+            <div v-if="selectedSourcePassages.length > 0" class="memory-library__source-list">
+              <article
+                v-for="(passage, index) in selectedSourcePassages"
+                :key="`${passage.sessionId}:${passage.turnId}`"
+                class="memory-library__source-row"
+                :class="`memory-library__source-row--${passage.status}`"
+                :aria-label="`Source passage ${index + 1}`"
+              >
+                <header>
+                  <strong>{{ sourcePassageHeading(passage) }}</strong>
+                  <span>{{ sourcePassageStatusLabel(passage) }}</span>
+                </header>
+                <small>{{ sourcePassageMetaLabel(passage) }}</small>
+                <p>{{ sourcePassageBody(passage) }}</p>
+                <small v-if="sourcePassageShortened(passage)">Long source shortened for display.</small>
+              </article>
+            </div>
+            <p v-else class="memory-library__source-empty">No original message is linked to this memory.</p>
+
+            <div v-if="selectedSummarySource" class="memory-library__drilldown-controls">
+              <label class="memory-library__editor">
+                <span>Memory text</span>
+                <textarea
+                  :aria-label="`Selected memory text`"
+                  :value="memorySummaryDrafts[selectedSummarySource.id] ?? selectedSummarySource.summary"
+                  rows="3"
+                  spellcheck="false"
+                  @input="setMemorySummaryDraft(selectedSummarySource.id, $event)"
+                />
+              </label>
+              <label class="memory-library__editor">
+                <span>Recall cues</span>
+                <input
+                  :aria-label="`Selected recall cues`"
+                  :value="memoryCueDrafts[selectedSummarySource.id] ?? selectedSummarySource.recallCues.join(', ')"
+                  autocomplete="off"
+                  spellcheck="false"
+                  @input="setMemoryCueDraft(selectedSummarySource.id, $event)"
+                />
+              </label>
+              <div class="memory-library__actions memory-library__actions--drilldown">
+                <button type="button" aria-label="Save selected memory" @click="saveMemorySummary(selectedSummarySource)">
+                  Save
+                </button>
+                <button
+                  type="button"
+                  :aria-label="`${selectedSummarySource.disabled ? 'Enable' : 'Disable'} selected memory`"
+                  @click="toggleMemorySummary(selectedSummarySource)"
+                >
+                  {{ selectedSummarySource.disabled ? "Enable" : "Disable" }}
+                </button>
+                <button
+                  type="button"
+                  class="memory-library__danger"
+                  aria-label="Delete selected memory"
+                  @click="$emit('memory-summary-delete', { id: selectedSummarySource.id })"
+                >
+                  Delete
+                </button>
+                <button type="button" aria-label="Export memory library" @click="$emit('memory-export')">
+                  Export library
+                </button>
+              </div>
+            </div>
+
+            <div v-else-if="selectedAtomSource" class="memory-library__drilldown-controls">
+              <label class="memory-library__editor">
+                <span>Memory text</span>
+                <textarea
+                  :aria-label="`Selected memory text`"
+                  :value="memoryAtomDrafts[selectedAtomSource.id] ?? selectedAtomSource.text"
+                  rows="3"
+                  spellcheck="false"
+                  @input="setMemoryAtomDraft(selectedAtomSource.id, $event)"
+                />
+              </label>
+              <div class="memory-library__actions memory-library__actions--drilldown">
+                <button type="button" aria-label="Save selected memory" @click="saveMemoryAtom(selectedAtomSource)">
+                  Save
+                </button>
+                <button type="button" aria-label="Export selected memory" @click="exportMemoryAtom(selectedAtomSource)">
+                  Export
+                </button>
+                <button
+                  type="button"
+                  :aria-label="`${selectedAtomSource.disabled ? 'Enable' : 'Disable'} selected memory`"
+                  @click="toggleMemoryAtom(selectedAtomSource)"
+                >
+                  {{ selectedAtomSource.disabled ? "Enable" : "Disable" }}
+                </button>
+                <button
+                  type="button"
+                  class="memory-library__danger"
+                  aria-label="Delete selected memory"
+                  @click="$emit('memory-atom-delete', { id: selectedAtomSource.id })"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </section>
+
           <div v-if="memorySegments.length > 0" class="memory-library__list" aria-label="Summary memories">
             <article
               v-for="segment in memorySegments"
@@ -384,40 +500,15 @@
                 </div>
               </dl>
 
-              <details
-                class="memory-library__source"
-                :aria-label="`Source passage for summary ${segment.id}`"
+              <button
+                type="button"
+                class="memory-library__source-link"
+                :aria-label="`View source for summary memory`"
+                @click="openSummarySourceDrilldown(segment)"
               >
-                <summary>{{ memorySourcePassageSummary(memorySourcePassages(segment)) }}</summary>
-                <div
-                  v-if="memorySourcePassages(segment).length > 0"
-                  class="memory-library__source-list"
-                >
-                  <article
-                    v-for="passage in memorySourcePassages(segment)"
-                    :key="`${passage.sessionId}:${passage.turnId}`"
-                    class="memory-library__source-row"
-                    :class="`memory-library__source-row--${passage.status}`"
-                  >
-                    <header>
-                      <strong>{{ sourcePassageHeading(passage) }}</strong>
-                      <span>{{ sourcePassageStatusLabel(passage) }}</span>
-                    </header>
-                    <dl>
-                      <div>
-                        <dt>Turn</dt>
-                        <dd>{{ passage.turnId }}</dd>
-                      </div>
-                      <div>
-                        <dt>Role</dt>
-                        <dd>{{ sourcePassageRoleValue(passage) }}</dd>
-                      </div>
-                    </dl>
-                    <p>{{ sourcePassageBody(passage) }}</p>
-                  </article>
-                </div>
-                <p v-else>No passage</p>
-              </details>
+                <span>{{ memorySourceLabel(segment) }}</span>
+                <strong>View source</strong>
+              </button>
 
               <label class="memory-library__editor">
                 <span>Memory text</span>
@@ -506,40 +597,15 @@
                   </div>
                 </dl>
 
-                <details
-                  class="memory-library__source"
-                  :aria-label="`Source passage for ${memoryAtomTypeLabel(atom)} memory ${atom.id}`"
+                <button
+                  type="button"
+                  class="memory-library__source-link"
+                  :aria-label="`View source for ${memoryAtomTypeLabel(atom)} memory`"
+                  @click="openAtomSourceDrilldown(atom)"
                 >
-                  <summary>{{ memorySourcePassageSummary(memorySourcePassages(atom)) }}</summary>
-                  <div
-                    v-if="memorySourcePassages(atom).length > 0"
-                    class="memory-library__source-list"
-                  >
-                    <article
-                      v-for="passage in memorySourcePassages(atom)"
-                      :key="`${passage.sessionId}:${passage.turnId}`"
-                      class="memory-library__source-row"
-                      :class="`memory-library__source-row--${passage.status}`"
-                    >
-                      <header>
-                        <strong>{{ sourcePassageHeading(passage) }}</strong>
-                        <span>{{ sourcePassageStatusLabel(passage) }}</span>
-                      </header>
-                      <dl>
-                        <div>
-                          <dt>Turn</dt>
-                          <dd>{{ passage.turnId }}</dd>
-                        </div>
-                        <div>
-                          <dt>Role</dt>
-                          <dd>{{ sourcePassageRoleValue(passage) }}</dd>
-                        </div>
-                      </dl>
-                      <p>{{ sourcePassageBody(passage) }}</p>
-                    </article>
-                  </div>
-                  <p v-else>No passage</p>
-                </details>
+                  <span>{{ memoryAtomSourceLabel(atom) }}</span>
+                  <strong>View source</strong>
+                </button>
 
                 <label class="memory-library__editor">
                   <span>Memory text</span>
@@ -582,8 +648,8 @@
           </div>
           <div v-if="latestRecallItem" class="memory-library__block memory-library__block--recall">
             <strong>Last recalled memory</strong>
-            <p>{{ latestRecallItem.reason }}</p>
-            <small>{{ latestRecallItem.sourceTurnIds.join(", ") }}</small>
+            <p>{{ recallReasonLabel(latestRecallItem.reason) }}</p>
+            <small>{{ recalledSourceLabel(latestRecallItem.sourceTurnIds.length) }}</small>
           </div>
           <p
             v-if="state.memoryDebug.actionMessage"
@@ -675,6 +741,16 @@ import {
   findBundledLive2DModel
 } from "./bundled-live2d-models";
 import Live2DStageView from "./Live2DStageView.vue";
+import {
+  describeMemorySourceCount,
+  describeRecallReason,
+  describeSourcePassageBody,
+  describeSourcePassageHeading,
+  describeSourcePassageMeta,
+  describeSourcePassageStatus,
+  formatMemoryTimestamp,
+  isSourcePassageShortened
+} from "./memory-source-display";
 import { describeProviderStatus } from "./settings-provider-status";
 import { describeProviderTestStatus, describeTestLlmAction, describeTestVoiceAction } from "./settings-test-llm";
 
@@ -756,7 +832,6 @@ const latestRecallById = computed(() => {
   const entries = (memorySnapshot.value?.lastRecallContext?.items ?? []).map((item) => [item.id, item] as const);
   return new Map(entries);
 });
-const sourcePassageDisplayLimit = 520;
 const memoryAtomTypeConfigs: Array<{ type: DesktopMemoryAtom["type"]; label: string; singular: string }> = [
   { type: "fact", label: "Facts", singular: "Fact" },
   { type: "preference", label: "Preferences", singular: "Preference" },
@@ -795,6 +870,58 @@ const memoryActionTone = computed(() => {
 const memorySummaryDrafts = ref<Record<string, string>>({});
 const memoryCueDrafts = ref<Record<string, string>>({});
 const memoryAtomDrafts = ref<Record<string, string>>({});
+type MemorySourceSelection = { kind: "summary"; id: string } | { kind: "atom"; id: string };
+const selectedSource = ref<MemorySourceSelection | null>(null);
+const selectedSourceDrilldown = computed(() => {
+  if (!selectedSource.value) {
+    return null;
+  }
+  if (selectedSource.value.kind === "summary") {
+    const item = memorySegments.value.find((segment) => segment.id === selectedSource.value?.id);
+    return item ? { kind: "summary" as const, item } : null;
+  }
+  const item = memoryAtoms.value.find((atom) => atom.id === selectedSource.value?.id);
+  return item ? { kind: "atom" as const, item } : null;
+});
+const selectedSummarySource = computed(() =>
+  selectedSourceDrilldown.value?.kind === "summary" ? selectedSourceDrilldown.value.item : null
+);
+const selectedAtomSource = computed(() =>
+  selectedSourceDrilldown.value?.kind === "atom" ? selectedSourceDrilldown.value.item : null
+);
+const selectedSourcePassages = computed(() =>
+  selectedSourceDrilldown.value ? memorySourcePassages(selectedSourceDrilldown.value.item) : []
+);
+const selectedSourceKindLabel = computed(() => {
+  if (selectedSourceDrilldown.value?.kind === "summary") {
+    return "Summary memory source";
+  }
+  if (selectedSourceDrilldown.value?.kind === "atom") {
+    return `${memoryAtomTypeLabel(selectedSourceDrilldown.value.item)} memory source`;
+  }
+  return "";
+});
+const selectedSourceTitle = computed(() => {
+  if (selectedSourceDrilldown.value?.kind === "summary") {
+    return compactMemoryText(selectedSourceDrilldown.value.item.summary);
+  }
+  if (selectedSourceDrilldown.value?.kind === "atom") {
+    return compactMemoryText(selectedSourceDrilldown.value.item.text);
+  }
+  return "";
+});
+const selectedSourceSummary = computed(() => {
+  if (!selectedSourceDrilldown.value) {
+    return "";
+  }
+  const item = selectedSourceDrilldown.value.item;
+  const sourceIds =
+    selectedSourceDrilldown.value.kind === "summary" ? summarySourceIds(item) : item.sourceTurnIds;
+  return describeMemorySourceCount({
+    sourcePassages: memorySourcePassages(item),
+    sourceIds
+  });
+});
 const currentBundledLive2DModel = computed(() => findBundledLive2DModel(props.state.settings.modelPath));
 const isCustomLive2DModel = computed(() => currentBundledLive2DModel.value === undefined);
 const selectedLive2DModel = computed(() =>
@@ -837,6 +964,16 @@ watch(
       nextAtomDrafts[atom.id] = memoryAtomDrafts.value[atom.id] ?? atom.text;
     }
     memoryAtomDrafts.value = nextAtomDrafts;
+  },
+  { immediate: true }
+);
+
+watch(
+  selectedSourceDrilldown,
+  (drilldown) => {
+    if (selectedSource.value && !drilldown) {
+      selectedSource.value = null;
+    }
   },
   { immediate: true }
 );
@@ -918,18 +1055,27 @@ function exportMemoryAtom(atom: DesktopMemoryAtom): void {
   emit("memory-atom-export", { id: atom.id });
 }
 
+function openSummarySourceDrilldown(segment: DesktopMemorySummarySegment): void {
+  selectedSource.value = { kind: "summary", id: segment.id };
+}
+
+function openAtomSourceDrilldown(atom: DesktopMemoryAtom): void {
+  selectedSource.value = { kind: "atom", id: atom.id };
+}
+
+function closeSourceDrilldown(): void {
+  selectedSource.value = null;
+}
+
 function memorySegmentStatus(segment: DesktopMemorySummarySegment): string {
   return segment.disabled ? "Disabled" : "Enabled";
 }
 
 function memorySourceLabel(segment: DesktopMemorySummarySegment): string {
-  const sourceIds = [
-    ...new Set([...segment.sourceTurns.map((turn) => turn.turnId), ...(segment.sourceTurnIds ?? [])])
-  ];
-  if (sourceIds.length === 0) {
-    return "No source";
-  }
-  return `${sourceIds.length} source ${sourceIds.length === 1 ? "turn" : "turns"}: ${sourceIds.join(", ")}`;
+  return describeMemorySourceCount({
+    sourcePassages: memorySourcePassages(segment),
+    sourceIds: summarySourceIds(segment)
+  });
 }
 
 function memoryLastUsedLabel(segment: DesktopMemorySummarySegment): string {
@@ -940,7 +1086,7 @@ function memoryLastUsedLabel(segment: DesktopMemorySummarySegment): string {
   if (!recall) {
     return "Not recalled this session";
   }
-  return `Last recall: ${recall.reason}`;
+  return describeRecallReason(recall.reason);
 }
 
 function memoryUpdatedLabel(segment: DesktopMemorySummarySegment): string {
@@ -960,10 +1106,10 @@ function memoryAtomGroupLabel(type: DesktopMemoryAtom["type"]): string {
 }
 
 function memoryAtomSourceLabel(atom: DesktopMemoryAtom): string {
-  if (atom.sourceTurnIds.length === 0) {
-    return "No source";
-  }
-  return `${atom.sourceTurnIds.length} source ${atom.sourceTurnIds.length === 1 ? "turn" : "turns"}: ${atom.sourceTurnIds.join(", ")}`;
+  return describeMemorySourceCount({
+    sourcePassages: memorySourcePassages(atom),
+    sourceIds: atom.sourceTurnIds
+  });
 }
 
 function memoryAtomUpdatedLabel(atom: DesktopMemoryAtom): string {
@@ -974,78 +1120,47 @@ function memorySourcePassages(item: { sourcePassages?: DesktopMemorySourcePassag
   return item.sourcePassages ?? [];
 }
 
-function memorySourcePassageSummary(passages: DesktopMemorySourcePassage[]): string {
-  if (passages.length === 0) {
-    return "No passage";
-  }
-  const availableCount = passages.filter((passage) => passage.status === "available").length;
-  if (availableCount > 0) {
-    return `${availableCount} source ${availableCount === 1 ? "passage" : "passages"}`;
-  }
-  return "Source unavailable in this local session store";
-}
-
 function sourcePassageStatusLabel(passage: DesktopMemorySourcePassage): string {
-  if (passage.status === "available") {
-    return "Source passage";
-  }
-  if (passage.status === "missing" || passage.status === "unavailable") {
-    return "Source unavailable in this local session store";
-  }
-  return "No passage";
+  return describeSourcePassageStatus(passage);
 }
 
 function sourcePassageHeading(passage: DesktopMemorySourcePassage): string {
-  if (passage.status === "available") {
-    return passage.role ? sourcePassageRoleLabel(passage.role) : "Source passage";
-  }
-  return "Source not available";
+  return describeSourcePassageHeading(passage);
 }
 
-function sourcePassageRoleValue(passage: DesktopMemorySourcePassage): string {
-  if (passage.status === "available") {
-    return sourcePassageRoleLabel(passage.role);
-  }
-  return "Not available";
-}
-
-function sourcePassageRoleLabel(role: DesktopMemorySourcePassage["role"]): string {
-  if (role === "assistant") {
-    return "Greyfield";
-  }
-  if (role === "user") {
-    return "User";
-  }
-  if (role === "system") {
-    return "System";
-  }
-  if (role === "event") {
-    return "Event";
-  }
-  return "Not available";
+function sourcePassageMetaLabel(passage: DesktopMemorySourcePassage): string {
+  return describeSourcePassageMeta(passage);
 }
 
 function sourcePassageBody(passage: DesktopMemorySourcePassage): string {
-  if (passage.status === "available") {
-    return boundSourcePassageText(passage.text ?? "");
-  }
-  return passage.message ?? "Source unavailable in this local session store";
+  return describeSourcePassageBody(passage);
 }
 
-function boundSourcePassageText(text: string): string {
-  const normalized = text.trim();
-  if (normalized.length <= sourcePassageDisplayLimit) {
+function sourcePassageShortened(passage: DesktopMemorySourcePassage): boolean {
+  return isSourcePassageShortened(passage);
+}
+
+function summarySourceIds(segment: DesktopMemorySummarySegment): string[] {
+  return [...new Set([...segment.sourceTurns.map((turn) => turn.turnId), ...(segment.sourceTurnIds ?? [])])];
+}
+
+function compactMemoryText(text: string): string {
+  const normalized = text.trim().replace(/\s+/gu, " ");
+  if (normalized.length <= 120) {
     return normalized;
   }
-  return `${normalized.slice(0, sourcePassageDisplayLimit).trimEnd()}...`;
+  return `${normalized.slice(0, 120).trimEnd()}...`;
 }
 
-function formatMemoryTimestamp(timestamp: string): string {
-  const parsed = Date.parse(timestamp);
-  if (Number.isNaN(parsed)) {
-    return timestamp;
+function recallReasonLabel(reason: string): string {
+  return describeRecallReason(reason);
+}
+
+function recalledSourceLabel(count: number): string {
+  if (count <= 0) {
+    return "No source passages attached to the last recall";
   }
-  return new Date(parsed).toISOString().slice(0, 16).replace("T", " ");
+  return `${count} source ${count === 1 ? "passage" : "passages"} attached to the last recall`;
 }
 
 function parseMemoryCues(text: string): string[] {
