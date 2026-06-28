@@ -40,6 +40,9 @@ export interface GreyfieldConfig {
     speechBubbleEnabled: boolean;
     proactiveMemoryEnabled: boolean;
   };
+  memory: {
+    llmAtomExtractionEnabled: boolean;
+  };
   characterFile: string;
 }
 
@@ -89,6 +92,9 @@ export const defaultGreyfieldConfig: GreyfieldConfig = {
     speechBubbleEnabled: true,
     proactiveMemoryEnabled: true
   },
+  memory: {
+    llmAtomExtractionEnabled: false
+  },
   characterFile: "characters/greyfield.yaml"
 };
 
@@ -102,6 +108,7 @@ export function mergeConfig(partial: GreyfieldConfigPatch): GreyfieldConfig {
     window: { ...defaultGreyfieldConfig.window, ...partial.window },
     live2d: { ...defaultGreyfieldConfig.live2d, ...partial.live2d },
     hotkeys: { ...defaultGreyfieldConfig.hotkeys, ...partial.hotkeys },
-    ui: { ...defaultGreyfieldConfig.ui, ...partial.ui }
+    ui: { ...defaultGreyfieldConfig.ui, ...partial.ui },
+    memory: { ...defaultGreyfieldConfig.memory, ...partial.memory }
   };
 }

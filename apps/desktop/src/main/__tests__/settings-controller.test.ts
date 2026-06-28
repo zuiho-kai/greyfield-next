@@ -70,4 +70,22 @@ describe("SettingsController", () => {
     expect(next.ui.proactiveMemoryEnabled).toBe(true);
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ ui: { speechBubbleEnabled: false, proactiveMemoryEnabled: true } }));
   });
+
+  it("preserves existing memory settings when unrelated patches are applied", async () => {
+    const save = vi.fn(async () => undefined);
+    const emit = vi.fn();
+    const controller = new SettingsController(
+      {
+        ...defaultGreyfieldConfig,
+        memory: { llmAtomExtractionEnabled: true }
+      },
+      save,
+      emit
+    );
+
+    const next = await controller.update({ provider: { model: "next-model" } });
+
+    expect(next.memory.llmAtomExtractionEnabled).toBe(true);
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ memory: { llmAtomExtractionEnabled: true } }));
+  });
 });

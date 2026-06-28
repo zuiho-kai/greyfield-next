@@ -326,6 +326,183 @@ describe("RuntimeService", () => {
     expect(events).toContainEqual({ type: "assistant.text.final", text: "远程" });
   });
 
+  it("uses better memory extraction when enabled and the chat provider is ready", async () => {
+    const memoryAtomStore = new TestMemoryAtomStore([]);
+    const fetch = createMemoryExtractionFetch("success");
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "secret",
+          model: "remote-model"
+        },
+        memory: {
+          ...defaultGreyfieldConfig.memory,
+          llmAtomExtractionEnabled: true
+        }
+      },
+      { fetch, threadId: "thread-memory-enabled", memoryAtomStore }
+    );
+    const events: unknown[] = [];
+
+    await service.handle({ type: "text.input", text: "记住我喜欢红玫瑰。" }, (event) => {
+      events.push(event);
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(getExtractionStatus(events)).toMatchObject({
+      status: "better",
+      reason: "provider-used",
+      llmAttempted: true,
+      fallbackUsed: true,
+      savedAtomCount: 2
+    });
+    expect(await memoryAtomStore.list("thread-memory-enabled")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "preference",
+          object: "rose"
+        })
+      ])
+    );
+    expect(await memoryAtomStore.list("thread-memory-enabled")).toHaveLength(2);
+  });
+
+  it("keeps standard local atom extraction when better memory is disabled", async () => {
+    const memoryAtomStore = new TestMemoryAtomStore([]);
+    const service = new RuntimeService(defaultGreyfieldConfig, {
+      threadId: "thread-memory-disabled",
+      memoryAtomStore
+    });
+    const events: unknown[] = [];
+
+    await service.handle({ type: "text.input", text: "记住我的生日是 9 月 7 日。" }, (event) => {
+      events.push(event);
+    });
+
+    expect(getExtractionStatus(events)).toMatchObject({
+      status: "standard",
+      reason: "disabled",
+      llmAttempted: false,
+      fallbackUsed: false,
+      savedAtomCount: 1
+    });
+    expect(await memoryAtomStore.list("thread-memory-disabled")).toEqual([
+      expect.objectContaining({
+        type: "fact",
+        eventDate: expect.objectContaining({ month: 9, day: 7 })
+      })
+    ]);
+  });
+
+  it("uses standard fallback when better memory is enabled without a real chat provider", async () => {
+    const memoryAtomStore = new TestMemoryAtomStore([]);
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        memory: {
+          ...defaultGreyfieldConfig.memory,
+          llmAtomExtractionEnabled: true
+        }
+      },
+      { threadId: "thread-memory-no-provider", memoryAtomStore }
+    );
+    const events: unknown[] = [];
+
+    await service.handle({ type: "text.input", text: "记住我的生日是 9 月 7 日。" }, (event) => {
+      events.push(event);
+    });
+
+    expect(getExtractionStatus(events)).toMatchObject({
+      status: "fallback",
+      reason: "provider-unavailable",
+      llmAttempted: false,
+      fallbackUsed: true,
+      savedAtomCount: 1
+    });
+    expect(await memoryAtomStore.list("thread-memory-no-provider")).toHaveLength(1);
+  });
+
+  it("uses standard fallback when better memory provider extraction fails", async () => {
+    const memoryAtomStore = new TestMemoryAtomStore([]);
+    const fetch = createMemoryExtractionFetch("provider-failure");
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "secret",
+          model: "remote-model"
+        },
+        memory: {
+          ...defaultGreyfieldConfig.memory,
+          llmAtomExtractionEnabled: true
+        }
+      },
+      { fetch, threadId: "thread-memory-provider-failure", memoryAtomStore }
+    );
+    const events: unknown[] = [];
+
+    await service.handle({ type: "text.input", text: "记住我的生日是 9 月 7 日。" }, (event) => {
+      events.push(event);
+    });
+
+    expect(getExtractionStatus(events)).toMatchObject({
+      status: "fallback",
+      reason: "provider-failure",
+      llmAttempted: true,
+      fallbackUsed: true,
+      savedAtomCount: 1
+    });
+    expect(await memoryAtomStore.list("thread-memory-provider-failure")).toEqual([
+      expect.objectContaining({
+        type: "fact",
+        eventDate: expect.objectContaining({ month: 9, day: 7 })
+      })
+    ]);
+  });
+
+  it("uses standard fallback when better memory provider output is invalid", async () => {
+    const memoryAtomStore = new TestMemoryAtomStore([]);
+    const fetch = createMemoryExtractionFetch("invalid-output");
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "secret",
+          model: "remote-model"
+        },
+        memory: {
+          ...defaultGreyfieldConfig.memory,
+          llmAtomExtractionEnabled: true
+        }
+      },
+      { fetch, threadId: "thread-memory-invalid-output", memoryAtomStore }
+    );
+    const events: unknown[] = [];
+
+    await service.handle({ type: "text.input", text: "记住我的生日是 9 月 7 日。" }, (event) => {
+      events.push(event);
+    });
+
+    expect(getExtractionStatus(events)).toMatchObject({
+      status: "fallback",
+      reason: "invalid-output",
+      llmAttempted: true,
+      fallbackUsed: true,
+      savedAtomCount: 1
+    });
+    expect(await memoryAtomStore.list("thread-memory-invalid-output")).toHaveLength(1);
+  });
+
   it("tests the fake LLM provider without appending session turns", async () => {
     const service = new RuntimeService(defaultGreyfieldConfig);
 
@@ -1641,6 +1818,65 @@ describe("RuntimeService", () => {
     expect(requestTexts[1]).toContain("第二条");
   });
 });
+
+function createMemoryExtractionFetch(mode: "success" | "provider-failure" | "invalid-output"): typeof fetch {
+  return vi.fn(async (_url, init) => {
+    const body = String(init?.body ?? "");
+    if (body.includes("You extract Greyfield long-term memory atoms")) {
+      if (mode === "provider-failure") {
+        return new Response(JSON.stringify({ error: "memory provider unavailable" }), { status: 503 });
+      }
+      if (mode === "invalid-output") {
+        return createSseResponse("not-json");
+      }
+      return createSseResponse(
+        JSON.stringify({
+          atoms: [
+            {
+              type: "preference",
+              text: "User likes red roses.",
+              importance: 0.86,
+              object: "rose",
+              triggers: {
+                exact: ["红玫瑰", "玫瑰"],
+                aliases: ["喜欢的花"],
+                secondary: ["rose"]
+              },
+              metadata: { preferenceType: "flower" }
+            }
+          ]
+        })
+      );
+    }
+    return createSseResponse("Stored.");
+  }) as typeof fetch;
+}
+
+function createSseResponse(text: string): Response {
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const encoder = new TextEncoder();
+      controller.enqueue(encoder.encode(`data: {"choices":[{"delta":{"content":${JSON.stringify(text)}}}]}\n\n`));
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    }
+  });
+  return new Response(body, { status: 200 });
+}
+
+function getExtractionStatus(events: unknown[]): unknown {
+  const event = events.find(
+    (candidate): candidate is { type: "memory.atom.extraction.status"; status: unknown } =>
+      typeof candidate === "object" &&
+      candidate !== null &&
+      "type" in candidate &&
+      candidate.type === "memory.atom.extraction.status"
+  );
+  if (!event) {
+    throw new Error(`Missing memory atom extraction status event: ${JSON.stringify(events)}`);
+  }
+  return event.status;
+}
 
 class TestMemoryAtomStore implements MemoryAtomStore {
   constructor(private atoms: MemoryAtom[]) {}

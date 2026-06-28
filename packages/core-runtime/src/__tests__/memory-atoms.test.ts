@@ -87,6 +87,12 @@ describe("memory atoms", () => {
       object: "rose",
       metadata: { preferenceType: "flower", color: "red" }
     });
+    expect(extractor.getLastReport()).toMatchObject({
+      status: "better",
+      reason: "provider-used",
+      llmAttempted: true,
+      fallbackUsed: true
+    });
     expect(provider.messages[0]?.[0]?.content).toContain("Allowed atom types");
   });
 
@@ -146,6 +152,40 @@ describe("memory atoms", () => {
       sourceTurnIds: ["turn-birthday"],
       eventDate: { kind: "month_day", month: 9, day: 7 }
     });
+    expect(extractor.getLastReport()).toMatchObject({
+      status: "fallback",
+      reason: "invalid-output",
+      llmAttempted: true,
+      fallbackUsed: true,
+      atomCount: 1
+    });
+  });
+
+  it("falls back to deterministic extraction when the LLM provider fails", async () => {
+    const extractor = new LLMBackedMemoryAtomExtractor({
+      llm: new ThrowingLLMProvider("provider offline"),
+      mode: "llm"
+    });
+
+    const atoms = await extractor.extract({
+      ...baseInput,
+      sourceTurnIds: ["turn-birthday"],
+      text: "记住我的生日是 9 月 7 日。"
+    });
+
+    expect(atoms).toHaveLength(1);
+    expect(atoms[0]).toMatchObject({
+      type: "fact",
+      sourceTurnIds: ["turn-birthday"],
+      eventDate: { kind: "month_day", month: 9, day: 7 }
+    });
+    expect(extractor.getLastReport()).toMatchObject({
+      status: "fallback",
+      reason: "provider-failure",
+      llmAttempted: true,
+      fallbackUsed: true,
+      atomCount: 1
+    });
   });
 
   it("rejects background UI event noise before calling the LLM provider", async () => {
@@ -172,6 +212,13 @@ describe("memory atoms", () => {
 
     expect(atoms).toEqual([]);
     expect(provider.messages).toEqual([]);
+    expect(extractor.getLastReport()).toMatchObject({
+      status: "standard",
+      reason: "skipped-noise",
+      llmAttempted: false,
+      fallbackUsed: false,
+      atomCount: 0
+    });
   });
 
   it("rejects LLM drafts with unsafe structured fields even when text is clean", async () => {
@@ -1003,5 +1050,13 @@ class ScriptedLLMProvider implements LLMProvider {
   async *stream(messages: ChatMessage[]): AsyncIterable<string> {
     this.messages.push(messages);
     yield this.response;
+  }
+}
+
+class ThrowingLLMProvider implements LLMProvider {
+  constructor(private readonly message: string) {}
+
+  async *stream(): AsyncIterable<string> {
+    throw new Error(this.message);
   }
 }

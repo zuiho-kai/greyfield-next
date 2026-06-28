@@ -9,6 +9,9 @@ import {
   LLMBackedMemoryAtomExtractor,
   type MemoryAtom,
   type MemoryAtomExtractionMode,
+  type MemoryAtomExtractionReport,
+  type MemoryAtomExtractionStatus,
+  type MemoryAtomExtractionStatusReason,
   type MemoryAtomExtractor,
   type MemoryAtomStore,
   type MemoryAtomWritePolicyOptions
@@ -29,6 +32,7 @@ export interface GreyfieldRuntimeOptions {
   memoryAtomStore?: MemoryAtomStore;
   memoryAtomExtractor?: MemoryAtomExtractor;
   memoryAtomExtractionMode?: MemoryAtomExtractionMode;
+  memoryAtomExtractionUnavailableReason?: Extract<MemoryAtomExtractionStatusReason, "disabled" | "provider-unavailable">;
   memoryAtomWritePolicy?: MemoryAtomWritePolicyOptions;
   sessionStore: SessionStore;
   persona: CharacterPersona;
@@ -243,7 +247,10 @@ export class GreyfieldRuntime {
     if (finalText.length > 0) {
       const userTurn = await this.options.sessionStore.append({ role: "user", content: text });
       await this.options.sessionStore.append({ role: "assistant", content: finalText });
-      await this.extractMemoryAtomsForTurn(text, userTurn.id);
+      const atomExtractionStatus = await this.extractMemoryAtomsForTurn(text, userTurn.id);
+      if (atomExtractionStatus) {
+        await emit({ type: "memory.atom.extraction.status", status: atomExtractionStatus });
+      }
       try {
         const createdSummary = await this.createSummaryForOldTurns();
         if (createdSummary) {
@@ -334,7 +341,7 @@ export class GreyfieldRuntime {
     }
   }
 
-  private async extractMemoryAtomsForTurn(text: string, sourceTurnId: string): Promise<void> {
+  private async extractMemoryAtomsForTurn(text: string, sourceTurnId: string): Promise<MemoryAtomExtractionStatus | undefined> {
     const memoryAtomStore = this.options.memoryAtomStore;
     if (!memoryAtomStore) {
       return;
@@ -355,11 +362,13 @@ export class GreyfieldRuntime {
       );
       const existingAtoms = await memoryAtomStore.list(this.threadId);
       const knownAtoms = [...existingAtoms];
+      let savedAtomCount = 0;
       for (const atom of writableAtoms) {
         const similar = findSimilarMemoryAtom(knownAtoms, atom);
         if (similar) {
           const updated = await memoryAtomStore.update(similar.id, createMemoryAtomMergePatch(similar, atom));
           if (updated) {
+            savedAtomCount += 1;
             const index = knownAtoms.findIndex((known) => known.id === updated.id);
             if (index >= 0) {
               knownAtoms[index] = updated;
@@ -368,10 +377,58 @@ export class GreyfieldRuntime {
           continue;
         }
         knownAtoms.push(await memoryAtomStore.append(atom));
+        savedAtomCount += 1;
       }
+      return this.buildMemoryAtomExtractionStatus(extractor.getLastReport?.(), savedAtomCount);
     } catch (error) {
       console.warn(`Greyfield memory atom extraction unavailable: ${formatError(error)}`);
+      return;
     }
+  }
+
+  private buildMemoryAtomExtractionStatus(
+    report: MemoryAtomExtractionReport | undefined,
+    savedAtomCount: number
+  ): MemoryAtomExtractionStatus {
+    const unavailableReason = this.options.memoryAtomExtractionUnavailableReason;
+    if (unavailableReason === "provider-unavailable") {
+      return {
+        status: "fallback",
+        reason: "provider-unavailable",
+        message: "Better memory needs a ready chat provider, so Greyfield used standard local memory for this message.",
+        savedAtomCount,
+        llmAttempted: false,
+        fallbackUsed: true
+      };
+    }
+    if (unavailableReason === "disabled") {
+      return {
+        status: "standard",
+        reason: "disabled",
+        message: "Better memory is off, so Greyfield used standard local memory for this message.",
+        savedAtomCount,
+        llmAttempted: false,
+        fallbackUsed: false
+      };
+    }
+    if (report) {
+      return {
+        status: report.status,
+        reason: report.reason,
+        message: report.message,
+        savedAtomCount,
+        llmAttempted: report.llmAttempted,
+        fallbackUsed: report.fallbackUsed
+      };
+    }
+    return {
+      status: "standard",
+      reason: "standard-only",
+      message: "Standard local memory checked this message.",
+      savedAtomCount,
+      llmAttempted: false,
+      fallbackUsed: false
+    };
   }
 
   private createMemoryAtomExtractor(): MemoryAtomExtractor {

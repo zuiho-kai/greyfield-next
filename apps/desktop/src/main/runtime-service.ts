@@ -9,6 +9,8 @@ import {
   type CharacterPersona,
   type LLMProvider,
   type MemoryAtom,
+  type MemoryAtomExtractionMode,
+  type MemoryAtomExtractionStatusReason,
   type MemoryAtomStore,
   type MemoryStore,
   type RecallContext,
@@ -513,6 +515,7 @@ export class RuntimeService {
 
   private async createRuntime(): Promise<GreyfieldRuntime> {
     const persona = await this.loadPersona();
+    const atomExtractionPolicy = this.resolveMemoryAtomExtractionPolicy();
     return new GreyfieldRuntime({
       llm: this.createLLMProvider(),
       asr: this.createASRProvider(),
@@ -520,6 +523,10 @@ export class RuntimeService {
       memoryStore: this.memoryStore,
       summarySegmentStore: this.summarySegmentStore,
       memoryAtomStore: this.memoryAtomStore,
+      memoryAtomExtractionMode: atomExtractionPolicy.mode,
+      ...(atomExtractionPolicy.unavailableReason
+        ? { memoryAtomExtractionUnavailableReason: atomExtractionPolicy.unavailableReason }
+        : {}),
       sessionStore: this.sessionStore,
       persona,
       voice: this.config.voice.id,
@@ -532,6 +539,20 @@ export class RuntimeService {
       summaryMinTurns: this.options.summaryMinTurns,
       ttsEnabled: this.config.voice.speechEnabled
     });
+  }
+
+  private resolveMemoryAtomExtractionPolicy(): {
+    mode: MemoryAtomExtractionMode;
+    unavailableReason?: Extract<MemoryAtomExtractionStatusReason, "disabled" | "provider-unavailable">;
+  } {
+    if (!this.config.memory.llmAtomExtractionEnabled) {
+      return { mode: "deterministic", unavailableReason: "disabled" };
+    }
+    const providerConfigError = this.validateOpenAICompatibleProviderConfig("chatting");
+    if (this.config.provider.llm !== "openai-compatible" || providerConfigError) {
+      return { mode: "deterministic", unavailableReason: "provider-unavailable" };
+    }
+    return { mode: "hybrid" };
   }
 
   private async emitRuntimeEvent(event: RuntimeOutputEvent, emit: RuntimeEventHandler): Promise<void> {

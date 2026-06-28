@@ -30,7 +30,8 @@ export class SettingsController {
         window: { ...this.config.window, ...patch.window },
         live2d: { ...this.config.live2d, ...patch.live2d },
         hotkeys: { ...this.config.hotkeys, ...patch.hotkeys },
-        ui: { ...this.config.ui, ...patch.ui }
+        ui: { ...this.config.ui, ...patch.ui },
+        memory: { ...this.config.memory, ...patch.memory }
       });
       await this.save(this.config);
       const next = this.getCurrent();

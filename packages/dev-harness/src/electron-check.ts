@@ -1,4 +1,4 @@
-import { _electron as electron, type Page } from "playwright";
+import { _electron as electron, type Locator, type Page } from "playwright";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -280,6 +280,7 @@ try {
   const auxiliaryWindowCloseRecovery = await verifyAuxiliaryWindowCloseRecovery();
   await settingsWindow.waitForSelector(".greyfield-shell");
   await settingsWindow.locator(".provider-status--preview", { hasText: "Fake provider is active" }).waitFor();
+  const memoryExtractionSettings = await verifyMemoryExtractionSettings(settingsWindow, configPath);
   const live2DModelSelect = settingsWindow.getByLabel("Live2D model");
   await live2DModelSelect.waitFor();
   const live2DOptions = await settingsWindow.getByLabel("Live2D model").evaluate((select) =>
@@ -368,6 +369,7 @@ try {
         savedModel: savedConfig.provider.model,
         savedProviderLLM: savedFakeProviderConfig.provider.llm,
         savedSpeechBubble: savedBubbleConfig.ui.speechBubbleEnabled,
+        memoryExtractionSettings,
         auxiliaryWindowCloseRecovery,
         hitTestWorked: true,
         wheelScaleWorked: true,
@@ -661,6 +663,58 @@ async function waitForVoiceSpeech(path: string, enabled: boolean): Promise<typeo
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Voice speech setting did not become ${enabled}: ${JSON.stringify(config?.voice ?? null)}`);
+}
+
+async function verifyMemoryExtractionSettings(
+  settingsWindow: Page,
+  path: string
+): Promise<{
+  defaultStandardVisible: boolean;
+  missingProviderFallbackVisible: boolean;
+  togglePersisted: boolean;
+  manualCandidateControlsAbsent: boolean;
+}> {
+  const memorySection = settingsWindow.getByLabel("Memory extraction", { exact: true });
+  await memorySection.waitFor();
+  const toggle = memorySection.getByLabel("Better memory extraction");
+  await toggle.waitFor();
+  await memorySection.locator(".memory-extraction-status--standard", { hasText: "Better extraction is off" }).waitFor();
+  await assertNoManualMemoryCandidateControls(memorySection);
+  await toggle.check();
+  const savedConfig = await waitForBetterMemory(path, true);
+  await memorySection.locator(".memory-extraction-status--fallback", { hasText: "OpenAI-compatible chat provider" }).waitFor();
+  await assertNoManualMemoryCandidateControls(memorySection);
+  return {
+    defaultStandardVisible: true,
+    missingProviderFallbackVisible: true,
+    togglePersisted: savedConfig.memory.llmAtomExtractionEnabled,
+    manualCandidateControlsAbsent: true
+  };
+}
+
+async function assertNoManualMemoryCandidateControls(section: Locator): Promise<void> {
+  const text = (await section.textContent()) ?? "";
+  if (/\b(accept|reject|candidate|pending)\b/i.test(text)) {
+    throw new Error(`Memory extraction settings exposed manual candidate review language: ${text}`);
+  }
+  for (const name of ["Accept", "Reject"]) {
+    if ((await section.getByRole("button", { name }).count()) > 0) {
+      throw new Error(`Memory extraction settings exposed a manual ${name} button`);
+    }
+  }
+}
+
+async function waitForBetterMemory(path: string, enabled: boolean): Promise<typeof defaultGreyfieldConfig> {
+  const started = Date.now();
+  let config: typeof defaultGreyfieldConfig | null = null;
+  while (Date.now() - started < 5_000) {
+    config = await readConfig(path).catch(() => null);
+    if (config?.memory.llmAtomExtractionEnabled === enabled) {
+      return config;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Better memory setting did not become ${enabled}: ${JSON.stringify(config?.memory ?? null)}`);
 }
 
 async function waitForProviderApiKey(path: string, apiKey: string): Promise<typeof defaultGreyfieldConfig> {

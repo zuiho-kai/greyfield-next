@@ -162,6 +162,44 @@ describe("createDesktopRuntimeBridge", () => {
     ]);
   });
 
+  it("forwards the better memory toggle and reduces extraction status events", () => {
+    const sent: Array<[string, unknown]> = [];
+    let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: (channel, payload) => sent.push([channel, payload]),
+      on: (channel, handler) => {
+        if (channel === "runtime:event") {
+          runtimeEvent = handler as typeof runtimeEvent;
+        }
+        return () => undefined;
+      }
+    });
+
+    const state = bridge.updateSettings({ llmAtomExtractionEnabled: true });
+    runtimeEvent?.({
+      type: "memory.atom.extraction.status",
+      status: {
+        status: "fallback",
+        reason: "provider-unavailable",
+        message: "Better memory needs a ready chat provider, so Greyfield used standard local memory for this message.",
+        savedAtomCount: 1,
+        llmAttempted: false,
+        fallbackUsed: true
+      }
+    });
+
+    expect(state.settings.llmAtomExtractionEnabled).toBe(true);
+    expect(sent).toContainEqual(["settings:update", { memory: { llmAtomExtractionEnabled: true } }]);
+    expect(bridge.getState().memoryExtraction).toEqual({
+      status: "fallback",
+      reason: "provider-unavailable",
+      message: "Better memory needs a ready chat provider, so Greyfield used standard local memory for this message.",
+      savedAtomCount: 1,
+      llmAttempted: false,
+      fallbackUsed: true
+    });
+  });
+
   it("renders proactive pet messages outside chat history and clears them when disabled", () => {
     const sent: Array<[string, unknown]> = [];
     let proactiveMessage:

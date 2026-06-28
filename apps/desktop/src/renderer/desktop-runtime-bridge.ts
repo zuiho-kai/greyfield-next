@@ -10,6 +10,7 @@ import type {
   DesktopProactiveMessage,
   DesktopMemorySummaryUpdate
 } from "../shared/ipc";
+import type { MemoryAtomExtractionStatus } from "@greyfield/core-runtime";
 import { isMaskedApiKey } from "../shared/secrets";
 import { createDefaultInteractionProfile } from "@greyfield/stage-live2d";
 import { createRendererPreviewRuntimeEvents } from "./preview-runtime-events";
@@ -41,6 +42,7 @@ export interface DesktopRendererState {
     exportText: string;
     snapshot: DesktopMemoryDebugSnapshot | null;
   };
+  memoryExtraction: MemoryAtomExtractionStatus | null;
   inputDraft: string;
   messages: DesktopMessage[];
   assistantDraft: string;
@@ -89,6 +91,7 @@ export interface DesktopSettingsState {
   modelY: number;
   speechBubbleEnabled: boolean;
   proactiveMemoryEnabled: boolean;
+  llmAtomExtractionEnabled: boolean;
 }
 
 export type DesktopSettingsPatch = Partial<DesktopSettingsState>;
@@ -885,6 +888,7 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       exportText: "",
       snapshot: null
     },
+    memoryExtraction: null,
     voiceInput: {
       status: "idle",
       message: ""
@@ -914,7 +918,8 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       modelX: defaultGreyfieldConfig.live2d.x,
       modelY: defaultGreyfieldConfig.live2d.y,
       speechBubbleEnabled: defaultGreyfieldConfig.ui.speechBubbleEnabled,
-      proactiveMemoryEnabled: defaultGreyfieldConfig.ui.proactiveMemoryEnabled
+      proactiveMemoryEnabled: defaultGreyfieldConfig.ui.proactiveMemoryEnabled,
+      llmAtomExtractionEnabled: defaultGreyfieldConfig.memory.llmAtomExtractionEnabled
     },
     window: {
       modelPassThrough: defaultGreyfieldConfig.window.modelPassThrough,
