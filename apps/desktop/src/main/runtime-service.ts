@@ -223,9 +223,13 @@ export class RuntimeService {
       return { ok: false, message: "No memory change was provided." };
     }
 
+    const existing = await this.getCurrentThreadSummarySegment(id);
+    if (!existing) {
+      return { ok: false, message: `Memory summary ${id} was not found in the current role.` };
+    }
     const updated = await this.summarySegmentStore.update(id, normalized);
-    if (!updated) {
-      return { ok: false, message: `Memory summary ${id} was not found.` };
+    if (!updated || updated.threadId !== this.threadId) {
+      return { ok: false, message: `Memory summary ${id} was not found in the current role.` };
     }
     this.lastRecallContext = undefined;
     return {
@@ -239,9 +243,13 @@ export class RuntimeService {
     if (!this.summarySegmentStore) {
       return { ok: false, message: "Memory summaries are not available in this runtime." };
     }
+    const existing = await this.getCurrentThreadSummarySegment(id);
+    if (!existing) {
+      return { ok: false, message: `Memory summary ${id} was not found in the current role.` };
+    }
     const deleted = await this.summarySegmentStore.delete(id);
     if (!deleted) {
-      return { ok: false, message: `Memory summary ${id} was not found.` };
+      return { ok: false, message: `Memory summary ${id} was not found in the current role.` };
     }
     this.lastRecallContext = undefined;
     return {
@@ -502,6 +510,11 @@ export class RuntimeService {
   private async getCurrentThreadMemoryAtom(id: string): Promise<MemoryAtom | null> {
     const atoms = (await this.memoryAtomStore?.list(this.threadId)) ?? [];
     return atoms.find((atom) => atom.id === id) ?? null;
+  }
+
+  private async getCurrentThreadSummarySegment(id: string): Promise<SummarySegment | null> {
+    const segments = (await this.summarySegmentStore?.list(this.threadId)) ?? [];
+    return segments.find((segment) => segment.id === id) ?? null;
   }
 
   private async resolveSummarySegmentSources(
