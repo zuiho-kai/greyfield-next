@@ -652,15 +652,15 @@ async function waitForSessionJsonl(expectedTexts: string[]): Promise<string> {
 
 async function waitForVoiceSpeech(path: string, enabled: boolean): Promise<typeof defaultGreyfieldConfig> {
   const started = Date.now();
-  let config = await readConfig(path);
+  let config: typeof defaultGreyfieldConfig | null = null;
   while (Date.now() - started < 5_000) {
-    config = await readConfig(path);
-    if (config.voice.speechEnabled === enabled) {
+    config = await readConfig(path).catch(() => null);
+    if (config?.voice.speechEnabled === enabled) {
       return config;
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error(`Voice speech setting did not become ${enabled}: ${JSON.stringify(config.voice)}`);
+  throw new Error(`Voice speech setting did not become ${enabled}: ${JSON.stringify(config?.voice ?? null)}`);
 }
 
 async function waitForProviderApiKey(path: string, apiKey: string): Promise<typeof defaultGreyfieldConfig> {

@@ -16,6 +16,7 @@ describe("Greyfield config", () => {
     expect(defaultGreyfieldConfig.live2d.modelPath).toContain(".model3.json");
     expect(defaultGreyfieldConfig.window.modelPassThrough).toBe(false);
     expect(defaultGreyfieldConfig.ui.speechBubbleEnabled).toBe(true);
+    expect(defaultGreyfieldConfig.ui.proactiveMemoryEnabled).toBe(true);
   });
 
   it("deep-merges nested settings without dropping defaults", () => {
@@ -24,7 +25,7 @@ describe("Greyfield config", () => {
       voice: { speechEnabled: true },
       audio: { microphoneId: "mic-2" },
       live2d: { scale: 1.25 },
-      ui: { speechBubbleEnabled: false }
+      ui: { speechBubbleEnabled: false, proactiveMemoryEnabled: false }
     });
 
     expect(config.provider).toMatchObject({
@@ -48,6 +49,7 @@ describe("Greyfield config", () => {
       scale: 1.25
     });
     expect(config.ui.speechBubbleEnabled).toBe(false);
+    expect(config.ui.proactiveMemoryEnabled).toBe(false);
   });
 
   it("loads user config files written with a UTF-8 BOM", async () => {

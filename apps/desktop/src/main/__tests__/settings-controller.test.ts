@@ -58,7 +58,7 @@ describe("SettingsController", () => {
     const controller = new SettingsController(
       {
         ...defaultGreyfieldConfig,
-        ui: { speechBubbleEnabled: false }
+        ui: { speechBubbleEnabled: false, proactiveMemoryEnabled: true }
       },
       save,
       emit
@@ -67,6 +67,7 @@ describe("SettingsController", () => {
     const next = await controller.update({ ui: {} });
 
     expect(next.ui.speechBubbleEnabled).toBe(false);
-    expect(save).toHaveBeenCalledWith(expect.objectContaining({ ui: { speechBubbleEnabled: false } }));
+    expect(next.ui.proactiveMemoryEnabled).toBe(true);
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ ui: { speechBubbleEnabled: false, proactiveMemoryEnabled: true } }));
   });
 });

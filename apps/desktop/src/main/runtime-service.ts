@@ -4,6 +4,7 @@ import {
   OpenAICompatibleASRProvider,
   OpenAICompatibleLLMProvider,
   OpenAICompatibleTTSProvider,
+  buildProactiveMemoryDisplayMessage,
   type ASRProvider,
   type CharacterPersona,
   type LLMProvider,
@@ -22,6 +23,10 @@ import {
   type RuntimeEventHandler,
   type RuntimeInputEvent,
   type RuntimeOutputEvent,
+  type RuntimeSceneContext,
+  type ProactiveMemoryDisplayMessage,
+  type ProactiveMemoryDisplayResult,
+  type ProactiveMemoryTriggerState,
   type TTSProvider,
   type ChatMessage
 } from "@greyfield/core-runtime";
@@ -103,6 +108,14 @@ export interface MemoryExportResult {
   exportedAt: string;
 }
 
+export type ProactiveDesktopMessage = ProactiveMemoryDisplayMessage;
+
+export interface ProactiveDesktopCheckResult {
+  displayed: boolean;
+  message?: ProactiveDesktopMessage;
+  reason?: "disabled" | "missing_atom_store" | "active_runtime" | ProactiveMemoryDisplayResult["reason"];
+}
+
 export class RuntimeService {
   private config: GreyfieldConfig;
   private readonly stage = new FakeStageDriver();
@@ -112,6 +125,7 @@ export class RuntimeService {
   private readonly memoryAtomStore: MemoryAtomStore | undefined;
   private readonly interactionProfile = createDefaultInteractionProfile();
   private lastRecallContext: RecallContext | undefined;
+  private proactiveTriggerState: ProactiveMemoryTriggerState = {};
   private activeRuntime: GreyfieldRuntime | undefined;
   private testingLLM = false;
   private testingVoice = false;
@@ -129,7 +143,11 @@ export class RuntimeService {
   }
 
   updateConfig(config: GreyfieldConfig): void {
+    const previousThreadId = this.threadId;
     this.config = config;
+    if (this.threadId !== previousThreadId) {
+      this.proactiveTriggerState = {};
+    }
   }
 
   async handle(input: RuntimeInputEvent, emit: RuntimeEventHandler): Promise<void> {
@@ -294,6 +312,29 @@ export class RuntimeService {
       ...(snapshot.lastRecallContext ? { lastRecallContext: snapshot.lastRecallContext } : {}),
       exportedAt: new Date().toISOString()
     };
+  }
+
+  async checkProactiveMemory(sceneContext: RuntimeSceneContext): Promise<ProactiveDesktopCheckResult> {
+    if (!this.config.ui.proactiveMemoryEnabled) {
+      return { displayed: false, reason: "disabled" };
+    }
+    if (this.activeRuntime) {
+      return { displayed: false, reason: "active_runtime" };
+    }
+    if (!this.memoryAtomStore) {
+      return { displayed: false, reason: "missing_atom_store" };
+    }
+
+    const atoms = await this.memoryAtomStore.list(this.threadId);
+    const result = buildProactiveMemoryDisplayMessage({
+      atoms,
+      sceneContext,
+      triggerState: this.proactiveTriggerState
+    });
+    if (result.response.displayed) {
+      this.proactiveTriggerState = result.nextTriggerState;
+    }
+    return result.response;
   }
 
   async updateMemoryAtom(id: string, patch: UpdateMemoryAtom): Promise<MemoryControlResult> {

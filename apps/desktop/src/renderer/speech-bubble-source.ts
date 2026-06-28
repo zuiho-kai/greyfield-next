@@ -5,11 +5,15 @@ export interface SpeechBubbleMessage {
 
 export function resolveSpeechBubbleSourceText(input: {
   assistantDraft: string;
+  proactiveMessageText?: string;
   messages: SpeechBubbleMessage[];
   status: string;
 }): string {
   if (input.assistantDraft) {
     return input.assistantDraft;
+  }
+  if (input.proactiveMessageText && input.status !== "thinking" && input.status !== "listening" && input.status !== "speaking") {
+    return input.proactiveMessageText;
   }
   const lastAssistantIndex = findLastMessageIndex(input.messages, "assistant");
   const lastUserIndex = findLastMessageIndex(input.messages, "user");

@@ -7,6 +7,7 @@ import type {
   DesktopIpcRequestMap,
   DesktopMemoryAtomUpdate,
   DesktopMemoryDebugSnapshot,
+  DesktopProactiveMessage,
   DesktopMemorySummaryUpdate
 } from "../shared/ipc";
 import { isMaskedApiKey } from "../shared/secrets";
@@ -43,6 +44,10 @@ export interface DesktopRendererState {
   inputDraft: string;
   messages: DesktopMessage[];
   assistantDraft: string;
+  proactiveMessage: {
+    text: string;
+    createdAt: string;
+  } | null;
   audioQueue: string[];
   settings: DesktopSettingsState;
   voiceInput: {
@@ -83,6 +88,7 @@ export interface DesktopSettingsState {
   modelX: number;
   modelY: number;
   speechBubbleEnabled: boolean;
+  proactiveMemoryEnabled: boolean;
 }
 
 export type DesktopSettingsPatch = Partial<DesktopSettingsState>;
@@ -119,6 +125,7 @@ export class DesktopRuntimeBridge {
       this.state = {
         ...this.state,
         settings,
+        proactiveMessage: settings.proactiveMemoryEnabled ? this.state.proactiveMessage : null,
         window: {
           ...this.state.window,
           modelPassThrough: config.window.modelPassThrough
@@ -173,6 +180,9 @@ export class DesktopRuntimeBridge {
       if (removed) {
         this.emitStateChange();
       }
+    });
+    this.host?.on("proactive:message", (message) => {
+      this.showProactiveMessage(message);
     });
     this.host?.on("provider:test-llm-result", (result) => {
       this.state = {
@@ -257,6 +267,7 @@ export class DesktopRuntimeBridge {
       voiceErrorMessage: "",
       inputDraft: "",
       assistantDraft: "",
+      proactiveMessage: null,
       messages: [...this.state.messages, { role: "user", text: trimmed }]
     };
 
@@ -277,6 +288,7 @@ export class DesktopRuntimeBridge {
       ...this.state,
       status: "listening",
       errorMessage: "",
+      proactiveMessage: null,
       voiceInput: {
         status: "listening",
         message: "Listening..."
@@ -335,6 +347,7 @@ export class DesktopRuntimeBridge {
         errorMessage: "",
         voiceErrorMessage: "",
         assistantDraft: "",
+        proactiveMessage: null,
         audioQueue: [],
         stage: {
           ...this.state.stage,
@@ -350,6 +363,7 @@ export class DesktopRuntimeBridge {
       errorMessage: "",
       voiceErrorMessage: "",
       assistantDraft: "",
+      proactiveMessage: null,
       audioQueue: [],
       stage: {
         ...this.state.stage,
@@ -384,9 +398,26 @@ export class DesktopRuntimeBridge {
                 : patch.providerApiKey.length > 0
             }
           : {})
-      }
+      },
+      proactiveMessage: patch.proactiveMemoryEnabled === false ? null : this.state.proactiveMessage
     };
     this.host?.send("settings:update", settingsPatchToConfigPatch(patch));
+    return this.getState();
+  }
+
+  showProactiveMessage(message: DesktopProactiveMessage): DesktopRendererState {
+    const text = message.text.trim();
+    if (text.length === 0 || !this.state.settings.proactiveMemoryEnabled) {
+      return this.getState();
+    }
+    this.state = {
+      ...this.state,
+      proactiveMessage: {
+        text,
+        createdAt: message.createdAt
+      }
+    };
+    this.emitStateChange();
     return this.getState();
   }
 
@@ -861,6 +892,7 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
     inputDraft: "",
     messages: [],
     assistantDraft: "",
+    proactiveMessage: null,
     audioQueue: [],
     settings: {
       providerLLM: defaultGreyfieldConfig.provider.llm,
@@ -881,7 +913,8 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       modelScale: defaultGreyfieldConfig.live2d.scale,
       modelX: defaultGreyfieldConfig.live2d.x,
       modelY: defaultGreyfieldConfig.live2d.y,
-      speechBubbleEnabled: defaultGreyfieldConfig.ui.speechBubbleEnabled
+      speechBubbleEnabled: defaultGreyfieldConfig.ui.speechBubbleEnabled,
+      proactiveMemoryEnabled: defaultGreyfieldConfig.ui.proactiveMemoryEnabled
     },
     window: {
       modelPassThrough: defaultGreyfieldConfig.window.modelPassThrough,

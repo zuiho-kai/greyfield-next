@@ -24,7 +24,8 @@ export function settingsFromConfig(config: RendererGreyfieldConfig | GreyfieldCo
     modelScale: config.live2d.scale,
     modelX: config.live2d.x,
     modelY: config.live2d.y,
-    speechBubbleEnabled: config.ui.speechBubbleEnabled
+    speechBubbleEnabled: config.ui.speechBubbleEnabled,
+    proactiveMemoryEnabled: config.ui.proactiveMemoryEnabled
   };
 }
 
@@ -61,7 +62,8 @@ export function configFromSettings(settings: DesktopSettingsState): GreyfieldCon
     },
     ui: {
       ...defaultGreyfieldConfig.ui,
-      speechBubbleEnabled: settings.speechBubbleEnabled
+      speechBubbleEnabled: settings.speechBubbleEnabled,
+      proactiveMemoryEnabled: settings.proactiveMemoryEnabled
     },
     characterFile: settings.characterFile
   };
@@ -122,7 +124,10 @@ export function settingsPatchToConfigPatch(patch: DesktopSettingsPatch): Greyfie
     configPatch.characterFile = patch.characterFile;
   }
   if (patch.speechBubbleEnabled !== undefined) {
-    configPatch.ui = { speechBubbleEnabled: patch.speechBubbleEnabled };
+    configPatch.ui = { ...configPatch.ui, speechBubbleEnabled: patch.speechBubbleEnabled };
+  }
+  if (patch.proactiveMemoryEnabled !== undefined) {
+    configPatch.ui = { ...configPatch.ui, proactiveMemoryEnabled: patch.proactiveMemoryEnabled };
   }
   return configPatch;
 }

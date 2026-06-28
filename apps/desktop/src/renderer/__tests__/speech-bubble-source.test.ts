@@ -30,6 +30,28 @@ describe("resolveSpeechBubbleSourceText", () => {
     ).toBe("new reply");
   });
 
+  it("shows proactive pet text without needing an assistant chat message", () => {
+    expect(
+      resolveSpeechBubbleSourceText({
+        assistantDraft: "",
+        proactiveMessageText: "It's raining again. I remembered our hotpot night at home.",
+        status: "idle",
+        messages: []
+      })
+    ).toBe("It's raining again. I remembered our hotpot night at home.");
+  });
+
+  it("does not show proactive text while a normal reply is active", () => {
+    expect(
+      resolveSpeechBubbleSourceText({
+        assistantDraft: "",
+        proactiveMessageText: "It's raining again. I remembered our hotpot night at home.",
+        status: "thinking",
+        messages: []
+      })
+    ).toBe("");
+  });
+
   it("keeps the latest assistant reply visible after the turn completes", () => {
     expect(
       resolveSpeechBubbleSourceText({

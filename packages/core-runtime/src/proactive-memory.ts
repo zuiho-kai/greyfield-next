@@ -104,6 +104,29 @@ export interface ProactiveMemoryCandidateResult {
   nextTriggerState: ProactiveMemoryTriggerState;
 }
 
+export interface ProactiveMemoryDisplayMessage {
+  text: string;
+  createdAt: string;
+}
+
+export interface ProactiveMemoryDisplayResult {
+  displayed: boolean;
+  message?: ProactiveMemoryDisplayMessage;
+  reason?: "cooldown" | "no_candidate";
+}
+
+export interface BuildProactiveMemoryDisplayOptions {
+  atoms: MemoryAtom[];
+  sceneContext: RuntimeSceneContext;
+  policy?: ProactiveMemoryPolicy;
+  triggerState?: ProactiveMemoryTriggerState;
+}
+
+export interface BuildProactiveMemoryDisplayResult {
+  response: ProactiveMemoryDisplayResult;
+  nextTriggerState: ProactiveMemoryTriggerState;
+}
+
 type NormalizedWeather = "rain" | "snow" | "wind" | "heat" | "normal";
 
 const defaultPolicy: Required<ProactiveMemoryPolicy> = {
@@ -125,6 +148,46 @@ export function buildProactiveMemoryCandidatesFromSceneContext(
     policy: options.policy,
     triggerState: options.triggerState
   });
+}
+
+export function buildProactiveMemoryDisplayMessage(
+  options: BuildProactiveMemoryDisplayOptions
+): BuildProactiveMemoryDisplayResult {
+  const triggerState = options.triggerState ?? {};
+  const result = buildProactiveMemoryCandidates({
+    atoms: options.atoms,
+    environment: sceneContextToEnvironmentTriggerState(options.sceneContext),
+    policy: {
+      enabled: true,
+      minImportance: 0.7,
+      maxCandidates: 1,
+      ...(options.policy ?? {})
+    },
+    triggerState
+  });
+  const candidate = result.candidates[0];
+  if (!candidate) {
+    const cooldownSkipped = result.skipped.some((item) => item.reason === "global_cooldown" || item.reason === "atom_cooldown");
+    return {
+      response: {
+        displayed: false,
+        reason: cooldownSkipped ? "cooldown" : "no_candidate"
+      },
+      nextTriggerState: result.nextTriggerState
+    };
+  }
+
+  const atom = options.atoms.find((item) => item.id === candidate.atomId);
+  return {
+    response: {
+      displayed: true,
+      message: {
+        text: formatProactiveDisplayText(atom, options.sceneContext),
+        createdAt: result.nextTriggerState.lastTriggeredAt ?? toIsoDateTime(options.sceneContext.currentTime ?? new Date())
+      }
+    },
+    nextTriggerState: result.nextTriggerState
+  };
 }
 
 export function sceneContextToEnvironmentTriggerState(sceneContext: RuntimeSceneContext): EnvironmentTriggerState {
@@ -524,6 +587,57 @@ function formatActivity(activity: string | undefined): string | undefined {
   }
   if (activity === "shared_meal") {
     return "吃饭";
+  }
+  return;
+}
+
+function formatProactiveDisplayText(atom: MemoryAtom | undefined, sceneContext: RuntimeSceneContext): string {
+  const weatherClause = formatDisplayWeatherClause(sceneContext.weather);
+  const activity = atom ? readStringMetadata(atom, "activity") : undefined;
+  const memoryClause = formatDisplayMemoryClause(activity, atom);
+  return `${weatherClause || "This moment feels familiar."} I remembered ${memoryClause}.`;
+}
+
+function formatDisplayMemoryClause(activity: string | undefined, atom: MemoryAtom | undefined): string {
+  const activityClause = formatDisplayActivityClause(activity);
+  const shared = atom?.metadata?.sharedExperience === true || /\b(we|us|together|shared)\b/iu.test(atom?.text ?? "");
+  if (activityClause) {
+    return shared ? activityClause.shared : activityClause.personal;
+  }
+  return shared ? "a quiet scene we shared" : "something you cared about";
+}
+
+function formatDisplayWeatherClause(weather: string | undefined): string {
+  if (!weather) {
+    return "";
+  }
+  if (/\brain|raining|rainy\b/iu.test(weather)) {
+    return "It's raining again.";
+  }
+  if (/\bsnow|snowing|snowy\b/iu.test(weather)) {
+    return "It's snowing again.";
+  }
+  if (/\bwind|windy\b/iu.test(weather)) {
+    return "The wind picked up again.";
+  }
+  return "";
+}
+
+function formatDisplayActivityClause(activity: string | undefined): { shared: string; personal: string } | undefined {
+  if (activity === "hotpot") {
+    return { shared: "our hotpot night at home", personal: "your hotpot night at home" };
+  }
+  if (activity === "tea") {
+    return { shared: "us making tea together", personal: "you making tea" };
+  }
+  if (activity === "movie") {
+    return { shared: "us watching a movie together", personal: "your movie night" };
+  }
+  if (activity === "lego") {
+    return { shared: "us building Lego together", personal: "your Lego build" };
+  }
+  if (activity === "shared_meal") {
+    return { shared: "us sharing a meal", personal: "your meal at home" };
   }
   return;
 }

@@ -127,6 +127,7 @@ const stageStatus = computed(() => state.status as "idle" | "listening" | "think
 const bubbleText = computed(() =>
   resolveSpeechBubbleSourceText({
     assistantDraft: state.assistantDraft,
+    proactiveMessageText: state.proactiveMessage?.text,
     messages: state.messages,
     status: state.status
   })
@@ -183,7 +184,8 @@ if (typeof window !== "undefined") {
       modelScale: config.live2d.scale,
       modelX: config.live2d.x,
       modelY: config.live2d.y,
-      speechBubbleEnabled: config.ui.speechBubbleEnabled
+      speechBubbleEnabled: config.ui.speechBubbleEnabled,
+      proactiveMemoryEnabled: config.ui.proactiveMemoryEnabled
     });
     state.window.modelPassThrough = config.window.modelPassThrough;
     syncPetWindowShape();
@@ -275,7 +277,7 @@ function updateNumericSetting(key: "modelScale" | "modelX" | "modelY" | "voiceVo
   }
 }
 
-function updateBooleanSetting(key: "speechBubbleEnabled" | "voiceSpeechEnabled", value: boolean): void {
+function updateBooleanSetting(key: "speechBubbleEnabled" | "voiceSpeechEnabled" | "proactiveMemoryEnabled", value: boolean): void {
   syncState(bridge.updateSettings({ [key]: value }));
 }
 

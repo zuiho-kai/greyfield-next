@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { extractDeterministicMemoryAtoms, type MemoryAtom } from "../memory-atoms";
-import { buildProactiveMemoryCandidates, buildProactiveMemoryCandidatesFromSceneContext } from "../proactive-memory";
+import {
+  buildProactiveMemoryCandidates,
+  buildProactiveMemoryCandidatesFromSceneContext,
+  buildProactiveMemoryDisplayMessage
+} from "../proactive-memory";
 
 const baseInput = {
   threadId: "thread-a",
@@ -63,6 +67,30 @@ describe("proactive memory", () => {
     });
     expect(result.candidates[0]?.reason).toContain("environment:rain,virtual_home,virtual_home.window=open,last_seen_days>=30");
     expect(result.candidates[0]?.text).not.toMatch(/weather api|screen|desktop state|memory-atom|source-turn|database|storage/iu);
+  });
+
+  it("builds a short display message and carries trigger state for cooldown", () => {
+    const atom = makeRainyWindowHotpotAtom();
+    const first = buildProactiveMemoryDisplayMessage({
+      atoms: [atom],
+      sceneContext: matchingSceneContext()
+    });
+    const second = buildProactiveMemoryDisplayMessage({
+      atoms: [atom],
+      sceneContext: matchingSceneContext(),
+      triggerState: first.nextTriggerState
+    });
+
+    expect(first.response).toEqual({
+      displayed: true,
+      message: {
+        text: "It's raining again. I remembered our hotpot night at home.",
+        createdAt: "2026-07-15T10:00:00.000Z"
+      }
+    });
+    expect(first.nextTriggerState.lastTriggeredAt).toBe("2026-07-15T10:00:00.000Z");
+    expect(first.nextTriggerState.atomLastTriggeredAt?.[atom.id]).toBe("2026-07-15T10:00:00.000Z");
+    expect(second.response).toEqual({ displayed: false, reason: "cooldown" });
   });
 
   it("generates the same candidate from Chinese runtime scene context aliases", () => {
