@@ -61,8 +61,17 @@ export class JsonlMemoryAtomStore implements MemoryAtomStore {
         updated = normalizeAtom({
           ...atom,
           ...(patch.text !== undefined ? { text: patch.text } : {}),
+          ...(patch.sourceTurnIds !== undefined ? { sourceTurnIds: patch.sourceTurnIds } : {}),
+          ...(patch.sourceSessionId !== undefined ? { sourceSessionId: patch.sourceSessionId } : {}),
           ...(patch.disabled !== undefined ? { disabled: patch.disabled } : {}),
           ...(patch.importance !== undefined ? { importance: patch.importance } : {}),
+          ...(patch.eventDate !== undefined ? { eventDate: patch.eventDate } : {}),
+          ...(patch.recurrence !== undefined ? { recurrence: patch.recurrence } : {}),
+          ...(patch.ritualAction !== undefined ? { ritualAction: patch.ritualAction } : {}),
+          ...(patch.subject !== undefined ? { subject: patch.subject } : {}),
+          ...(patch.object !== undefined ? { object: patch.object } : {}),
+          ...(patch.sentiment !== undefined ? { sentiment: patch.sentiment } : {}),
+          ...(patch.metadata !== undefined ? { metadata: patch.metadata } : {}),
           triggers,
           updatedAt: patch.updatedAt ?? new Date().toISOString()
         });

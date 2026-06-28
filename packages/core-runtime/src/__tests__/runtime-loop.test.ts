@@ -156,6 +156,109 @@ describe("GreyfieldRuntime", () => {
     expect(capturedMessages[0]?.content).toContain("Ritual action: 送玫瑰");
   });
 
+  it("can run hybrid LLM-backed atom extraction through the runtime without network access", async () => {
+    const memoryAtomStore = new TestMemoryAtomStore();
+    const sessionStore = new InMemorySessionStore("session-llm-atoms");
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* (messages) {
+          if (messages[0]?.content.includes("You extract Greyfield long-term memory atoms")) {
+            yield JSON.stringify({
+              atoms: [
+                {
+                  type: "preference",
+                  text: "User likes red roses as a meaningful flower.",
+                  importance: 0.86,
+                  object: "rose",
+                  triggers: {
+                    exact: ["红玫瑰", "玫瑰"],
+                    aliases: ["喜欢的花", "花"],
+                    secondary: ["rose"]
+                  },
+                  metadata: { preferenceType: "flower", color: "red" }
+                }
+              ]
+            });
+            return;
+          }
+          yield "I will remember that.";
+        }
+      },
+      tts: { synthesize: async (text) => new Uint8Array([text.length]) },
+      memoryStore,
+      memoryAtomStore,
+      memoryAtomExtractionMode: "hybrid",
+      sessionStore,
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default",
+      threadId: "thread-llm-atoms"
+    });
+
+    await runtime.handle(
+      { type: "text.input", text: "我们第一次相遇是 2024 年 5 月 20 日，那天我拿着一支红玫瑰。" },
+      () => undefined
+    );
+
+    const storedAtoms = await memoryAtomStore.list("thread-llm-atoms");
+    expect(storedAtoms.map((atom) => atom.type)).toEqual(expect.arrayContaining(["relationship_event", "preference"]));
+    expect(storedAtoms.find((atom) => atom.type === "preference")).toMatchObject({
+      sourceTurnIds: ["session-llm-atoms-1"],
+      object: "rose",
+      metadata: { preferenceType: "flower", color: "red" }
+    });
+  });
+
+  it("updates similar memory atoms instead of appending duplicates on repeated saves", async () => {
+    const memoryAtomStore = new TestMemoryAtomStore();
+    const sessionStore = new InMemorySessionStore("session-atom-dedupe");
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* (messages) {
+          if (messages[0]?.content.includes("You extract Greyfield long-term memory atoms")) {
+            yield JSON.stringify({
+              atoms: [
+                {
+                  type: "preference",
+                  text: "User likes red roses.",
+                  importance: 0.5,
+                  object: "rose",
+                  triggers: {
+                    exact: ["红玫瑰", "玫瑰"],
+                    aliases: ["喜欢的花", "花"],
+                    secondary: []
+                  },
+                  metadata: { preferenceType: "flower" }
+                }
+              ]
+            });
+            return;
+          }
+          yield "Stored.";
+        }
+      },
+      tts: { synthesize: async (text) => new Uint8Array([text.length]) },
+      memoryStore,
+      memoryAtomStore,
+      memoryAtomExtractionMode: "llm",
+      sessionStore,
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default",
+      threadId: "thread-atom-dedupe"
+    });
+
+    await runtime.handle({ type: "text.input", text: "记住我喜欢红玫瑰。" }, () => undefined);
+    await runtime.handle({ type: "text.input", text: "以后也记住我喜欢红玫瑰。" }, () => undefined);
+
+    const storedAtoms = await memoryAtomStore.list("thread-atom-dedupe");
+    expect(storedAtoms).toHaveLength(1);
+    expect(storedAtoms[0]).toMatchObject({
+      type: "preference",
+      object: "rose",
+      importance: 0.65,
+      sourceTurnIds: ["session-atom-dedupe-1", "session-atom-dedupe-3"]
+    });
+  });
+
   it("hydrates recalled atom prompt material with bounded source fragments", async () => {
     const memoryAtomStore = new TestMemoryAtomStore();
     const sessionStore = new InMemorySessionStore("session-atom-source");
