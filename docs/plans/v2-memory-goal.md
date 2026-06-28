@@ -6,6 +6,30 @@
 
 Greyfield memory should become a source-linked, user-correctable companion memory system. The merged V2.0 slices are the storage/control foundation; the product roadmap now continues as V2.1 in [Version Product Book](version-product-book.md).
 
+## Plain-Language Product Status
+
+The current V2 memory work is not "the pet already feels like it remembers you." It is the foundation that makes that product experience possible and testable.
+
+What the user can trust now:
+
+- Raw chat is still the source of truth. Summaries and memory atoms should point back to original turns instead of replacing them.
+- Settings Memory controls can inspect and manage existing memory state.
+- The benchmark can prove specific memory behaviors without relying on manual long-term chat tests.
+- The current score is intentionally below full readiness, so missing product abilities remain visible.
+
+What the user still cannot rely on yet:
+
+- Greyfield does not fully use desktop or virtual-world scene signals to proactively recall shared experiences.
+- It does not yet deliver a polished low-disturbance desktop message when a memory is triggered by rain, absence, home/window context, or an anniversary-like scene.
+- It does not yet provide the complete "this is why I remembered this" Memory Library experience for every memory type.
+- It does not yet have broad semantic/vector recall or a graph-like concept memory layer.
+
+The next product-critical work is therefore not another ledger entry. It is to make a user feel the difference:
+
+1. scene signals enter memory recall in a structured way;
+2. low-disturbance proactive desktop messages use those recalled scenes;
+3. Memory Library controls stay trustworthy for edit, disable, delete, export, role isolation, and source drilldown.
+
 The first engineering goal, V2.0a, is merged into `main` via [#63](https://github.com/zuiho-kai/greyfield-next/pull/63):
 
 - keep raw chat turns as the source of truth.

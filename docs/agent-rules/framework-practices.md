@@ -58,6 +58,7 @@ These practices were promoted from the V1 closeout PR sequence #41-#57.
 | #59 | Floating controls existed and Stop-audio passed, but manual QA still found malformed active button visuals, odd bubble placement, and overlapping speech. | Frontend-visible acceptance must assert trigger-after-click visual states and forbidden concurrent states directly; existence, final cleanup, and green Stop tests are not enough. |
 | #67-#68 | The V2.0b memory-control work shipped useful functionality, but too much thread budget was spent watching CI/CodeRabbit and doing post-merge evidence cleanup inside the same feature loop. | During development, use local targeted checks. Treat CI/CodeRabbit as merge-readiness gates only; if remote checks are pending and no merge decision is being made, report status and stop waiting. Split post-merge docs cleanup from the next feature unless release wording is the immediate task. |
 | #95-#97 | V2.1 memory work used broad phase issues as implementation containers, so one PR mixed source drilldown UI, privacy redaction, exports, and source-session correctness. Sub-agent retries then spent tokens without increasing mergeable output. | Split roadmap phases into atomic implementation issues before coding. Each sub-agent gets one issue, one worktree, one branch, one expected PR, and a verification gate. If review shows mixed scope, split before more CI or agent retries. |
+| 2026-06-28 V2.1 planning | V2.1 memory work produced useful backend and benchmark pieces, but the product discussion drifted into PR/status accounting. The user asked for a product book in human language: what the pet should feel like, what is actually felt today, and what remains missing. | Product/version work must pass the product design gate before implementation: write the user-facing story, current felt status, backend-only status, missing product gaps, and next user-visible slice before creating more issues, PRs, or sub-agent assignments. |
 
 ## Completion Claim Discipline
 
@@ -66,3 +67,11 @@ These practices were promoted from the V1 closeout PR sequence #41-#57.
 - A partial feature may merge only if the docs and PR body keep the unimplemented remainder visible.
 - Do not mark a feature done because the last implemented slice passed. Mark it done only after the whole scenario matrix has current-head proof.
 - If the user says the scope is still missing, reopen the evidence map before defending the previous claim.
+
+## Product Planning Discipline
+
+- Start product answers with the user-visible experience, not with PR count, package names, or CI status.
+- State what the user can feel in the current app separately from what is only backend scaffolding or benchmark proof.
+- Keep "not done" items explicit when they block the intended product feeling.
+- Only after the product story is clear should the agent split atomic issues, assign sub-agents, or discuss verification details.
+- For memory work, the default product question is: "Does the pet feel like it shares history with the user, and can it prove why it remembered something?"

@@ -12,6 +12,7 @@ Greyfield Next is a TypeScript monorepo for a Live2D desktop companion. This fil
 - **P6 Scope discipline**: Do not import broad framework behavior or future systems into the V1 path.
 - **P7 Review before PR**: Passing tests are necessary, not sufficient. Code checks must cover duplication, layering, edge cases, and surface area.
 - **P8 Learn once**: Real misses, repeated bugs, and user corrections must update the nearest knowledge or retro document.
+- **P9 Product language first**: Roadmaps, product books, and version goals must start from the user-visible experience, current felt capability, and explicit gaps before implementation tasks, PRs, or sub-agent routing.
 
 ## Hard Rules
 
@@ -32,6 +33,7 @@ Greyfield Next is a TypeScript monorepo for a Live2D desktop companion. This fil
 - In a fresh worktree, run dependency install, `pnpm` tests, and typecheck serially per worktree. Do not start two `pnpm` commands in the same worktree at the same time.
 - Prefer appending to existing knowledge docs over creating tiny one-off rule files.
 - Roadmap or phase issues are indexes, not implementation scope. Before assigning code work, split the next user-visible function point into an atomic issue with acceptance evidence, non-goals, owner files, and one expected PR.
+- Product/version planning is not ready for implementation until the product book states in plain language what the user will feel, what works now, what still does not work, and which benchmark or harness proves the gap.
 - Do not spawn an implementation sub-agent until the task names exactly one issue, one dedicated worktree, one branch, the owned file/module surface, and the verification gate. If that agent fails or is reassigned, close or explicitly retire it before another agent touches the same worktree.
 
 ## Required Reading Index
