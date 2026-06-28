@@ -332,7 +332,6 @@
               v-for="lane in memoryTypeLanes"
               :key="lane.label"
               class="memory-library__lane"
-              :class="{ 'memory-library__lane--future': lane.future }"
             >
               <strong>{{ lane.label }}</strong>
               <small>{{ lane.detail }}</small>
@@ -422,7 +421,86 @@
               </div>
             </article>
           </div>
-          <div v-else class="memory-library__empty">No summary memories yet.</div>
+          <div v-if="memoryAtomGroups.length > 0" class="memory-library__list" aria-label="Atom memories">
+            <section
+              v-for="group in memoryAtomGroups"
+              :key="group.type"
+              class="memory-library__group"
+              :aria-label="`${group.label} memories`"
+            >
+              <header class="memory-library__group-header">
+                <h3>{{ group.label }}</h3>
+                <span>{{ group.atoms.length }} stored</span>
+              </header>
+              <article
+                v-for="atom in group.atoms"
+                :key="atom.id"
+                class="memory-library__segment"
+                :class="{ 'memory-library__segment--disabled': atom.disabled }"
+                :aria-label="`${memoryAtomTypeLabel(atom)} memory ${atom.id}`"
+              >
+                <header class="memory-library__segment-header">
+                  <div>
+                    <small>{{ memoryAtomTypeLabel(atom) }}</small>
+                    <strong>{{ atom.text }}</strong>
+                  </div>
+                  <span>{{ memoryAtomStatus(atom) }}</span>
+                </header>
+
+                <dl class="memory-library__meta">
+                  <div>
+                    <dt>Source</dt>
+                    <dd>{{ memoryAtomSourceLabel(atom) }}</dd>
+                  </div>
+                  <div>
+                    <dt>Group</dt>
+                    <dd>{{ memoryAtomGroupLabel(atom.type) }}</dd>
+                  </div>
+                  <div>
+                    <dt>Updated</dt>
+                    <dd>{{ memoryAtomUpdatedLabel(atom) }}</dd>
+                  </div>
+                </dl>
+
+                <label class="memory-library__editor">
+                  <span>Memory text</span>
+                  <textarea
+                    :aria-label="`Memory text ${atom.id}`"
+                    :value="memoryAtomDrafts[atom.id] ?? atom.text"
+                    rows="3"
+                    spellcheck="false"
+                    @input="setMemoryAtomDraft(atom.id, $event)"
+                  />
+                </label>
+                <div class="memory-library__actions memory-library__actions--atom">
+                  <button type="button" :aria-label="`Save memory ${atom.id}`" @click="saveMemoryAtom(atom)">
+                    Save
+                  </button>
+                  <button type="button" :aria-label="`Export memory ${atom.id}`" @click="exportMemoryAtom(atom)">
+                    Export
+                  </button>
+                  <button
+                    type="button"
+                    :aria-label="`${atom.disabled ? 'Enable' : 'Disable'} memory ${atom.id}`"
+                    @click="toggleMemoryAtom(atom)"
+                  >
+                    {{ atom.disabled ? "Enable" : "Disable" }}
+                  </button>
+                  <button
+                    type="button"
+                    class="memory-library__danger"
+                    :aria-label="`Delete memory ${atom.id}`"
+                    @click="$emit('memory-atom-delete', { id: atom.id })"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </article>
+            </section>
+          </div>
+          <div v-if="memorySegments.length === 0 && memoryAtoms.length === 0" class="memory-library__empty">
+            No memories yet.
+          </div>
           <div v-if="latestRecallItem" class="memory-library__block memory-library__block--recall">
             <strong>Last recalled memory</strong>
             <p>{{ latestRecallItem.reason }}</p>
@@ -451,6 +529,9 @@
             <button type="button" @click="$emit('memory-export')">Export library</button>
             <button type="button" class="memory-library__danger-action" @click="$emit('memory-summary-clear')">
               Clear summary memory
+            </button>
+            <button type="button" class="memory-library__danger-action" @click="$emit('memory-atom-clear-current-role')">
+              Clear current role atoms
             </button>
           </div>
         </div>
@@ -507,7 +588,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import type { SummarySegment } from "@greyfield/core-runtime";
+import type { MemoryAtom, SummarySegment } from "@greyfield/core-runtime";
 import type { DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
 import {
   bundledLive2DModels,
@@ -542,6 +623,10 @@ const emit = defineEmits<{
   "memory-summary-update": [payload: { id: string; summary?: string; recallCues?: string[]; disabled?: boolean }];
   "memory-summary-delete": [payload: { id: string }];
   "memory-summary-clear": [];
+  "memory-atom-update": [payload: { id: string; text?: string; disabled?: boolean }];
+  "memory-atom-delete": [payload: { id: string }];
+  "memory-atom-clear-current-role": [];
+  "memory-atom-export": [payload: { id: string }];
   "memory-export": [];
   "open-chat": [];
 }>();
@@ -566,8 +651,18 @@ const memorySnapshot = computed(() => props.state.memoryDebug.snapshot);
 const memoryRawCount = computed(() => memorySnapshot.value?.recentTurns.length ?? 0);
 const memorySummaryCount = computed(() => memorySnapshot.value?.summarySegments.length ?? 0);
 const memorySegments = computed(() => memorySnapshot.value?.summarySegments ?? []);
-const memoryEnabledCount = computed(() => memorySegments.value.filter((segment) => !segment.disabled).length);
-const memoryDisabledCount = computed(() => memorySegments.value.filter((segment) => segment.disabled).length);
+const memoryAtoms = computed(() => memorySnapshot.value?.memoryAtoms ?? []);
+const memoryEnabledCount = computed(
+  () =>
+    memorySegments.value.filter((segment) => !segment.disabled).length +
+    memoryAtoms.value.filter((atom) => !atom.disabled).length
+);
+const memoryDisabledCount = computed(
+  () =>
+    memorySegments.value.filter((segment) => segment.disabled).length +
+    memoryAtoms.value.filter((atom) => atom.disabled).length
+);
+const memoryStoredCount = computed(() => memorySummaryCount.value + memoryAtoms.value.length);
 const memoryLibraryStatusLabel = computed(() => {
   if (props.state.memoryDebug.status === "loading") {
     return "Refreshing";
@@ -575,44 +670,38 @@ const memoryLibraryStatusLabel = computed(() => {
   if (!memorySnapshot.value) {
     return "Not loaded";
   }
-  return `${memoryEnabledCount.value}/${memorySummaryCount.value} enabled`;
+  return `${memoryEnabledCount.value}/${memoryStoredCount.value} enabled`;
 });
 const latestRecallItem = computed(() => memorySnapshot.value?.lastRecallContext?.items[0] ?? null);
 const latestRecallById = computed(() => {
   const entries = (memorySnapshot.value?.lastRecallContext?.items ?? []).map((item) => [item.id, item] as const);
   return new Map(entries);
 });
-const memoryTypeLanes = computed<Array<{ label: string; detail: string; future?: boolean }>>(() => [
+const memoryAtomTypeConfigs: Array<{ type: MemoryAtom["type"]; label: string; singular: string }> = [
+  { type: "fact", label: "Facts", singular: "Fact" },
+  { type: "preference", label: "Preferences", singular: "Preference" },
+  { type: "opinion", label: "Opinions", singular: "Opinion" },
+  { type: "relationship_event", label: "Relationships", singular: "Relationship" },
+  { type: "episodic_scene", label: "Scenes", singular: "Scene" }
+];
+const memoryTypeLanes = computed<Array<{ label: string; detail: string }>>(() => [
   {
     label: "Summary",
     detail: `${memorySummaryCount.value} stored`
   },
-  {
-    label: "Facts",
-    detail: "Future lane",
-    future: true
-  },
-  {
-    label: "Preferences",
-    detail: "Future lane",
-    future: true
-  },
-  {
-    label: "Relationships",
-    detail: "Future lane",
-    future: true
-  },
-  {
-    label: "Events",
-    detail: "Future lane",
-    future: true
-  },
-  {
-    label: "Scenes",
-    detail: "Future lane",
-    future: true
-  }
+  ...memoryAtomTypeConfigs.map((config) => ({
+    label: config.label,
+    detail: `${memoryAtoms.value.filter((atom) => atom.type === config.type).length} stored`
+  }))
 ]);
+const memoryAtomGroups = computed(() =>
+  memoryAtomTypeConfigs
+    .map((config) => ({
+      ...config,
+      atoms: memoryAtoms.value.filter((atom) => atom.type === config.type)
+    }))
+    .filter((group) => group.atoms.length > 0)
+);
 const memoryActionTone = computed(() => {
   if (props.state.memoryDebug.actionStatus === "error") {
     return "error";
@@ -624,6 +713,7 @@ const memoryActionTone = computed(() => {
 });
 const memorySummaryDrafts = ref<Record<string, string>>({});
 const memoryCueDrafts = ref<Record<string, string>>({});
+const memoryAtomDrafts = ref<Record<string, string>>({});
 const currentBundledLive2DModel = computed(() => findBundledLive2DModel(props.state.settings.modelPath));
 const isCustomLive2DModel = computed(() => currentBundledLive2DModel.value === undefined);
 const selectedLive2DModel = computed(() =>
@@ -654,6 +744,18 @@ watch(
     }
     memorySummaryDrafts.value = nextSummaryDrafts;
     memoryCueDrafts.value = nextCueDrafts;
+  },
+  { immediate: true }
+);
+
+watch(
+  memoryAtoms,
+  (atoms) => {
+    const nextAtomDrafts: Record<string, string> = {};
+    for (const atom of atoms) {
+      nextAtomDrafts[atom.id] = memoryAtomDrafts.value[atom.id] ?? atom.text;
+    }
+    memoryAtomDrafts.value = nextAtomDrafts;
   },
   { immediate: true }
 );
@@ -695,6 +797,13 @@ function setMemoryCueDraft(id: string, event: Event): void {
   };
 }
 
+function setMemoryAtomDraft(id: string, event: Event): void {
+  memoryAtomDrafts.value = {
+    ...memoryAtomDrafts.value,
+    [id]: valueFrom(event)
+  };
+}
+
 function saveMemorySummary(segment: SummarySegment): void {
   emit("memory-summary-update", {
     id: segment.id,
@@ -708,6 +817,24 @@ function toggleMemorySummary(segment: SummarySegment): void {
     id: segment.id,
     disabled: !segment.disabled
   });
+}
+
+function saveMemoryAtom(atom: MemoryAtom): void {
+  emit("memory-atom-update", {
+    id: atom.id,
+    text: memoryAtomDrafts.value[atom.id] ?? atom.text
+  });
+}
+
+function toggleMemoryAtom(atom: MemoryAtom): void {
+  emit("memory-atom-update", {
+    id: atom.id,
+    disabled: !atom.disabled
+  });
+}
+
+function exportMemoryAtom(atom: MemoryAtom): void {
+  emit("memory-atom-export", { id: atom.id });
 }
 
 function memorySegmentStatus(segment: SummarySegment): string {
@@ -734,7 +861,38 @@ function memoryLastUsedLabel(segment: SummarySegment): string {
 }
 
 function memoryUpdatedLabel(segment: SummarySegment): string {
-  return segment.updatedAt ?? segment.createdAt;
+  return formatMemoryTimestamp(segment.updatedAt ?? segment.createdAt);
+}
+
+function memoryAtomStatus(atom: MemoryAtom): string {
+  return atom.disabled ? "Disabled" : "Enabled";
+}
+
+function memoryAtomTypeLabel(atom: MemoryAtom): string {
+  return memoryAtomTypeConfigs.find((config) => config.type === atom.type)?.singular ?? "Memory";
+}
+
+function memoryAtomGroupLabel(type: MemoryAtom["type"]): string {
+  return memoryAtomTypeConfigs.find((config) => config.type === type)?.label ?? "Memory";
+}
+
+function memoryAtomSourceLabel(atom: MemoryAtom): string {
+  if (atom.sourceTurnIds.length === 0) {
+    return "No source turns";
+  }
+  return `${atom.sourceTurnIds.length} source ${atom.sourceTurnIds.length === 1 ? "turn" : "turns"}: ${atom.sourceTurnIds.join(", ")}`;
+}
+
+function memoryAtomUpdatedLabel(atom: MemoryAtom): string {
+  return formatMemoryTimestamp(atom.updatedAt ?? atom.createdAt);
+}
+
+function formatMemoryTimestamp(timestamp: string): string {
+  const parsed = Date.parse(timestamp);
+  if (Number.isNaN(parsed)) {
+    return timestamp;
+  }
+  return new Date(parsed).toISOString().slice(0, 16).replace("T", " ");
 }
 
 function parseMemoryCues(text: string): string[] {

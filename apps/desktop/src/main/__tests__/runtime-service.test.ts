@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it, vi } from "vitest";
 import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
-import type { SummarySegment } from "@greyfield/core-runtime";
+import type { MemoryAtom, MemoryAtomStore, SummarySegment, UpdateMemoryAtom } from "@greyfield/core-runtime";
 import { createDesktopRuntimeStoreOptions } from "../desktop-runtime-stores";
 import { RuntimeService } from "../runtime-service";
 
@@ -949,6 +949,167 @@ describe("RuntimeService", () => {
     }
   });
 
+  it("exports, updates, deletes, and clears only current-role memory atoms", async () => {
+    const providerSecret = "runtime-provider-secret";
+    const memoryAtomStore = new TestMemoryAtomStore([
+      makeMemoryAtom({
+        id: "atom-current-fact",
+        threadId: "thread-a",
+        type: "fact",
+        text: "User birthday is June 12.",
+        sourceTurnIds: ["turn-a-1"]
+      }),
+      makeMemoryAtom({
+        id: "atom-current-preference",
+        threadId: "thread-a",
+        type: "preference",
+        text: "User prefers Hiyori.",
+        sourceTurnIds: ["turn-a-2"]
+      }),
+      makeMemoryAtom({
+        id: "atom-other-role",
+        threadId: "thread-b",
+        type: "opinion",
+        text: "Other role memory stays isolated.",
+        sourceTurnIds: ["turn-b-1"]
+      })
+    ]);
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          apiKey: providerSecret
+        }
+      },
+      {
+        threadId: "thread-a",
+        memoryAtomStore
+      }
+    );
+
+    const snapshot = await service.getMemoryLibrarySnapshot();
+    expect(snapshot.memoryAtoms.map((atom) => atom.id)).toEqual(["atom-current-fact", "atom-current-preference"]);
+
+    const edited = await service.updateMemoryAtom("atom-current-preference", {
+      text: "Edited atom memory: User prefers Sakura.",
+      disabled: true
+    });
+    expect(edited).toMatchObject({
+      ok: true,
+      message: "Atom memory atom-current-preference disabled.",
+      snapshot: {
+        memoryAtoms: [
+          expect.objectContaining({ id: "atom-current-fact" }),
+          expect.objectContaining({
+            id: "atom-current-preference",
+            text: "Edited atom memory: User prefers Sakura.",
+            disabled: true
+          })
+        ]
+      }
+    });
+
+    await expect(service.updateMemoryAtom("atom-other-role", { disabled: true })).resolves.toMatchObject({
+      ok: false,
+      message: "Atom memory atom-other-role was not found in the current role."
+    });
+    expect(memoryAtomStore.getAll().find((atom) => atom.id === "atom-other-role")?.disabled).toBe(false);
+
+    const exported = await service.exportMemory();
+    expect(exported.memoryAtoms.map((atom) => atom.id)).toEqual(["atom-current-fact", "atom-current-preference"]);
+    expect(JSON.stringify(exported)).not.toContain(providerSecret);
+
+    await expect(service.exportMemoryAtom("atom-current-preference")).resolves.toMatchObject({
+      memoryAtoms: [expect.objectContaining({ id: "atom-current-preference" })],
+      recentTurns: [],
+      summarySegments: []
+    });
+    await expect(service.exportMemoryAtom("atom-other-role")).resolves.toBeNull();
+
+    const deleted = await service.deleteMemoryAtom("atom-current-fact");
+    expect(deleted).toMatchObject({
+      ok: true,
+      message: "Atom memory atom-current-fact deleted. Raw chat history and summaries were kept.",
+      snapshot: {
+        memoryAtoms: [expect.objectContaining({ id: "atom-current-preference" })]
+      }
+    });
+    expect(memoryAtomStore.getAll().some((atom) => atom.id === "atom-current-fact")).toBe(false);
+
+    const cleared = await service.clearCurrentRoleMemoryAtoms();
+    expect(cleared).toMatchObject({
+      ok: true,
+      message: "Cleared 1 current role atom memory. Raw chat history and summaries were kept.",
+      snapshot: {
+        memoryAtoms: []
+      }
+    });
+    expect(memoryAtomStore.getAll().map((atom) => atom.id)).toEqual(["atom-other-role"]);
+  });
+
+  it("keeps disabled and deleted memory atoms out of prompt recall", async () => {
+    const memoryAtomStore = new TestMemoryAtomStore([
+      makeMemoryAtom({
+        id: "atom-hiyori",
+        threadId: "thread-a",
+        type: "preference",
+        text: "Atom recall target: User prefers Hiyori.",
+        sourceTurnIds: ["turn-hiyori"],
+        triggers: {
+          exact: ["Hiyori"],
+          aliases: ["model"],
+          secondary: ["Live2D"]
+        },
+        triggerKeys: ["hiyori", "model", "live2d"]
+      })
+    ]);
+    const requestBodies: string[] = [];
+    const fetch = vi.fn(async (_url, init) => {
+      requestBodies.push(String(init?.body ?? ""));
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"ok"}}]}\n\n'));
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        }
+      });
+      return new Response(body, { status: 200 });
+    });
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "secret",
+          model: "remote-model"
+        }
+      },
+      {
+        threadId: "thread-a",
+        memoryAtomStore,
+        fetch
+      }
+    );
+
+    await service.handle({ type: "text.input", text: "Hiyori 模型还在吗？" }, () => undefined);
+    expect(requestBodies.at(-1)).toContain("Atom recall target: User prefers Hiyori.");
+
+    await service.updateMemoryAtom("atom-hiyori", { disabled: true });
+    await service.handle({ type: "text.input", text: "Hiyori 模型还在吗？" }, () => undefined);
+    expect(requestBodies.at(-1)).not.toContain("Atom recall target: User prefers Hiyori.");
+
+    await service.updateMemoryAtom("atom-hiyori", { disabled: false });
+    await service.deleteMemoryAtom("atom-hiyori");
+    await service.handle({ type: "text.input", text: "Hiyori 模型还在吗？" }, () => undefined);
+    expect(requestBodies.at(-1)).not.toContain("Atom recall target: User prefers Hiyori.");
+    expect((await service.getMemoryLibrarySnapshot()).memoryAtoms).toEqual([]);
+    expect((await service.exportMemory()).memoryAtoms).toEqual([]);
+  });
+
   it("interrupt aborts the active OpenAI-compatible request", async () => {
     let capturedSignal: AbortSignal | undefined;
     let requestStarted: (() => void) | undefined;
@@ -1049,3 +1210,97 @@ describe("RuntimeService", () => {
     expect(requestTexts[1]).toContain("第二条");
   });
 });
+
+class TestMemoryAtomStore implements MemoryAtomStore {
+  constructor(private atoms: MemoryAtom[]) {}
+
+  async append(atom: MemoryAtom): Promise<MemoryAtom> {
+    return this.upsert(atom);
+  }
+
+  async upsert(atom: MemoryAtom): Promise<MemoryAtom> {
+    const existingIndex = this.atoms.findIndex((item) => item.id === atom.id);
+    if (existingIndex === -1) {
+      this.atoms.push(atom);
+      return atom;
+    }
+    this.atoms[existingIndex] = {
+      ...this.atoms[existingIndex],
+      ...atom
+    };
+    return this.atoms[existingIndex]!;
+  }
+
+  async list(threadId: string): Promise<MemoryAtom[]> {
+    return this.atoms.filter((atom) => atom.threadId === threadId);
+  }
+
+  async update(id: string, patch: UpdateMemoryAtom): Promise<MemoryAtom | null> {
+    const index = this.atoms.findIndex((atom) => atom.id === id);
+    if (index === -1) {
+      return null;
+    }
+    const existing = this.atoms[index]!;
+    this.atoms[index] = {
+      ...existing,
+      ...(patch.text !== undefined ? { text: patch.text } : {}),
+      ...(patch.disabled !== undefined ? { disabled: patch.disabled } : {}),
+      ...(patch.importance !== undefined ? { importance: patch.importance } : {}),
+      ...(patch.triggers !== undefined
+        ? {
+            triggers: {
+              exact: patch.triggers.exact ?? existing.triggers.exact,
+              aliases: patch.triggers.aliases ?? existing.triggers.aliases,
+              secondary: patch.triggers.secondary ?? existing.triggers.secondary,
+              ...(patch.triggers.calendar !== undefined || existing.triggers.calendar !== undefined
+                ? { calendar: patch.triggers.calendar ?? existing.triggers.calendar ?? [] }
+                : {}),
+              ...(patch.triggers.environment !== undefined || existing.triggers.environment !== undefined
+                ? { environment: patch.triggers.environment ?? existing.triggers.environment ?? [] }
+                : {}),
+              ...(patch.triggers.semantic !== undefined || existing.triggers.semantic !== undefined
+                ? { semantic: patch.triggers.semantic ?? existing.triggers.semantic ?? [] }
+                : {}),
+              ...(patch.triggers.relationship !== undefined || existing.triggers.relationship !== undefined
+                ? { relationship: patch.triggers.relationship ?? existing.triggers.relationship ?? [] }
+                : {})
+            }
+          }
+        : {}),
+      updatedAt: patch.updatedAt ?? "2026-06-28T00:10:00.000Z"
+    };
+    return this.atoms[index]!;
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const before = this.atoms.length;
+    this.atoms = this.atoms.filter((atom) => atom.id !== id);
+    return this.atoms.length !== before;
+  }
+
+  getAll(): MemoryAtom[] {
+    return this.atoms;
+  }
+}
+
+function makeMemoryAtom(overrides: Partial<MemoryAtom> = {}): MemoryAtom {
+  return {
+    id: "atom-memory",
+    threadId: "thread-a",
+    type: "fact",
+    text: "User has an atom memory.",
+    sourceTurnIds: ["turn-a-1"],
+    createdAt: "2026-06-28T00:00:00.000Z",
+    updatedAt: "2026-06-28T00:00:00.000Z",
+    importance: 0.8,
+    triggerKeys: ["hiyori"],
+    triggers: {
+      exact: ["Hiyori"],
+      aliases: [],
+      secondary: []
+    },
+    metadata: {},
+    disabled: false,
+    ...overrides
+  };
+}

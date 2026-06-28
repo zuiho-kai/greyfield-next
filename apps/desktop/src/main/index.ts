@@ -166,6 +166,22 @@ function registerIpc(): void {
     void clearMemorySummaries();
   });
 
+  ipcMain.on("memory:atom-update", (_event, payload) => {
+    void updateMemoryAtom(payload);
+  });
+
+  ipcMain.on("memory:atom-delete", (_event, payload) => {
+    void deleteMemoryAtom(payload.id);
+  });
+
+  ipcMain.on("memory:atom-clear-current-role", () => {
+    void clearCurrentRoleMemoryAtoms();
+  });
+
+  ipcMain.on("memory:atom-export", (event, payload) => {
+    void exportMemoryAtom(event.sender, payload.id);
+  });
+
   ipcMain.on("memory:export-request", (event) => {
     void exportMemory(event.sender);
   });
@@ -336,6 +352,42 @@ async function clearMemorySummaries(): Promise<void> {
   }
 }
 
+async function updateMemoryAtom(payload: Parameters<NonNullable<typeof runtimeService>["updateMemoryAtom"]>[1] & { id: string }): Promise<void> {
+  const result = await runtimeService?.updateMemoryAtom(payload.id, payload);
+  if (!result) {
+    broadcastMemoryActionResult({ ok: false, message: "Memory runtime is not available." });
+    return;
+  }
+  broadcastMemoryActionResult({ ok: result.ok, message: result.message });
+  if (result.snapshot) {
+    broadcastMemoryDebugSnapshotPayload(result.snapshot);
+  }
+}
+
+async function deleteMemoryAtom(id: string): Promise<void> {
+  const result = await runtimeService?.deleteMemoryAtom(id);
+  if (!result) {
+    broadcastMemoryActionResult({ ok: false, message: "Memory runtime is not available." });
+    return;
+  }
+  broadcastMemoryActionResult({ ok: result.ok, message: result.message });
+  if (result.snapshot) {
+    broadcastMemoryDebugSnapshotPayload(result.snapshot);
+  }
+}
+
+async function clearCurrentRoleMemoryAtoms(): Promise<void> {
+  const result = await runtimeService?.clearCurrentRoleMemoryAtoms();
+  if (!result) {
+    broadcastMemoryActionResult({ ok: false, message: "Memory runtime is not available." });
+    return;
+  }
+  broadcastMemoryActionResult({ ok: result.ok, message: result.message });
+  if (result.snapshot) {
+    broadcastMemoryDebugSnapshotPayload(result.snapshot);
+  }
+}
+
 async function exportMemory(sender: Electron.WebContents): Promise<void> {
   const exported = await runtimeService?.exportMemory();
   if (!exported) {
@@ -345,6 +397,22 @@ async function exportMemory(sender: Electron.WebContents): Promise<void> {
   sender.send("memory:export-result", {
     ok: true,
     message: "Memory export is ready.",
+    export: exported
+  });
+}
+
+async function exportMemoryAtom(sender: Electron.WebContents, id: string): Promise<void> {
+  const exported = await runtimeService?.exportMemoryAtom(id);
+  if (!exported) {
+    sender.send("memory:export-result", {
+      ok: false,
+      message: `Atom memory ${id} was not found in the current role.`
+    });
+    return;
+  }
+  sender.send("memory:export-result", {
+    ok: true,
+    message: `Atom memory ${id} export is ready.`,
     export: exported
   });
 }

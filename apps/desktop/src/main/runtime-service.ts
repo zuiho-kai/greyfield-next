@@ -7,12 +7,14 @@ import {
   type ASRProvider,
   type CharacterPersona,
   type LLMProvider,
+  type MemoryAtom,
   type MemoryAtomStore,
   type MemoryStore,
   type RecallContext,
   type SessionStore,
   type SummarySegment,
   type SummarySegmentStore,
+  type UpdateMemoryAtom,
   normalizeSummarySegmentUpdate,
   type UpdateSummarySegment,
   type RuntimeEventHandler,
@@ -58,7 +60,17 @@ export interface VoiceTestResult {
 export interface MemoryControlResult {
   ok: boolean;
   message: string;
-  snapshot?: Awaited<ReturnType<RuntimeService["getMemoryDebugSnapshot"]>>;
+  snapshot?: Awaited<ReturnType<RuntimeService["getMemoryLibrarySnapshot"]>>;
+}
+
+export interface MemoryLibrarySnapshot {
+  threadId: string;
+  sessionId: string;
+  recentTurns: Awaited<ReturnType<SessionStore["getRecent"]>>;
+  summarySegments: SummarySegment[];
+  memoryAtoms: MemoryAtom[];
+  lastRecallContext?: RecallContext;
+  updatedAt: string;
 }
 
 export interface MemoryExportResult {
@@ -66,6 +78,7 @@ export interface MemoryExportResult {
   sessionId: string;
   recentTurns: Awaited<ReturnType<SessionStore["getRecent"]>>;
   summarySegments: SummarySegment[];
+  memoryAtoms: MemoryAtom[];
   lastRecallContext?: RecallContext;
   exportedAt: string;
 }
@@ -153,19 +166,17 @@ export class RuntimeService {
     );
   }
 
-  async getMemoryDebugSnapshot(limit = 20): Promise<{
-    threadId: string;
-    sessionId: string;
-    recentTurns: Awaited<ReturnType<SessionStore["getRecent"]>>;
-    summarySegments: SummarySegment[];
-    lastRecallContext?: RecallContext;
-    updatedAt: string;
-  }> {
+  async getMemoryDebugSnapshot(limit = 20): Promise<MemoryLibrarySnapshot> {
+    return this.getMemoryLibrarySnapshot(limit);
+  }
+
+  async getMemoryLibrarySnapshot(limit = 20): Promise<MemoryLibrarySnapshot> {
     return {
       threadId: this.threadId,
       sessionId: this.sessionStore.sessionId,
       recentTurns: await this.sessionStore.getRecent(limit),
       summarySegments: (await this.summarySegmentStore?.list(this.threadId)) ?? [],
+      memoryAtoms: (await this.memoryAtomStore?.list(this.threadId)) ?? [],
       ...(this.lastRecallContext ? { lastRecallContext: this.lastRecallContext } : {}),
       updatedAt: new Date().toISOString()
     };
@@ -195,7 +206,7 @@ export class RuntimeService {
     return {
       ok: true,
       message: updated.disabled ? `Memory ${id} disabled.` : `Memory ${id} saved.`,
-      snapshot: await this.getMemoryDebugSnapshot()
+      snapshot: await this.getMemoryLibrarySnapshot()
     };
   }
 
@@ -211,7 +222,7 @@ export class RuntimeService {
     return {
       ok: true,
       message: `Memory ${id} deleted. Raw chat history was kept.`,
-      snapshot: await this.getMemoryDebugSnapshot()
+      snapshot: await this.getMemoryLibrarySnapshot()
     };
   }
 
@@ -224,7 +235,7 @@ export class RuntimeService {
       return {
         ok: true,
         message: "No summary memory to clear.",
-        snapshot: await this.getMemoryDebugSnapshot()
+        snapshot: await this.getMemoryLibrarySnapshot()
       };
     }
 
@@ -235,18 +246,106 @@ export class RuntimeService {
     return {
       ok: true,
       message: `Cleared ${summaries.length} summary ${summaries.length === 1 ? "memory" : "memories"}. Raw chat history was kept.`,
-      snapshot: await this.getMemoryDebugSnapshot()
+      snapshot: await this.getMemoryLibrarySnapshot()
     };
   }
 
   async exportMemory(limit = 200): Promise<MemoryExportResult> {
-    const snapshot = await this.getMemoryDebugSnapshot(limit);
+    const snapshot = await this.getMemoryLibrarySnapshot(limit);
     return {
       threadId: snapshot.threadId,
       sessionId: snapshot.sessionId,
       recentTurns: snapshot.recentTurns,
       summarySegments: snapshot.summarySegments,
+      memoryAtoms: snapshot.memoryAtoms,
       ...(snapshot.lastRecallContext ? { lastRecallContext: snapshot.lastRecallContext } : {}),
+      exportedAt: new Date().toISOString()
+    };
+  }
+
+  async updateMemoryAtom(id: string, patch: UpdateMemoryAtom): Promise<MemoryControlResult> {
+    if (!this.memoryAtomStore) {
+      return { ok: false, message: "Atom memory is not available in this runtime." };
+    }
+    const normalized = normalizeMemoryAtomPatch(patch);
+    if (normalized.text !== undefined && normalized.text.length === 0) {
+      return { ok: false, message: "Atom memory text cannot be empty." };
+    }
+    if (normalized.text === undefined && normalized.disabled === undefined && normalized.importance === undefined) {
+      return { ok: false, message: "No atom memory change was provided." };
+    }
+
+    const existing = await this.getCurrentThreadMemoryAtom(id);
+    if (!existing) {
+      return { ok: false, message: `Atom memory ${id} was not found in the current role.` };
+    }
+    const updated = await this.memoryAtomStore.update(id, normalized);
+    if (!updated || updated.threadId !== this.threadId) {
+      return { ok: false, message: `Atom memory ${id} was not found in the current role.` };
+    }
+    this.lastRecallContext = undefined;
+    return {
+      ok: true,
+      message: updated.disabled ? `Atom memory ${id} disabled.` : `Atom memory ${id} saved.`,
+      snapshot: await this.getMemoryLibrarySnapshot()
+    };
+  }
+
+  async deleteMemoryAtom(id: string): Promise<MemoryControlResult> {
+    if (!this.memoryAtomStore) {
+      return { ok: false, message: "Atom memory is not available in this runtime." };
+    }
+    const existing = await this.getCurrentThreadMemoryAtom(id);
+    if (!existing) {
+      return { ok: false, message: `Atom memory ${id} was not found in the current role.` };
+    }
+    const deleted = await this.memoryAtomStore.delete(id);
+    if (!deleted) {
+      return { ok: false, message: `Atom memory ${id} was not found in the current role.` };
+    }
+    this.lastRecallContext = undefined;
+    return {
+      ok: true,
+      message: `Atom memory ${id} deleted. Raw chat history and summaries were kept.`,
+      snapshot: await this.getMemoryLibrarySnapshot()
+    };
+  }
+
+  async clearCurrentRoleMemoryAtoms(): Promise<MemoryControlResult> {
+    if (!this.memoryAtomStore) {
+      return { ok: false, message: "Atom memory is not available in this runtime." };
+    }
+    const atoms = await this.memoryAtomStore.list(this.threadId);
+    if (atoms.length === 0) {
+      return {
+        ok: true,
+        message: "No current role atom memories to clear.",
+        snapshot: await this.getMemoryLibrarySnapshot()
+      };
+    }
+    for (const atom of atoms) {
+      await this.memoryAtomStore.delete(atom.id);
+    }
+    this.lastRecallContext = undefined;
+    return {
+      ok: true,
+      message: `Cleared ${atoms.length} current role atom ${atoms.length === 1 ? "memory" : "memories"}. Raw chat history and summaries were kept.`,
+      snapshot: await this.getMemoryLibrarySnapshot()
+    };
+  }
+
+  async exportMemoryAtom(id: string): Promise<MemoryExportResult | null> {
+    const atom = await this.getCurrentThreadMemoryAtom(id);
+    if (!atom) {
+      return null;
+    }
+    const snapshot = await this.getMemoryLibrarySnapshot(0);
+    return {
+      threadId: snapshot.threadId,
+      sessionId: snapshot.sessionId,
+      recentTurns: [],
+      summarySegments: [],
+      memoryAtoms: [atom],
       exportedAt: new Date().toISOString()
     };
   }
@@ -370,6 +469,11 @@ export class RuntimeService {
 
   private async loadPersona(): Promise<CharacterPersona> {
     return this.options.loadPersona?.(this.config) ?? this.createDefaultPersona();
+  }
+
+  private async getCurrentThreadMemoryAtom(id: string): Promise<MemoryAtom | null> {
+    const atoms = (await this.memoryAtomStore?.list(this.threadId)) ?? [];
+    return atoms.find((atom) => atom.id === id) ?? null;
   }
 
   private createDefaultPersona(): CharacterPersona {
@@ -525,4 +629,14 @@ function deriveThreadId(config: GreyfieldConfig): string {
   const source = config.characterFile.trim() || "default-character";
   const slug = source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return `desktop:${slug || "default-character"}`;
+}
+
+function normalizeMemoryAtomPatch(patch: UpdateMemoryAtom): UpdateMemoryAtom {
+  return {
+    ...(patch.text !== undefined ? { text: patch.text.trim() } : {}),
+    ...(patch.disabled !== undefined ? { disabled: patch.disabled } : {}),
+    ...(patch.importance !== undefined ? { importance: patch.importance } : {}),
+    ...(patch.triggers !== undefined ? { triggers: patch.triggers } : {}),
+    ...(patch.updatedAt !== undefined ? { updatedAt: patch.updatedAt } : {})
+  };
 }

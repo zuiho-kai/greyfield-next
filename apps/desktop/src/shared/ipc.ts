@@ -1,4 +1,11 @@
-import type { RecallContext, RuntimeInputEvent, RuntimeOutputEvent, SessionTurn, SummarySegment } from "@greyfield/core-runtime";
+import type {
+  MemoryAtom,
+  RecallContext,
+  RuntimeInputEvent,
+  RuntimeOutputEvent,
+  SessionTurn,
+  SummarySegment
+} from "@greyfield/core-runtime";
 import type { GreyfieldConfig, GreyfieldConfigPatch } from "@greyfield/persistence/config-schema";
 import type { RendererGreyfieldConfig } from "./renderer-config";
 
@@ -20,6 +27,7 @@ export interface DesktopMemoryDebugSnapshot {
   sessionId: string;
   recentTurns: SessionTurn[];
   summarySegments: SummarySegment[];
+  memoryAtoms: MemoryAtom[];
   lastRecallContext?: RecallContext;
   updatedAt: string;
 }
@@ -28,6 +36,12 @@ export interface DesktopMemorySummaryUpdate {
   id: string;
   summary?: string;
   recallCues?: string[];
+  disabled?: boolean;
+}
+
+export interface DesktopMemoryAtomUpdate {
+  id: string;
+  text?: string;
   disabled?: boolean;
 }
 
@@ -41,6 +55,7 @@ export interface DesktopMemoryExport {
   sessionId: string;
   recentTurns: SessionTurn[];
   summarySegments: SummarySegment[];
+  memoryAtoms: MemoryAtom[];
   lastRecallContext?: RecallContext;
   exportedAt: string;
 }
@@ -54,6 +69,10 @@ export interface DesktopIpcRequestMap {
   "memory:summary-update": DesktopMemorySummaryUpdate;
   "memory:summary-delete": { id: string };
   "memory:summary-clear": {};
+  "memory:atom-update": DesktopMemoryAtomUpdate;
+  "memory:atom-delete": { id: string };
+  "memory:atom-clear-current-role": {};
+  "memory:atom-export": { id: string };
   "memory:export-request": {};
   "settings:update": GreyfieldConfigPatch;
   "window:set-click-through": { enabled: boolean };

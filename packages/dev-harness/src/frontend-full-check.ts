@@ -27,6 +27,7 @@ const checks: Check[] = [
   { name: "Stop audio harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-stop-audio-check.ts"] },
   { name: "microphone ASR and waveform mouth harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-voice-input-check.ts"] },
   { name: "memory summary and control harness", command: pnpmCommand, args: ["run", "harness:electron:memory-control"] },
+  { name: "memory atom library harness", command: pnpmCommand, args: ["run", "harness:electron:memory-atom-library"] },
   {
     name: "real OpenAI-compatible TTS Electron harness",
     command: pnpmCommand,

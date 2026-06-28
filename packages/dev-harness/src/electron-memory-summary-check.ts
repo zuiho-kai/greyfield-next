@@ -114,10 +114,10 @@ try {
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Summary" }).waitFor();
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Facts" }).waitFor();
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Preferences" }).waitFor();
+  await memoryLibrary.locator(".memory-library__lane", { hasText: "Opinions" }).waitFor();
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Relationships" }).waitFor();
-  await memoryLibrary.locator(".memory-library__lane", { hasText: "Events" }).waitFor();
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Scenes" }).waitFor();
-  await memoryLibrary.locator(".memory-library__stats", { hasText: "Enabled 1" }).waitFor();
+  await memoryLibrary.locator(".memory-library__stats", { hasText: "Enabled" }).waitFor();
   await memoryLibrary.locator(".memory-library__meta", { hasText: "desktop-main-session-1" }).waitFor();
   await memoryLibrary.locator(".memory-library__block--recall", { hasText: "Last recalled memory" }).waitFor();
   await memoryLibrary.locator(".memory-library__block--recall", { hasText: "cue:hiyori" }).waitFor();
