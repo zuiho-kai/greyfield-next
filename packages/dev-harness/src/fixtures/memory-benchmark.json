@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "thresholds": {
     "summaryScore": 0.95,
     "recallScore": 0.95
@@ -8,10 +8,10 @@
     "summaryRegressionScore": 1,
     "recallRegressionScore": 1,
     "atomExtractionScore": 0.95,
-    "atomRecallScore": 0.8,
+    "atomRecallScore": 0.88,
     "proactiveTriggerScore": 1,
-    "productReadinessScore": 0.56,
-    "v21aScenarioScore": 0.54
+    "productReadinessScore": 0.58,
+    "v21aScenarioScore": 0.56
   },
   "productReadiness": {
     "targetScore": 1,
@@ -55,8 +55,16 @@
         "description": "Date-bearing atoms can be recalled for birthdays, first-meeting anniversaries, and other calendar moments.",
         "status": "partial",
         "score": 0.55,
-        "weight": 0.16,
+        "weight": 0.14,
         "evidence": "atomRecall benchmark dynamically recalls birthday and first-meeting atoms by dates rather than lexical birthday/anniversary terms, while rejecting unrelated weather questions near those dates; coverage is still deterministic and not a full calendar index"
+      },
+      {
+        "id": "semantic-relationship-recall",
+        "description": "Relationship memories can be recalled through deterministic semantic and relationship concept links without exact keyword overlap.",
+        "status": "partial",
+        "score": 0.6,
+        "weight": 0.1,
+        "evidence": "atomRecall benchmark dynamically recalls a first-meeting rose/gift ritual from vague important-day and gift-ritual language through relationship concepts, keeps source turn/raw passage evidence, and rejects unrelated colleague/generic gift prompts. This is a minimum no-vector parity path, not a full embedding/vector database."
       },
       {
         "id": "source-evidence-drilldown",
@@ -71,7 +79,7 @@
         "description": "Scene, calendar, and environment cues can proactively trigger relevant memories without a direct user keyword.",
         "status": "partial",
         "score": 0.4,
-        "weight": 0.17,
+        "weight": 0.12,
         "evidence": "proactiveTrigger benchmark dynamically runs pure core candidates from explicit runtime scene context over scene atoms with enabled, disabled, importance, global cooldown, per-atom cooldown, weather, virtual-home window, missing virtual-home state, non-shared-scene rejection, and last-seen gates; desktop scheduler, external weather feed, and notification/UI integration remain unimplemented"
       },
       {
@@ -79,7 +87,7 @@
         "description": "The memory path rejects UI/event noise and private context that was not explicitly saved.",
         "status": "partial",
         "score": 0.42,
-        "weight": 0.11,
+        "weight": 0.08,
         "evidence": "LLM atom validation and automatic write policy reject scripted Settings/weather event source turns and secret-like provider text, including structured atom fields, before persistence. Broader privacy classification and raw-turn erasure remain incomplete."
       }
     ],
@@ -90,7 +98,7 @@
         "description": "The user gives durable relationship facts that should become separate source-linked atoms and later calendar recall.",
         "status": "partial",
         "score": 0.6,
-        "weight": 0.34,
+        "weight": 0.25,
         "dimensions": [
           "memory-atom-extraction",
           "calendar-recall",
@@ -127,12 +135,54 @@
         }
       },
       {
+        "id": "semantic-relationship-ritual-recall",
+        "title": "Semantic relationship ritual recall",
+        "description": "A relationship event should be recalled from vague important-day and gift-ritual language without exact first-meeting or rose trigger overlap.",
+        "status": "partial",
+        "score": 0.6,
+        "weight": 0.25,
+        "dimensions": [
+          "memory-atom-extraction",
+          "semantic-relationship-recall",
+          "source-evidence-drilldown",
+          "privacy-noise"
+        ],
+        "probeInput": "那个重要日子和礼物仪式的原文是什么？",
+        "turns": [
+          {
+            "id": "relationship-1",
+            "role": "user",
+            "content": "今天是我们第一次见面的纪念日，记住我送你一朵玫瑰，也把以后送礼物当成这个重要日子的仪式。"
+          },
+          {
+            "id": "relationship-2",
+            "role": "assistant",
+            "content": "这条应该作为关系事件保存：来源、重要日子和礼物仪式都要能回查。"
+          },
+          {
+            "id": "relationship-3",
+            "role": "user",
+            "content": "同事婚礼的礼物清单不要和我们的关系记忆混在一起。"
+          }
+        ],
+        "expectedBehavior": [
+          "extract a source-linked first-meeting relationship event with gift ritual concepts",
+          "recall from vague important-day and gift-ritual wording through semantic/relationship concepts, not exact first-meeting or rose triggers",
+          "source drilldown should include the raw relationship turn and unrelated colleague wedding prompts must not inject the memory"
+        ],
+        "currentGap": "This proves a deterministic semantic/relationship graph-equivalent minimum path with source evidence. It is not a full embedding/vector database and does not add renderer source-drilldown UI.",
+        "sourceExpectations": {
+          "sourceTurnIds": ["relationship-1"],
+          "exactFragments": ["第一次见面的纪念日", "一朵玫瑰", "礼物", "重要日子的仪式"]
+        }
+      },
+      {
         "id": "game-negative-review-source-drilldown",
         "title": "Game negative review original-text drilldown",
         "description": "The user later asks for the exact original wording of a game complaint, not just a paraphrased summary.",
         "status": "partial",
         "score": 0.6,
-        "weight": 0.33,
+        "weight": 0.25,
         "dimensions": [
           "memory-atom-extraction",
           "source-evidence-drilldown",
@@ -178,7 +228,7 @@
         "description": "Scene and environment cues should trigger a remembered care ritual when the user has been away for a long time.",
         "status": "partial",
         "score": 0.45,
-        "weight": 0.33,
+        "weight": 0.25,
         "dimensions": [
           "memory-atom-extraction",
           "scene-proactive-trigger",
@@ -667,6 +717,62 @@
             "input": "这个新游戏叫《月桥档案》，玩法挺普通，帮我想一个推荐语。",
             "rejectedAtomExpectationIds": ["game-negative-review"],
             "promptExcludes": ["星环旅店", "教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "semantic-relationship-ritual-atoms",
+      "description": "Dynamically extracts a first-meeting gift ritual and recalls it through semantic/relationship concepts with lexical recall lanes disabled.",
+      "scenarioId": "semantic-relationship-ritual-recall",
+      "extractionMinScore": 0.95,
+      "recallMinScore": 0.95,
+      "extraction": {
+        "sourceTurnIds": ["relationship-1"],
+        "rejectedSourceTurnIds": [],
+        "expectedAtoms": [
+          {
+            "id": "relationship-ritual",
+            "type": "relationship_event",
+            "sourceTurnIds": ["relationship-1"],
+            "textIncludes": ["relationship event", "rose"],
+            "triggerIncludes": ["important day", "gift ritual", "user_and_greyfield", "first_meeting_anniversary", "gift_ritual"],
+            "eventDate": { "kind": "absolute", "isoDate": "2026-06-26" },
+            "recurrenceFrequency": "annual",
+            "ritualAction": "送玫瑰",
+            "object": "first_meeting_anniversary",
+            "metadata": { "eventType": "first_meeting_anniversary", "gift": "rose" }
+          }
+        ]
+      },
+      "recall": {
+        "input": "那个重要日子和礼物仪式的原文是什么？",
+        "expectedAtomExpectationIds": ["relationship-ritual"],
+        "disabledTriggerLanes": ["exact", "aliases", "secondary", "calendar"],
+        "promptIncludes": [
+          "Source turns: relationship-1",
+          "semantic:",
+          "important day",
+          "gift ritual",
+          "relationship:",
+          "important_day",
+          "gift_ritual",
+          "Source fragments:",
+          "第一次见面的纪念日",
+          "一朵玫瑰",
+          "重要日子的仪式"
+        ],
+        "promptExcludes": ["exact:", "alias:", "secondary:", "calendar:"],
+        "sourceEvidence": {
+          "expectedClass": "memory_hit_with_raw_source_evidence",
+          "requiredFragments": ["第一次见面的纪念日", "一朵玫瑰", "重要日子的仪式"]
+        },
+        "falsePositiveCases": [
+          {
+            "id": "coworker-wedding-gift-ritual-does-not-inject-companion-memory",
+            "input": "同事婚礼的礼物仪式要怎么安排？",
+            "rejectedAtomExpectationIds": ["relationship-ritual"],
+            "promptExcludes": ["relationship-1", "第一次见面的纪念日", "一朵玫瑰", "重要日子的仪式"]
           }
         ]
       }

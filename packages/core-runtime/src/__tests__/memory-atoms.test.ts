@@ -284,6 +284,8 @@ describe("memory atoms", () => {
       metadata: { eventType: "first_meeting_anniversary", gift: "rose" }
     });
     expect(atom?.triggerKeys).toEqual(expect.arrayContaining(["第一次遇见", "纪念日", "玫瑰"]));
+    expect(atom?.triggers.semantic).toEqual(expect.arrayContaining(["important day", "gift ritual", "rose ritual"]));
+    expect(atom?.triggers.relationship).toEqual(expect.arrayContaining(["user_and_greyfield", "first_meeting_anniversary", "gift_ritual"]));
   });
 
   it("extracts a negative game opinion atom with target and reason trigger keys", () => {
@@ -455,6 +457,88 @@ describe("memory atoms", () => {
       atoms: [semanticOnlyAtom]
     });
     expect(unrelated.items).toEqual([]);
+  });
+
+  it("recalls relationship rituals through graph concepts without lexical trigger overlap", () => {
+    const sourceTurns: SessionTurn[] = [
+      {
+        id: "turn-ritual",
+        role: "user",
+        content: "今天是我们第一次见面的纪念日，记住我送你一朵玫瑰，也把以后送礼物当成这个重要日子的仪式。",
+        createdAt: "2026-06-28T00:00:00.000Z"
+      }
+    ];
+    const [atom] = extractDeterministicMemoryAtoms({
+      ...baseInput,
+      sourceTurnIds: ["turn-ritual"],
+      text: sourceTurns[0]!.content
+    });
+    const graphOnlyAtom: MemoryAtom = {
+      ...atom!,
+      triggers: {
+        ...atom!.triggers,
+        exact: [],
+        aliases: [],
+        secondary: [],
+        calendar: [],
+        semantic: []
+      },
+      triggerKeys: []
+    };
+
+    const context = buildMemoryAtomRecallContext({
+      input: "那个重要日子和礼物仪式的原文是什么？",
+      atoms: [graphOnlyAtom],
+      sourceTurns,
+      sourcePassageMode: "always"
+    });
+    const prompt = formatMemoryAtomRecallContextForPrompt(context);
+
+    expect(context.items[0]).toMatchObject({
+      type: "relationship_event",
+      sourceTurnIds: ["turn-ritual"],
+      reason: expect.stringContaining("relationship:")
+    });
+    expect(context.items[0]?.matchedKeys).toEqual(expect.arrayContaining(["important_day", "gift_ritual"]));
+    expect(prompt).toContain("Source fragments:");
+    expect(prompt).toContain("第一次见面");
+    expect(prompt).toContain("玫瑰");
+    expect(prompt).not.toContain("exact:");
+  });
+
+  it("does not inject companion relationship memories for unrelated gift rituals", () => {
+    const [atom] = extractDeterministicMemoryAtoms({
+      ...baseInput,
+      sourceTurnIds: ["turn-ritual"],
+      text: "今天是我们第一次见面的纪念日，记住我送你一朵玫瑰，也把以后送礼物当成这个重要日子的仪式。"
+    });
+    const coworkerEvent: MemoryAtom = {
+      ...atom!,
+      id: "atom-coworker-event",
+      subject: "coworker",
+      triggers: {
+        ...atom!.triggers,
+        exact: [],
+        aliases: [],
+        secondary: [],
+        calendar: [],
+        semantic: [],
+        relationship: ["coworker"]
+      },
+      triggerKeys: []
+    };
+
+    const unrelatedTarget = buildMemoryAtomRecallContext({
+      input: "同事的纪念日礼物仪式要怎么安排？",
+      atoms: [atom!]
+    });
+    expect(unrelatedTarget.items).toEqual([]);
+
+    const unrelatedAtom = buildMemoryAtomRecallContext({
+      input: "那个重要日子和礼物仪式要怎么准备？",
+      atoms: [coworkerEvent]
+    });
+    expect(unrelatedAtom.items).toEqual([]);
   });
 
   it("recalls annual birthday and first-meeting atoms by calendar dates without lexical overlap", () => {

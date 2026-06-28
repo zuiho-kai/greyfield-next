@@ -233,7 +233,8 @@ export interface BuildMemoryAtomRecallContextOptions {
   sourcePassageMaxCharactersPerTurn?: number;
   sourcePassageMaxTurnsPerAtom?: number;
   minScore?: number;
-  // Future non-calendar lanes are explicit adapters. The default deterministic path uses exact, alias, secondary, and calendar keys.
+  // Additional lanes can still be explicit adapters. The default deterministic path covers exact,
+  // alias, secondary, calendar, semantic, and relationship graph-equivalent keys.
   resolvers?: MemoryAtomRecallLaneResolver[];
 }
 
@@ -243,6 +244,7 @@ const defaultMaxAtomRecallCharacters = 1400;
 const exactLaneScore = 100;
 const aliasLaneScore = 70;
 const semanticLaneScore = 58;
+const relationshipLaneScore = 66;
 const secondaryLaneScore = 40;
 const calendarLaneScore = 82;
 const defaultCalendarWindowDays = 1;
@@ -407,12 +409,16 @@ export function buildMemoryAtomRecallContext(options: BuildMemoryAtomRecallConte
   const scored = options.atoms
     .filter((atom) => !atom.disabled)
     .map((atom) => {
+      if (shouldSuppressCompanionRelationshipRecall(options.input, atom)) {
+        return { atom, matches: [], score: 0 };
+      }
       const matches = [
         ...matchTriggerLane(options.input, atom.triggers.exact, "exact", exactLaneScore),
         ...matchTriggerLane(options.input, atom.triggers.aliases, "alias", aliasLaneScore),
         ...matchTriggerLane(options.input, atom.triggers.secondary, "secondary", secondaryLaneScore),
         ...matchCalendarLane(options.input, atom, options),
         ...matchSemanticLane(options.input, atom),
+        ...matchRelationshipLane(options.input, atom),
         ...(options.resolvers ?? []).flatMap((resolver) => resolver.match(options.input, atom, options))
       ];
       const uniqueMatches = dedupeMatches(matches);
@@ -1052,7 +1058,15 @@ function extractRelationshipEventAtom(
       aliases: ["初遇", "相遇纪念日", "第一次见面"],
       secondary: hasRose ? ["玫瑰", "送花", "礼物"] : ["关系事件"],
       calendar: normalizeTriggerKeys(["first_meeting_anniversary", dateKey]),
-      relationship: ["user_and_greyfield"]
+      semantic: ["relationship milestone", "important day", "anniversary ritual", ...(hasRose ? ["gift ritual", "rose ritual"] : [])],
+      relationship: [
+        "user_and_greyfield",
+        "relationship_event",
+        "first_meeting_anniversary",
+        "important_day",
+        "relationship_ritual",
+        ...(hasRose ? ["gift_ritual", "rose_ritual"] : [])
+      ]
     },
     metadata: {
       eventType: "first_meeting_anniversary",
@@ -1609,6 +1623,144 @@ function matchSemanticLane(input: string, atom: MemoryAtom): MemoryAtomRecallMat
     .map((concept) => ({ lane: "semantic", key: concept, score: semanticLaneScore + Math.min(8, concept.length / 3) }));
 }
 
+function matchRelationshipLane(input: string, atom: MemoryAtom): MemoryAtomRecallMatch[] {
+  if (!isCompanionRelationshipAtom(atom)) {
+    return [];
+  }
+  const atomConcepts = extractRelationshipAtomConcepts(atom);
+  if (atomConcepts.size === 0) {
+    return [];
+  }
+  const query = extractRelationshipRecallConcepts(input);
+  if (!query.hasIntent) {
+    return [];
+  }
+  const matched = [...query.concepts].filter((concept) => atomConcepts.has(concept));
+  const hasSpecificMatch = matched.some((concept) => concept !== "user_and_greyfield" && concept !== "relationship_event");
+  if (!hasSpecificMatch) {
+    return [];
+  }
+  return matched.map((concept) => ({ lane: "relationship", key: concept, score: relationshipLaneScore + Math.min(10, concept.length / 2) }));
+}
+
+function extractRelationshipRecallConcepts(input: string): { hasIntent: boolean; concepts: Set<string> } {
+  const concepts = new Set<string>();
+  const text = normalizeText(input).toLowerCase();
+  if (hasExternalRelationshipTarget(text)) {
+    return { hasIntent: false, concepts };
+  }
+
+  const hasVagueMemoryReference =
+    /(那个|那件|那次|那天|当时|之前|以前|旧|记得|想起|回忆|重要日子|什么日子|remember|recall|before|old|important day|special day)/iu.test(text);
+  const hasRelationshipSignal =
+    /(我们|你和我|共同|关系|初遇|相遇|第一次|纪念|纪念日|仪式|礼物仪式|anniversary|ritual|greyfield)/iu.test(text);
+  if (!hasVagueMemoryReference || !hasRelationshipSignal) {
+    return { hasIntent: false, concepts };
+  }
+
+  if (/(重要日子|什么日子|那个日子|那天|纪念|纪念日|anniversary|important day|special day)/iu.test(text)) {
+    concepts.add("relationship_event");
+    concepts.add("important_day");
+    concepts.add("anniversary");
+  }
+  if (/(第一次|初遇|相遇|first meeting|first met)/iu.test(text)) {
+    concepts.add("first_meeting_anniversary");
+  }
+  if (/(礼物|送礼|送|仪式|gift|ritual)/iu.test(text)) {
+    concepts.add("relationship_ritual");
+    concepts.add("gift_ritual");
+  }
+  if (/(玫瑰|花|rose|flower)/iu.test(text)) {
+    concepts.add("gift_ritual");
+    concepts.add("rose_ritual");
+  }
+  if (/(我们|你和我|共同|greyfield|你)/iu.test(text)) {
+    concepts.add("user_and_greyfield");
+  }
+
+  return { hasIntent: concepts.size > 0, concepts };
+}
+
+function extractRelationshipAtomConcepts(atom: MemoryAtom): Set<string> {
+  const concepts = new Set<string>();
+  const add = (value: string | undefined) => {
+    if (!value) {
+      return;
+    }
+    const concept = normalizeSemanticConcept(value.replace(/\s+/g, "_"));
+    if (concept.length > 0) {
+      concepts.add(concept);
+    }
+  };
+
+  for (const key of atom.triggers.relationship ?? []) {
+    add(key);
+  }
+  if (atom.type === "relationship_event") {
+    add("relationship_event");
+  }
+  if (atom.subject === "user_and_greyfield") {
+    add("user_and_greyfield");
+  }
+  if (atom.eventDate) {
+    add("important_day");
+  }
+  if (atom.recurrence?.frequency === "annual") {
+    add("annual_ritual");
+    add("relationship_ritual");
+  }
+  add(atom.object);
+
+  const eventType = metadataString(atom.metadata, "eventType");
+  if (eventType === "first_meeting_anniversary" || atom.object === "first_meeting_anniversary") {
+    add("first_meeting_anniversary");
+    add("anniversary");
+    add("important_day");
+  }
+  if (eventType) {
+    add(eventType);
+  }
+
+  const ritualAction = normalizeText(atom.ritualAction ?? "");
+  if (ritualAction.length > 0) {
+    add("relationship_ritual");
+  }
+  if (/(礼物|送|gift)/iu.test(ritualAction)) {
+    add("gift_ritual");
+  }
+  if (/(玫瑰|rose|花)/iu.test(ritualAction)) {
+    add("gift_ritual");
+    add("rose_ritual");
+  }
+
+  const gift = metadataString(atom.metadata, "gift");
+  if (gift && gift !== "null") {
+    add("gift_ritual");
+    if (/(rose|玫瑰|花)/iu.test(gift)) {
+      add("rose_ritual");
+    }
+  }
+
+  return concepts;
+}
+
+function isCompanionRelationshipAtom(atom: MemoryAtom): boolean {
+  return atom.subject === "user_and_greyfield" || (atom.triggers.relationship ?? []).some((key) => normalizeSemanticConcept(key) === "user_and_greyfield");
+}
+
+function shouldSuppressCompanionRelationshipRecall(input: string, atom: MemoryAtom): boolean {
+  return isCompanionRelationshipAtom(atom) && hasExternalRelationshipTarget(input);
+}
+
+function hasExternalRelationshipTarget(text: string): boolean {
+  return /(同事|客户|公司|团队|项目|会议|婚礼|朋友的|别人的|colleague|client|company|meeting|wedding)/iu.test(text);
+}
+
+function metadataString(metadata: MemoryAtom["metadata"], key: string): string | undefined {
+  const value = metadata?.[key];
+  return typeof value === "string" ? normalizeText(value) : undefined;
+}
+
 function extractSemanticRecallConcepts(input: string): Set<string> {
   const concepts = new Set<string>();
   const text = input.toLowerCase();
@@ -1620,11 +1772,38 @@ function extractSemanticRecallConcepts(input: string): Set<string> {
     concepts.add("game complaint source");
     concepts.add("disliked old game");
   }
+  const relationshipQuery = extractRelationshipRecallConcepts(input);
+  if (relationshipQuery.hasIntent) {
+    for (const concept of relationshipQuery.concepts) {
+      const semanticConcept = relationshipConceptToSemanticConcept(concept);
+      if (semanticConcept) {
+        concepts.add(semanticConcept);
+      }
+    }
+  }
   return concepts;
 }
 
 function normalizeSemanticConcept(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function relationshipConceptToSemanticConcept(concept: string): string | undefined {
+  switch (concept) {
+    case "important_day":
+      return "important day";
+    case "first_meeting_anniversary":
+    case "anniversary":
+      return "relationship milestone";
+    case "relationship_ritual":
+      return "anniversary ritual";
+    case "gift_ritual":
+      return "gift ritual";
+    case "rose_ritual":
+      return "rose ritual";
+    default:
+      return;
+  }
 }
 
 interface CalendarQuery {
