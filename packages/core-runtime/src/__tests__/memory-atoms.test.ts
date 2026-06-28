@@ -595,6 +595,84 @@ describe("memory atoms", () => {
     expect(prompt).not.toContain("exact:");
   });
 
+  it("extracts non-rose recurring companion rituals with recurrence, action, subject, and source", () => {
+    const [atom] = extractDeterministicMemoryAtoms({
+      ...baseInput,
+      sourceTurnIds: ["turn-letter-ritual"],
+      text: "记住每年 12 月 24 日，我们和 Greyfield 的固定仪式是写一封手写信，这不是普通圣诞礼物计划。"
+    });
+
+    expect(atom).toMatchObject({
+      type: "relationship_event",
+      sourceTurnIds: ["turn-letter-ritual"],
+      subject: "user_and_greyfield",
+      object: "recurring_relationship_ritual",
+      eventDate: { kind: "month_day", month: 12, day: 24 },
+      recurrence: { frequency: "annual", sourceText: "每年" },
+      ritualAction: "写手写信",
+      metadata: {
+        eventType: "recurring_relationship_ritual",
+        ritualAction: "写手写信",
+        ritualKind: "letter_ritual"
+      }
+    });
+    expect(atom?.triggers.semantic).toEqual(expect.arrayContaining(["recurring ritual", "annual ritual", "letter ritual"]));
+    expect(atom?.triggers.relationship).toEqual(
+      expect.arrayContaining(["user_and_greyfield", "recurring_relationship_ritual", "annual_ritual", "letter_ritual"])
+    );
+  });
+
+  it("recalls non-rose recurring rituals through relationship concepts without exact keywords", () => {
+    const sourceTurns: SessionTurn[] = [
+      {
+        id: "turn-letter-ritual",
+        role: "user",
+        content: "记住每年 12 月 24 日，我们和 Greyfield 的固定仪式是写一封手写信，这不是普通圣诞礼物计划。",
+        createdAt: "2026-06-28T00:00:00.000Z"
+      }
+    ];
+    const [atom] = extractDeterministicMemoryAtoms({
+      ...baseInput,
+      sourceTurnIds: ["turn-letter-ritual"],
+      text: sourceTurns[0]!.content
+    });
+    const relationshipOnlyAtom: MemoryAtom = {
+      ...atom!,
+      triggers: {
+        ...atom!.triggers,
+        exact: [],
+        aliases: [],
+        secondary: [],
+        calendar: [],
+        semantic: []
+      },
+      triggerKeys: []
+    };
+
+    const context = buildMemoryAtomRecallContext({
+      input: "那个每年固定的小仪式原文是什么？",
+      atoms: [relationshipOnlyAtom],
+      sourceTurns,
+      sourcePassageMode: "always"
+    });
+    const prompt = formatMemoryAtomRecallContextForPrompt(context);
+
+    expect(context.items[0]).toMatchObject({
+      type: "relationship_event",
+      sourceTurnIds: ["turn-letter-ritual"],
+      recurrence: { frequency: "annual" },
+      ritualAction: "写手写信",
+      reason: expect.stringContaining("relationship:")
+    });
+    expect(context.items[0]?.matchedKeys).toEqual(
+      expect.arrayContaining(["relationship_ritual", "recurring_relationship_ritual", "annual_ritual"])
+    );
+    expect(prompt).toContain("Source fragments:");
+    expect(prompt).toContain("每年 12 月 24 日");
+    expect(prompt).toContain("写一封手写信");
+    expect(prompt).not.toContain("exact:");
+  });
+
   it("does not inject companion relationship memories for unrelated gift rituals", () => {
     const [atom] = extractDeterministicMemoryAtoms({
       ...baseInput,
@@ -628,6 +706,30 @@ describe("memory atoms", () => {
       atoms: [coworkerEvent]
     });
     expect(unrelatedAtom.items).toEqual([]);
+  });
+
+  it("rejects generic holidays, coworker events, and unrelated gift planning for relationship rituals", () => {
+    const [atom] = extractDeterministicMemoryAtoms({
+      ...baseInput,
+      sourceTurnIds: ["turn-letter-ritual"],
+      text: "记住每年 12 月 24 日，我们和 Greyfield 的固定仪式是写一封手写信，这不是普通圣诞礼物计划。"
+    });
+
+    for (const input of [
+      "圣诞节送礼物有什么清单建议？",
+      "12月24日圣诞节送礼物有什么清单建议？",
+      "同事纪念日的礼物仪式要怎么安排？",
+      "我想给朋友买一个无关礼物，有什么建议？"
+    ]) {
+      expect(buildMemoryAtomRecallContext({ input, atoms: [atom!] }).items).toEqual([]);
+    }
+
+    const coworkerAtoms = extractDeterministicMemoryAtoms({
+      ...baseInput,
+      sourceTurnIds: ["turn-coworker-wedding"],
+      text: "记住同事婚礼每年聚餐送礼物的安排，别和我们的关系记忆混在一起。"
+    });
+    expect(coworkerAtoms.some((candidate) => candidate.type === "relationship_event")).toBe(false);
   });
 
   it("recalls annual birthday and first-meeting atoms by calendar dates without lexical overlap", () => {

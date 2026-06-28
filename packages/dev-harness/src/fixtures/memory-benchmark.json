@@ -72,7 +72,7 @@
         "status": "partial",
         "score": 0.6,
         "weight": 0.1,
-        "evidence": "atomRecall benchmark dynamically recalls a first-meeting rose/gift ritual from vague important-day and gift-ritual language through relationship concepts, keeps source turn/raw passage evidence, and rejects unrelated colleague/generic gift prompts. This is a minimum no-vector parity path, not a full embedding/vector database."
+        "evidence": "atomRecall benchmark dynamically recalls first-meeting rose/gift and non-rose recurring tea rituals from vague ritual language through relationship concepts, keeps source turn/raw passage evidence, and rejects unrelated colleague, generic holiday, and gift-planning prompts. This is a minimum no-vector parity path, not a full embedding/vector database."
       },
       {
         "id": "source-evidence-drilldown",
@@ -145,7 +145,7 @@
       {
         "id": "semantic-relationship-ritual-recall",
         "title": "Semantic relationship ritual recall",
-        "description": "A relationship event should be recalled from vague important-day and gift-ritual language without exact first-meeting or rose trigger overlap.",
+        "description": "Relationship rituals should be recalled from vague important-day and ritual language without exact first-meeting, rose, or action keyword overlap.",
         "status": "partial",
         "score": 0.6,
         "weight": 0.2,
@@ -171,17 +171,23 @@
             "id": "relationship-3",
             "role": "user",
             "content": "同事婚礼的礼物清单不要和我们的关系记忆混在一起。"
+          },
+          {
+            "id": "relationship-4",
+            "role": "user",
+            "content": "记住每年 12 月 24 日，我们和 Greyfield 的固定仪式是一起泡桂花茶，这不是普通圣诞礼物计划。"
           }
         ],
         "expectedBehavior": [
           "extract a source-linked first-meeting relationship event with gift ritual concepts",
-          "recall from vague important-day and gift-ritual wording through semantic/relationship concepts, not exact first-meeting or rose triggers",
-          "source drilldown should include the raw relationship turn and unrelated colleague wedding prompts must not inject the memory"
+          "extract a source-linked non-rose recurring relationship ritual with annual recurrence, action, subject, event date, and source turn",
+          "recall from vague important-day and ritual wording through semantic/relationship concepts, not exact first-meeting, rose, or action triggers",
+          "source drilldown should include the raw relationship turn and unrelated colleague, generic holiday, or gift-planning prompts must not inject the memory"
         ],
-        "currentGap": "This proves a deterministic semantic/relationship graph-equivalent minimum path with source evidence. It is not a full embedding/vector database and does not add renderer source-drilldown UI.",
+        "currentGap": "This proves a deterministic semantic/relationship graph-equivalent minimum path with source evidence and recurring ritual atom coverage. It is not a full embedding/vector database, scheduler, feed integration, or renderer source-drilldown UI.",
         "sourceExpectations": {
-          "sourceTurnIds": ["relationship-1"],
-          "exactFragments": ["第一次见面的纪念日", "一朵玫瑰", "礼物", "重要日子的仪式"]
+          "sourceTurnIds": ["relationship-1", "relationship-4"],
+          "exactFragments": ["第一次见面的纪念日", "一朵玫瑰", "礼物", "重要日子的仪式", "每年 12 月 24 日", "一起泡桂花茶"]
         }
       },
       {
@@ -882,6 +888,88 @@
             "input": "同事婚礼的礼物仪式要怎么安排？",
             "rejectedAtomExpectationIds": ["relationship-ritual"],
             "promptExcludes": ["relationship-1", "第一次见面的纪念日", "一朵玫瑰", "重要日子的仪式"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "recurring-relationship-ritual-atoms",
+      "description": "Dynamically extracts a non-rose recurring relationship ritual and recalls it through relationship concepts with lexical and semantic recall lanes disabled.",
+      "scenarioId": "semantic-relationship-ritual-recall",
+      "extractionMinScore": 0.95,
+      "recallMinScore": 0.95,
+      "extraction": {
+        "sourceTurnIds": ["relationship-4"],
+        "rejectedSourceTurnIds": [],
+        "expectedAtoms": [
+          {
+            "id": "annual-tea-ritual",
+            "type": "relationship_event",
+            "sourceTurnIds": ["relationship-4"],
+            "textIncludes": ["Relationship ritual", "annually", "桂花茶"],
+            "triggerIncludes": [
+              "recurring ritual",
+              "annual ritual",
+              "tea ritual",
+              "user_and_greyfield",
+              "relationship_ritual",
+              "recurring_relationship_ritual",
+              "annual_ritual",
+              "tea_ritual"
+            ],
+            "eventDate": { "kind": "month_day", "month": 12, "day": 24 },
+            "recurrenceFrequency": "annual",
+            "ritualAction": "一起泡桂花茶",
+            "subject": "user_and_greyfield",
+            "object": "recurring_relationship_ritual",
+            "metadata": {
+              "eventType": "recurring_relationship_ritual",
+              "ritualAction": "一起泡桂花茶",
+              "ritualKind": "tea_ritual"
+            }
+          }
+        ]
+      },
+      "recall": {
+        "input": "那个每年固定的小仪式原文是什么？",
+        "expectedAtomExpectationIds": ["annual-tea-ritual"],
+        "disabledTriggerLanes": ["exact", "aliases", "secondary", "calendar", "semantic"],
+        "sourcePassageMode": "always",
+        "promptIncludes": [
+          "Source turns: relationship-4",
+          "relationship:",
+          "relationship_ritual",
+          "recurring_relationship_ritual",
+          "annual_ritual",
+          "Recurrence: annual",
+          "Ritual action: 一起泡桂花茶",
+          "Source fragments:",
+          "每年 12 月 24 日",
+          "一起泡桂花茶"
+        ],
+        "promptExcludes": ["exact:", "alias:", "secondary:", "calendar:", "semantic:"],
+        "sourceEvidence": {
+          "expectedClass": "memory_hit_with_raw_source_evidence",
+          "requiredFragments": ["每年 12 月 24 日", "一起泡桂花茶"]
+        },
+        "falsePositiveCases": [
+          {
+            "id": "generic-holiday-gift-planning-does-not-inject-tea-ritual",
+            "input": "12月24日圣诞节送礼物有什么清单建议？",
+            "rejectedAtomExpectationIds": ["annual-tea-ritual"],
+            "promptExcludes": ["relationship-4", "一起泡桂花茶", "Source-linked relationship memory"]
+          },
+          {
+            "id": "coworker-event-does-not-inject-tea-ritual",
+            "input": "同事纪念日的礼物仪式要怎么安排？",
+            "rejectedAtomExpectationIds": ["annual-tea-ritual"],
+            "promptExcludes": ["relationship-4", "一起泡桂花茶", "Source-linked relationship memory"]
+          },
+          {
+            "id": "unrelated-gift-planning-does-not-inject-tea-ritual",
+            "input": "我想给朋友买一个无关礼物，有什么建议？",
+            "rejectedAtomExpectationIds": ["annual-tea-ritual"],
+            "promptExcludes": ["relationship-4", "一起泡桂花茶", "Source-linked relationship memory"]
           }
         ]
       }
