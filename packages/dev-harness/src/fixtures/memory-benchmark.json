@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "thresholds": {
     "summaryScore": 0.95,
     "recallScore": 0.95
@@ -7,8 +7,10 @@
   "baselineScores": {
     "summaryRegressionScore": 1,
     "recallRegressionScore": 1,
-    "productReadinessScore": 0.16,
-    "v21aScenarioScore": 0.05
+    "atomExtractionScore": 0.82,
+    "atomRecallScore": 0.61,
+    "productReadinessScore": 0.27,
+    "v21aScenarioScore": 0.2
   },
   "productReadiness": {
     "targetScore": 1,
@@ -41,11 +43,11 @@
       },
       {
         "id": "memory-atom-extraction",
-        "description": "Background LLM extraction produces typed, source-linked memory atoms rather than one broad summary segment.",
-        "status": "not_implemented",
-        "score": 0,
+        "description": "Deterministic extraction can produce typed, source-linked memory atoms for a narrow set of V2.1 scenarios, but LLM extraction and atom-level product controls are not complete.",
+        "status": "partial",
+        "score": 0.45,
         "weight": 0.22,
-        "evidence": "Core MemoryAtom schema, deterministic extractor, and JSONL atom store exist, but no desktop user-path atom write/recall, LLM extractor, or dynamic benchmark scoring is active on main"
+        "evidence": "atomExtraction benchmark dynamically runs extractDeterministicMemoryAtoms over birthday/first-meeting rose, game negative review, and rainy hotpot cases; desktop chat can write and recall deterministic atoms, but LLM extraction and atom-level Memory Library controls remain unimplemented"
       },
       {
         "id": "calendar-recall",
@@ -61,7 +63,7 @@
         "status": "partial",
         "score": 0.2,
         "weight": 0.16,
-        "evidence": "Summary segments keep source turn IDs and export raw turns, but recall output cannot yet fetch exact source passages"
+        "evidence": "Summary segments and memory atoms keep source turn IDs, but recall output cannot yet fetch exact source passages"
       },
       {
         "id": "scene-proactive-trigger",
@@ -85,8 +87,8 @@
         "id": "birthday-first-meeting-rose",
         "title": "Birthday, first meeting, and rose atoms",
         "description": "The user gives durable relationship facts that should become separate source-linked atoms and later calendar recall.",
-        "status": "not_implemented",
-        "score": 0,
+        "status": "partial",
+        "score": 0.25,
         "weight": 0.34,
         "dimensions": [
           "memory-atom-extraction",
@@ -117,7 +119,7 @@
           "calendar recall should surface birthday and first-meeting anniversary without exact keyword overlap",
           "drilldown should show source turns rose-1 and rose-2"
         ],
-        "currentGap": "Current main has an atom schema, deterministic first slice, and JSONL store, but desktop memory still cannot write and recall these relationship atoms from the user path, run date-aware recall, or drill down to exact source passages.",
+        "currentGap": "Current main can write and recall deterministic birthday and first-meeting rose atoms from the desktop chat path, but it still cannot run date-aware recall, extract a separate rose preference, manage atoms in Memory Library, or drill down to exact source passages.",
         "sourceExpectations": {
           "sourceTurnIds": ["rose-1", "rose-2"],
           "exactFragments": ["我的生日是 9 月 7 日", "第一次相遇是 2024 年 5 月 20 日", "红玫瑰"]
@@ -128,7 +130,7 @@
         "title": "Game negative review original-text drilldown",
         "description": "The user later asks for the exact original wording of a game complaint, not just a paraphrased summary.",
         "status": "partial",
-        "score": 0.15,
+        "score": 0.25,
         "weight": 0.33,
         "dimensions": [
           "memory-atom-extraction",
@@ -158,7 +160,7 @@
           "recall should expose exact original wording on source drilldown",
           "UI/event noise must not be mixed into the memory"
         ],
-        "currentGap": "Source turn IDs exist for summaries, but the current recall prompt cannot fetch or display the exact raw review text on demand.",
+        "currentGap": "Deterministic atom extraction and direct trigger recall can preserve the source turn ID for the game complaint, but the current recall prompt cannot fetch or display the exact raw review text on demand.",
         "sourceExpectations": {
           "sourceTurnIds": ["game-1"],
           "exactFragments": ["教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员"]
@@ -168,8 +170,8 @@
         "id": "rainy-home-hotpot-proactive-trigger",
         "title": "Rainy virtual-home hotpot proactive trigger",
         "description": "Scene and environment cues should trigger a remembered care ritual when the user has been away for a long time.",
-        "status": "not_implemented",
-        "score": 0,
+        "status": "partial",
+        "score": 0.1,
         "weight": 0.33,
         "dimensions": [
           "memory-atom-extraction",
@@ -200,7 +202,7 @@
           "trigger recall should run from environment state without a direct chat keyword",
           "event telemetry should not become the remembered user preference"
         ],
-        "currentGap": "Current runtime has no virtual-home state, weather/absence feed, scene trigger index, or proactive recall loop.",
+        "currentGap": "Deterministic extraction can form a rainy hotpot scene atom from the user turn, but current runtime has no virtual-home state, weather/absence feed, scene trigger index, or proactive recall loop.",
         "sourceExpectations": {
           "sourceTurnIds": ["hotpot-1", "hotpot-2"],
           "exactFragments": ["下雨", "虚拟家的窗户开着", "长期没上线", "一起吃火锅"]
@@ -417,6 +419,134 @@
       "maxCharacters": 320,
       "promptIncludes": ["Reason: cue:", "Source turns: turn-night-rest-1"],
       "promptExcludes": ["memory-ci-noise"]
+    }
+  ],
+  "atomCases": [
+    {
+      "id": "birthday-first-meeting-rose-atoms",
+      "description": "Dynamically extracts birthday and first-meeting rose atoms while showing that a separate rose preference and calendar recall are not complete.",
+      "scenarioId": "birthday-first-meeting-rose",
+      "extractionMinScore": 0.6,
+      "recallMinScore": 0.95,
+      "extraction": {
+        "sourceTurnIds": ["rose-1", "rose-2"],
+        "rejectedSourceTurnIds": [],
+        "expectedAtoms": [
+          {
+            "id": "birthday",
+            "type": "fact",
+            "sourceTurnIds": ["rose-1"],
+            "textIncludes": ["birthday", "09-07"],
+            "triggerIncludes": ["生日", "09-07"],
+            "eventDate": { "kind": "month_day", "month": 9, "day": 7 },
+            "recurrenceFrequency": "annual",
+            "object": "birthday",
+            "metadata": { "factType": "birthday" }
+          },
+          {
+            "id": "first-meeting-rose",
+            "type": "relationship_event",
+            "sourceTurnIds": ["rose-2"],
+            "textIncludes": ["relationship event", "rose"],
+            "triggerIncludes": ["相遇纪念日", "玫瑰"],
+            "eventDate": { "kind": "month_day", "month": 5, "day": 20 },
+            "ritualAction": "送玫瑰",
+            "object": "first_meeting_anniversary",
+            "metadata": { "eventType": "first_meeting_anniversary", "gift": "rose" }
+          },
+          {
+            "id": "separate-rose-preference",
+            "type": "preference",
+            "sourceTurnIds": ["rose-2"],
+            "textIncludes": ["rose"],
+            "triggerIncludes": ["玫瑰"],
+            "object": "rose",
+            "metadata": { "preferenceType": "flower" }
+          }
+        ]
+      },
+      "recall": {
+        "input": "明天是不是该准备生日或第一次相遇纪念日？我还喜欢什么花？",
+        "expectedAtomExpectationIds": ["birthday", "first-meeting-rose"],
+        "rejectedAtomExpectationIds": ["separate-rose-preference"],
+        "promptIncludes": ["Source turns: rose-1", "Source turns: rose-2", "Ritual action: 送玫瑰"],
+        "unsupportedGaps": [
+          "calendar recall for tomorrow or annual anniversaries is not implemented",
+          "separate rose preference extraction is not implemented",
+          "source passage drilldown is not implemented"
+        ]
+      }
+    },
+    {
+      "id": "game-negative-review-atoms",
+      "description": "Dynamically extracts and recalls a negative game-review atom while keeping exact source-passage drilldown unimplemented.",
+      "scenarioId": "game-negative-review-source-drilldown",
+      "extractionMinScore": 0.9,
+      "recallMinScore": 0.75,
+      "extraction": {
+        "sourceTurnIds": ["game-1", "game-3"],
+        "rejectedSourceTurnIds": ["game-3"],
+        "expectedAtoms": [
+          {
+            "id": "game-negative-review",
+            "type": "opinion",
+            "sourceTurnIds": ["game-1"],
+            "textIncludes": ["negative opinion", "星环旅店", "剧情"],
+            "triggerIncludes": ["星环旅店", "剧情", "游戏差评"],
+            "object": "星环旅店",
+            "sentiment": "negative",
+            "metadata": { "target": "星环旅店", "reasons": ["剧情"], "opinionType": "game_review" }
+          }
+        ]
+      },
+      "recall": {
+        "input": "上次我吐槽《星环旅店》的差评原文是什么？别只总结。",
+        "expectedAtomExpectationIds": ["game-negative-review"],
+        "promptIncludes": ["Source turns: game-1", "教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员"],
+        "unsupportedGaps": [
+          "exact source passage drilldown is not implemented",
+          "LLM extraction that preserves arbitrary complaint wording is not implemented"
+        ]
+      }
+    },
+    {
+      "id": "rainy-home-hotpot-atoms",
+      "description": "Dynamically extracts a rainy hotpot scene atom while proving environment/proactive scene recall still does not fire.",
+      "scenarioId": "rainy-home-hotpot-proactive-trigger",
+      "extractionMinScore": 0.7,
+      "recallMinScore": 0.05,
+      "extraction": {
+        "sourceTurnIds": ["hotpot-1", "hotpot-3"],
+        "rejectedSourceTurnIds": ["hotpot-3"],
+        "expectedAtoms": [
+          {
+            "id": "rainy-hotpot-scene",
+            "type": "episodic_scene",
+            "sourceTurnIds": ["hotpot-1"],
+            "textIncludes": ["rainy", "hotpot"],
+            "triggerIncludes": ["下雨", "雨天", "火锅"],
+            "object": "rainy_hotpot_scene",
+            "metadata": { "sceneType": "shared_meal", "weather": "rain", "activity": "hotpot" }
+          },
+          {
+            "id": "window-long-absence-action",
+            "type": "episodic_scene",
+            "sourceTurnIds": ["hotpot-1"],
+            "textIncludes": ["open window", "long absence", "关窗"],
+            "triggerIncludes": ["虚拟家的窗户开着", "长期没上线", "关窗"]
+          }
+        ]
+      },
+      "recall": {
+        "input": "environment: raining; virtual_home.window=open; last_seen_days=45",
+        "expectedAtomExpectationIds": ["rainy-hotpot-scene"],
+        "promptIncludes": ["火锅"],
+        "unsupportedGaps": [
+          "environment trigger lane is not wired into benchmark recall",
+          "scene proactive trigger loop is not implemented",
+          "virtual-home window and last-seen state are not implemented"
+        ]
+      }
     }
   ]
 }

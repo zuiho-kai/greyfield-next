@@ -1,9 +1,14 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  buildMemoryAtomRecallContext,
   buildRecallContext,
   createSummarySegmentDraft,
+  extractDeterministicMemoryAtoms,
+  formatMemoryAtomRecallContextForPrompt,
   formatRecallContextForPrompt,
+  type MemoryAtom,
+  type MemoryAtomType,
   type SummarySegment
 } from "@greyfield/core-runtime";
 import type { SessionTurn } from "@greyfield/core-runtime";
@@ -17,6 +22,8 @@ interface MemoryBenchmarkFixture {
   baselineScores: {
     summaryRegressionScore: number;
     recallRegressionScore: number;
+    atomExtractionScore: number;
+    atomRecallScore: number;
     productReadinessScore: number;
     v21aScenarioScore: number;
   };
@@ -26,6 +33,7 @@ interface MemoryBenchmarkFixture {
   summaryCases: SummaryBenchmarkCase[];
   recallSegments: RecallSegmentFixture[];
   recallCases: RecallBenchmarkCase[];
+  atomCases: AtomBenchmarkCase[];
 }
 
 interface ProductReadinessFixture {
@@ -115,6 +123,48 @@ interface RecallBenchmarkCase {
   promptExcludes?: string[];
 }
 
+interface AtomBenchmarkCase {
+  id: string;
+  description?: string;
+  scenarioId: (typeof requiredV21aScenarioIds)[number];
+  extractionMinScore: number;
+  recallMinScore: number;
+  extraction: {
+    sourceTurnIds: string[];
+    expectedAtoms: AtomExpectation[];
+    rejectedSourceTurnIds?: string[];
+  };
+  recall: {
+    input: string;
+    expectedAtomExpectationIds: string[];
+    rejectedAtomExpectationIds?: string[];
+    maxItems?: number;
+    maxCharacters?: number;
+    promptIncludes?: string[];
+    promptExcludes?: string[];
+    unsupportedGaps?: string[];
+  };
+}
+
+interface AtomExpectation {
+  id: string;
+  type: MemoryAtomType;
+  sourceTurnIds: string[];
+  textIncludes?: string[];
+  triggerIncludes?: string[];
+  eventDate?: {
+    kind: "absolute" | "month_day";
+    isoDate?: string;
+    month?: number;
+    day?: number;
+  };
+  recurrenceFrequency?: "annual";
+  ritualAction?: string;
+  object?: string;
+  sentiment?: "positive" | "negative" | "neutral";
+  metadata?: Record<string, string | string[] | number | boolean | null>;
+}
+
 interface CaseResult {
   id: string;
   passed: boolean;
@@ -139,19 +189,27 @@ const fixture = await loadFixture();
 const recallSegments = fixture.recallSegments.map((segment) => makeSegment(segment, fixture));
 const summaryResults = fixture.summaryCases.map((testCase) => runSummaryCase(testCase, fixture));
 const recallResults = fixture.recallCases.map((testCase) => runRecallCase(testCase));
+const atomExtractionResults = fixture.atomCases.map((testCase) => runAtomExtractionCase(testCase, fixture));
+const atomRecallResults = fixture.atomCases.map((testCase) => runAtomRecallCase(testCase, fixture));
 const summaryScore = average(summaryResults.map((result) => result.score));
 const recallScore = average(recallResults.map((result) => result.score));
+const atomExtractionScore = average(atomExtractionResults.map((result) => result.score));
+const atomRecallScore = average(atomRecallResults.map((result) => result.score));
 const productReadinessResult = scoreProductReadiness(fixture.productReadiness);
 const ok =
-  fixture.version === 3 &&
+  fixture.version === 4 &&
   summaryScore >= fixture.thresholds.summaryScore &&
   recallScore >= fixture.thresholds.recallScore &&
   summaryScore >= fixture.baselineScores.summaryRegressionScore &&
   recallScore >= fixture.baselineScores.recallRegressionScore &&
+  atomExtractionScore >= fixture.baselineScores.atomExtractionScore &&
+  atomRecallScore >= fixture.baselineScores.atomRecallScore &&
   productReadinessResult.score >= fixture.baselineScores.productReadinessScore &&
   productReadinessResult.scenarioScore >= fixture.baselineScores.v21aScenarioScore &&
   summaryResults.every((result) => result.passed) &&
-  recallResults.every((result) => result.passed);
+  recallResults.every((result) => result.passed) &&
+  atomExtractionResults.every((result) => result.passed) &&
+  atomRecallResults.every((result) => result.passed);
 
 const report = {
   ok,
@@ -162,6 +220,8 @@ const report = {
   scores: {
     summaryRegressionScore: roundScore(summaryScore),
     recallRegressionScore: roundScore(recallScore),
+    atomExtractionScore: roundScore(atomExtractionScore),
+    atomRecallScore: roundScore(atomRecallScore),
     productReadinessScore: productReadinessResult.score,
     productReadinessCapabilityScore: productReadinessResult.capabilityScore,
     v21aScenarioScore: productReadinessResult.scenarioScore
@@ -173,6 +233,14 @@ const report = {
   recall: {
     score: roundScore(recallScore),
     cases: recallResults
+  },
+  atomExtraction: {
+    score: roundScore(atomExtractionScore),
+    cases: atomExtractionResults
+  },
+  atomRecall: {
+    score: roundScore(atomRecallScore),
+    cases: atomRecallResults
   },
   productReadiness: productReadinessResult
 };
@@ -199,13 +267,15 @@ async function loadFixture(): Promise<MemoryBenchmarkFixture> {
 }
 
 function validateFixture(candidate: MemoryBenchmarkFixture): void {
-  if (candidate.version !== 3) {
+  if (candidate.version !== 4) {
     throw new Error(`Unsupported memory benchmark fixture version: ${candidate.version}`);
   }
   validateScore("thresholds.summaryScore", candidate.thresholds.summaryScore);
   validateScore("thresholds.recallScore", candidate.thresholds.recallScore);
   validateScore("baselineScores.summaryRegressionScore", candidate.baselineScores.summaryRegressionScore);
   validateScore("baselineScores.recallRegressionScore", candidate.baselineScores.recallRegressionScore);
+  validateScore("baselineScores.atomExtractionScore", candidate.baselineScores.atomExtractionScore);
+  validateScore("baselineScores.atomRecallScore", candidate.baselineScores.atomRecallScore);
   validateScore("baselineScores.productReadinessScore", candidate.baselineScores.productReadinessScore);
   validateScore("baselineScores.v21aScenarioScore", candidate.baselineScores.v21aScenarioScore);
   validateProductReadiness(candidate.productReadiness);
@@ -218,6 +288,7 @@ function validateFixture(candidate: MemoryBenchmarkFixture): void {
   assertUnique("summary case", candidate.summaryCases.map((testCase) => testCase.id));
   assertUnique("recall segment", candidate.recallSegments.map((segment) => segment.id));
   assertUnique("recall case", candidate.recallCases.map((testCase) => testCase.id));
+  assertUnique("atom case", candidate.atomCases.map((testCase) => testCase.id));
   const segmentIds = new Set(candidate.recallSegments.map((segment) => segment.id));
   for (const testCase of candidate.recallCases) {
     for (const id of [...testCase.expectedIds, ...testCase.rejectedIds, ...(testCase.expectedSkipped ?? []).map((item) => item.id)]) {
@@ -225,6 +296,9 @@ function validateFixture(candidate: MemoryBenchmarkFixture): void {
         throw new Error(`Recall case ${testCase.id} references missing segment ${id}`);
       }
     }
+  }
+  for (const testCase of candidate.atomCases) {
+    validateAtomCase(testCase, candidate);
   }
 }
 
@@ -302,6 +376,44 @@ function validateProductReadiness(productReadiness: ProductReadinessFixture): vo
     }
     if (scenario.sourceExpectations.exactFragments.length === 0) {
       throw new Error(`productReadiness.${scenario.id}.sourceExpectations.exactFragments must not be empty`);
+    }
+  }
+}
+
+function validateAtomCase(testCase: AtomBenchmarkCase, loadedFixture: MemoryBenchmarkFixture): void {
+  validateScore(`atomCases.${testCase.id}.extractionMinScore`, testCase.extractionMinScore);
+  validateScore(`atomCases.${testCase.id}.recallMinScore`, testCase.recallMinScore);
+  const scenario = findScenario(testCase.scenarioId, loadedFixture);
+  if (!scenario) {
+    throw new Error(`Atom case ${testCase.id} references missing scenario ${testCase.scenarioId}`);
+  }
+  const scenarioTurnIds = new Set(scenario.turns.map((turn) => turn.id));
+  if (testCase.extraction.sourceTurnIds.length === 0) {
+    throw new Error(`Atom case ${testCase.id} must define extraction.sourceTurnIds`);
+  }
+  if (testCase.extraction.expectedAtoms.length === 0) {
+    throw new Error(`Atom case ${testCase.id} must define extraction.expectedAtoms`);
+  }
+  assertUnique(
+    `atom expectation for ${testCase.id}`,
+    testCase.extraction.expectedAtoms.map((expectation) => expectation.id)
+  );
+  for (const turnId of [
+    ...testCase.extraction.sourceTurnIds,
+    ...testCase.extraction.expectedAtoms.flatMap((expectation) => expectation.sourceTurnIds),
+    ...(testCase.extraction.rejectedSourceTurnIds ?? [])
+  ]) {
+    if (!scenarioTurnIds.has(turnId)) {
+      throw new Error(`Atom case ${testCase.id} references missing scenario turn ${turnId}`);
+    }
+  }
+  const expectationIds = new Set(testCase.extraction.expectedAtoms.map((expectation) => expectation.id));
+  for (const expectationId of [
+    ...testCase.recall.expectedAtomExpectationIds,
+    ...(testCase.recall.rejectedAtomExpectationIds ?? [])
+  ]) {
+    if (!expectationIds.has(expectationId)) {
+      throw new Error(`Atom case ${testCase.id} recall references missing atom expectation ${expectationId}`);
     }
   }
 }
@@ -491,6 +603,295 @@ function runRecallCase(testCase: RecallBenchmarkCase): CaseResult {
   };
 }
 
+function runAtomExtractionCase(testCase: AtomBenchmarkCase, loadedFixture: MemoryBenchmarkFixture): CaseResult {
+  const atoms = collectAtomCaseAtoms(testCase, loadedFixture);
+  const expectationResults = testCase.extraction.expectedAtoms.map((expectation) =>
+    scoreAtomExpectation(expectation, atoms)
+  );
+  const rejectedSourceHits = atoms
+    .filter((atom) => (testCase.extraction.rejectedSourceTurnIds ?? []).some((turnId) => atom.sourceTurnIds.includes(turnId)))
+    .map(toAtomDetail);
+  const expectationScore = average(expectationResults.map((result) => result.score));
+  const rejectionScore = rejectedSourceHits.length === 0 ? 1 : 0;
+  const score = weightedAverage([
+    [expectationScore, 0.9],
+    [rejectionScore, 0.1]
+  ]);
+
+  return {
+    id: testCase.id,
+    passed: score >= testCase.extractionMinScore,
+    score: roundScore(score),
+    details: {
+      description: testCase.description,
+      scenarioId: testCase.scenarioId,
+      minScore: testCase.extractionMinScore,
+      sourceTurnIds: testCase.extraction.sourceTurnIds,
+      extractedAtoms: atoms.map(toAtomDetail),
+      expectationResults,
+      rejectedSourceHits
+    }
+  };
+}
+
+function runAtomRecallCase(testCase: AtomBenchmarkCase, loadedFixture: MemoryBenchmarkFixture): CaseResult {
+  const atoms = collectAtomCaseAtoms(testCase, loadedFixture);
+  const expectationMatches = new Map(
+    testCase.extraction.expectedAtoms.map((expectation) => [expectation.id, findBestAtomForExpectation(expectation, atoms)])
+  );
+  const context = buildMemoryAtomRecallContext({
+    input: testCase.recall.input,
+    atoms,
+    maxItems: testCase.recall.maxItems,
+    maxCharacters: testCase.recall.maxCharacters
+  });
+  const promptText = formatMemoryAtomRecallContextForPrompt(context);
+  const actualIds = context.items.map((item) => item.id);
+  const actualIdSet = new Set(actualIds);
+  const expectedMatches = testCase.recall.expectedAtomExpectationIds.map((expectationId) => ({
+    expectationId,
+    atom: expectationMatches.get(expectationId)?.atom
+  }));
+  const missingExtraction = expectedMatches
+    .filter((match) => !match.atom)
+    .map((match) => match.expectationId);
+  const missingRecall = expectedMatches
+    .filter((match) => match.atom && !actualIdSet.has(match.atom.id))
+    .map((match) => ({ expectationId: match.expectationId, atomId: match.atom?.id }));
+  const rejectedHits = (testCase.recall.rejectedAtomExpectationIds ?? [])
+    .map((expectationId) => ({ expectationId, atom: expectationMatches.get(expectationId)?.atom }))
+    .filter((match) => match.atom && actualIdSet.has(match.atom.id))
+    .map((match) => ({ expectationId: match.expectationId, atomId: match.atom?.id }));
+  const sourceVisible = context.items.every((item) => item.sourceTurnIds.every((turnId) => promptText.includes(turnId)));
+  const reasonVisible = context.items.every((item) => item.reason.length > 0 && promptText.includes(item.reason));
+  const missingPromptFragments = (testCase.recall.promptIncludes ?? []).filter((fragment) => !promptText.includes(fragment));
+  const unexpectedPromptFragments = (testCase.recall.promptExcludes ?? []).filter((fragment) => promptText.includes(fragment));
+  const expectedCount = testCase.recall.expectedAtomExpectationIds.length;
+  const hitScore =
+    expectedCount === 0
+      ? actualIds.length === 0
+        ? 1
+        : 0
+      : ratio(expectedCount - missingExtraction.length - missingRecall.length, expectedCount);
+  const rejectedExpectationCount = (testCase.recall.rejectedAtomExpectationIds ?? []).length;
+  const rejectionScore =
+    rejectedExpectationCount === 0 ? 1 : ratio(rejectedExpectationCount - rejectedHits.length, rejectedExpectationCount);
+  const visibilityScore = context.items.length > 0 && sourceVisible && reasonVisible ? 1 : 0;
+  const promptScore =
+    (testCase.recall.promptIncludes ?? []).length + (testCase.recall.promptExcludes ?? []).length === 0
+      ? 1
+      : missingPromptFragments.length === 0 && unexpectedPromptFragments.length === 0
+        ? 1
+        : 0;
+  const score = weightedAverage([
+    [hitScore, 0.7],
+    [promptScore, 0.2],
+    [rejectionScore, 0.05],
+    [visibilityScore, 0.05]
+  ]);
+
+  return {
+    id: testCase.id,
+    passed: score >= testCase.recallMinScore,
+    score: roundScore(score),
+    details: {
+      description: testCase.description,
+      scenarioId: testCase.scenarioId,
+      minScore: testCase.recallMinScore,
+      input: testCase.recall.input,
+      actualIds,
+      skipped: context.skipped,
+      missingExtraction,
+      missingRecall,
+      rejectedHits,
+      missingPromptFragments,
+      unexpectedPromptFragments,
+      unsupportedGaps: testCase.recall.unsupportedGaps ?? [],
+      reasons: context.items.map((item) => ({ id: item.id, reason: item.reason, score: item.score })),
+      sourceVisible,
+      reasonVisible
+    }
+  };
+}
+
+function collectAtomCaseAtoms(testCase: AtomBenchmarkCase, loadedFixture: MemoryBenchmarkFixture): MemoryAtom[] {
+  const scenario = findScenario(testCase.scenarioId, loadedFixture);
+  if (!scenario) {
+    throw new Error(`Atom case ${testCase.id} references missing scenario ${testCase.scenarioId}`);
+  }
+  const turnsById = new Map(scenario.turns.map((turn) => [turn.id, turn]));
+  return testCase.extraction.sourceTurnIds.flatMap((turnId) => {
+    const turn = turnsById.get(turnId);
+    if (!turn) {
+      throw new Error(`Atom case ${testCase.id} references missing scenario turn ${turnId}`);
+    }
+    return extractDeterministicMemoryAtoms({
+      text: turn.content,
+      threadId: loadedFixture.threadId,
+      sourceTurnIds: [turn.id],
+      sourceSessionId: loadedFixture.sessionId,
+      createdAt: turn.createdAt ?? defaultCreatedAt,
+      now: turn.createdAt ?? defaultCreatedAt
+    });
+  });
+}
+
+function scoreAtomExpectation(expectation: AtomExpectation, atoms: MemoryAtom[]): {
+  expectationId: string;
+  score: number;
+  actualAtom?: ReturnType<typeof toAtomDetail>;
+  missingChecks: string[];
+  matchedChecks: string[];
+} {
+  const match = findBestAtomForExpectation(expectation, atoms);
+  return {
+    expectationId: expectation.id,
+    score: roundScore(match.score),
+    actualAtom: match.atom ? toAtomDetail(match.atom) : undefined,
+    missingChecks: match.checks.filter((check) => check.score < 1).map((check) => check.label),
+    matchedChecks: match.checks.filter((check) => check.score === 1).map((check) => check.label)
+  };
+}
+
+function findBestAtomForExpectation(
+  expectation: AtomExpectation,
+  atoms: MemoryAtom[]
+): {
+  atom?: MemoryAtom;
+  score: number;
+  checks: Array<{ label: string; score: number }>;
+} {
+  const candidates = atoms.filter(
+    (atom) => atom.type === expectation.type && expectation.sourceTurnIds.every((turnId) => atom.sourceTurnIds.includes(turnId))
+  );
+  if (candidates.length === 0) {
+    return { score: 0, checks: [{ label: "type/source", score: 0 }] };
+  }
+  return candidates
+    .map((atom) => {
+      const checks = scoreAtomExpectationChecks(expectation, atom);
+      return { atom, checks, score: average(checks.map((check) => check.score)) };
+    })
+    .sort((a, b) => b.score - a.score)[0]!;
+}
+
+function scoreAtomExpectationChecks(expectation: AtomExpectation, atom: MemoryAtom): Array<{ label: string; score: number }> {
+  const checks: Array<{ label: string; score: number }> = [
+    { label: "type", score: atom.type === expectation.type ? 1 : 0 },
+    {
+      label: "sourceTurnIds",
+      score: expectation.sourceTurnIds.every((turnId) => atom.sourceTurnIds.includes(turnId)) ? 1 : 0
+    }
+  ];
+  if (expectation.textIncludes) {
+    checks.push({
+      label: "textIncludes",
+      score: ratio(
+        expectation.textIncludes.filter((fragment) => atom.text.toLowerCase().includes(fragment.toLowerCase())).length,
+        expectation.textIncludes.length
+      )
+    });
+  }
+  if (expectation.triggerIncludes) {
+    const triggerKeys = flattenAtomTriggerKeys(atom);
+    checks.push({
+      label: "triggerIncludes",
+      score: ratio(
+        expectation.triggerIncludes.filter((key) => triggerKeys.includes(key.toLowerCase())).length,
+        expectation.triggerIncludes.length
+      )
+    });
+  }
+  if (expectation.eventDate) {
+    checks.push({ label: "eventDate", score: atomEventDateMatches(atom, expectation) ? 1 : 0 });
+  }
+  if (expectation.recurrenceFrequency) {
+    checks.push({
+      label: "recurrence",
+      score: atom.recurrence?.frequency === expectation.recurrenceFrequency ? 1 : 0
+    });
+  }
+  if (expectation.ritualAction) {
+    checks.push({
+      label: "ritualAction",
+      score: atom.ritualAction === expectation.ritualAction ? 1 : 0
+    });
+  }
+  if (expectation.object) {
+    checks.push({ label: "object", score: atom.object === expectation.object ? 1 : 0 });
+  }
+  if (expectation.sentiment) {
+    checks.push({ label: "sentiment", score: atom.sentiment === expectation.sentiment ? 1 : 0 });
+  }
+  if (expectation.metadata) {
+    const metadataEntries = Object.entries(expectation.metadata);
+    checks.push({
+      label: "metadata",
+      score: ratio(
+        metadataEntries.filter(([key, value]) => metadataValueMatches(atom.metadata?.[key], value)).length,
+        metadataEntries.length
+      )
+    });
+  }
+  return checks;
+}
+
+function atomEventDateMatches(atom: MemoryAtom, expectation: AtomExpectation): boolean {
+  if (!atom.eventDate || !expectation.eventDate) {
+    return false;
+  }
+  return (
+    atom.eventDate.kind === expectation.eventDate.kind &&
+    (expectation.eventDate.isoDate === undefined || atom.eventDate.isoDate === expectation.eventDate.isoDate) &&
+    (expectation.eventDate.month === undefined || atom.eventDate.month === expectation.eventDate.month) &&
+    (expectation.eventDate.day === undefined || atom.eventDate.day === expectation.eventDate.day)
+  );
+}
+
+function metadataValueMatches(
+  actual: string | string[] | number | boolean | null | undefined,
+  expected: string | string[] | number | boolean | null
+): boolean {
+  if (Array.isArray(expected)) {
+    return Array.isArray(actual) && expected.every((item) => actual.includes(item));
+  }
+  return actual === expected;
+}
+
+function flattenAtomTriggerKeys(atom: MemoryAtom): string[] {
+  return [
+    ...new Set(
+      [
+        ...atom.triggerKeys,
+        ...atom.triggers.exact,
+        ...atom.triggers.aliases,
+        ...atom.triggers.secondary,
+        ...(atom.triggers.calendar ?? []),
+        ...(atom.triggers.environment ?? []),
+        ...(atom.triggers.semantic ?? []),
+        ...(atom.triggers.relationship ?? [])
+      ].map((key) => key.toLowerCase())
+    )
+  ];
+}
+
+function toAtomDetail(atom: MemoryAtom): Record<string, unknown> {
+  return {
+    id: atom.id,
+    type: atom.type,
+    text: atom.text,
+    sourceTurnIds: atom.sourceTurnIds,
+    triggerKeys: atom.triggerKeys,
+    triggers: atom.triggers,
+    eventDate: atom.eventDate,
+    recurrence: atom.recurrence,
+    ritualAction: atom.ritualAction,
+    object: atom.object,
+    sentiment: atom.sentiment,
+    metadata: atom.metadata
+  };
+}
+
 function makeSegment(segment: RecallSegmentFixture, loadedFixture: MemoryBenchmarkFixture): SummarySegment {
   return {
     id: segment.id,
@@ -507,6 +908,10 @@ function makeSegment(segment: RecallSegmentFixture, loadedFixture: MemoryBenchma
     createdAt: segment.createdAt ?? defaultCreatedAt,
     disabled: segment.disabled
   };
+}
+
+function findScenario(id: string, loadedFixture: MemoryBenchmarkFixture): ProductScenarioFixture | undefined {
+  return loadedFixture.productReadiness.scenarios.find((scenario) => scenario.id === id);
 }
 
 function average(values: number[]): number {
