@@ -1,9 +1,9 @@
-import { _electron as electron, type ElectronApplication, type Page } from "playwright";
+import { _electron as electron, type ElectronApplication, type Locator, type Page } from "playwright";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import type { MemoryAtom } from "@greyfield/core-runtime";
+import type { MemoryAtom, SessionTurn } from "@greyfield/core-runtime";
 import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
 import { getElectronExecutablePath } from "./electron-install";
 
@@ -12,16 +12,23 @@ const desktopRoot = join(workspaceRoot, "apps", "desktop");
 const executablePath = await getElectronExecutablePath(desktopRoot);
 const tempDir = await mkdtemp(join(tmpdir(), "greyfield-electron-memory-atoms-"));
 const configPath = join(tempDir, "greyfield.config.json");
+const sessionPath = join(tempDir, "sessions", "desktop-main-session.jsonl");
 const atomPath = join(tempDir, "memory", "atoms.jsonl");
 const artifactDir = join(workspaceRoot, ".cache", "greyfield-memory-atom-library", "latest");
 const settingsInitialScreenshotPath = join(artifactDir, "settings-memory-atoms-initial.png");
 const settingsAfterClearScreenshotPath = join(artifactDir, "settings-memory-atoms-after-clear.png");
+const availableSourceScreenshotPath = join(artifactDir, "source-available.png");
+const missingSourceScreenshotPath = join(artifactDir, "source-missing.png");
+const unavailableSourceScreenshotPath = join(artifactDir, "source-unavailable.png");
+const noSourceScreenshotPath = join(artifactDir, "source-no-passage.png");
 const providerSecret = "memory-atom-library-provider-secret";
 const currentThreadId = "desktop:characters-greyfield-yaml";
 const otherThreadId = "desktop:characters-other-role-yaml";
+const boundedTail = "SOURCE_PASSAGE_BOUNDARY_TAIL_SHOULD_NOT_RENDER";
 
 let app: ElectronApplication | undefined;
 try {
+  await mkdir(join(tempDir, "sessions"), { recursive: true });
   await mkdir(join(tempDir, "memory"), { recursive: true });
   await mkdir(artifactDir, { recursive: true });
   await writeFile(
@@ -39,6 +46,18 @@ try {
     )}\n`,
     "utf8"
   );
+  await writeSessionFile([
+    makeTurn({
+      id: "desktop-main-session-fact",
+      role: "user",
+      content: `User birthday source says June 12. ${"This sentence keeps the available source passage long. ".repeat(16)}${boundedTail}`
+    }),
+    makeTurn({
+      id: "desktop-main-session-preference",
+      role: "assistant",
+      content: "Greyfield confirmed the user prefers the Hiyori model."
+    })
+  ]);
   await writeAtomFile([
     makeAtom({
       id: "atom-fact",
@@ -65,6 +84,7 @@ try {
       id: "atom-relationship",
       type: "relationship_event",
       text: "First meeting anniversary ritual is giving roses.",
+      sourceSessionId: "previous-local-session",
       sourceTurnIds: ["desktop-main-session-relationship"],
       metadata: { eventType: "first_meeting_anniversary" }
     }),
@@ -72,7 +92,7 @@ try {
       id: "atom-scene",
       type: "episodic_scene",
       text: "Shared rainy hotpot evening memory.",
-      sourceTurnIds: ["desktop-main-session-scene"],
+      sourceTurnIds: [],
       metadata: { sceneType: "shared_meal" }
     }),
     makeAtom({
@@ -115,9 +135,30 @@ try {
   await memoryLibrary.locator('[aria-label="Opinion memory atom-opinion"]', { hasText: "User dislikes pay-to-win game loops." }).waitFor();
   await memoryLibrary.locator('[aria-label="Relationship memory atom-relationship"]', { hasText: "First meeting anniversary ritual is giving roses." }).waitFor();
   await memoryLibrary.locator('[aria-label="Scene memory atom-scene"]', { hasText: "Shared rainy hotpot evening memory." }).waitFor();
+  const availableSource = await openSourcePassage(memoryLibrary, "Source passage for Fact memory atom-fact");
+  await availableSource.getByText("User birthday source says June 12.").waitFor();
+  await availableSource.getByText("Turn").waitFor();
+  await availableSource.getByText("desktop-main-session-fact").waitFor();
+  await availableSource.getByText("Role").waitFor();
+  await availableSource.getByText("User").first().waitFor();
+  const missingSource = await openSourcePassage(memoryLibrary, "Source passage for Opinion memory atom-opinion");
+  await missingSource.getByText("Source unavailable in this local session store").first().waitFor();
+  await missingSource.getByText("desktop-main-session-opinion").waitFor();
+  const unavailableSource = await openSourcePassage(memoryLibrary, "Source passage for Relationship memory atom-relationship");
+  await unavailableSource.getByText("Source unavailable in this local session store").first().waitFor();
+  await unavailableSource.getByText("desktop-main-session-relationship").waitFor();
+  const noSource = await openSourcePassage(memoryLibrary, "Source passage for Scene memory atom-scene");
+  await noSource.getByText("No passage").first().waitFor();
+  await captureSourceState(settings, availableSource, availableSourceScreenshotPath);
+  await captureSourceState(settings, missingSource, missingSourceScreenshotPath);
+  await captureSourceState(settings, unavailableSource, unavailableSourceScreenshotPath);
+  await captureSourceState(settings, noSource, noSourceScreenshotPath);
 
   const initialLibraryText = (await memoryLibrary.textContent()) ?? "";
   assertTextDoesNotExposeForbiddenMemoryUi(initialLibraryText);
+  if (initialLibraryText.includes(boundedTail)) {
+    throw new Error("Memory Library rendered source text beyond the bounded passage display.");
+  }
   await assertSettingsPageDoesNotExposeProviderSecret(settings);
   if (initialLibraryText.includes("Other role memory must stay isolated.")) {
     throw new Error("Memory Library rendered a different role's atom memory.");
@@ -192,6 +233,10 @@ try {
         settingsPageTextAndInputsExcludedProviderSecret: true,
         memoryExportExcludedProviderSecret: true,
         noPendingCandidateApprovalUi: true,
+        availableSourceScreenshotPath,
+        missingSourceScreenshotPath,
+        unavailableSourceScreenshotPath,
+        noSourceScreenshotPath,
         settingsInitialScreenshotPath,
         settingsAfterClearScreenshotPath,
         remainingAtomIds: (await readAtoms()).map((atom) => atom.id)
@@ -221,6 +266,10 @@ async function waitForRoleWindow(app: ElectronApplication, roleName: "settings")
 
 async function writeAtomFile(atoms: MemoryAtom[]): Promise<void> {
   await writeFile(atomPath, `${atoms.map((atom) => JSON.stringify(atom)).join("\n")}\n`, "utf8");
+}
+
+async function writeSessionFile(turns: SessionTurn[]): Promise<void> {
+  await writeFile(sessionPath, `${turns.map((turn) => JSON.stringify(turn)).join("\n")}\n`, "utf8");
 }
 
 async function readAtoms(): Promise<MemoryAtom[]> {
@@ -256,6 +305,18 @@ async function waitForMissingAtom(id: string): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Timed out waiting for atom ${id} to be removed; atoms=${JSON.stringify(lastAtoms)}`);
+}
+
+async function openSourcePassage(memoryLibrary: Locator, label: string): Promise<Locator> {
+  const source = memoryLibrary.locator(`[aria-label="${label}"]`);
+  await source.locator("summary").click();
+  return source;
+}
+
+async function captureSourceState(page: Page, source: Locator, path: string): Promise<void> {
+  await source.evaluate((element) => element.scrollIntoView({ block: "center", inline: "nearest" }));
+  await page.waitForTimeout(100);
+  await page.screenshot({ path });
 }
 
 function assertTextDoesNotExposeForbiddenMemoryUi(text: string): void {
@@ -305,6 +366,16 @@ async function assertSettingsPageDoesNotExposeProviderSecret(page: Page): Promis
   if (haystack.includes(providerSecret)) {
     throw new Error(`Settings page rendered the configured provider API key: ${JSON.stringify(rendered)}`);
   }
+}
+
+function makeTurn(overrides: Partial<SessionTurn>): SessionTurn {
+  return {
+    id: "desktop-main-session-1",
+    role: "user",
+    content: "User shared a source turn.",
+    createdAt: "2026-06-28T00:00:00.000Z",
+    ...overrides
+  };
 }
 
 function makeAtom(overrides: Partial<MemoryAtom>): MemoryAtom {

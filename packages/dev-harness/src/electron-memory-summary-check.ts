@@ -1,4 +1,4 @@
-import { _electron as electron, type ElectronApplication, type Page } from "playwright";
+import { _electron as electron, type ElectronApplication, type Locator, type Page } from "playwright";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -14,6 +14,7 @@ const configPath = join(tempDir, "greyfield.config.json");
 const sessionPath = join(tempDir, "sessions", "desktop-main-session.jsonl");
 const summaryPath = join(tempDir, "memory", "summary-segments.jsonl");
 const artifactDir = join(workspaceRoot, ".cache", "greyfield-memory-summary", "latest");
+const settingsSourceScreenshotPath = join(artifactDir, "settings-memory-source-passages.png");
 const settingsScreenshotPath = join(artifactDir, "settings-memory.png");
 const providerSecret = "memory-library-provider-secret";
 
@@ -119,6 +120,11 @@ try {
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Scenes" }).waitFor();
   await memoryLibrary.locator(".memory-library__stats", { hasText: "Enabled" }).waitFor();
   await memoryLibrary.locator(".memory-library__meta", { hasText: "desktop-main-session-1" }).waitFor();
+  const summarySource = await openSourcePassage(memoryLibrary, "Source passage for summary summary-1");
+  await summarySource.getByText("Source passage").first().waitFor();
+  await summarySource.getByText("desktop-main-session-1").waitFor();
+  await summarySource.getByText("User").first().waitFor();
+  await summarySource.getByText("第一轮：我喜欢 Hiyori。").waitFor();
   await memoryLibrary.locator(".memory-library__block--recall", { hasText: "Last recalled memory" }).waitFor();
   await memoryLibrary.locator(".memory-library__block--recall", { hasText: "cue:hiyori" }).waitFor();
   const memoryLibraryText = ((await memoryLibrary.textContent()) ?? "").toLowerCase();
@@ -130,6 +136,7 @@ try {
   if (memoryLibraryText.includes(providerSecret)) {
     throw new Error("Memory Library rendered the configured provider API key.");
   }
+  await settings.screenshot({ path: settingsSourceScreenshotPath, fullPage: true });
 
   await settings.getByLabel("Memory text summary-1").fill("Edited memory: User prefers Hiyori and Sakura.");
   await settings.getByLabel("Recall cues summary-1").fill("edited-hiyori, hiyori, sakura");
@@ -201,6 +208,7 @@ try {
         noPendingCandidateApprovalUi: true,
         memoryExportExcludedProviderSecret: true,
         settingsMemoryVisible: true,
+        settingsSourceScreenshotPath,
         settingsScreenshotPath,
         summaryIncludesSourceTurns: true
       },
@@ -225,6 +233,12 @@ async function waitForRoleWindow(app: ElectronApplication, roleName: "chat" | "s
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Timed out waiting for ${roleName} window`);
+}
+
+async function openSourcePassage(memoryLibrary: Locator, label: string): Promise<Locator> {
+  const source = memoryLibrary.locator(`[aria-label="${label}"]`);
+  await source.locator("summary").click();
+  return source;
 }
 
 async function sendMessage(page: Page, text: string): Promise<void> {
