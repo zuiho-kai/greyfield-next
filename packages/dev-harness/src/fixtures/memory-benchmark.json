@@ -289,7 +289,7 @@
         "dimensions": [
           "memory-atom-extraction",
           "scene-proactive-trigger",
-          "calendar-recall",
+          "source-evidence-drilldown",
           "privacy-noise"
         ],
         "probeInput": "environment: raining; virtual_home.window=open; last_seen_days=45",

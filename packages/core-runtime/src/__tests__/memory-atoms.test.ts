@@ -616,6 +616,11 @@ describe("memory atoms", () => {
       sourceTurnIds: ["turn-coworker-dinner"],
       text: "记住那天下雨，我和同事在家里开着窗一起吃饭。"
     });
+    const pronounOnlySceneAtoms = extractDeterministicMemoryAtoms({
+      ...baseInput,
+      sourceTurnIds: ["turn-pronoun-dinner"],
+      text: "记住那天下雨，他和我在家里开着窗一起吃饭。"
+    });
     const genericWeatherSceneAtoms = extractDeterministicMemoryAtoms({
       ...baseInput,
       sourceTurnIds: ["turn-generic-weather"],
@@ -623,6 +628,7 @@ describe("memory atoms", () => {
     });
 
     expect(coworkerSceneAtoms).toEqual([]);
+    expect(pronounOnlySceneAtoms).toEqual([]);
     expect(genericWeatherSceneAtoms).toEqual([]);
 
     const { relationship: _relationship, semantic: legacySemantic, ...legacyTriggers } = sharedScene!.triggers;
@@ -660,6 +666,12 @@ describe("memory atoms", () => {
       atoms: [sharedScene]
     });
     expect(weatherContext.items).toEqual([]);
+
+    const waterContext = buildMemoryAtomRecallContext({
+      input: "what water source did we discuss?",
+      atoms: [sharedScene]
+    });
+    expect(waterContext.items).toEqual([]);
   });
 
   it("recalls atoms through exact, alias, and secondary trigger lanes", () => {

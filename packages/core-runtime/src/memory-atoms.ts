@@ -2013,7 +2013,7 @@ function hasSharedSceneSignal(text: string): boolean {
 }
 
 function hasSceneCompanionTarget(text: string): boolean {
-  return /(greyfield|小灰|你和我|我和你|和你|和我|我们之间|我们的|user\s+and\s+greyfield)/iu.test(text);
+  return /(greyfield|小灰|你和我|我和你|我们之间|我们的|user\s+and\s+greyfield)/iu.test(text);
 }
 
 function sceneWeatherEnglishAdjective(weather: SceneWeather): string {
@@ -2377,7 +2377,7 @@ function shouldSuppressPromiseRecall(input: string, atom: MemoryAtom): boolean {
 }
 
 function hasExternalRelationshipTarget(text: string): boolean {
-  return /(同事|客户|公司|团队|项目|会议|婚礼|朋友|别人的|colleague|client|company|meeting|wedding|friend)/iu.test(text);
+  return /(同事|客户|公司|团队|项目|会议|婚礼|朋友|别人的|他和我|她和我|它和我|我和他|我和她|我和它|他和你|她和你|你和他|你和她|colleague|client|company|meeting|wedding|friend)/iu.test(text);
 }
 
 function isGenericHolidayOrGiftPlanningQuery(input: string): boolean {
@@ -2440,7 +2440,7 @@ function extractSceneRecallConcepts(input: string): { hasIntent: boolean; concep
 
   const hasSceneCue =
     /(场景|场面|画面|时刻|片段|一幕|moment|scene|memory)/iu.test(text) ||
-    /(下雨|雨声|雨天|开窗|窗户|窗边|虚拟家|家里|火锅|吃东西|吃饭|避风港|rainy|rain|window|home|hotpot|eat|ate|together)/iu.test(text);
+    /(下雨|雨声|雨天|开窗|窗户|窗边|虚拟家|家里|火锅|吃东西|吃饭|避风港|rainy|rain|window|home|hotpot|\beat\b|\bate\b|together)/iu.test(text);
   const hasRecallCue =
     /(那个|那次|那天|当天|当时|之前|以前|回忆|想起|记得|原文|原话|来源|证据|片段|moment|scene|day|time|remember|recall|source|quote|verbatim)/iu.test(
       text
@@ -2450,7 +2450,7 @@ function extractSceneRecallConcepts(input: string): { hasIntent: boolean; concep
   }
 
   concepts.add("scene memory");
-  if (/(我们|一起|共同|和你|和我|shared|together|\bwe\b|\bour\b)/iu.test(text)) {
+  if (/(我们|一起|共同|你和我|我和你|shared|together|\bwe\b|\bour\b)/iu.test(text)) {
     concepts.add("shared scene memory");
   }
   if (/(下雨|雨天|rainy|rain|raining)/iu.test(text)) {
@@ -2459,7 +2459,7 @@ function extractSceneRecallConcepts(input: string): { hasIntent: boolean; concep
   if (/(下雪|雪天|snowy|snow)/iu.test(text)) {
     concepts.add("snowy scene");
   }
-  if (/(大风|刮风|windy|wind)/iu.test(text)) {
+  if (/(大风|刮风|\bwindy\b|\bwind\b)/iu.test(text)) {
     concepts.add("windy scene");
   }
   if (/(很热|高温|hot weather)/iu.test(text)) {
@@ -2478,7 +2478,7 @@ function extractSceneRecallConcepts(input: string): { hasIntent: boolean; concep
     concepts.add("rain hotpot memory");
     concepts.add("shared meal scene");
   }
-  if (/(吃东西|吃饭|ate|eat|meal)/iu.test(text)) {
+  if (/(吃东西|吃饭|\bate\b|\beat\b|\bmeal\b)/iu.test(text)) {
     concepts.add("shared meal scene");
   }
   if (/(雨声|rain sound|sound of rain)/iu.test(text)) {
@@ -2492,7 +2492,7 @@ function extractSceneRecallConcepts(input: string): { hasIntent: boolean; concep
 
 function isGenericWeatherSceneQuery(input: string): boolean {
   const text = normalizeText(input);
-  const hasWeatherCue = /(天气|下雨|降雨|气温|温度|台风|weather|forecast|rain|raining|snow|wind|temperature|weather probe)/iu.test(text);
+  const hasWeatherCue = /(天气|下雨|降雨|气温|温度|台风|weather|forecast|rain|raining|snow|\bwind\b|temperature|weather probe)/iu.test(text);
   if (!hasWeatherCue) {
     return false;
   }
