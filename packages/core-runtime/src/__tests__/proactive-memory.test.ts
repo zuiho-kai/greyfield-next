@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { extractDeterministicMemoryAtoms, type MemoryAtom } from "../memory-atoms";
-import { buildProactiveMemoryCandidates } from "../proactive-memory";
+import { buildProactiveMemoryCandidates, buildProactiveMemoryCandidatesFromSceneContext } from "../proactive-memory";
 
 const baseInput = {
   threadId: "thread-a",
@@ -29,6 +29,13 @@ describe("proactive memory", () => {
     expect(result.candidates[0]).toMatchObject({
       kind: "environment",
       atomId: atom.id,
+      sourceTurnIds: ["turn-hotpot"],
+      importance: atom.importance,
+      cooldown: {
+        triggeredAt: "2026-07-15T10:00:00.000Z",
+        globalCooldownMs: 0,
+        perAtomCooldownMs: 0
+      },
       matchedEnvironmentKeys: expect.arrayContaining(["rain", "virtual_home", "virtual_home.window=open", "last_seen_days>=30"])
     });
     expect(result.candidates[0]?.text).toContain("外面在下雨");
@@ -37,6 +44,25 @@ describe("proactive memory", () => {
     expect(result.candidates[0]?.text).not.toContain(atom.id);
     expect(result.candidates[0]?.text).not.toMatch(/memory-atom|source-turn|database|storage/iu);
     expect(result.nextTriggerState.atomLastTriggeredAt?.[atom.id]).toBe("2026-07-15T10:00:00.000Z");
+  });
+
+  it("generates candidates from explicit runtime scene context without external sensing", () => {
+    const atom = makeRainyWindowHotpotAtom();
+
+    const result = buildProactiveMemoryCandidatesFromSceneContext({
+      atoms: [atom],
+      sceneContext: matchingSceneContext(),
+      policy: { globalCooldownMs: 0, perAtomCooldownMs: 0 }
+    });
+
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]).toMatchObject({
+      atomId: atom.id,
+      sourceTurnIds: ["turn-hotpot"],
+      matchedEnvironmentKeys: expect.arrayContaining(["rain", "virtual_home", "virtual_home.window=open", "last_seen_days>=30"])
+    });
+    expect(result.candidates[0]?.reason).toContain("environment:rain,virtual_home,virtual_home.window=open,last_seen_days>=30");
+    expect(result.candidates[0]?.text).not.toMatch(/weather api|screen|desktop state|memory-atom|source-turn|database|storage/iu);
   });
 
   it("gates candidates by policy, disabled atoms, importance, and cooldowns", () => {
@@ -131,6 +157,64 @@ describe("proactive memory", () => {
       expect.arrayContaining([{ atomId: nonSharedScene.id, reason: "no_shared_scene" }])
     );
   });
+
+  it("keeps scene-context candidates quiet for recent activity, ordinary weather, missing home/window state, and non-shared scenes", () => {
+    const atom = makeRainyWindowHotpotAtom();
+
+    const recentActivity = buildProactiveMemoryCandidatesFromSceneContext({
+      atoms: [atom],
+      sceneContext: { ...matchingSceneContext(), absenceDays: 1 },
+      policy: { globalCooldownMs: 0, perAtomCooldownMs: 0 }
+    });
+    expect(recentActivity.candidates).toEqual([]);
+    expect(recentActivity.skipped).toEqual(expect.arrayContaining([{ atomId: atom.id, reason: "recent_user_activity" }]));
+
+    const ordinaryWeather = buildProactiveMemoryCandidatesFromSceneContext({
+      atoms: [atom],
+      sceneContext: { ...matchingSceneContext(), weather: "ordinary" },
+      policy: { globalCooldownMs: 0, perAtomCooldownMs: 0 }
+    });
+    expect(ordinaryWeather.candidates).toEqual([]);
+    expect(ordinaryWeather.skipped).toEqual(expect.arrayContaining([{ atomId: atom.id, reason: "weather_mismatch" }]));
+
+    const missingHome = buildProactiveMemoryCandidatesFromSceneContext({
+      atoms: [atom],
+      sceneContext: {
+        currentTime: "2026-07-15T10:00:00.000Z",
+        weather: "raining",
+        objects: [{ kind: "window", state: "open" }],
+        absenceDays: 45
+      },
+      policy: { globalCooldownMs: 0, perAtomCooldownMs: 0 }
+    });
+    expect(missingHome.candidates).toEqual([]);
+    expect(missingHome.skipped).toEqual(expect.arrayContaining([{ atomId: atom.id, reason: "virtual_home_missing" }]));
+
+    const missingWindowState = buildProactiveMemoryCandidatesFromSceneContext({
+      atoms: [atom],
+      sceneContext: {
+        currentTime: "2026-07-15T10:00:00.000Z",
+        weather: "raining",
+        location: "virtual_home",
+        objects: [{ kind: "hotpot" }],
+        absenceDays: 45
+      },
+      policy: { globalCooldownMs: 0, perAtomCooldownMs: 0 }
+    });
+    expect(missingWindowState.candidates).toEqual([]);
+    expect(missingWindowState.skipped).toEqual(expect.arrayContaining([{ atomId: atom.id, reason: "window_closed" }]));
+
+    const nonSharedScene = makeNonSharedRainyWindowAtom();
+    const noSharedExperience = buildProactiveMemoryCandidatesFromSceneContext({
+      atoms: [nonSharedScene],
+      sceneContext: matchingSceneContext(),
+      policy: { globalCooldownMs: 0, perAtomCooldownMs: 0 }
+    });
+    expect(noSharedExperience.candidates).toEqual([]);
+    expect(noSharedExperience.skipped).toEqual(
+      expect.arrayContaining([{ atomId: nonSharedScene.id, reason: "no_shared_scene" }])
+    );
+  });
 });
 
 function makeRainyWindowHotpotAtom(): MemoryAtom {
@@ -162,5 +246,15 @@ function matchingEnvironment() {
     weather: "raining",
     virtualHome: { windowOpen: true },
     lastSeenDays: 45
+  };
+}
+
+function matchingSceneContext() {
+  return {
+    currentTime: "2026-07-15T10:00:00.000Z",
+    weather: "raining",
+    location: "virtual_home",
+    objects: [{ kind: "window", state: "open" }, { kind: "hotpot" }],
+    absenceDays: 45
   };
 }

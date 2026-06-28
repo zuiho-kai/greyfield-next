@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   buildMemoryAtomRecallContext,
+  buildProactiveMemoryCandidatesFromSceneContext,
   buildProactiveMemoryCandidates,
   buildRecallContext,
   createSummarySegmentDraft,
@@ -15,6 +16,7 @@ import {
   type MemoryAtomType,
   type ProactiveMemoryPolicy,
   type ProactiveMemoryTriggerState,
+  type RuntimeSceneContext,
   type SummarySegment
 } from "@greyfield/core-runtime";
 import type { ChatMessage, LLMProvider, SessionTurn } from "@greyfield/core-runtime";
@@ -196,7 +198,8 @@ interface AtomExpectation {
 
 interface ProactiveBenchmarkCase {
   minScore: number;
-  environment: EnvironmentTriggerState;
+  environment?: EnvironmentTriggerState;
+  sceneContext?: RuntimeSceneContext;
   policy?: ProactiveMemoryPolicy;
   triggerState?: ProactiveMemoryTriggerState;
   expectedAtomExpectationIds: string[];
@@ -209,6 +212,7 @@ interface ProactiveBenchmarkCase {
 interface ProactiveNegativeCase {
   id: string;
   environment?: EnvironmentTriggerState;
+  sceneContext?: RuntimeSceneContext;
   policy?: ProactiveMemoryPolicy;
   triggerState?: ProactiveMemoryTriggerState;
   expectedSkippedReasons?: string[];
@@ -483,6 +487,9 @@ function validateAtomCase(testCase: AtomBenchmarkCase, loadedFixture: MemoryBenc
   }
   if (testCase.proactive) {
     validateScore(`atomCases.${testCase.id}.proactive.minScore`, testCase.proactive.minScore);
+    if (!testCase.proactive.environment && !testCase.proactive.sceneContext) {
+      throw new Error(`Atom case ${testCase.id} proactive must define environment or sceneContext`);
+    }
     assertUnique(
       `proactive negative case for ${testCase.id}`,
       testCase.proactive.negativeCases.map((negativeCase) => negativeCase.id)
@@ -922,14 +929,10 @@ async function runAtomProactiveCase(
   const expectationMatches = new Map(
     testCase.extraction.expectedAtoms.map((expectation) => [expectation.id, findBestAtomForExpectation(expectation, atoms)])
   );
-  const result = buildProactiveMemoryCandidates({
-    atoms,
-    environment: testCase.proactive.environment,
-    policy: testCase.proactive.policy,
-    triggerState: testCase.proactive.triggerState
-  });
+  const result = buildProactiveBenchmarkCandidates(atoms, testCase.proactive);
   const actualIds = result.candidates.map((candidate) => candidate.atomId);
   const actualIdSet = new Set(actualIds);
+  const candidatesByAtomId = new Map(result.candidates.map((candidate) => [candidate.atomId, candidate]));
   const expectedMatches = testCase.proactive.expectedAtomExpectationIds.map((expectationId) => ({
     expectationId,
     atom: expectationMatches.get(expectationId)?.atom
@@ -940,6 +943,17 @@ async function runAtomProactiveCase(
   const missingCandidates = expectedMatches
     .filter((match) => match.atom && !actualIdSet.has(match.atom.id))
     .map((match) => ({ expectationId: match.expectationId, atomId: match.atom?.id }));
+  const missingCandidateSourceTurnIds = expectedMatches
+    .flatMap((match) => {
+      const atom = match.atom;
+      const candidate = atom ? candidatesByAtomId.get(atom.id) : undefined;
+      if (!atom || !candidate) {
+        return [];
+      }
+      return atom.sourceTurnIds
+        .filter((turnId) => !candidate.sourceTurnIds.includes(turnId))
+        .map((turnId) => ({ expectationId: match.expectationId, atomId: atom.id, turnId }));
+    });
   const rejectedHits = (testCase.proactive.rejectedAtomExpectationIds ?? [])
     .map((expectationId) => ({ expectationId, atom: expectationMatches.get(expectationId)?.atom }))
     .filter((match) => match.atom && actualIdSet.has(match.atom.id))
@@ -954,6 +968,16 @@ async function runAtomProactiveCase(
   const internalTextLeaks = result.candidates
     .filter((candidate) => candidateTextExposesInternals(candidate.text, candidate.atomId))
     .map((candidate) => candidate.atomId);
+  const missingCandidateMetadata = result.candidates
+    .filter(
+      (candidate) =>
+        candidate.sourceTurnIds.length === 0 ||
+        !Number.isFinite(candidate.importance) ||
+        candidate.cooldown.triggeredAt.length === 0 ||
+        !Number.isFinite(candidate.cooldown.globalCooldownMs) ||
+        !Number.isFinite(candidate.cooldown.perAtomCooldownMs)
+    )
+    .map((candidate) => candidate.atomId);
   const negativeResults = testCase.proactive.negativeCases.map((negativeCase) =>
     runProactiveNegativeCase(negativeCase, atoms, testCase.proactive)
   );
@@ -966,7 +990,11 @@ async function runAtomProactiveCase(
         : 0
       : ratio(expectedCount - missingExtraction.length - missingCandidates.length, expectedCount);
   const textScore =
-    missingCandidateFragments.length === 0 && unexpectedCandidateFragments.length === 0 && internalTextLeaks.length === 0
+    missingCandidateFragments.length === 0 &&
+    unexpectedCandidateFragments.length === 0 &&
+    internalTextLeaks.length === 0 &&
+    missingCandidateSourceTurnIds.length === 0 &&
+    missingCandidateMetadata.length === 0
       ? 1
       : 0;
   const rejectedExpectationCount = (testCase.proactive.rejectedAtomExpectationIds ?? []).length;
@@ -986,6 +1014,8 @@ async function runAtomProactiveCase(
       score >= testCase.proactive.minScore &&
       missingExtraction.length === 0 &&
       missingCandidates.length === 0 &&
+      missingCandidateSourceTurnIds.length === 0 &&
+      missingCandidateMetadata.length === 0 &&
       missingCandidateFragments.length === 0 &&
       unexpectedCandidateFragments.length === 0 &&
       internalTextLeaks.length === 0 &&
@@ -999,13 +1029,18 @@ async function runAtomProactiveCase(
       skipped: result.skipped,
       candidates: result.candidates.map((candidate) => ({
         atomId: candidate.atomId,
+        sourceTurnIds: candidate.sourceTurnIds,
         text: candidate.text,
+        importance: candidate.importance,
+        cooldown: candidate.cooldown,
         matchedEnvironmentKeys: candidate.matchedEnvironmentKeys,
         reason: candidate.reason,
         score: candidate.score
       })),
       missingExtraction,
       missingCandidates,
+      missingCandidateSourceTurnIds,
+      missingCandidateMetadata,
       rejectedHits,
       missingCandidateFragments,
       unexpectedCandidateFragments,
@@ -1026,9 +1061,9 @@ function runProactiveNegativeCase(
   skipped: ReturnType<typeof buildProactiveMemoryCandidates>["skipped"];
   missingSkippedReasons: string[];
 } {
-  const result = buildProactiveMemoryCandidates({
-    atoms,
-    environment: negativeCase.environment ?? positiveCase.environment,
+  const result = buildProactiveBenchmarkCandidates(atoms, {
+    environment: negativeCase.environment ?? (negativeCase.sceneContext ? undefined : positiveCase.environment),
+    sceneContext: negativeCase.sceneContext ?? (negativeCase.environment ? undefined : positiveCase.sceneContext),
     policy: { ...(positiveCase.policy ?? {}), ...(negativeCase.policy ?? {}) },
     triggerState: negativeCase.triggerState ?? positiveCase.triggerState
   });
@@ -1043,6 +1078,29 @@ function runProactiveNegativeCase(
     skipped: result.skipped,
     missingSkippedReasons
   };
+}
+
+function buildProactiveBenchmarkCandidates(
+  atoms: MemoryAtom[],
+  input: Pick<ProactiveBenchmarkCase, "environment" | "sceneContext" | "policy" | "triggerState">
+): ReturnType<typeof buildProactiveMemoryCandidates> {
+  if (input.sceneContext) {
+    return buildProactiveMemoryCandidatesFromSceneContext({
+      atoms,
+      sceneContext: input.sceneContext,
+      policy: input.policy,
+      triggerState: input.triggerState
+    });
+  }
+  if (input.environment) {
+    return buildProactiveMemoryCandidates({
+      atoms,
+      environment: input.environment,
+      policy: input.policy,
+      triggerState: input.triggerState
+    });
+  }
+  throw new Error("Proactive benchmark case must define environment or sceneContext");
 }
 
 function candidateTextExposesInternals(text: string, atomId: string): boolean {

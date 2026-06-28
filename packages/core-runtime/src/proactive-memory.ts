@@ -11,6 +11,24 @@ export interface EnvironmentTriggerState {
   lastSeenDays?: number;
 }
 
+export interface RuntimeSceneObjectSignal {
+  kind: string;
+  state?: string;
+  location?: string;
+}
+
+export type RuntimeSceneObject = string | RuntimeSceneObjectSignal;
+
+export interface RuntimeSceneContext {
+  // Explicit caller-supplied scene signals only; this module never reads weather, screen, or OS state.
+  currentTime?: string | Date;
+  weather?: string;
+  location?: string;
+  objects?: RuntimeSceneObject[];
+  absenceDays?: number;
+  lastSeenAt?: string | Date;
+}
+
 export interface ProactiveMemoryPolicy {
   enabled?: boolean;
   minImportance?: number;
@@ -29,10 +47,21 @@ export interface ProactiveMemoryTriggerState {
 export interface ProactiveMemoryCandidate {
   kind: "environment";
   atomId: string;
+  sourceTurnIds: string[];
   text: string;
   score: number;
+  importance: number;
   matchedEnvironmentKeys: string[];
   reason: string;
+  cooldown: ProactiveMemoryCandidateCooldown;
+}
+
+export interface ProactiveMemoryCandidateCooldown {
+  triggeredAt: string;
+  globalCooldownMs: number;
+  perAtomCooldownMs: number;
+  nextGlobalAllowedAt?: string;
+  nextAtomAllowedAt?: string;
 }
 
 export interface ProactiveMemorySkippedItem {
@@ -62,6 +91,13 @@ export interface BuildProactiveMemoryCandidatesOptions {
   triggerState?: ProactiveMemoryTriggerState;
 }
 
+export interface BuildProactiveMemorySceneCandidatesOptions {
+  atoms: MemoryAtom[];
+  sceneContext: RuntimeSceneContext;
+  policy?: ProactiveMemoryPolicy;
+  triggerState?: ProactiveMemoryTriggerState;
+}
+
 export interface ProactiveMemoryCandidateResult {
   candidates: ProactiveMemoryCandidate[];
   skipped: ProactiveMemorySkippedItem[];
@@ -79,6 +115,29 @@ const defaultPolicy: Required<ProactiveMemoryPolicy> = {
   defaultLongAbsenceDays: 30,
   requireSharedScene: true
 };
+
+export function buildProactiveMemoryCandidatesFromSceneContext(
+  options: BuildProactiveMemorySceneCandidatesOptions
+): ProactiveMemoryCandidateResult {
+  return buildProactiveMemoryCandidates({
+    atoms: options.atoms,
+    environment: sceneContextToEnvironmentTriggerState(options.sceneContext),
+    policy: options.policy,
+    triggerState: options.triggerState
+  });
+}
+
+export function sceneContextToEnvironmentTriggerState(sceneContext: RuntimeSceneContext): EnvironmentTriggerState {
+  const windowOpen = getSceneWindowOpen(sceneContext.objects ?? []);
+  const homePresent = isHomeLocation(sceneContext.location) || sceneContext.objects?.some(sceneObjectHasHomeLocation) === true;
+  return {
+    now: sceneContext.currentTime,
+    weather: sceneContext.weather,
+    ...(homePresent ? { virtualHome: windowOpen === undefined ? {} : { windowOpen } } : {}),
+    lastSeenAt: sceneContext.lastSeenAt,
+    lastSeenDays: sceneContext.absenceDays
+  };
+}
 
 export function buildProactiveMemoryCandidates(
   options: BuildProactiveMemoryCandidatesOptions
@@ -125,10 +184,13 @@ export function buildProactiveMemoryCandidates(
         {
           kind: "environment",
           atomId: atom.id,
+          sourceTurnIds: atom.sourceTurnIds,
           text: formatProactiveCandidateText(atom, options.environment, match.matchedKeys),
           score: roundScore(atom.importance * 100 + match.matchedKeys.length * 8 + match.priorityBoost),
+          importance: atom.importance,
           matchedEnvironmentKeys: match.matchedKeys,
-          reason: `environment:${match.matchedKeys.join(",")}`
+          reason: `environment:${match.matchedKeys.join(",")}`,
+          cooldown: buildCandidateCooldown(policy, options.environment.now ?? new Date())
         }
       ];
     })
@@ -151,6 +213,70 @@ export function buildProactiveMemoryCandidates(
     nextTriggerState:
       candidates.length > 0 ? recordProactiveMemoryTriggers(triggerState, candidates, options.environment.now ?? new Date()) : triggerState
   };
+}
+
+function getSceneWindowOpen(objects: RuntimeSceneObject[]): boolean | undefined {
+  for (const object of objects) {
+    const kind = typeof object === "string" ? object : object.kind;
+    if (!isWindowObject(kind)) {
+      continue;
+    }
+    const state = typeof object === "string" ? object : object.state;
+    if (!state) {
+      continue;
+    }
+    if (/\b(open|opened|true)\b/iu.test(state)) {
+      return true;
+    }
+    if (/\b(closed|shut|false)\b/iu.test(state)) {
+      return false;
+    }
+  }
+  return;
+}
+
+function isWindowObject(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = normalizeKey(value).replace(/[-_.]+/g, " ");
+  return /\bwindow\b/iu.test(normalized);
+}
+
+function sceneObjectHasHomeLocation(object: RuntimeSceneObject): boolean {
+  const values =
+    typeof object === "string" ? [object] : [object.location, object.kind].filter((value): value is string => Boolean(value));
+  return values.some(isHomeLocation);
+}
+
+function isHomeLocation(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = normalizeKey(value).replace(/[-_.\s]+/g, "_");
+  return normalized === "home" || normalized === "virtual_home" || normalized.includes("virtual_home");
+}
+
+function buildCandidateCooldown(
+  policy: Required<ProactiveMemoryPolicy>,
+  triggeredAtValue: string | Date
+): ProactiveMemoryCandidateCooldown {
+  const triggeredAt = toIsoDateTime(triggeredAtValue);
+  return {
+    triggeredAt,
+    globalCooldownMs: policy.globalCooldownMs,
+    perAtomCooldownMs: policy.perAtomCooldownMs,
+    ...(policy.globalCooldownMs > 0 ? { nextGlobalAllowedAt: addMsToIsoDateTime(triggeredAt, policy.globalCooldownMs) } : {}),
+    ...(policy.perAtomCooldownMs > 0 ? { nextAtomAllowedAt: addMsToIsoDateTime(triggeredAt, policy.perAtomCooldownMs) } : {})
+  };
+}
+
+function addMsToIsoDateTime(value: string, ms: number): string {
+  const time = Date.parse(value);
+  if (!Number.isFinite(time)) {
+    return toIsoDateTime(new Date());
+  }
+  return new Date(time + ms).toISOString();
 }
 
 export function recordProactiveMemoryTriggers(
@@ -441,7 +567,7 @@ function normalizeWeather(value: string | undefined): NormalizedWeather | undefi
   if (/(heat|hot|高温|很热)/iu.test(value)) {
     return "heat";
   }
-  if (/(normal|clear|sunny|晴|普通天气|正常天气)/iu.test(value)) {
+  if (/(normal|ordinary|clear|sunny|晴|普通天气|正常天气)/iu.test(value)) {
     return "normal";
   }
   return;
