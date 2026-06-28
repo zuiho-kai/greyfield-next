@@ -777,7 +777,7 @@ describe("RuntimeService", () => {
     }
   });
 
-  it("clears only the current character thread summary memories", async () => {
+  it("updates, deletes, and clears only current character thread summary memories", async () => {
     let summaries: SummarySegment[] = [
       makeSummarySegment("summary-1", "desktop:characters-greyfield-yaml", "Current thread memory."),
       makeSummarySegment("summary-2", "desktop:characters-greyfield-yaml", "Second current thread memory."),
@@ -795,7 +795,7 @@ describe("RuntimeService", () => {
           return summaries.filter((segment) => segment.threadId === threadId);
         },
         async update() {
-          throw new Error("update is not used by this test");
+          throw new Error("cross-role update should be blocked before hitting the store");
         },
         async delete(id) {
           const before = summaries.length;
@@ -804,6 +804,16 @@ describe("RuntimeService", () => {
         }
       }
     });
+
+    await expect(service.updateMemorySummary("summary-other", { summary: "Wrong role edit." })).resolves.toMatchObject({
+      ok: false,
+      message: "Memory summary summary-other was not found in the current role."
+    });
+    await expect(service.deleteMemorySummary("summary-other")).resolves.toMatchObject({
+      ok: false,
+      message: "Memory summary summary-other was not found in the current role."
+    });
+    expect(summaries.map((segment) => segment.id)).toEqual(["summary-1", "summary-2", "summary-other"]);
 
     const result = await service.clearMemorySummaries();
 

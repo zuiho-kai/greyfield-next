@@ -1,4 +1,6 @@
 import { _electron as electron, type ElectronApplication, type Locator, type Page } from "playwright";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -22,9 +24,27 @@ const missingSourceScreenshotPath = join(artifactDir, "source-missing.png");
 const unavailableSourceScreenshotPath = join(artifactDir, "source-unavailable.png");
 const noSourceScreenshotPath = join(artifactDir, "source-no-passage.png");
 const providerSecret = "memory-atom-library-provider-secret";
+const editedAtomText = "Edited atom memory: User prefers Sakura.";
+const atomOpinionText = "User dislikes pay-to-win game loops.";
+const currentRoleCharacterFile = "characters/greyfield.yaml";
+const otherRoleCharacterFile = "characters/other-role.yaml";
 const currentThreadId = "desktop:characters-greyfield-yaml";
 const otherThreadId = "desktop:characters-other-role-yaml";
 const boundedTail = "SOURCE_PASSAGE_BOUNDARY_TAIL_SHOULD_NOT_RENDER";
+const requestBodies: string[] = [];
+const server = createServer(async (request: IncomingMessage, response: ServerResponse) => {
+  requestBodies.push(await readRequestBody(request));
+  response.writeHead(200, {
+    "content-type": "text/event-stream",
+    "cache-control": "no-cache"
+  });
+  response.write('data: {"choices":[{"delta":{"content":"Atom memory harness response."}}]}\n\n');
+  response.write("data: [DONE]\n\n");
+  response.end();
+});
+
+await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+const port = (server.address() as AddressInfo).port;
 
 let app: ElectronApplication | undefined;
 try {
@@ -36,9 +56,13 @@ try {
     `${JSON.stringify(
       {
         ...defaultGreyfieldConfig,
+        characterFile: currentRoleCharacterFile,
         provider: {
           ...defaultGreyfieldConfig.provider,
-          apiKey: providerSecret
+          llm: "openai-compatible",
+          baseUrl: `http://127.0.0.1:${port}/v1`,
+          apiKey: providerSecret,
+          model: "memory-atom-library-harness"
         }
       },
       null,
@@ -76,8 +100,14 @@ try {
     makeAtom({
       id: "atom-opinion",
       type: "opinion",
-      text: "User dislikes pay-to-win game loops.",
+      text: atomOpinionText,
       sourceTurnIds: ["desktop-main-session-opinion"],
+      triggerKeys: ["pay-to-win", "game loops"],
+      triggers: {
+        exact: ["pay-to-win"],
+        aliases: ["game loops"],
+        secondary: ["loops"]
+      },
       metadata: { opinionType: "game_review" }
     }),
     makeAtom({
@@ -104,24 +134,13 @@ try {
     })
   ]);
 
-  app = await electron.launch({
-    executablePath,
-    cwd: desktopRoot,
-    args: [join(desktopRoot, "dist-main", "index.mjs")],
-    env: {
-      ...process.env,
-      GREYFIELD_CONFIG_PATH: configPath,
-      GREYFIELD_PROJECT_ROOT: workspaceRoot,
-      GREYFIELD_USER_DATA_PATH: tempDir
-    }
-  });
-
-  await app.firstWindow({ timeout: 10_000 });
-  const settings = await waitForRoleWindow(app, "settings");
+  app = await launchApp();
+  let chat = await waitForRoleWindow(app, "chat");
+  let settings = await waitForRoleWindow(app, "settings");
   await settings.waitForSelector(".greyfield-shell");
   await settings.getByRole("button", { name: "Refresh memory" }).click();
 
-  const memoryLibrary = settings.locator('[aria-label="Memory Library"]');
+  let memoryLibrary = settings.locator('[aria-label="Memory Library"]');
   await memoryLibrary.waitFor();
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Summary" }).waitFor();
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Facts" }).waitFor();
@@ -197,16 +216,26 @@ try {
   }
   await settings.screenshot({ path: settingsInitialScreenshotPath, fullPage: true });
 
-  await settings.getByLabel("Memory text atom-preference").fill("Edited atom memory: User prefers Sakura.");
+  await switchCharacter(settings, otherRoleCharacterFile);
+  await memoryLibrary.locator('[aria-label="Preference memory atom-other-role"]', { hasText: "Other role memory must stay isolated." }).waitFor();
+  const roleBText = (await memoryLibrary.textContent()) ?? "";
+  if (roleBText.includes("User birthday is June 12.") || roleBText.includes(atomOpinionText)) {
+    throw new Error(`Role-B Memory Library rendered role-A atom memory: ${roleBText}`);
+  }
+  await switchCharacter(settings, currentRoleCharacterFile);
+  await memoryLibrary.locator('[aria-label="Fact memory atom-fact"]', { hasText: "User birthday is June 12." }).waitFor();
+  await assertCurrentRoleOnly(memoryLibrary);
+
+  await settings.getByLabel("Memory text atom-preference").fill(editedAtomText);
   await settings.getByRole("button", { name: "Save memory atom-preference" }).click();
   await memoryLibrary.getByText("Atom memory atom-preference saved.").waitFor();
-  await waitForAtom("atom-preference", (atom) => atom.text === "Edited atom memory: User prefers Sakura.");
+  await waitForAtom("atom-preference", (atom) => atom.text === editedAtomText);
 
   await settings.getByRole("button", { name: "Export memory atom-preference" }).click();
   await memoryLibrary.getByText("Atom memory atom-preference export is ready.").waitFor();
   await settings.getByLabel("Memory library export").waitFor();
   const singleAtomExport = await settings.getByLabel("Memory library export").inputValue();
-  if (!singleAtomExport.includes("Edited atom memory: User prefers Sakura.")) {
+  if (!singleAtomExport.includes(editedAtomText)) {
     throw new Error(`Single-atom export missed edited atom text: ${singleAtomExport}`);
   }
   if (singleAtomExport.includes(providerSecret)) {
@@ -220,15 +249,42 @@ try {
   await settings.getByRole("button", { name: "Disable memory atom-preference" }).click();
   await memoryLibrary.getByText("Atom memory atom-preference disabled.").waitFor();
   await waitForAtom("atom-preference", (atom) => atom.disabled === true);
+  clearCapturedRequests();
+  await sendMessageAndWaitForNextAssistant(chat, "Hiyori 模型偏好还在吗？");
+  assertLatestSystemPromptExcludes(editedAtomText, "disabled atom-preference should stay out of prompt recall");
+
+  await settings.getByRole("button", { name: "Enable memory atom-preference" }).click();
+  await waitForAtom("atom-preference", (atom) => atom.disabled === false);
+  clearCapturedRequests();
+  await sendMessageAndWaitForNextAssistant(chat, "Hiyori 模型偏好重新启用了吗？");
+  assertLatestSystemPromptIncludes(editedAtomText, "re-enabled atom-preference should return to prompt recall");
+
+  await app.close();
+  app = await launchApp();
+  chat = await waitForRoleWindow(app, "chat");
+  settings = await waitForRoleWindow(app, "settings");
+  await settings.getByRole("button", { name: "Refresh memory" }).click();
+  memoryLibrary = settings.locator('[aria-label="Memory Library"]');
+  await memoryLibrary.locator('[aria-label="Preference memory atom-preference"]', { hasText: editedAtomText }).waitFor();
+  await memoryLibrary.locator('[aria-label="Opinion memory atom-opinion"]', { hasText: atomOpinionText }).waitFor();
+  await assertCurrentRoleOnly(memoryLibrary);
+  await waitForAtom("atom-preference", (atom) => atom.text === editedAtomText && atom.disabled === false);
+
+  clearCapturedRequests();
+  await sendMessageAndWaitForNextAssistant(chat, "pay-to-win game loops 这条记忆还在吗？");
+  assertLatestSystemPromptIncludes(atomOpinionText, "atom-opinion should be recalled before deletion");
 
   await settings.getByRole("button", { name: "Delete memory atom-opinion" }).click();
   await memoryLibrary.getByText("Atom memory atom-opinion deleted. Raw chat history and summaries were kept").waitFor();
   await waitForMissingAtom("atom-opinion");
+  clearCapturedRequests();
+  await sendMessageAndWaitForNextAssistant(chat, "pay-to-win game loops 删除后不应该再召回。");
+  assertLatestSystemPromptExcludes(atomOpinionText, "deleted atom-opinion should stay out of prompt recall");
 
   await settings.getByRole("button", { name: "Export library" }).click();
   await memoryLibrary.getByText("Memory export is ready.").waitFor();
   const libraryExport = await settings.getByLabel("Memory library export").inputValue();
-  if (libraryExport.includes("User dislikes pay-to-win game loops.")) {
+  if (libraryExport.includes(atomOpinionText)) {
     throw new Error(`Library export still included deleted atom-opinion: ${libraryExport}`);
   }
   if (libraryExport.includes(providerSecret)) {
@@ -259,8 +315,14 @@ try {
         atomGroupsVisible: true,
         atomEditPersisted: true,
         atomDisablePersisted: true,
+        atomEnablePersisted: true,
+        disabledAtomSkippedFromPrompt: true,
+        enabledAtomReturnedToPrompt: true,
+        atomDeleteRemovedFromPrompt: true,
         atomDeleteRemovedFromExport: true,
         clearCurrentRoleKeptOtherRoleAtom: true,
+        roleBMemoryIsolated: true,
+        reloadPersistence: true,
         memoryDomExcludedProviderSecret: true,
         settingsPageTextAndInputsExcludedProviderSecret: true,
         memoryExportExcludedProviderSecret: true,
@@ -279,21 +341,115 @@ try {
   );
 } finally {
   await app?.close().catch(() => undefined);
+  server.closeAllConnections?.();
+  server.close();
   await rm(tempDir, { recursive: true, force: true });
 }
 
-async function waitForRoleWindow(app: ElectronApplication, roleName: "settings"): Promise<Page> {
+async function launchApp(): Promise<ElectronApplication> {
+  const output: string[] = [];
+  const launched = await electron.launch({
+    executablePath,
+    cwd: desktopRoot,
+    args: [join(desktopRoot, "dist-main", "index.mjs")],
+    env: {
+      ...process.env,
+      GREYFIELD_CONFIG_PATH: configPath,
+      GREYFIELD_PROJECT_ROOT: workspaceRoot,
+      GREYFIELD_USER_DATA_PATH: tempDir
+    }
+  });
+  launched.process().stdout?.on("data", (chunk) => output.push(String(chunk)));
+  launched.process().stderr?.on("data", (chunk) => output.push(String(chunk)));
+  try {
+    await launched.firstWindow({ timeout: 10_000 });
+    return launched;
+  } catch (error) {
+    const urls = launched.windows().map((page) => page.url());
+    const spawnargs = launched.process().spawnargs;
+    await launched.close().catch(() => undefined);
+    throw new Error(
+      `Timed out waiting for first Electron window; spawnargs=${JSON.stringify(spawnargs)}; urls=${JSON.stringify(urls)}; output=${output.join("").slice(-4000)}; cause=${String(error)}`
+    );
+  }
+}
+
+async function waitForRoleWindow(app: ElectronApplication, roleName: "settings" | "chat"): Promise<Page> {
   const started = Date.now();
   while (Date.now() - started < 5_000) {
     for (const page of app.windows()) {
       const role = await page.evaluate(() => new URLSearchParams(window.location.search).get("window")).catch(() => null);
       if (role === roleName) {
+        await page.waitForSelector(roleName === "settings" ? ".greyfield-shell" : ".chat-shell");
         return page;
       }
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Timed out waiting for ${roleName} window`);
+}
+
+async function readRequestBody(request: IncomingMessage): Promise<string> {
+  let raw = "";
+  for await (const chunk of request) {
+    raw += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
+  }
+  return raw;
+}
+
+async function switchCharacter(settings: Page, characterFile: string): Promise<void> {
+  await settings.getByLabel("Character").fill(characterFile);
+  await settings.waitForTimeout(250);
+  await settings.getByRole("button", { name: "Refresh memory" }).click();
+}
+
+async function assertCurrentRoleOnly(memoryLibrary: Locator): Promise<void> {
+  const text = (await memoryLibrary.textContent()) ?? "";
+  if (text.includes("Other role memory must stay isolated.")) {
+    throw new Error(`Current role Memory Library rendered role-B atom memory: ${text}`);
+  }
+}
+
+async function sendMessageAndWaitForNextAssistant(page: Page, text: string): Promise<void> {
+  const previousCount = await page.locator(".message-list .assistant:not(.draft)").count();
+  await page.getByLabel("Message").fill(text);
+  await page.getByRole("button", { name: "Send" }).click();
+  await page.waitForFunction(
+    (count) => document.querySelectorAll(".message-list .assistant:not(.draft)").length > count,
+    previousCount,
+    { timeout: 10_000 }
+  );
+}
+
+function clearCapturedRequests(): void {
+  requestBodies.length = 0;
+}
+
+function assertLatestSystemPromptIncludes(fragment: string, reason: string): void {
+  const systemPrompt = latestSystemPrompt();
+  if (!systemPrompt.includes(fragment)) {
+    throw new Error(`${reason}; prompt=${systemPrompt}`);
+  }
+}
+
+function assertLatestSystemPromptExcludes(fragment: string, reason: string): void {
+  const systemPrompt = latestSystemPrompt();
+  if (systemPrompt.includes(fragment)) {
+    throw new Error(`${reason}; prompt=${systemPrompt}`);
+  }
+}
+
+function latestSystemPrompt(): string {
+  const requestBody = requestBodies.at(-1);
+  if (!requestBody) {
+    throw new Error("Expected the local LLM server to receive a chat completion request.");
+  }
+  const parsed = JSON.parse(requestBody) as { messages?: Array<{ role?: string; content?: string }> };
+  const systemPrompt = parsed.messages?.find((message) => message.role === "system")?.content;
+  if (!systemPrompt) {
+    throw new Error(`OpenAI-compatible request did not include a system prompt: ${requestBody}`);
+  }
+  return systemPrompt;
 }
 
 async function writeAtomFile(atoms: MemoryAtom[]): Promise<void> {

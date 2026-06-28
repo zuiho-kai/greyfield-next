@@ -324,7 +324,7 @@
 
           <div class="memory-library__privacy" role="note">
             <strong>Local memory controls</strong>
-            <span>Exports include memory text and source turns. Provider credentials stay out of this library.</span>
+            <span>Exports include memory text and source turns. Delete and clear remove library memories, not raw chat history; provider credentials stay out.</span>
           </div>
 
           <div class="memory-library__lanes" aria-label="Memory types">
