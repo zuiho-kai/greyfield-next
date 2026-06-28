@@ -29,7 +29,7 @@ describe("proactive memory", () => {
     expect(result.candidates[0]).toMatchObject({
       kind: "environment",
       atomId: atom.id,
-      matchedEnvironmentKeys: expect.arrayContaining(["rain", "virtual_home.window=open", "last_seen_days>=30"])
+      matchedEnvironmentKeys: expect.arrayContaining(["rain", "virtual_home", "virtual_home.window=open", "last_seen_days>=30"])
     });
     expect(result.candidates[0]?.text).toContain("外面在下雨");
     expect(result.candidates[0]?.text).toContain("关窗");
@@ -85,7 +85,7 @@ describe("proactive memory", () => {
     ).toEqual(expect.arrayContaining([{ atomId: atom.id, reason: "atom_cooldown" }]));
   });
 
-  it("stays quiet for recent activity, closed windows, and normal weather", () => {
+  it("stays quiet for recent activity, missing virtual home, closed windows, normal weather, and non-shared scenes", () => {
     const atom = makeRainyWindowHotpotAtom();
 
     const yesterdaySeen = buildProactiveMemoryCandidates({
@@ -95,6 +95,14 @@ describe("proactive memory", () => {
     });
     expect(yesterdaySeen.candidates).toEqual([]);
     expect(yesterdaySeen.skipped).toEqual(expect.arrayContaining([{ atomId: atom.id, reason: "recent_user_activity" }]));
+
+    const missingVirtualHome = buildProactiveMemoryCandidates({
+      atoms: [atom],
+      environment: { now: "2026-07-15T10:00:00.000Z", weather: "raining", lastSeenDays: 45 },
+      policy: { globalCooldownMs: 0, perAtomCooldownMs: 0 }
+    });
+    expect(missingVirtualHome.candidates).toEqual([]);
+    expect(missingVirtualHome.skipped).toEqual(expect.arrayContaining([{ atomId: atom.id, reason: "virtual_home_missing" }]));
 
     const windowClosed = buildProactiveMemoryCandidates({
       atoms: [atom],
@@ -111,6 +119,17 @@ describe("proactive memory", () => {
     });
     expect(normalWeather.candidates).toEqual([]);
     expect(normalWeather.skipped).toEqual(expect.arrayContaining([{ atomId: atom.id, reason: "weather_mismatch" }]));
+
+    const nonSharedScene = makeNonSharedRainyWindowAtom();
+    const noSharedExperience = buildProactiveMemoryCandidates({
+      atoms: [nonSharedScene],
+      environment: matchingEnvironment(),
+      policy: { globalCooldownMs: 0, perAtomCooldownMs: 0 }
+    });
+    expect(noSharedExperience.candidates).toEqual([]);
+    expect(noSharedExperience.skipped).toEqual(
+      expect.arrayContaining([{ atomId: nonSharedScene.id, reason: "no_shared_scene" }])
+    );
   });
 });
 
@@ -121,6 +140,18 @@ function makeRainyWindowHotpotAtom(): MemoryAtom {
   });
   if (!atom) {
     throw new Error("Expected rainy virtual-home hotpot atom");
+  }
+  return atom;
+}
+
+function makeNonSharedRainyWindowAtom(): MemoryAtom {
+  const [atom] = extractDeterministicMemoryAtoms({
+    ...baseInput,
+    sourceTurnIds: ["turn-window"],
+    text: "如果以后下雨，虚拟家的窗户开着，而且我长期没上线，就提醒我关窗。"
+  });
+  if (!atom) {
+    throw new Error("Expected rainy virtual-home window atom");
   }
   return atom;
 }

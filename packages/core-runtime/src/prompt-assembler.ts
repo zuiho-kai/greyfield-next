@@ -48,5 +48,7 @@ function formatRecallContextSection(context: RecallContext): string {
 
 function formatAtomRecallContextSection(context: MemoryAtomRecallContext): string {
   const formatted = formatMemoryAtomRecallContextForPrompt(context);
-  return formatted.length > 0 ? `Atom recall context:\n${formatted}` : "Atom recall context: no relevant long-term memory atoms.";
+  return formatted.length > 0
+    ? `Long-term recall context:\n${formatted}`
+    : "Long-term recall context: no relevant source-linked long-term memories.";
 }

@@ -62,14 +62,16 @@ describe("assemblePrompt", () => {
     expect(systemContent).toContain("Greyfield");
     expect(systemContent).toContain("V1 cannot control the desktop");
     expect(systemContent).toContain("User wants a Live2D desktop companion");
-    expect(systemContent).toContain("Atom recall context:");
-    expect(systemContent).toContain("atom-rose");
+    expect(systemContent).toContain("Long-term recall context:");
+    expect(systemContent).toContain("Source-linked relationship memory");
+    expect(systemContent).not.toContain("atom-rose");
+    expect(systemContent).not.toContain("memory-atom");
     expect(systemContent).toContain("Source turns: session-a-3");
     expect(systemContent).toContain("Ritual action: 送玫瑰");
     expect(systemContent).toContain("Recall context:");
     expect(systemContent).toContain("summary-1");
     expect(systemContent).toContain("Source turns: session-a-1, session-a-2");
-    expect(systemContent.indexOf("Atom recall context:")).toBeLessThan(systemContent.indexOf("Recall context:"));
+    expect(systemContent.indexOf("Long-term recall context:")).toBeLessThan(systemContent.indexOf("Recall context:"));
     expect(systemContent).toContain("thread-a");
     expect(messages.map((message) => message.content)).toEqual([
       expect.stringContaining("Recent focus"),

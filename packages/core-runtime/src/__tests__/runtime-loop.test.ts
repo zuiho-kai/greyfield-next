@@ -150,8 +150,10 @@ describe("GreyfieldRuntime", () => {
 
     await runtime.handle({ type: "text.input", text: "初遇纪念日要准备什么？" }, () => undefined);
 
-    expect(capturedMessages[0]?.content).toContain("Atom recall context:");
-    expect(capturedMessages[0]?.content).toContain("memory-atom");
+    expect(capturedMessages[0]?.content).toContain("Long-term recall context:");
+    expect(capturedMessages[0]?.content).toContain("Source-linked relationship memory");
+    expect(capturedMessages[0]?.content).not.toContain("memory-atom");
+    expect(capturedMessages[0]?.content).not.toContain(storedAtoms[0]?.id);
     expect(capturedMessages[0]?.content).toContain("Source turns: session-atoms-1");
     expect(capturedMessages[0]?.content).toContain("Ritual action: 送玫瑰");
   });
@@ -292,7 +294,10 @@ describe("GreyfieldRuntime", () => {
     );
 
     const system = capturedMessages[0]?.content ?? "";
-    expect(system).toContain("Atom recall context:");
+    expect(system).toContain("Long-term recall context:");
+    expect(system).toContain("Source-linked opinion memory");
+    expect(system).not.toContain("memory-atom");
+    expect(system).not.toMatch(/\batom-(?:fact|preference|opinion|relationship_event|episodic_scene)-[\w-]+/u);
     expect(system).toContain("Source fragments:");
     expect(system).toContain("教程像坏掉的电梯");
     expect(system).toContain("剧情把玩家当成没睡醒的测试员");

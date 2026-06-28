@@ -10,8 +10,8 @@
     "atomExtractionScore": 0.95,
     "atomRecallScore": 0.8,
     "proactiveTriggerScore": 1,
-    "productReadinessScore": 0.55,
-    "v21aScenarioScore": 0.53
+    "productReadinessScore": 0.56,
+    "v21aScenarioScore": 0.54
   },
   "productReadiness": {
     "targetScore": 1,
@@ -70,9 +70,9 @@
         "id": "scene-proactive-trigger",
         "description": "Scene, calendar, and environment cues can proactively trigger relevant memories without a direct user keyword.",
         "status": "partial",
-        "score": 0.35,
+        "score": 0.4,
         "weight": 0.17,
-        "evidence": "proactiveTrigger benchmark dynamically runs pure core environment candidates over scene atoms with enabled, disabled, importance, global cooldown, per-atom cooldown, weather, virtual-home window, and last-seen gates; desktop scheduler, external weather feed, and notification/UI integration remain unimplemented"
+        "evidence": "proactiveTrigger benchmark dynamically runs pure core environment candidates over scene atoms with enabled, disabled, importance, global cooldown, per-atom cooldown, weather, virtual-home window, missing virtual-home state, non-shared-scene rejection, and last-seen gates; desktop scheduler, external weather feed, and notification/UI integration remain unimplemented"
       },
       {
         "id": "privacy-noise",
@@ -177,7 +177,7 @@
         "title": "Rainy virtual-home hotpot proactive trigger",
         "description": "Scene and environment cues should trigger a remembered care ritual when the user has been away for a long time.",
         "status": "partial",
-        "score": 0.4,
+        "score": 0.45,
         "weight": 0.33,
         "dimensions": [
           "memory-atom-extraction",
@@ -201,6 +201,11 @@
             "id": "hotpot-3",
             "role": "event",
             "content": "weather probe: rain started"
+          },
+          {
+            "id": "hotpot-4",
+            "role": "user",
+            "content": "如果以后下雨，虚拟家的窗户开着，而且我长期没上线，就提醒我关窗。"
           }
         ],
         "expectedBehavior": [
@@ -208,7 +213,7 @@
           "trigger recall should run from environment state without a direct chat keyword",
           "event telemetry should not become the remembered user preference"
         ],
-        "currentGap": "Deterministic extraction can form a rainy virtual-home hotpot scene atom, and pure core proactive candidate generation now handles the matching environment plus quiet negative gates. Current runtime still has no desktop proactive scheduler, notification surface, real virtual-home state feed, or external weather integration.",
+        "currentGap": "Deterministic extraction can form a rainy virtual-home hotpot scene atom, pure core proactive candidate generation now handles the matching environment plus quiet negative gates for recent activity, normal weather, missing virtual-home state, and non-shared scenes, and atom recall prompt material avoids atom IDs. Current runtime still has no desktop proactive scheduler, notification surface, real virtual-home state feed, or external weather integration.",
         "sourceExpectations": {
           "sourceTurnIds": ["hotpot-1", "hotpot-2"],
           "exactFragments": ["下雨", "虚拟家的窗户开着", "长期没上线", "一起吃火锅"]
@@ -660,7 +665,7 @@
       "extractionMinScore": 0.7,
       "recallMinScore": 0.05,
       "extraction": {
-        "sourceTurnIds": ["hotpot-1", "hotpot-3"],
+        "sourceTurnIds": ["hotpot-1", "hotpot-3", "hotpot-4"],
         "rejectedSourceTurnIds": ["hotpot-3"],
         "expectedAtoms": [
           {
@@ -670,7 +675,7 @@
             "textIncludes": ["rainy", "hotpot"],
             "triggerIncludes": ["下雨", "雨天", "火锅"],
             "object": "rainy_hotpot_scene",
-            "metadata": { "sceneType": "shared_meal", "weather": "rain", "activity": "hotpot" }
+            "metadata": { "sceneType": "shared_meal", "weather": "rain", "activity": "hotpot", "sharedExperience": true }
           },
           {
             "id": "window-long-absence-action",
@@ -678,7 +683,15 @@
             "sourceTurnIds": ["hotpot-1"],
             "textIncludes": ["open window", "long absence", "关窗", "hotpot"],
             "triggerIncludes": ["虚拟家的窗户开着", "长期没上线", "关窗"],
-            "metadata": { "windowState": "open", "action": "close_window", "longAbsence": true, "longAbsenceDays": 30 }
+            "metadata": { "windowState": "open", "action": "close_window", "longAbsence": true, "longAbsenceDays": 30, "sharedExperience": true }
+          },
+          {
+            "id": "non-shared-window-action",
+            "type": "episodic_scene",
+            "sourceTurnIds": ["hotpot-4"],
+            "textIncludes": ["open window", "long absence", "关窗"],
+            "triggerIncludes": ["虚拟家的窗户开着", "长期没上线", "关窗"],
+            "metadata": { "windowState": "open", "action": "close_window", "longAbsence": true, "longAbsenceDays": 30, "sharedExperience": false }
           }
         ]
       },
@@ -686,6 +699,7 @@
         "input": "environment: raining; virtual_home.window=open; last_seen_days=45",
         "expectedAtomExpectationIds": ["rainy-hotpot-scene"],
         "promptIncludes": ["火锅"],
+        "promptExcludes": ["memory-atom", "atom-", "database", "storage"],
         "unsupportedGaps": [
           "lexical atom recall still does not use the structured proactive environment state",
           "desktop scene proactive scheduler is not implemented",
@@ -706,8 +720,9 @@
           "minImportance": 0.7
         },
         "expectedAtomExpectationIds": ["rainy-hotpot-scene", "window-long-absence-action"],
+        "rejectedAtomExpectationIds": ["non-shared-window-action"],
         "candidateIncludes": ["外面在下雨", "虚拟家的窗户还开着", "45 天没上线", "关窗", "吃火锅"],
-        "candidateExcludes": ["memory-atom", "source-turn", "hotpot-1", "atom-"],
+        "candidateExcludes": ["memory-atom", "source-turn", "hotpot-1", "atom-", "database", "storage"],
         "negativeCases": [
           {
             "id": "yesterday-seen",
@@ -718,6 +733,15 @@
               "lastSeenDays": 1
             },
             "expectedSkippedReasons": ["recent_user_activity"]
+          },
+          {
+            "id": "missing-virtual-home",
+            "environment": {
+              "now": "2026-07-15T10:00:00.000Z",
+              "weather": "raining",
+              "lastSeenDays": 45
+            },
+            "expectedSkippedReasons": ["virtual_home_missing", "no_shared_scene"]
           },
           {
             "id": "window-closed",
