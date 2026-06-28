@@ -288,6 +288,95 @@ describe("memory atoms", () => {
     expect(atom?.triggers.relationship).toEqual(expect.arrayContaining(["user_and_greyfield", "first_meeting_anniversary", "gift_ritual"]));
   });
 
+  it("extracts source-linked promise atoms with subject, action object, and semantic trigger concepts", () => {
+    const [greyfieldPromise] = extractDeterministicMemoryAtoms({
+      ...baseInput,
+      sourceTurnIds: ["turn-promise-greyfield"],
+      text: "记住，你答应以后帮我整理书桌；这个承诺以后要能想起来。"
+    });
+
+    expect(greyfieldPromise).toMatchObject({
+      type: "promise",
+      sourceTurnIds: ["turn-promise-greyfield"],
+      subject: "greyfield",
+      object: "desk_cleanup",
+      metadata: {
+        promiseType: "commitment",
+        promiseSubject: "greyfield",
+        promiseAction: "organize_desk",
+        actionText: "整理书桌",
+        promiseObject: "desk_cleanup"
+      }
+    });
+    expect(greyfieldPromise?.triggers.semantic).toEqual(
+      expect.arrayContaining(["promise memory", "help commitment", "organization promise", "desk organization promise"])
+    );
+    expect(greyfieldPromise?.triggers.relationship).toEqual(expect.arrayContaining(["user_and_greyfield", "greyfield_commitment"]));
+
+    const [userPromise] = extractDeterministicMemoryAtoms({
+      ...baseInput,
+      sourceTurnIds: ["turn-promise-user"],
+      text: "记住我承诺每周日晚把读书笔记发给你。"
+    });
+
+    expect(userPromise).toMatchObject({
+      type: "promise",
+      sourceTurnIds: ["turn-promise-user"],
+      subject: "user",
+      object: "reading_notes",
+      metadata: {
+        promiseSubject: "user",
+        promiseAction: "send_reading_notes",
+        actionText: "读书笔记"
+      }
+    });
+    expect(userPromise?.triggers.semantic).toEqual(expect.arrayContaining(["promise memory", "user commitment", "reading notes promise"]));
+  });
+
+  it("recalls promises through meaning-level cues while rejecting unrelated project promises", () => {
+    const [atom] = extractDeterministicMemoryAtoms({
+      ...baseInput,
+      sourceTurnIds: ["turn-promise"],
+      text: "记住，你答应以后帮我整理书桌；这个承诺以后要能想起来。"
+    });
+    const semanticOnlyAtom: MemoryAtom = {
+      ...atom!,
+      triggers: {
+        ...atom!.triggers,
+        exact: [],
+        aliases: [],
+        secondary: []
+      },
+      triggerKeys: []
+    };
+
+    const context = buildMemoryAtomRecallContext({
+      input: "你之前说好要帮我整理的那件事是什么？",
+      atoms: [semanticOnlyAtom]
+    });
+
+    expect(context.items[0]).toMatchObject({
+      type: "promise",
+      sourceTurnIds: ["turn-promise"],
+      reason: expect.stringContaining("semantic:")
+    });
+    expect(context.items[0]?.matchedKeys).toEqual(expect.arrayContaining(["promise memory", "help commitment", "organization promise"]));
+    expect(formatMemoryAtomRecallContextForPrompt(context)).toContain("Source-linked promise memory");
+
+    const projectPromise = buildMemoryAtomRecallContext({
+      input: "这个项目里客户承诺的整理事项是什么？",
+      atoms: [atom!]
+    });
+    expect(projectPromise.items).toEqual([]);
+
+    const rejectedExtraction = extractDeterministicMemoryAtoms({
+      ...baseInput,
+      sourceTurnIds: ["turn-project-promise"],
+      text: "记住这个项目承诺：客户答应下周交设计稿。"
+    });
+    expect(rejectedExtraction).toEqual([]);
+  });
+
   it("extracts a negative game opinion atom with target and reason trigger keys", () => {
     const [atom] = extractDeterministicMemoryAtoms({
       ...baseInput,

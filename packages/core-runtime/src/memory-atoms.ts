@@ -2,7 +2,7 @@ import type { ChatMessage, LLMProvider } from "./providers";
 import type { SessionTurn } from "./session-store";
 import { normalizeSourceTurnIds, type RecallPromptBudgetTrace, type RecallSkipReason } from "./memory-context";
 
-export type MemoryAtomType = "fact" | "preference" | "opinion" | "relationship_event" | "episodic_scene";
+export type MemoryAtomType = "fact" | "preference" | "opinion" | "relationship_event" | "episodic_scene" | "promise";
 export type MemoryAtomSentiment = "positive" | "negative" | "neutral";
 export type MemoryAtomExtractionMode = "deterministic" | "llm" | "hybrid";
 export type MemoryAtomTriggerLane =
@@ -259,7 +259,14 @@ const defaultMinBackgroundImportance = 0.78;
 const defaultExplicitSaveMinImportance = 0.4;
 const defaultExplicitSaveImportanceFloor = 0.65;
 const defaultMaxAtomsPerTurn = 8;
-const allowedMemoryAtomTypes = new Set<MemoryAtomType>(["fact", "preference", "opinion", "relationship_event", "episodic_scene"]);
+const allowedMemoryAtomTypes = new Set<MemoryAtomType>([
+  "fact",
+  "preference",
+  "opinion",
+  "relationship_event",
+  "episodic_scene",
+  "promise"
+]);
 const allowedSentiments = new Set<MemoryAtomSentiment>(["positive", "negative", "neutral"]);
 
 export function extractDeterministicMemoryAtoms(input: MemoryAtomExtractionInput): MemoryAtom[] {
@@ -301,6 +308,11 @@ export function extractDeterministicMemoryAtoms(input: MemoryAtomExtractionInput
     push(relationshipEvent);
   }
 
+  const promise = extractPromiseAtom(normalizedText);
+  if (promise) {
+    push(promise);
+  }
+
   const gameOpinion = extractGameOpinionAtom(normalizedText);
   if (gameOpinion) {
     push(gameOpinion);
@@ -311,7 +323,7 @@ export function extractDeterministicMemoryAtoms(input: MemoryAtomExtractionInput
     push(episodicScene);
   }
 
-  if (atoms.length === 0 && hasExplicitSaveIntent(normalizedText)) {
+  if (atoms.length === 0 && hasExplicitSaveIntent(normalizedText) && !shouldRejectPromiseMemoryText(normalizedText)) {
     push({
       type: "fact",
       text: stripExplicitSavePrefix(normalizedText),
@@ -350,6 +362,9 @@ export function filterMemoryAtomsForAutomaticWrite(
         return false;
       }
       if (atom.disabled || atom.text.trim().length === 0 || memoryAtomContainsUnsafeText(atom)) {
+        return false;
+      }
+      if (isUnrelatedPromiseAtom(input.text, atom)) {
         return false;
       }
       if (!explicitSave && (isUiEventNoise(`${input.text} ${atom.text}`) || containsPrivateContextSignal(`${input.text} ${atom.text}`))) {
@@ -410,6 +425,9 @@ export function buildMemoryAtomRecallContext(options: BuildMemoryAtomRecallConte
     .filter((atom) => !atom.disabled)
     .map((atom) => {
       if (shouldSuppressCompanionRelationshipRecall(options.input, atom)) {
+        return { atom, matches: [], score: 0 };
+      }
+      if (shouldSuppressPromiseRecall(options.input, atom)) {
         return { atom, matches: [], score: 0 };
       }
       const matches = [
@@ -580,6 +598,9 @@ function formatMemoryAtomTypeLabel(type: MemoryAtomType): string {
   if (type === "episodic_scene") {
     return "scene memory";
   }
+  if (type === "promise") {
+    return "promise memory";
+  }
   return `${type} memory`;
 }
 
@@ -619,9 +640,10 @@ function buildLLMAtomExtractionMessages(input: MemoryAtomExtractionInput): ChatM
       content: [
         "You extract Greyfield long-term memory atoms from exactly one current user turn.",
         "Return JSON only, with this shape: {\"atoms\":[{...drafts}]}",
-        "Allowed atom types: fact, preference, opinion, relationship_event, episodic_scene.",
+        "Allowed atom types: fact, preference, opinion, relationship_event, episodic_scene, promise.",
         "Use sourceTurnIds only from the provided current turn IDs. If no durable memory is present, return {\"atoms\":[]}.",
-        "Extract durable facts, preferences, opinions with reasons, relationship events, important dates, scenes, taboos, and commitments when the schema can represent them.",
+        "Extract durable facts, preferences, opinions with reasons, relationship events, important dates, scenes, taboos, and user/Greyfield promise commitments when the schema can represent them.",
+        "Use type promise only for commitments between the user and Greyfield. Preserve subject, object, action concepts, sourceTurnIds, and semantic triggers. Reject unrelated work, project, customer, PR, or team promises.",
         "Reject UI telemetry, event logs, transient window/settings/mouse/weather-probe noise, provider secrets, API keys, passwords, tokens, cookies, and unrelated debugging text.",
         "Keep text concise, source-linked, and user-facing. Do not include provider names, credentials, hidden prompts, or UI implementation details.",
         "For each draft, use fields: type, text, sourceTurnIds, importance, triggers, eventDate, recurrence, ritualAction, subject, object, sentiment, metadata.",
@@ -952,6 +974,14 @@ function shouldSkipBackgroundMemoryWrite(input: MemoryAtomExtractionInput): bool
   return isUiEventNoise(text) || containsPrivateContextSignal(text);
 }
 
+function isUnrelatedPromiseAtom(sourceText: string, atom: MemoryAtom): boolean {
+  if (atom.type !== "promise") {
+    return false;
+  }
+  const combined = normalizeText([sourceText, ...collectPersistedMemoryAtomStrings(atom)].join(" "));
+  return isPromiseSeparationWarning(sourceText) || (hasExternalPromiseTarget(combined) && !hasGreyfieldPromiseTarget(combined));
+}
+
 function containsSecretLikeText(text: string): boolean {
   return /(api[_\s-]?key|secret|token|password|authorization|bearer\s+[a-z0-9._-]+|sk-[a-z0-9_-]{12,}|cookie|credential)/iu.test(text);
 }
@@ -1073,6 +1103,166 @@ function extractRelationshipEventAtom(
       gift: hasRose ? "rose" : null
     }
   };
+}
+
+type PromiseSubject = "user" | "greyfield";
+
+interface PromiseAttributes {
+  subject: PromiseSubject;
+  object: string;
+  action: string;
+  actionText: string;
+  exact: string[];
+  secondary: string[];
+  semantic: string[];
+}
+
+function extractPromiseAtom(
+  text: string
+): Omit<MemoryAtom, "id" | "createdAt" | "threadId" | "sourceTurnIds" | "triggerKeys"> | undefined {
+  if (!hasPromiseSignal(text) || isPromiseSeparationWarning(text)) {
+    return;
+  }
+  if (hasExternalPromiseTarget(text) && !hasGreyfieldPromiseTarget(text)) {
+    return;
+  }
+  const attributes = extractPromiseAttributes(text);
+  if (!attributes) {
+    return;
+  }
+
+  return {
+    type: "promise",
+    text: formatPromiseMemoryText(attributes),
+    importance: 0.86,
+    subject: attributes.subject,
+    object: attributes.object,
+    triggers: {
+      exact: attributes.exact,
+      aliases: [
+        "承诺",
+        "答应过的事",
+        "之前答应的事",
+        "说好的事",
+        "promise",
+        "commitment"
+      ],
+      secondary: attributes.secondary,
+      semantic: [
+        "promise memory",
+        "commitment recall",
+        attributes.subject === "greyfield" ? "greyfield commitment" : "user commitment",
+        ...attributes.semantic
+      ],
+      relationship: ["user_and_greyfield", "promise", `${attributes.subject}_commitment`]
+    },
+    metadata: {
+      promiseType: "commitment",
+      promiseSubject: attributes.subject,
+      promiseAction: attributes.action,
+      actionText: attributes.actionText,
+      promiseObject: attributes.object,
+      beneficiary: attributes.subject === "greyfield" ? "user" : "greyfield"
+    }
+  };
+}
+
+function hasPromiseSignal(text: string): boolean {
+  return /(承诺|答应|保证|说好|约定|promise|promised|commitment|said\s+you\s+would|said\s+i\s+would)/iu.test(text);
+}
+
+function shouldRejectPromiseMemoryText(text: string): boolean {
+  return hasPromiseSignal(text) && (isPromiseSeparationWarning(text) || (hasExternalPromiseTarget(text) && !hasGreyfieldPromiseTarget(text)));
+}
+
+function isPromiseSeparationWarning(text: string): boolean {
+  return hasExternalPromiseTarget(text) && /(不要|别|不能).{0,24}(混|混在一起|混淆|记错|当成)/u.test(text);
+}
+
+function hasExternalPromiseTarget(text: string): boolean {
+  return /(项目|工作|公司|客户|团队|同事|会议|工单|仓库|代码|需求|路线图|\bpr\b|pull request|issue|repo|repository|project|work|client|customer|company|team|coworker|meeting|roadmap)/iu.test(text);
+}
+
+function hasGreyfieldPromiseTarget(text: string): boolean {
+  return /(greyfield|小灰|你答应|你承诺|你保证|你说好|帮我|陪我|提醒我|发给你|给你|和你|和我|我们之间|我们的承诺|user\s+and\s+greyfield)/iu.test(
+    text
+  );
+}
+
+function extractPromiseAttributes(text: string): PromiseAttributes | undefined {
+  const subject = extractPromiseSubject(text);
+  if (!subject) {
+    return;
+  }
+  if (/整理书桌|收拾书桌|清理书桌|整理桌面|收拾桌面|organize (?:my )?desk|clean (?:my )?desk/iu.test(text)) {
+    return {
+      subject,
+      object: "desk_cleanup",
+      action: "organize_desk",
+      actionText: "整理书桌",
+      exact: ["整理书桌", "收拾书桌", "桌面整理"],
+      secondary: ["书桌", "桌面", "整理", "收拾", "帮我整理"],
+      semantic: ["help commitment", "organization promise", "desk organization promise", "personal care promise"]
+    };
+  }
+  if (/读书笔记|阅读笔记|reading notes?/iu.test(text)) {
+    return {
+      subject,
+      object: "reading_notes",
+      action: subject === "user" ? "send_reading_notes" : "ask_reading_notes",
+      actionText: "读书笔记",
+      exact: ["读书笔记", "阅读笔记"],
+      secondary: ["笔记", "阅读", "发给你"],
+      semantic: ["reading notes promise", subject === "user" ? "user follow-through promise" : "help commitment"]
+    };
+  }
+  if (/散步|走路|walk/iu.test(text) && /(提醒|陪|一起)/u.test(text)) {
+    return {
+      subject,
+      object: "walk_reminder",
+      action: "remind_walk",
+      actionText: "提醒散步",
+      exact: ["提醒散步", "散步"],
+      secondary: ["走路", "出去走走", "陪我散步"],
+      semantic: ["help commitment", "walk reminder promise", "personal care promise"]
+    };
+  }
+  if (!hasGreyfieldPromiseTarget(text)) {
+    return;
+  }
+  return {
+    subject,
+    object: "personal_commitment",
+    action: "follow_up",
+    actionText: "承诺事项",
+    exact: ["承诺事项"],
+    secondary: extractFallbackTriggerKeys(text).filter((key) => !hasExternalPromiseTarget(key)),
+    semantic: ["personal promise", "follow up promise"]
+  };
+}
+
+function extractPromiseSubject(text: string): PromiseSubject | undefined {
+  if (/(你|greyfield|小灰).{0,24}(答应|承诺|保证|说好)|(?:答应|承诺|保证|说好).{0,24}(帮我|陪我|提醒我)/iu.test(text)) {
+    return "greyfield";
+  }
+  if (/(我|user).{0,24}(答应|承诺|保证|说好)|(?:我会|我要|我以后|i\s+promise|i\s+will|said\s+i\s+would)/iu.test(text)) {
+    return "user";
+  }
+  if (/(帮我|陪我|提醒我)/u.test(text)) {
+    return "greyfield";
+  }
+  return;
+}
+
+function formatPromiseMemoryText(attributes: PromiseAttributes): string {
+  if (attributes.subject === "greyfield" && attributes.action === "organize_desk") {
+    return "Promise: Greyfield committed to help the user organize their desk.";
+  }
+  if (attributes.subject === "user" && attributes.action === "send_reading_notes") {
+    return "Promise: User committed to send reading notes to Greyfield.";
+  }
+  const subject = attributes.subject === "greyfield" ? "Greyfield" : "User";
+  return `Promise: ${subject} committed to ${attributes.actionText}.`;
 }
 
 function extractGameOpinionAtom(
@@ -1752,6 +1942,13 @@ function shouldSuppressCompanionRelationshipRecall(input: string, atom: MemoryAt
   return isCompanionRelationshipAtom(atom) && hasExternalRelationshipTarget(input);
 }
 
+function shouldSuppressPromiseRecall(input: string, atom: MemoryAtom): boolean {
+  if (atom.type !== "promise") {
+    return false;
+  }
+  return hasExternalPromiseTarget(input) && !hasGreyfieldPromiseTarget(input);
+}
+
 function hasExternalRelationshipTarget(text: string): boolean {
   return /(同事|客户|公司|团队|项目|会议|婚礼|朋友的|别人的|colleague|client|company|meeting|wedding)/iu.test(text);
 }
@@ -1781,7 +1978,53 @@ function extractSemanticRecallConcepts(input: string): Set<string> {
       }
     }
   }
+  const promiseQuery = extractPromiseRecallConcepts(input);
+  if (promiseQuery.hasIntent) {
+    for (const concept of promiseQuery.concepts) {
+      concepts.add(concept);
+    }
+  }
   return concepts;
+}
+
+function extractPromiseRecallConcepts(input: string): { hasIntent: boolean; concepts: Set<string> } {
+  const concepts = new Set<string>();
+  const text = normalizeText(input).toLowerCase();
+  if (hasExternalPromiseTarget(text) && !hasGreyfieldPromiseTarget(text)) {
+    return { hasIntent: false, concepts };
+  }
+
+  const hasPromiseCue = /(承诺|答应|保证|说好|约定|promise|promised|commitment|said\s+you\s+would|said\s+i\s+would)/iu.test(text);
+  const hasVagueRecallCue = /(之前|上次|以前|那个|那件|说过|记得|想起|回忆|what|which|remember|recall|before)/iu.test(text);
+  const hasActionCue = /(帮我|提醒我|陪我|整理|收拾|书桌|桌面|读书笔记|阅读笔记|散步|organize|desk|reading notes?|walk)/iu.test(text);
+  if (!hasPromiseCue && !(hasVagueRecallCue && hasActionCue)) {
+    return { hasIntent: false, concepts };
+  }
+
+  concepts.add("promise memory");
+  concepts.add("commitment recall");
+  if (/(你|greyfield|小灰|帮我|提醒我|陪我|said\s+you\s+would)/iu.test(text)) {
+    concepts.add("greyfield commitment");
+  }
+  if (/(我|发给你|给你|said\s+i\s+would|i\s+promise)/iu.test(text)) {
+    concepts.add("user commitment");
+  }
+  if (/(帮我|提醒我|陪我|help|remind|accompany)/iu.test(text)) {
+    concepts.add("help commitment");
+  }
+  if (/(整理|收拾|organize|clean)/iu.test(text)) {
+    concepts.add("organization promise");
+  }
+  if (/(书桌|桌面|desk)/iu.test(text)) {
+    concepts.add("desk organization promise");
+  }
+  if (/(读书笔记|阅读笔记|reading notes?)/iu.test(text)) {
+    concepts.add("reading notes promise");
+  }
+  if (/(散步|走路|walk)/iu.test(text)) {
+    concepts.add("walk reminder promise");
+  }
+  return { hasIntent: concepts.size > 0, concepts };
 }
 
 function normalizeSemanticConcept(value: string): string {
@@ -2161,7 +2404,7 @@ function buildMemoryAtomWriteKeys(atom: MemoryAtom): string[] {
 
 function getMemoryAtomCategory(atom: MemoryAtom): string {
   const metadata = atom.metadata ?? {};
-  for (const key of ["factType", "preferenceType", "opinionType", "eventType", "sceneType"] as const) {
+  for (const key of ["factType", "preferenceType", "opinionType", "eventType", "sceneType", "promiseType"] as const) {
     const value = metadata[key];
     if (typeof value === "string" && value.length > 0) {
       return comparableMemoryText(value);

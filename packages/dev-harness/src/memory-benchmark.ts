@@ -193,6 +193,7 @@ interface AtomExpectation {
   };
   recurrenceFrequency?: "annual";
   ritualAction?: string;
+  subject?: string;
   object?: string;
   sentiment?: "positive" | "negative" | "neutral";
   metadata?: Record<string, string | string[] | number | boolean | null>;
@@ -239,6 +240,7 @@ const validAtomRecallTriggerLanes = new Set<AtomRecallTriggerLane>([
 ]);
 const requiredV21aCapabilityIds = [
   "memory-atom-extraction",
+  "source-linked-promise-memory",
   "calendar-recall",
   "semantic-relationship-recall",
   "source-evidence-drilldown",
@@ -249,6 +251,7 @@ const requiredV21aScenarioIds = [
   "birthday-first-meeting-rose",
   "semantic-relationship-ritual-recall",
   "game-negative-review-source-drilldown",
+  "user-greyfield-promise-recall",
   "rainy-home-hotpot-proactive-trigger"
 ] as const;
 const fixture = await loadFixture();
@@ -1161,7 +1164,7 @@ function candidateTextExposesInternals(text: string, atomId: string): boolean {
 function promptTextInternalLeaks(text: string): string[] {
   const checks: Array<[RegExp, string]> = [
     [/memory-atom/iu, "memory-atom"],
-    [/\batom-(?:fact|preference|opinion|relationship_event|episodic_scene)-[\w-]+/iu, "atom-id"],
+    [/\batom-(?:fact|preference|opinion|relationship_event|episodic_scene|promise)-[\w-]+/iu, "atom-id"],
     [/\bdatabase\b/iu, "database"],
     [/\bstorage\b/iu, "storage"]
   ];
@@ -1314,6 +1317,9 @@ function scoreAtomExpectationChecks(expectation: AtomExpectation, atom: MemoryAt
       score: atom.ritualAction === expectation.ritualAction ? 1 : 0
     });
   }
+  if (expectation.subject) {
+    checks.push({ label: "subject", score: atom.subject === expectation.subject ? 1 : 0 });
+  }
   if (expectation.object) {
     checks.push({ label: "object", score: atom.object === expectation.object ? 1 : 0 });
   }
@@ -1383,6 +1389,7 @@ function toAtomDetail(atom: MemoryAtom): Record<string, unknown> {
     eventDate: atom.eventDate,
     recurrence: atom.recurrence,
     ritualAction: atom.ritualAction,
+    subject: atom.subject,
     object: atom.object,
     sentiment: atom.sentiment,
     metadata: atom.metadata

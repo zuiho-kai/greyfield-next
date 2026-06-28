@@ -978,7 +978,7 @@ describe("RuntimeService", () => {
       expect(system).toContain("Source turns: desktop-main-session-1");
       expect(system).toContain("Ritual action: 送玫瑰");
       expect(system).not.toContain("memory-atom");
-      expect(system).not.toMatch(/\batom-(?:fact|preference|opinion|relationship_event|episodic_scene)-[\w-]+/u);
+      expect(system).not.toMatch(/\batom-(?:fact|preference|opinion|relationship_event|episodic_scene|promise)-[\w-]+/u);
       expect(system).not.toContain("database");
     } finally {
       await rm(dir, { recursive: true, force: true });
