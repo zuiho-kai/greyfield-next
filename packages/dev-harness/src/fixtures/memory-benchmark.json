@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "thresholds": {
     "summaryScore": 0.95,
     "recallScore": 0.95
@@ -7,10 +7,11 @@
   "baselineScores": {
     "summaryRegressionScore": 1,
     "recallRegressionScore": 1,
-    "atomExtractionScore": 0.82,
+    "atomExtractionScore": 0.9,
     "atomRecallScore": 0.61,
-    "productReadinessScore": 0.27,
-    "v21aScenarioScore": 0.2
+    "proactiveTriggerScore": 0.95,
+    "productReadinessScore": 0.33,
+    "v21aScenarioScore": 0.29
   },
   "productReadiness": {
     "targetScore": 1,
@@ -68,10 +69,10 @@
       {
         "id": "scene-proactive-trigger",
         "description": "Scene, calendar, and environment cues can proactively trigger relevant memories without a direct user keyword.",
-        "status": "not_implemented",
-        "score": 0,
+        "status": "partial",
+        "score": 0.35,
         "weight": 0.17,
-        "evidence": "No scene state, environment feed, last-seen trigger, or proactive recall scheduler exists"
+        "evidence": "proactiveTrigger benchmark dynamically runs pure core environment candidates over scene atoms with enabled, disabled, importance, global cooldown, per-atom cooldown, weather, virtual-home window, and last-seen gates; desktop scheduler, external weather feed, and notification/UI integration remain unimplemented"
       },
       {
         "id": "privacy-noise",
@@ -171,7 +172,7 @@
         "title": "Rainy virtual-home hotpot proactive trigger",
         "description": "Scene and environment cues should trigger a remembered care ritual when the user has been away for a long time.",
         "status": "partial",
-        "score": 0.1,
+        "score": 0.4,
         "weight": 0.33,
         "dimensions": [
           "memory-atom-extraction",
@@ -202,7 +203,7 @@
           "trigger recall should run from environment state without a direct chat keyword",
           "event telemetry should not become the remembered user preference"
         ],
-        "currentGap": "Deterministic extraction can form a rainy hotpot scene atom from the user turn, but current runtime has no virtual-home state, weather/absence feed, scene trigger index, or proactive recall loop.",
+        "currentGap": "Deterministic extraction can form a rainy virtual-home hotpot scene atom, and pure core proactive candidate generation now handles the matching environment plus quiet negative gates. Current runtime still has no desktop proactive scheduler, notification surface, real virtual-home state feed, external weather integration, or source-passage drilldown.",
         "sourceExpectations": {
           "sourceTurnIds": ["hotpot-1", "hotpot-2"],
           "exactFragments": ["下雨", "虚拟家的窗户开着", "长期没上线", "一起吃火锅"]
@@ -511,7 +512,7 @@
     },
     {
       "id": "rainy-home-hotpot-atoms",
-      "description": "Dynamically extracts a rainy hotpot scene atom while proving environment/proactive scene recall still does not fire.",
+      "description": "Dynamically extracts a rainy virtual-home hotpot scene atom and runs pure core proactive environment trigger gates.",
       "scenarioId": "rainy-home-hotpot-proactive-trigger",
       "extractionMinScore": 0.7,
       "recallMinScore": 0.05,
@@ -532,8 +533,9 @@
             "id": "window-long-absence-action",
             "type": "episodic_scene",
             "sourceTurnIds": ["hotpot-1"],
-            "textIncludes": ["open window", "long absence", "关窗"],
-            "triggerIncludes": ["虚拟家的窗户开着", "长期没上线", "关窗"]
+            "textIncludes": ["open window", "long absence", "关窗", "hotpot"],
+            "triggerIncludes": ["虚拟家的窗户开着", "长期没上线", "关窗"],
+            "metadata": { "windowState": "open", "action": "close_window", "longAbsence": true, "longAbsenceDays": 30 }
           }
         ]
       },
@@ -542,9 +544,64 @@
         "expectedAtomExpectationIds": ["rainy-hotpot-scene"],
         "promptIncludes": ["火锅"],
         "unsupportedGaps": [
-          "environment trigger lane is not wired into benchmark recall",
-          "scene proactive trigger loop is not implemented",
+          "lexical atom recall still does not use the structured proactive environment state",
+          "desktop scene proactive scheduler is not implemented",
           "virtual-home window and last-seen state are not implemented"
+        ]
+      },
+      "proactive": {
+        "minScore": 0.95,
+        "environment": {
+          "now": "2026-07-15T10:00:00.000Z",
+          "weather": "raining",
+          "virtualHome": { "windowOpen": true },
+          "lastSeenDays": 45
+        },
+        "policy": {
+          "globalCooldownMs": 0,
+          "perAtomCooldownMs": 0,
+          "minImportance": 0.7
+        },
+        "expectedAtomExpectationIds": ["rainy-hotpot-scene", "window-long-absence-action"],
+        "candidateIncludes": ["外面在下雨", "虚拟家的窗户还开着", "45 天没上线", "关窗", "吃火锅"],
+        "candidateExcludes": ["memory-atom", "source-turn", "hotpot-1", "atom-"],
+        "negativeCases": [
+          {
+            "id": "yesterday-seen",
+            "environment": {
+              "now": "2026-07-15T10:00:00.000Z",
+              "weather": "raining",
+              "virtualHome": { "windowOpen": true },
+              "lastSeenDays": 1
+            },
+            "expectedSkippedReasons": ["recent_user_activity"]
+          },
+          {
+            "id": "window-closed",
+            "environment": {
+              "now": "2026-07-15T10:00:00.000Z",
+              "weather": "raining",
+              "virtualHome": { "windowOpen": false },
+              "lastSeenDays": 45
+            },
+            "expectedSkippedReasons": ["window_closed"]
+          },
+          {
+            "id": "normal-weather",
+            "environment": {
+              "now": "2026-07-15T10:00:00.000Z",
+              "weather": "normal weather",
+              "virtualHome": { "windowOpen": true },
+              "lastSeenDays": 45
+            },
+            "expectedSkippedReasons": ["weather_mismatch"]
+          },
+          {
+            "id": "global-cooldown",
+            "triggerState": { "lastTriggeredAt": "2026-07-15T09:59:00.000Z" },
+            "policy": { "globalCooldownMs": 3600000 },
+            "expectedSkippedReasons": ["global_cooldown"]
+          }
         ]
       }
     }

@@ -2,13 +2,17 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   buildMemoryAtomRecallContext,
+  buildProactiveMemoryCandidates,
   buildRecallContext,
   createSummarySegmentDraft,
   extractDeterministicMemoryAtoms,
   formatMemoryAtomRecallContextForPrompt,
   formatRecallContextForPrompt,
+  type EnvironmentTriggerState,
   type MemoryAtom,
   type MemoryAtomType,
+  type ProactiveMemoryPolicy,
+  type ProactiveMemoryTriggerState,
   type SummarySegment
 } from "@greyfield/core-runtime";
 import type { SessionTurn } from "@greyfield/core-runtime";
@@ -24,6 +28,7 @@ interface MemoryBenchmarkFixture {
     recallRegressionScore: number;
     atomExtractionScore: number;
     atomRecallScore: number;
+    proactiveTriggerScore: number;
     productReadinessScore: number;
     v21aScenarioScore: number;
   };
@@ -144,6 +149,7 @@ interface AtomBenchmarkCase {
     promptExcludes?: string[];
     unsupportedGaps?: string[];
   };
+  proactive?: ProactiveBenchmarkCase;
 }
 
 interface AtomExpectation {
@@ -163,6 +169,26 @@ interface AtomExpectation {
   object?: string;
   sentiment?: "positive" | "negative" | "neutral";
   metadata?: Record<string, string | string[] | number | boolean | null>;
+}
+
+interface ProactiveBenchmarkCase {
+  minScore: number;
+  environment: EnvironmentTriggerState;
+  policy?: ProactiveMemoryPolicy;
+  triggerState?: ProactiveMemoryTriggerState;
+  expectedAtomExpectationIds: string[];
+  rejectedAtomExpectationIds?: string[];
+  candidateIncludes?: string[];
+  candidateExcludes?: string[];
+  negativeCases: ProactiveNegativeCase[];
+}
+
+interface ProactiveNegativeCase {
+  id: string;
+  environment?: EnvironmentTriggerState;
+  policy?: ProactiveMemoryPolicy;
+  triggerState?: ProactiveMemoryTriggerState;
+  expectedSkippedReasons?: string[];
 }
 
 interface CaseResult {
@@ -191,25 +217,31 @@ const summaryResults = fixture.summaryCases.map((testCase) => runSummaryCase(tes
 const recallResults = fixture.recallCases.map((testCase) => runRecallCase(testCase));
 const atomExtractionResults = fixture.atomCases.map((testCase) => runAtomExtractionCase(testCase, fixture));
 const atomRecallResults = fixture.atomCases.map((testCase) => runAtomRecallCase(testCase, fixture));
+const proactiveTriggerResults = fixture.atomCases
+  .filter(hasProactiveBenchmarkCase)
+  .map((testCase) => runAtomProactiveCase(testCase, fixture));
 const summaryScore = average(summaryResults.map((result) => result.score));
 const recallScore = average(recallResults.map((result) => result.score));
 const atomExtractionScore = average(atomExtractionResults.map((result) => result.score));
 const atomRecallScore = average(atomRecallResults.map((result) => result.score));
+const proactiveTriggerScore = average(proactiveTriggerResults.map((result) => result.score));
 const productReadinessResult = scoreProductReadiness(fixture.productReadiness);
 const ok =
-  fixture.version === 4 &&
+  fixture.version === 5 &&
   summaryScore >= fixture.thresholds.summaryScore &&
   recallScore >= fixture.thresholds.recallScore &&
   summaryScore >= fixture.baselineScores.summaryRegressionScore &&
   recallScore >= fixture.baselineScores.recallRegressionScore &&
   atomExtractionScore >= fixture.baselineScores.atomExtractionScore &&
   atomRecallScore >= fixture.baselineScores.atomRecallScore &&
+  proactiveTriggerScore >= fixture.baselineScores.proactiveTriggerScore &&
   productReadinessResult.score >= fixture.baselineScores.productReadinessScore &&
   productReadinessResult.scenarioScore >= fixture.baselineScores.v21aScenarioScore &&
   summaryResults.every((result) => result.passed) &&
   recallResults.every((result) => result.passed) &&
   atomExtractionResults.every((result) => result.passed) &&
-  atomRecallResults.every((result) => result.passed);
+  atomRecallResults.every((result) => result.passed) &&
+  proactiveTriggerResults.every((result) => result.passed);
 
 const report = {
   ok,
@@ -222,6 +254,7 @@ const report = {
     recallRegressionScore: roundScore(recallScore),
     atomExtractionScore: roundScore(atomExtractionScore),
     atomRecallScore: roundScore(atomRecallScore),
+    proactiveTriggerScore: roundScore(proactiveTriggerScore),
     productReadinessScore: productReadinessResult.score,
     productReadinessCapabilityScore: productReadinessResult.capabilityScore,
     v21aScenarioScore: productReadinessResult.scenarioScore
@@ -241,6 +274,10 @@ const report = {
   atomRecall: {
     score: roundScore(atomRecallScore),
     cases: atomRecallResults
+  },
+  proactiveTrigger: {
+    score: roundScore(proactiveTriggerScore),
+    cases: proactiveTriggerResults
   },
   productReadiness: productReadinessResult
 };
@@ -267,7 +304,7 @@ async function loadFixture(): Promise<MemoryBenchmarkFixture> {
 }
 
 function validateFixture(candidate: MemoryBenchmarkFixture): void {
-  if (candidate.version !== 4) {
+  if (candidate.version !== 5) {
     throw new Error(`Unsupported memory benchmark fixture version: ${candidate.version}`);
   }
   validateScore("thresholds.summaryScore", candidate.thresholds.summaryScore);
@@ -276,6 +313,7 @@ function validateFixture(candidate: MemoryBenchmarkFixture): void {
   validateScore("baselineScores.recallRegressionScore", candidate.baselineScores.recallRegressionScore);
   validateScore("baselineScores.atomExtractionScore", candidate.baselineScores.atomExtractionScore);
   validateScore("baselineScores.atomRecallScore", candidate.baselineScores.atomRecallScore);
+  validateScore("baselineScores.proactiveTriggerScore", candidate.baselineScores.proactiveTriggerScore);
   validateScore("baselineScores.productReadinessScore", candidate.baselineScores.productReadinessScore);
   validateScore("baselineScores.v21aScenarioScore", candidate.baselineScores.v21aScenarioScore);
   validateProductReadiness(candidate.productReadiness);
@@ -410,11 +448,20 @@ function validateAtomCase(testCase: AtomBenchmarkCase, loadedFixture: MemoryBenc
   const expectationIds = new Set(testCase.extraction.expectedAtoms.map((expectation) => expectation.id));
   for (const expectationId of [
     ...testCase.recall.expectedAtomExpectationIds,
-    ...(testCase.recall.rejectedAtomExpectationIds ?? [])
+    ...(testCase.recall.rejectedAtomExpectationIds ?? []),
+    ...(testCase.proactive?.expectedAtomExpectationIds ?? []),
+    ...(testCase.proactive?.rejectedAtomExpectationIds ?? [])
   ]) {
     if (!expectationIds.has(expectationId)) {
       throw new Error(`Atom case ${testCase.id} recall references missing atom expectation ${expectationId}`);
     }
+  }
+  if (testCase.proactive) {
+    validateScore(`atomCases.${testCase.id}.proactive.minScore`, testCase.proactive.minScore);
+    assertUnique(
+      `proactive negative case for ${testCase.id}`,
+      testCase.proactive.negativeCases.map((negativeCase) => negativeCase.id)
+    );
   }
 }
 
@@ -712,6 +759,145 @@ function runAtomRecallCase(testCase: AtomBenchmarkCase, loadedFixture: MemoryBen
       reasonVisible
     }
   };
+}
+
+function hasProactiveBenchmarkCase(testCase: AtomBenchmarkCase): testCase is AtomBenchmarkCase & { proactive: ProactiveBenchmarkCase } {
+  return testCase.proactive !== undefined;
+}
+
+function runAtomProactiveCase(
+  testCase: AtomBenchmarkCase & { proactive: ProactiveBenchmarkCase },
+  loadedFixture: MemoryBenchmarkFixture
+): CaseResult {
+  const atoms = collectAtomCaseAtoms(testCase, loadedFixture);
+  const expectationMatches = new Map(
+    testCase.extraction.expectedAtoms.map((expectation) => [expectation.id, findBestAtomForExpectation(expectation, atoms)])
+  );
+  const result = buildProactiveMemoryCandidates({
+    atoms,
+    environment: testCase.proactive.environment,
+    policy: testCase.proactive.policy,
+    triggerState: testCase.proactive.triggerState
+  });
+  const actualIds = result.candidates.map((candidate) => candidate.atomId);
+  const actualIdSet = new Set(actualIds);
+  const expectedMatches = testCase.proactive.expectedAtomExpectationIds.map((expectationId) => ({
+    expectationId,
+    atom: expectationMatches.get(expectationId)?.atom
+  }));
+  const missingExtraction = expectedMatches
+    .filter((match) => !match.atom)
+    .map((match) => match.expectationId);
+  const missingCandidates = expectedMatches
+    .filter((match) => match.atom && !actualIdSet.has(match.atom.id))
+    .map((match) => ({ expectationId: match.expectationId, atomId: match.atom?.id }));
+  const rejectedHits = (testCase.proactive.rejectedAtomExpectationIds ?? [])
+    .map((expectationId) => ({ expectationId, atom: expectationMatches.get(expectationId)?.atom }))
+    .filter((match) => match.atom && actualIdSet.has(match.atom.id))
+    .map((match) => ({ expectationId: match.expectationId, atomId: match.atom?.id }));
+  const candidateText = result.candidates.map((candidate) => candidate.text).join("\n");
+  const missingCandidateFragments = (testCase.proactive.candidateIncludes ?? []).filter(
+    (fragment) => !candidateText.includes(fragment)
+  );
+  const unexpectedCandidateFragments = (testCase.proactive.candidateExcludes ?? []).filter((fragment) =>
+    candidateText.includes(fragment)
+  );
+  const internalTextLeaks = result.candidates
+    .filter((candidate) => candidateTextExposesInternals(candidate.text, candidate.atomId))
+    .map((candidate) => candidate.atomId);
+  const negativeResults = testCase.proactive.negativeCases.map((negativeCase) =>
+    runProactiveNegativeCase(negativeCase, atoms, testCase.proactive)
+  );
+  const negativePasses = negativeResults.filter((negativeResult) => negativeResult.passed).length;
+  const expectedCount = testCase.proactive.expectedAtomExpectationIds.length;
+  const hitScore =
+    expectedCount === 0
+      ? actualIds.length === 0
+        ? 1
+        : 0
+      : ratio(expectedCount - missingExtraction.length - missingCandidates.length, expectedCount);
+  const textScore =
+    missingCandidateFragments.length === 0 && unexpectedCandidateFragments.length === 0 && internalTextLeaks.length === 0
+      ? 1
+      : 0;
+  const rejectedExpectationCount = (testCase.proactive.rejectedAtomExpectationIds ?? []).length;
+  const rejectionScore =
+    rejectedExpectationCount === 0 ? 1 : ratio(rejectedExpectationCount - rejectedHits.length, rejectedExpectationCount);
+  const negativeScore = ratio(negativePasses, testCase.proactive.negativeCases.length);
+  const score = weightedAverage([
+    [hitScore, 0.35],
+    [textScore, 0.25],
+    [negativeScore, 0.3],
+    [rejectionScore, 0.1]
+  ]);
+
+  return {
+    id: testCase.id,
+    passed:
+      score >= testCase.proactive.minScore &&
+      missingExtraction.length === 0 &&
+      missingCandidates.length === 0 &&
+      missingCandidateFragments.length === 0 &&
+      unexpectedCandidateFragments.length === 0 &&
+      internalTextLeaks.length === 0 &&
+      negativeResults.every((negativeResult) => negativeResult.passed),
+    score: roundScore(score),
+    details: {
+      description: testCase.description,
+      scenarioId: testCase.scenarioId,
+      minScore: testCase.proactive.minScore,
+      actualIds,
+      skipped: result.skipped,
+      candidates: result.candidates.map((candidate) => ({
+        atomId: candidate.atomId,
+        text: candidate.text,
+        matchedEnvironmentKeys: candidate.matchedEnvironmentKeys,
+        reason: candidate.reason,
+        score: candidate.score
+      })),
+      missingExtraction,
+      missingCandidates,
+      rejectedHits,
+      missingCandidateFragments,
+      unexpectedCandidateFragments,
+      internalTextLeaks,
+      negativeResults
+    }
+  };
+}
+
+function runProactiveNegativeCase(
+  negativeCase: ProactiveNegativeCase,
+  atoms: MemoryAtom[],
+  positiveCase: ProactiveBenchmarkCase
+): {
+  id: string;
+  passed: boolean;
+  actualIds: string[];
+  skipped: ReturnType<typeof buildProactiveMemoryCandidates>["skipped"];
+  missingSkippedReasons: string[];
+} {
+  const result = buildProactiveMemoryCandidates({
+    atoms,
+    environment: negativeCase.environment ?? positiveCase.environment,
+    policy: { ...(positiveCase.policy ?? {}), ...(negativeCase.policy ?? {}) },
+    triggerState: negativeCase.triggerState ?? positiveCase.triggerState
+  });
+  const expectedReasons = negativeCase.expectedSkippedReasons ?? [];
+  const missingSkippedReasons = expectedReasons.filter(
+    (reason) => !result.skipped.some((skipped) => skipped.reason === reason)
+  );
+  return {
+    id: negativeCase.id,
+    passed: result.candidates.length === 0 && missingSkippedReasons.length === 0,
+    actualIds: result.candidates.map((candidate) => candidate.atomId),
+    skipped: result.skipped,
+    missingSkippedReasons
+  };
+}
+
+function candidateTextExposesInternals(text: string, atomId: string): boolean {
+  return text.includes(atomId) || /memory-atom|source-turn|database|storage|turn-[\w-]+/iu.test(text);
 }
 
 function collectAtomCaseAtoms(testCase: AtomBenchmarkCase, loadedFixture: MemoryBenchmarkFixture): MemoryAtom[] {

@@ -185,7 +185,7 @@ export function extractDeterministicMemoryAtoms(input: MemoryAtomExtractionInput
     push(gameOpinion);
   }
 
-  const episodicScene = extractRainyHotpotSceneAtom(normalizedText);
+  const episodicScene = extractEpisodicSceneAtom(normalizedText);
   if (episodicScene) {
     push(episodicScene);
   }
@@ -435,33 +435,352 @@ function extractGameOpinionAtom(
   };
 }
 
-function extractRainyHotpotSceneAtom(
+type SceneWeather = "rain" | "snow" | "wind" | "heat";
+type ScenePlace = "virtual_home" | "home" | "window";
+type SceneWindowState = "open" | "closed";
+type SceneActivity = "hotpot" | "tea" | "movie" | "lego" | "shared_meal";
+type SceneAction = "close_window";
+type SceneRelationshipMeaning = "shared_activity" | "quiet_companionship" | "care_ritual";
+type SceneTimeOfDay = "morning" | "afternoon" | "evening" | "night";
+
+interface SceneAttributes {
+  weather?: SceneWeather;
+  place?: ScenePlace;
+  windowState?: SceneWindowState;
+  activity?: SceneActivity;
+  action?: SceneAction;
+  relationshipMeaning?: SceneRelationshipMeaning;
+  timeOfDay?: SceneTimeOfDay;
+  longAbsence?: boolean;
+  longAbsenceDays?: number;
+}
+
+function extractEpisodicSceneAtom(
   text: string
 ): Omit<MemoryAtom, "id" | "createdAt" | "threadId" | "sourceTurnIds" | "triggerKeys"> | undefined {
-  if (!/(下雨|雨天|雨)/u.test(text) || !/火锅/u.test(text) || !hasExplicitSaveIntent(text)) {
+  if (!hasExplicitSaveIntent(text)) {
     return;
   }
+  const attributes = extractSceneAttributes(text);
+  if (countSceneSignals(attributes) < 2) {
+    return;
+  }
+  const triggerParts = buildSceneTriggerParts(text, attributes);
   return {
     type: "episodic_scene",
-    text: "Episodic scene: a rainy evening when the user and Greyfield ate hotpot together.",
-    importance: 0.78,
+    text: formatSceneMemoryText(attributes),
+    importance: attributes.action || attributes.longAbsence ? 0.82 : 0.76,
     subject: "user_and_greyfield",
-    object: "rainy_hotpot_scene",
+    object: buildSceneObject(attributes),
     triggers: {
-      exact: ["下雨天吃火锅", "火锅"],
-      aliases: ["雨天", "下雨天", "那个下雨的晚上"],
-      secondary: ["晚上", "一起吃饭", "热乎乎"],
-      environment: ["下雨", "雨天"],
-      semantic: ["cozy shared meal", "rainy evening memory"],
+      exact: triggerParts.exact,
+      aliases: triggerParts.aliases,
+      secondary: triggerParts.secondary,
+      environment: triggerParts.environment,
+      semantic: triggerParts.semantic,
       relationship: ["user_and_greyfield"]
     },
-    metadata: {
-      sceneType: "shared_meal",
-      weather: "rain",
-      activity: "hotpot",
-      timeOfDay: text.includes("晚上") ? "evening" : "unknown"
-    }
+    metadata: buildSceneMetadata(attributes)
   };
+}
+
+function extractSceneAttributes(text: string): SceneAttributes {
+  const weather = extractSceneWeather(text);
+  const place = /虚拟家|虚拟的家|房间/u.test(text) ? "virtual_home" : /家里|家中|在家/u.test(text) ? "home" : /窗边|窗户|窗/u.test(text) ? "window" : undefined;
+  const windowState = /窗户开着|开着窗|窗开着|window\s*=\s*open/iu.test(text)
+    ? "open"
+    : /窗户关着|关着窗|窗关着|window\s*=\s*closed/iu.test(text)
+      ? "closed"
+      : undefined;
+  const activity = extractSceneActivity(text);
+  const action = /关窗|关上窗|把窗户关/u.test(text) ? "close_window" : undefined;
+  const longAbsence = /长期没上线|很久没上线|好久没来|很久不在|long absence/iu.test(text);
+  const relationshipMeaning = extractSceneRelationshipMeaning(text, action, longAbsence);
+  return {
+    weather,
+    place,
+    windowState,
+    activity,
+    action,
+    relationshipMeaning,
+    timeOfDay: extractSceneTimeOfDay(text),
+    longAbsence,
+    longAbsenceDays: longAbsence ? 30 : undefined
+  };
+}
+
+function extractSceneWeather(text: string): SceneWeather | undefined {
+  if (/(下雨|雨天|雨|raining|rainy)/iu.test(text)) {
+    return "rain";
+  }
+  if (/(下雪|雪天|雪|snowing|snowy)/iu.test(text)) {
+    return "snow";
+  }
+  if (/(大风|刮风|风很大|windy)/iu.test(text)) {
+    return "wind";
+  }
+  if (/(很热|热天|高温|hot weather)/iu.test(text)) {
+    return "heat";
+  }
+  return;
+}
+
+function extractSceneActivity(text: string): SceneActivity | undefined {
+  if (/火锅/u.test(text)) {
+    return "hotpot";
+  }
+  if (/(泡茶|喝茶|茶)/u.test(text)) {
+    return "tea";
+  }
+  if (/(看电影|电影)/u.test(text)) {
+    return "movie";
+  }
+  if (/(拼乐高|乐高|积木)/u.test(text)) {
+    return "lego";
+  }
+  if (/(吃饭|晚饭|一起吃)/u.test(text)) {
+    return "shared_meal";
+  }
+  return;
+}
+
+function extractSceneRelationshipMeaning(
+  text: string,
+  action?: SceneAction,
+  longAbsence?: boolean
+): SceneRelationshipMeaning | undefined {
+  if (action || longAbsence || /(提醒|照顾|别让我忘)/u.test(text)) {
+    return "care_ritual";
+  }
+  if (/(陪伴|安心|安静|舒服|一起待着)/u.test(text)) {
+    return "quiet_companionship";
+  }
+  if (/(我们|一起|共同)/u.test(text)) {
+    return "shared_activity";
+  }
+  return;
+}
+
+function extractSceneTimeOfDay(text: string): SceneTimeOfDay | undefined {
+  if (/早上|清晨|上午/u.test(text)) {
+    return "morning";
+  }
+  if (/下午/u.test(text)) {
+    return "afternoon";
+  }
+  if (/傍晚|晚上|晚饭/u.test(text)) {
+    return "evening";
+  }
+  if (/深夜|夜里|半夜/u.test(text)) {
+    return "night";
+  }
+  return;
+}
+
+function countSceneSignals(attributes: SceneAttributes): number {
+  return [
+    attributes.weather,
+    attributes.place,
+    attributes.windowState,
+    attributes.activity,
+    attributes.action,
+    attributes.relationshipMeaning,
+    attributes.timeOfDay,
+    attributes.longAbsence ? "long_absence" : undefined
+  ].filter(Boolean).length;
+}
+
+function buildSceneTriggerParts(
+  text: string,
+  attributes: SceneAttributes
+): {
+  exact: string[];
+  aliases: string[];
+  secondary: string[];
+  environment: string[];
+  semantic: string[];
+} {
+  const exact = [
+    ...sceneActivityTriggerKeys(attributes.activity),
+    ...(attributes.weather === "rain" && attributes.activity === "hotpot" ? ["下雨天吃火锅"] : []),
+    ...(attributes.windowState === "open" ? ["虚拟家的窗户开着"] : []),
+    ...(attributes.longAbsence ? ["长期没上线"] : []),
+    ...(attributes.action === "close_window" ? ["关窗"] : [])
+  ];
+  const aliases = [
+    ...sceneWeatherAliasKeys(attributes.weather),
+    ...(attributes.timeOfDay ? [sceneTimeLabel(attributes.timeOfDay)] : []),
+    ...(attributes.place === "virtual_home" ? ["虚拟家"] : []),
+    ...(attributes.relationshipMeaning ? [sceneRelationshipLabel(attributes.relationshipMeaning)] : [])
+  ];
+  const secondary = [
+    ...(attributes.activity === "hotpot" ? ["一起吃饭", "热乎乎"] : []),
+    ...(attributes.activity === "tea" ? ["一起喝茶", "安静陪伴"] : []),
+    ...(attributes.activity === "lego" ? ["一起拼乐高", "窗边陪伴"] : []),
+    ...(attributes.action === "close_window" ? ["提醒关窗"] : []),
+    ...(attributes.longAbsence ? ["长期未上线", "久别提醒"] : []),
+    ...(attributes.windowState === "open" ? ["窗户开着"] : [])
+  ];
+  const environment = [
+    ...sceneWeatherEnvironmentKeys(attributes.weather),
+    ...(attributes.place === "virtual_home" ? ["virtual_home", "虚拟家"] : []),
+    ...(attributes.windowState === "open" ? ["virtual_home.window=open", "窗户开着", "虚拟家的窗户开着"] : []),
+    ...(attributes.windowState === "closed" ? ["virtual_home.window=closed", "窗户关着"] : []),
+    ...(attributes.longAbsence ? ["last_seen_days>=30", "长期没上线"] : []),
+    ...(attributes.timeOfDay ? [attributes.timeOfDay] : [])
+  ];
+  const semantic = [
+    ...(attributes.weather && attributes.activity ? [`${attributes.weather} ${attributes.activity} memory`] : []),
+    ...(attributes.relationshipMeaning ? [attributes.relationshipMeaning.replace(/_/g, " ")] : []),
+    ...(attributes.action === "close_window" ? ["low disturbance care reminder"] : []),
+    ...(attributes.relationshipMeaning || text.includes("一起") ? ["shared scene memory"] : [])
+  ];
+  return { exact, aliases, secondary, environment, semantic };
+}
+
+function sceneWeatherAliasKeys(weather: SceneWeather | undefined): string[] {
+  if (weather === "rain") {
+    return ["雨天", "下雨天", "那个下雨的晚上"];
+  }
+  if (weather === "snow") {
+    return ["雪天", "下雪天", "那个下雪的下午"];
+  }
+  if (weather === "wind") {
+    return ["大风天", "刮风的时候"];
+  }
+  if (weather === "heat") {
+    return ["很热的时候", "高温天"];
+  }
+  return [];
+}
+
+function sceneWeatherEnvironmentKeys(weather: SceneWeather | undefined): string[] {
+  if (weather === "rain") {
+    return ["rain", "raining", "下雨", "雨天"];
+  }
+  if (weather === "snow") {
+    return ["snow", "snowing", "下雪", "雪天"];
+  }
+  if (weather === "wind") {
+    return ["wind", "windy", "大风", "刮风"];
+  }
+  if (weather === "heat") {
+    return ["heat", "hot", "高温", "很热"];
+  }
+  return [];
+}
+
+function sceneActivityTriggerKeys(activity: SceneActivity | undefined): string[] {
+  if (activity === "hotpot") {
+    return ["火锅"];
+  }
+  if (activity === "tea") {
+    return ["泡茶", "喝茶"];
+  }
+  if (activity === "movie") {
+    return ["看电影", "电影"];
+  }
+  if (activity === "lego") {
+    return ["拼乐高", "乐高"];
+  }
+  if (activity === "shared_meal") {
+    return ["一起吃饭"];
+  }
+  return [];
+}
+
+function formatSceneMemoryText(attributes: SceneAttributes): string {
+  const descriptors = [
+    attributes.weather ? `${sceneWeatherEnglishAdjective(attributes.weather)}` : "",
+    attributes.place === "virtual_home" ? "virtual-home" : attributes.place === "home" ? "home" : "",
+    attributes.timeOfDay ?? "",
+    "scene"
+  ].filter(Boolean);
+  const details = [
+    attributes.windowState === "open" ? "with an open window" : "",
+    attributes.longAbsence ? "after a long absence" : "",
+    attributes.action === "close_window" ? "where the user wanted Greyfield to remind them to 关窗" : "",
+    attributes.activity ? `and share ${sceneActivityEnglishLabel(attributes.activity)} together` : "",
+    attributes.relationshipMeaning ? `as ${sceneRelationshipEnglishLabel(attributes.relationshipMeaning)}` : ""
+  ].filter(Boolean);
+  return `Episodic scene: a ${descriptors.join(" ")} ${details.join(" ")}.`;
+}
+
+function buildSceneObject(attributes: SceneAttributes): string {
+  if (attributes.weather === "rain" && attributes.activity === "hotpot") {
+    return "rainy_hotpot_scene";
+  }
+  return [
+    attributes.weather,
+    attributes.place,
+    attributes.activity,
+    attributes.action ? "care" : undefined,
+    "scene"
+  ]
+    .filter(Boolean)
+    .join("_");
+}
+
+function buildSceneMetadata(attributes: SceneAttributes): Record<string, string | number | boolean | null> {
+  return {
+    sceneType: attributes.activity === "hotpot" || attributes.activity === "shared_meal" ? "shared_meal" : "episodic_scene",
+    ...(attributes.weather ? { weather: attributes.weather } : {}),
+    ...(attributes.place ? { place: attributes.place } : {}),
+    ...(attributes.windowState ? { windowState: attributes.windowState } : {}),
+    ...(attributes.activity ? { activity: attributes.activity } : {}),
+    ...(attributes.action ? { action: attributes.action, actionText: sceneActionText(attributes.action) } : {}),
+    ...(attributes.relationshipMeaning ? { relationshipMeaning: attributes.relationshipMeaning } : {}),
+    ...(attributes.timeOfDay ? { timeOfDay: attributes.timeOfDay } : {}),
+    ...(attributes.longAbsence ? { longAbsence: true, longAbsenceDays: attributes.longAbsenceDays ?? 30 } : {})
+  };
+}
+
+function sceneWeatherEnglishAdjective(weather: SceneWeather): string {
+  return weather === "rain" ? "rainy" : weather === "snow" ? "snowy" : weather === "wind" ? "windy" : "hot-weather";
+}
+
+function sceneActivityEnglishLabel(activity: SceneActivity): string {
+  if (activity === "hotpot") {
+    return "hotpot";
+  }
+  if (activity === "tea") {
+    return "tea";
+  }
+  if (activity === "movie") {
+    return "a movie";
+  }
+  if (activity === "lego") {
+    return "lego";
+  }
+  return "a meal";
+}
+
+function sceneActionText(action: SceneAction): string {
+  return action === "close_window" ? "关窗" : action;
+}
+
+function sceneRelationshipLabel(meaning: SceneRelationshipMeaning): string {
+  if (meaning === "care_ritual") {
+    return "照顾提醒";
+  }
+  if (meaning === "quiet_companionship") {
+    return "安静陪伴";
+  }
+  return "共同经历";
+}
+
+function sceneRelationshipEnglishLabel(meaning: SceneRelationshipMeaning): string {
+  if (meaning === "care_ritual") {
+    return "a care ritual";
+  }
+  if (meaning === "quiet_companionship") {
+    return "quiet companionship";
+  }
+  return "a shared activity";
+}
+
+function sceneTimeLabel(timeOfDay: SceneTimeOfDay): string {
+  return timeOfDay === "morning" ? "早上" : timeOfDay === "afternoon" ? "下午" : timeOfDay === "evening" ? "晚上" : "夜里";
 }
 
 function hasExplicitSaveIntent(text: string): boolean {
