@@ -3,7 +3,18 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it, vi } from "vitest";
 import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
-import type { MemoryAtom, MemoryAtomStore, SummarySegment, UpdateMemoryAtom } from "@greyfield/core-runtime";
+import type {
+  AppendSummarySegment,
+  AppendSessionTurn,
+  MemoryAtom,
+  MemoryAtomStore,
+  SessionHandoff,
+  SessionStore,
+  SessionTurn,
+  SummarySegment,
+  SummarySegmentStore,
+  UpdateMemoryAtom
+} from "@greyfield/core-runtime";
 import { createDesktopRuntimeStoreOptions } from "../desktop-runtime-stores";
 import { RuntimeService } from "../runtime-service";
 
@@ -1051,6 +1062,107 @@ describe("RuntimeService", () => {
     expect(memoryAtomStore.getAll().map((atom) => atom.id)).toEqual(["atom-other-role"]);
   });
 
+  it("resolves memory source passages with session-safe turn references for snapshot and export", async () => {
+    const currentSessionCollisionText = "CURRENT SESSION COLLISION TEXT SHOULD NOT BE USED";
+    const sessionStore = new TestSessionStore("current-session", [
+      {
+        id: "turn-collision",
+        role: "user",
+        content: currentSessionCollisionText,
+        createdAt: "2026-06-28T00:00:00.000Z"
+      },
+      {
+        id: "legacy-turn",
+        role: "assistant",
+        content: "Legacy source from the current session is allowed.",
+        createdAt: "2026-06-28T00:01:00.000Z"
+      }
+    ]);
+    const summarySegmentStore = new TestSummarySegmentStore([
+      {
+        id: "summary-foreign",
+        threadId: "thread-a",
+        sessionId: "foreign-session",
+        summary: "Foreign summary points at a colliding turn id.",
+        recallCues: ["foreign"],
+        sourceTurns: [
+          {
+            sessionId: "foreign-session",
+            turnId: "turn-collision",
+            role: "user",
+            createdAt: "2026-06-27T00:00:00.000Z"
+          }
+        ],
+        sourceTurnIds: ["turn-collision"],
+        createdAt: "2026-06-28T00:02:00.000Z",
+        updatedAt: "2026-06-28T00:02:00.000Z"
+      },
+      {
+        id: "summary-legacy",
+        threadId: "thread-a",
+        sessionId: "foreign-session",
+        summary: "Legacy summary source ids use the current session.",
+        recallCues: ["legacy"],
+        sourceTurns: [],
+        sourceTurnIds: ["legacy-turn"],
+        createdAt: "2026-06-28T00:03:00.000Z",
+        updatedAt: "2026-06-28T00:03:00.000Z"
+      }
+    ]);
+    const memoryAtomStore = new TestMemoryAtomStore([
+      makeMemoryAtom({
+        id: "atom-foreign",
+        threadId: "thread-a",
+        text: "Foreign atom points at a colliding turn id.",
+        sourceSessionId: "foreign-session",
+        sourceTurnIds: ["turn-collision"]
+      })
+    ]);
+    const service = new RuntimeService(defaultGreyfieldConfig, {
+      threadId: "thread-a",
+      sessionStore,
+      summarySegmentStore,
+      memoryAtomStore
+    });
+
+    const snapshot = await service.getMemoryLibrarySnapshot(0);
+    const foreignSummaryPassage = snapshot.summarySegments.find((segment) => segment.id === "summary-foreign")
+      ?.sourcePassages[0];
+    expect(foreignSummaryPassage).toMatchObject({
+      sessionId: "foreign-session",
+      turnId: "turn-collision",
+      status: "unavailable"
+    });
+    expect(foreignSummaryPassage).not.toHaveProperty("text");
+    expect(snapshot.summarySegments.find((segment) => segment.id === "summary-legacy")?.sourcePassages[0]).toMatchObject({
+      sessionId: "current-session",
+      turnId: "legacy-turn",
+      status: "available",
+      text: "Legacy source from the current session is allowed."
+    });
+    expect(snapshot.memoryAtoms[0]?.sourcePassages[0]).toMatchObject({
+      sessionId: "foreign-session",
+      turnId: "turn-collision",
+      status: "unavailable"
+    });
+    expect(JSON.stringify(snapshot)).toContain("unavailable");
+    expect(JSON.stringify(snapshot)).not.toContain(currentSessionCollisionText);
+
+    const exported = await service.exportMemory(0);
+    expect(exported.summarySegments.find((segment) => segment.id === "summary-foreign")?.sourcePassages[0]).toMatchObject({
+      sessionId: "foreign-session",
+      turnId: "turn-collision",
+      status: "unavailable"
+    });
+    expect(exported.memoryAtoms[0]?.sourcePassages[0]).toMatchObject({
+      sessionId: "foreign-session",
+      turnId: "turn-collision",
+      status: "unavailable"
+    });
+    expect(JSON.stringify(exported)).toContain("unavailable");
+    expect(JSON.stringify(exported)).not.toContain(currentSessionCollisionText);
+  });
+
   it("keeps disabled and deleted memory atoms out of prompt recall", async () => {
     const memoryAtomStore = new TestMemoryAtomStore([
       makeMemoryAtom({
@@ -1283,6 +1395,81 @@ class TestMemoryAtomStore implements MemoryAtomStore {
 
   getAll(): MemoryAtom[] {
     return this.atoms;
+  }
+}
+
+class TestSummarySegmentStore implements SummarySegmentStore {
+  constructor(private summaries: SummarySegment[]) {}
+
+  async append(segment: AppendSummarySegment): Promise<SummarySegment> {
+    const createdAt = segment.createdAt ?? "2026-06-28T00:00:00.000Z";
+    const stored = {
+      ...segment,
+      id: `summary-${this.summaries.length + 1}`,
+      createdAt,
+      updatedAt: createdAt
+    };
+    this.summaries.push(stored);
+    return stored;
+  }
+
+  async get(id: string): Promise<SummarySegment | null> {
+    return this.summaries.find((summary) => summary.id === id) ?? null;
+  }
+
+  async list(threadId: string): Promise<SummarySegment[]> {
+    return this.summaries.filter((summary) => summary.threadId === threadId);
+  }
+
+  async update(): Promise<SummarySegment | null> {
+    throw new Error("update is not used by this test store");
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const before = this.summaries.length;
+    this.summaries = this.summaries.filter((summary) => summary.id !== id);
+    return this.summaries.length !== before;
+  }
+}
+
+class TestSessionStore implements SessionStore {
+  private readonly turns: SessionTurn[];
+
+  constructor(readonly sessionId: string, turns: SessionTurn[]) {
+    this.turns = [...turns];
+  }
+
+  async append(turn: AppendSessionTurn): Promise<SessionTurn> {
+    const stored: SessionTurn = {
+      id: `${this.sessionId}-${this.turns.length + 1}`,
+      role: turn.role,
+      content: turn.content,
+      createdAt: turn.createdAt ?? "2026-06-28T00:00:00.000Z",
+      meta: turn.meta
+    };
+    this.turns.push(stored);
+    return stored;
+  }
+
+  async getRecent(limit: number): Promise<SessionTurn[]> {
+    return limit <= 0 ? [] : this.turns.slice(-limit);
+  }
+
+  async getByIds(turnIds: string[]): Promise<SessionTurn[]> {
+    const byId = new Map(this.turns.map((turn) => [turn.id, turn]));
+    return [...new Set(turnIds)].flatMap((turnId) => {
+      const turn = byId.get(turnId);
+      return turn ? [turn] : [];
+    });
+  }
+
+  async createHandoff(limit = 20): Promise<SessionHandoff> {
+    const turns = await this.getRecent(limit);
+    return {
+      sessionId: this.sessionId,
+      turns,
+      summary: turns.map((turn) => `${turn.role}: ${turn.content}`).join("\n")
+    };
   }
 }
 

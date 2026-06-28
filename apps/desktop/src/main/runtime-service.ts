@@ -12,6 +12,8 @@ import {
   type MemoryStore,
   type RecallContext,
   type SessionStore,
+  type SessionTurn,
+  type SessionTurnLookup,
   type SummarySegment,
   type SummarySegmentStore,
   type UpdateMemoryAtom,
@@ -63,12 +65,30 @@ export interface MemoryControlResult {
   snapshot?: Awaited<ReturnType<RuntimeService["getMemoryLibrarySnapshot"]>>;
 }
 
+export interface MemorySourcePassage {
+  sessionId: string;
+  turnId: string;
+  status: "available" | "missing" | "unavailable";
+  role?: SessionTurn["role"];
+  text?: string;
+  createdAt?: string;
+  message?: string;
+}
+
+export type MemoryLibrarySummarySegment = SummarySegment & {
+  sourcePassages: MemorySourcePassage[];
+};
+
+export type MemoryLibraryAtom = MemoryAtom & {
+  sourcePassages: MemorySourcePassage[];
+};
+
 export interface MemoryLibrarySnapshot {
   threadId: string;
   sessionId: string;
   recentTurns: Awaited<ReturnType<SessionStore["getRecent"]>>;
-  summarySegments: SummarySegment[];
-  memoryAtoms: MemoryAtom[];
+  summarySegments: MemoryLibrarySummarySegment[];
+  memoryAtoms: MemoryLibraryAtom[];
   lastRecallContext?: RecallContext;
   updatedAt: string;
 }
@@ -77,8 +97,8 @@ export interface MemoryExportResult {
   threadId: string;
   sessionId: string;
   recentTurns: Awaited<ReturnType<SessionStore["getRecent"]>>;
-  summarySegments: SummarySegment[];
-  memoryAtoms: MemoryAtom[];
+  summarySegments: MemoryLibrarySummarySegment[];
+  memoryAtoms: MemoryLibraryAtom[];
   lastRecallContext?: RecallContext;
   exportedAt: string;
 }
@@ -171,12 +191,17 @@ export class RuntimeService {
   }
 
   async getMemoryLibrarySnapshot(limit = 20): Promise<MemoryLibrarySnapshot> {
+    const recentTurns = await this.sessionStore.getRecent(limit);
+    const [summarySegments, memoryAtoms] = await Promise.all([
+      this.resolveSummarySegmentSources((await this.summarySegmentStore?.list(this.threadId)) ?? [], recentTurns),
+      this.resolveMemoryAtomSources((await this.memoryAtomStore?.list(this.threadId)) ?? [], recentTurns)
+    ]);
     return {
       threadId: this.threadId,
       sessionId: this.sessionStore.sessionId,
-      recentTurns: await this.sessionStore.getRecent(limit),
-      summarySegments: (await this.summarySegmentStore?.list(this.threadId)) ?? [],
-      memoryAtoms: (await this.memoryAtomStore?.list(this.threadId)) ?? [],
+      recentTurns,
+      summarySegments,
+      memoryAtoms,
       ...(this.lastRecallContext ? { lastRecallContext: this.lastRecallContext } : {}),
       updatedAt: new Date().toISOString()
     };
@@ -345,7 +370,7 @@ export class RuntimeService {
       sessionId: snapshot.sessionId,
       recentTurns: [],
       summarySegments: [],
-      memoryAtoms: [atom],
+      memoryAtoms: await this.resolveMemoryAtomSources([atom], []),
       exportedAt: new Date().toISOString()
     };
   }
@@ -474,6 +499,94 @@ export class RuntimeService {
   private async getCurrentThreadMemoryAtom(id: string): Promise<MemoryAtom | null> {
     const atoms = (await this.memoryAtomStore?.list(this.threadId)) ?? [];
     return atoms.find((atom) => atom.id === id) ?? null;
+  }
+
+  private async resolveSummarySegmentSources(
+    segments: SummarySegment[],
+    recentTurns: SessionTurn[]
+  ): Promise<MemoryLibrarySummarySegment[]> {
+    return Promise.all(
+      segments.map(async (segment) => ({
+        ...segment,
+        sourcePassages: await this.resolveSourcePassages(getSummarySourceRefs(segment, this.sessionStore.sessionId), recentTurns)
+      }))
+    );
+  }
+
+  private async resolveMemoryAtomSources(
+    atoms: MemoryAtom[],
+    recentTurns: SessionTurn[]
+  ): Promise<MemoryLibraryAtom[]> {
+    return Promise.all(
+      atoms.map(async (atom) => ({
+        ...atom,
+        sourcePassages: await this.resolveSourcePassages(getAtomSourceRefs(atom, this.sessionStore.sessionId), recentTurns)
+      }))
+    );
+  }
+
+  private async resolveSourcePassages(
+    refs: SourceTurnRef[],
+    recentTurns: SessionTurn[]
+  ): Promise<MemorySourcePassage[]> {
+    if (refs.length === 0) {
+      return [];
+    }
+    const currentSessionId = this.sessionStore.sessionId;
+    const currentSessionRefs = refs.filter((ref) => ref.sessionId === currentSessionId);
+    const currentTurns = new Map(recentTurns.map((turn) => [turn.id, turn]));
+    let currentLookupUnavailable = !hasSessionTurnLookup(this.sessionStore);
+    if (currentSessionRefs.length > 0 && hasSessionTurnLookup(this.sessionStore)) {
+      try {
+        for (const turn of await this.sessionStore.getByIds(currentSessionRefs.map((ref) => ref.turnId))) {
+          currentTurns.set(turn.id, turn);
+        }
+      } catch {
+        currentLookupUnavailable = true;
+      }
+    }
+
+    return refs.map((ref) => {
+      if (ref.sessionId !== currentSessionId) {
+        return {
+          sessionId: ref.sessionId,
+          turnId: ref.turnId,
+          status: "unavailable",
+          ...(ref.role ? { role: ref.role } : {}),
+          ...(ref.createdAt ? { createdAt: ref.createdAt } : {}),
+          message: "Source turn belongs to another session and is unavailable in the current local store."
+        };
+      }
+      const turn = currentTurns.get(ref.turnId);
+      if (!turn) {
+        if (currentLookupUnavailable) {
+          return {
+            sessionId: ref.sessionId,
+            turnId: ref.turnId,
+            status: "unavailable",
+            ...(ref.role ? { role: ref.role } : {}),
+            ...(ref.createdAt ? { createdAt: ref.createdAt } : {}),
+            message: "Source turn lookup is unavailable in the current local store."
+          };
+        }
+        return {
+          sessionId: ref.sessionId,
+          turnId: ref.turnId,
+          status: "missing",
+          ...(ref.role ? { role: ref.role } : {}),
+          ...(ref.createdAt ? { createdAt: ref.createdAt } : {}),
+          message: "Source turn is missing from the current session store."
+        };
+      }
+      return {
+        sessionId: ref.sessionId,
+        turnId: ref.turnId,
+        status: "available",
+        role: turn.role,
+        text: turn.content,
+        createdAt: turn.createdAt
+      };
+    });
   }
 
   private createDefaultPersona(): CharacterPersona {
@@ -639,4 +752,63 @@ function normalizeMemoryAtomPatch(patch: UpdateMemoryAtom): UpdateMemoryAtom {
     ...(patch.triggers !== undefined ? { triggers: patch.triggers } : {}),
     ...(patch.updatedAt !== undefined ? { updatedAt: patch.updatedAt } : {})
   };
+}
+
+interface SourceTurnRef {
+  sessionId: string;
+  turnId: string;
+  role?: SessionTurn["role"];
+  createdAt?: string;
+}
+
+function getSummarySourceRefs(segment: SummarySegment, currentSessionId: string): SourceTurnRef[] {
+  if (segment.sourceTurns.length > 0) {
+    return normalizeSourceRefs(
+      segment.sourceTurns.map((turn) => ({
+        sessionId: turn.sessionId,
+        turnId: turn.turnId,
+        role: turn.role,
+        createdAt: turn.createdAt
+      }))
+    );
+  }
+  return normalizeSourceRefs(
+    (segment.sourceTurnIds ?? []).map((turnId) => ({
+      sessionId: currentSessionId,
+      turnId
+    }))
+  );
+}
+
+function getAtomSourceRefs(atom: MemoryAtom, currentSessionId: string): SourceTurnRef[] {
+  const sessionId = atom.sourceSessionId ?? currentSessionId;
+  return normalizeSourceRefs(
+    atom.sourceTurnIds.map((turnId) => ({
+      sessionId,
+      turnId
+    }))
+  );
+}
+
+function normalizeSourceRefs(refs: SourceTurnRef[]): SourceTurnRef[] {
+  const seen = new Set<string>();
+  const normalized: SourceTurnRef[] = [];
+  for (const ref of refs) {
+    const sessionId = ref.sessionId.trim();
+    const turnId = ref.turnId.trim();
+    if (sessionId.length === 0 || turnId.length === 0) {
+      continue;
+    }
+    const key = `${sessionId}\0${turnId}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    normalized.push({ ...ref, sessionId, turnId });
+  }
+  return normalized;
+}
+
+function hasSessionTurnLookup(store: SessionStore): store is SessionStore & SessionTurnLookup {
+  return "getByIds" in store && typeof store.getByIds === "function";
 }
