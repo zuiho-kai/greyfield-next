@@ -196,7 +196,7 @@ export class RuntimeService {
       this.resolveSummarySegmentSources((await this.summarySegmentStore?.list(this.threadId)) ?? [], recentTurns),
       this.resolveMemoryAtomSources((await this.memoryAtomStore?.list(this.threadId)) ?? [], recentTurns)
     ]);
-    return {
+    return this.redactMemoryLibrarySnapshot({
       threadId: this.threadId,
       sessionId: this.sessionStore.sessionId,
       recentTurns,
@@ -204,7 +204,7 @@ export class RuntimeService {
       memoryAtoms,
       ...(this.lastRecallContext ? { lastRecallContext: this.lastRecallContext } : {}),
       updatedAt: new Date().toISOString()
-    };
+    });
   }
 
   async updateMemorySummary(id: string, patch: UpdateSummarySegment): Promise<MemoryControlResult> {
@@ -370,7 +370,7 @@ export class RuntimeService {
       sessionId: snapshot.sessionId,
       recentTurns: [],
       summarySegments: [],
-      memoryAtoms: await this.resolveMemoryAtomSources([atom], []),
+      memoryAtoms: snapshot.memoryAtoms.filter((snapshotAtom) => snapshotAtom.id === atom.id),
       exportedAt: new Date().toISOString()
     };
   }
@@ -487,7 +487,10 @@ export class RuntimeService {
 
   private async emitRuntimeEvent(event: RuntimeOutputEvent, emit: RuntimeEventHandler): Promise<void> {
     if (event.type === "memory.recall.context") {
-      this.lastRecallContext = event.context;
+      const context = this.redactRecallContext(event.context);
+      this.lastRecallContext = context;
+      await emit({ ...event, context });
+      return;
     }
     await emit(event);
   }
@@ -587,6 +590,92 @@ export class RuntimeService {
         createdAt: turn.createdAt
       };
     });
+  }
+
+  private redactMemoryLibrarySnapshot(snapshot: MemoryLibrarySnapshot): MemoryLibrarySnapshot {
+    return {
+      ...snapshot,
+      recentTurns: snapshot.recentTurns.map((turn) => this.redactSessionTurn(turn)),
+      summarySegments: snapshot.summarySegments.map((segment) => this.redactSummarySegment(segment)),
+      memoryAtoms: snapshot.memoryAtoms.map((atom) => this.redactMemoryAtom(atom)),
+      ...(snapshot.lastRecallContext ? { lastRecallContext: this.redactRecallContext(snapshot.lastRecallContext) } : {})
+    };
+  }
+
+  private redactSessionTurn(turn: SessionTurn): SessionTurn {
+    return {
+      ...turn,
+      content: this.redactSecretText(turn.content),
+      ...(turn.meta ? { meta: redactSecretValue(turn.meta, (value) => this.redactSecretText(value)) as Record<string, unknown> } : {})
+    };
+  }
+
+  private redactSummarySegment(segment: MemoryLibrarySummarySegment): MemoryLibrarySummarySegment {
+    return {
+      ...segment,
+      summary: this.redactSecretText(segment.summary),
+      recallCues: segment.recallCues.map((cue) => this.redactSecretText(cue)),
+      sourcePassages: segment.sourcePassages.map((passage) => this.redactSourcePassage(passage))
+    };
+  }
+
+  private redactMemoryAtom(atom: MemoryLibraryAtom): MemoryLibraryAtom {
+    return {
+      ...atom,
+      text: this.redactSecretText(atom.text),
+      triggerKeys: atom.triggerKeys.map((key) => this.redactSecretText(key)),
+      triggers: redactSecretValue(atom.triggers, (value) => this.redactSecretText(value)) as MemoryAtom["triggers"],
+      ...(atom.eventDate
+        ? {
+            eventDate: {
+              ...atom.eventDate,
+              sourceText: this.redactSecretText(atom.eventDate.sourceText)
+            }
+          }
+        : {}),
+      ...(atom.recurrence
+        ? {
+            recurrence: {
+              ...atom.recurrence,
+              sourceText: this.redactSecretText(atom.recurrence.sourceText)
+            }
+          }
+        : {}),
+      ...(atom.ritualAction ? { ritualAction: this.redactSecretText(atom.ritualAction) } : {}),
+      ...(atom.subject ? { subject: this.redactSecretText(atom.subject) } : {}),
+      ...(atom.object ? { object: this.redactSecretText(atom.object) } : {}),
+      ...(atom.metadata
+        ? { metadata: redactSecretValue(atom.metadata, (value) => this.redactSecretText(value)) as MemoryAtom["metadata"] }
+        : {}),
+      sourcePassages: atom.sourcePassages.map((passage) => this.redactSourcePassage(passage))
+    };
+  }
+
+  private redactSourcePassage(passage: MemorySourcePassage): MemorySourcePassage {
+    return {
+      ...passage,
+      ...(passage.text ? { text: this.redactSecretText(passage.text) } : {}),
+      ...(passage.message ? { message: this.redactSecretText(passage.message) } : {})
+    };
+  }
+
+  private redactRecallContext(context: RecallContext): RecallContext {
+    return {
+      items: context.items.map((item) => ({
+        ...item,
+        summary: this.redactSecretText(item.summary),
+        recallCues: item.recallCues.map((cue) => this.redactSecretText(cue)),
+        reason: this.redactSecretText(item.reason)
+      })),
+      skipped: context.skipped.map((item) => ({
+        ...item,
+        reason: this.redactSecretText(item.reason)
+      }))
+    };
+  }
+
+  private redactSecretText(value: string): string {
+    return redactSecretText(value, [this.config.provider.apiKey]);
   }
 
   private createDefaultPersona(): CharacterPersona {
@@ -811,4 +900,33 @@ function normalizeSourceRefs(refs: SourceTurnRef[]): SourceTurnRef[] {
 
 function hasSessionTurnLookup(store: SessionStore): store is SessionStore & SessionTurnLookup {
   return "getByIds" in store && typeof store.getByIds === "function";
+}
+
+const redactedSecretPlaceholder = "[redacted-secret]";
+const providerStyleSecretPattern = /\bsk-[A-Za-z0-9_-]{8,}\b/gu;
+
+function redactSecretText(value: string, configuredSecrets: string[]): string {
+  const secrets = [...new Set(configuredSecrets.map((secret) => secret.trim()).filter(Boolean))].sort(
+    (left, right) => right.length - left.length
+  );
+  let redacted = value;
+  for (const secret of secrets) {
+    redacted = redacted.split(secret).join(redactedSecretPlaceholder);
+  }
+  return redacted.replace(providerStyleSecretPattern, redactedSecretPlaceholder);
+}
+
+function redactSecretValue(value: unknown, redactText: (value: string) => string): unknown {
+  if (typeof value === "string") {
+    return redactText(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => redactSecretValue(item, redactText));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, redactSecretValue(item, redactText)])
+    );
+  }
+  return value;
 }
