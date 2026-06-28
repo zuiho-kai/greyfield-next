@@ -375,6 +375,41 @@
                 </div>
               </dl>
 
+              <details
+                class="memory-library__source"
+                :aria-label="`Source passage for summary ${segment.id}`"
+              >
+                <summary>{{ memorySourcePassageSummary(memorySourcePassages(segment)) }}</summary>
+                <div
+                  v-if="memorySourcePassages(segment).length > 0"
+                  class="memory-library__source-list"
+                >
+                  <article
+                    v-for="passage in memorySourcePassages(segment)"
+                    :key="`${passage.sessionId}:${passage.turnId}`"
+                    class="memory-library__source-row"
+                    :class="`memory-library__source-row--${passage.status}`"
+                  >
+                    <header>
+                      <strong>{{ sourcePassageHeading(passage) }}</strong>
+                      <span>{{ sourcePassageStatusLabel(passage) }}</span>
+                    </header>
+                    <dl>
+                      <div>
+                        <dt>Turn</dt>
+                        <dd>{{ passage.turnId }}</dd>
+                      </div>
+                      <div>
+                        <dt>Role</dt>
+                        <dd>{{ sourcePassageRoleValue(passage) }}</dd>
+                      </div>
+                    </dl>
+                    <p>{{ sourcePassageBody(passage) }}</p>
+                  </article>
+                </div>
+                <p v-else>No passage</p>
+              </details>
+
               <label class="memory-library__editor">
                 <span>Memory text</span>
                 <textarea
@@ -461,6 +496,41 @@
                     <dd>{{ memoryAtomUpdatedLabel(atom) }}</dd>
                   </div>
                 </dl>
+
+                <details
+                  class="memory-library__source"
+                  :aria-label="`Source passage for ${memoryAtomTypeLabel(atom)} memory ${atom.id}`"
+                >
+                  <summary>{{ memorySourcePassageSummary(memorySourcePassages(atom)) }}</summary>
+                  <div
+                    v-if="memorySourcePassages(atom).length > 0"
+                    class="memory-library__source-list"
+                  >
+                    <article
+                      v-for="passage in memorySourcePassages(atom)"
+                      :key="`${passage.sessionId}:${passage.turnId}`"
+                      class="memory-library__source-row"
+                      :class="`memory-library__source-row--${passage.status}`"
+                    >
+                      <header>
+                        <strong>{{ sourcePassageHeading(passage) }}</strong>
+                        <span>{{ sourcePassageStatusLabel(passage) }}</span>
+                      </header>
+                      <dl>
+                        <div>
+                          <dt>Turn</dt>
+                          <dd>{{ passage.turnId }}</dd>
+                        </div>
+                        <div>
+                          <dt>Role</dt>
+                          <dd>{{ sourcePassageRoleValue(passage) }}</dd>
+                        </div>
+                      </dl>
+                      <p>{{ sourcePassageBody(passage) }}</p>
+                    </article>
+                  </div>
+                  <p v-else>No passage</p>
+                </details>
 
                 <label class="memory-library__editor">
                   <span>Memory text</span>
@@ -588,7 +658,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import type { MemoryAtom, SummarySegment } from "@greyfield/core-runtime";
+import type { DesktopMemoryAtom, DesktopMemorySourcePassage, DesktopMemorySummarySegment } from "../shared/ipc";
 import type { DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
 import {
   bundledLive2DModels,
@@ -677,7 +747,8 @@ const latestRecallById = computed(() => {
   const entries = (memorySnapshot.value?.lastRecallContext?.items ?? []).map((item) => [item.id, item] as const);
   return new Map(entries);
 });
-const memoryAtomTypeConfigs: Array<{ type: MemoryAtom["type"]; label: string; singular: string }> = [
+const sourcePassageDisplayLimit = 520;
+const memoryAtomTypeConfigs: Array<{ type: DesktopMemoryAtom["type"]; label: string; singular: string }> = [
   { type: "fact", label: "Facts", singular: "Fact" },
   { type: "preference", label: "Preferences", singular: "Preference" },
   { type: "opinion", label: "Opinions", singular: "Opinion" },
@@ -804,7 +875,7 @@ function setMemoryAtomDraft(id: string, event: Event): void {
   };
 }
 
-function saveMemorySummary(segment: SummarySegment): void {
+function saveMemorySummary(segment: DesktopMemorySummarySegment): void {
   emit("memory-summary-update", {
     id: segment.id,
     summary: memorySummaryDrafts.value[segment.id] ?? segment.summary,
@@ -812,44 +883,46 @@ function saveMemorySummary(segment: SummarySegment): void {
   });
 }
 
-function toggleMemorySummary(segment: SummarySegment): void {
+function toggleMemorySummary(segment: DesktopMemorySummarySegment): void {
   emit("memory-summary-update", {
     id: segment.id,
     disabled: !segment.disabled
   });
 }
 
-function saveMemoryAtom(atom: MemoryAtom): void {
+function saveMemoryAtom(atom: DesktopMemoryAtom): void {
   emit("memory-atom-update", {
     id: atom.id,
     text: memoryAtomDrafts.value[atom.id] ?? atom.text
   });
 }
 
-function toggleMemoryAtom(atom: MemoryAtom): void {
+function toggleMemoryAtom(atom: DesktopMemoryAtom): void {
   emit("memory-atom-update", {
     id: atom.id,
     disabled: !atom.disabled
   });
 }
 
-function exportMemoryAtom(atom: MemoryAtom): void {
+function exportMemoryAtom(atom: DesktopMemoryAtom): void {
   emit("memory-atom-export", { id: atom.id });
 }
 
-function memorySegmentStatus(segment: SummarySegment): string {
+function memorySegmentStatus(segment: DesktopMemorySummarySegment): string {
   return segment.disabled ? "Disabled" : "Enabled";
 }
 
-function memorySourceLabel(segment: SummarySegment): string {
-  const sourceIds = segment.sourceTurns.map((turn) => turn.turnId);
+function memorySourceLabel(segment: DesktopMemorySummarySegment): string {
+  const sourceIds = [
+    ...new Set([...segment.sourceTurns.map((turn) => turn.turnId), ...(segment.sourceTurnIds ?? [])])
+  ];
   if (sourceIds.length === 0) {
-    return "No source turns";
+    return "No source";
   }
   return `${sourceIds.length} source ${sourceIds.length === 1 ? "turn" : "turns"}: ${sourceIds.join(", ")}`;
 }
 
-function memoryLastUsedLabel(segment: SummarySegment): string {
+function memoryLastUsedLabel(segment: DesktopMemorySummarySegment): string {
   if (segment.disabled) {
     return "Disabled";
   }
@@ -860,31 +933,101 @@ function memoryLastUsedLabel(segment: SummarySegment): string {
   return `Last recall: ${recall.reason}`;
 }
 
-function memoryUpdatedLabel(segment: SummarySegment): string {
+function memoryUpdatedLabel(segment: DesktopMemorySummarySegment): string {
   return formatMemoryTimestamp(segment.updatedAt ?? segment.createdAt);
 }
 
-function memoryAtomStatus(atom: MemoryAtom): string {
+function memoryAtomStatus(atom: DesktopMemoryAtom): string {
   return atom.disabled ? "Disabled" : "Enabled";
 }
 
-function memoryAtomTypeLabel(atom: MemoryAtom): string {
+function memoryAtomTypeLabel(atom: DesktopMemoryAtom): string {
   return memoryAtomTypeConfigs.find((config) => config.type === atom.type)?.singular ?? "Memory";
 }
 
-function memoryAtomGroupLabel(type: MemoryAtom["type"]): string {
+function memoryAtomGroupLabel(type: DesktopMemoryAtom["type"]): string {
   return memoryAtomTypeConfigs.find((config) => config.type === type)?.label ?? "Memory";
 }
 
-function memoryAtomSourceLabel(atom: MemoryAtom): string {
+function memoryAtomSourceLabel(atom: DesktopMemoryAtom): string {
   if (atom.sourceTurnIds.length === 0) {
-    return "No source turns";
+    return "No source";
   }
   return `${atom.sourceTurnIds.length} source ${atom.sourceTurnIds.length === 1 ? "turn" : "turns"}: ${atom.sourceTurnIds.join(", ")}`;
 }
 
-function memoryAtomUpdatedLabel(atom: MemoryAtom): string {
+function memoryAtomUpdatedLabel(atom: DesktopMemoryAtom): string {
   return formatMemoryTimestamp(atom.updatedAt ?? atom.createdAt);
+}
+
+function memorySourcePassages(item: { sourcePassages?: DesktopMemorySourcePassage[] }): DesktopMemorySourcePassage[] {
+  return item.sourcePassages ?? [];
+}
+
+function memorySourcePassageSummary(passages: DesktopMemorySourcePassage[]): string {
+  if (passages.length === 0) {
+    return "No passage";
+  }
+  const availableCount = passages.filter((passage) => passage.status === "available").length;
+  if (availableCount > 0) {
+    return `${availableCount} source ${availableCount === 1 ? "passage" : "passages"}`;
+  }
+  return "Source unavailable in this local session store";
+}
+
+function sourcePassageStatusLabel(passage: DesktopMemorySourcePassage): string {
+  if (passage.status === "available") {
+    return "Source passage";
+  }
+  if (passage.status === "missing" || passage.status === "unavailable") {
+    return "Source unavailable in this local session store";
+  }
+  return "No passage";
+}
+
+function sourcePassageHeading(passage: DesktopMemorySourcePassage): string {
+  if (passage.status === "available") {
+    return passage.role ? sourcePassageRoleLabel(passage.role) : "Source passage";
+  }
+  return "Source not available";
+}
+
+function sourcePassageRoleValue(passage: DesktopMemorySourcePassage): string {
+  if (passage.status === "available") {
+    return sourcePassageRoleLabel(passage.role);
+  }
+  return "Not available";
+}
+
+function sourcePassageRoleLabel(role: DesktopMemorySourcePassage["role"]): string {
+  if (role === "assistant") {
+    return "Greyfield";
+  }
+  if (role === "user") {
+    return "User";
+  }
+  if (role === "system") {
+    return "System";
+  }
+  if (role === "event") {
+    return "Event";
+  }
+  return "Not available";
+}
+
+function sourcePassageBody(passage: DesktopMemorySourcePassage): string {
+  if (passage.status === "available") {
+    return boundSourcePassageText(passage.text ?? "");
+  }
+  return passage.message ?? "Source unavailable in this local session store";
+}
+
+function boundSourcePassageText(text: string): string {
+  const normalized = text.trim();
+  if (normalized.length <= sourcePassageDisplayLimit) {
+    return normalized;
+  }
+  return `${normalized.slice(0, sourcePassageDisplayLimit).trimEnd()}...`;
 }
 
 function formatMemoryTimestamp(timestamp: string): string {
