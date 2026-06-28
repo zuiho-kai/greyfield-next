@@ -25,7 +25,9 @@ const unavailableSourceScreenshotPath = join(artifactDir, "source-unavailable.pn
 const noSourceScreenshotPath = join(artifactDir, "source-no-passage.png");
 const providerSecret = "memory-atom-library-provider-secret";
 const editedAtomText = "Edited atom memory: User prefers Sakura.";
+const editedPromiseText = "Edited promise memory: Greyfield will help organize the desk.";
 const atomOpinionText = "User dislikes pay-to-win game loops.";
+const atomPromiseText = "Promise: Greyfield committed to help the user organize their desk.";
 const currentRoleCharacterFile = "characters/greyfield.yaml";
 const otherRoleCharacterFile = "characters/other-role.yaml";
 const currentThreadId = "desktop:characters-greyfield-yaml";
@@ -80,6 +82,11 @@ try {
       id: "desktop-main-session-preference",
       role: "assistant",
       content: ""
+    }),
+    makeTurn({
+      id: "desktop-main-session-promise",
+      role: "user",
+      content: "Source promise says Greyfield promised to help organize the desk."
     })
   ]);
   await writeAtomFile([
@@ -126,6 +133,24 @@ try {
       metadata: { sceneType: "shared_meal" }
     }),
     makeAtom({
+      id: "atom-promise",
+      type: "promise",
+      text: atomPromiseText,
+      sourceTurnIds: ["desktop-main-session-promise"],
+      triggerKeys: ["promise memory", "desk organization promise"],
+      triggers: {
+        exact: ["整理书桌"],
+        aliases: ["promise"],
+        secondary: ["desk"],
+        semantic: ["promise memory", "desk organization promise"]
+      },
+      metadata: {
+        promiseType: "commitment",
+        promiseSubject: "greyfield",
+        promiseAction: "organize_desk"
+      }
+    }),
+    makeAtom({
       id: "atom-other-role",
       threadId: otherThreadId,
       type: "preference",
@@ -148,12 +173,15 @@ try {
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Opinions" }).waitFor();
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Relationships" }).waitFor();
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Scenes" }).waitFor();
-  await memoryLibrary.locator(".memory-library__stats", { hasText: "Enabled 5" }).waitFor();
+  await memoryLibrary.locator(".memory-library__lane", { hasText: "Promises" }).waitFor();
+  await memoryLibrary.locator(".memory-library__stats", { hasText: "Enabled 6" }).waitFor();
   await memoryLibrary.locator('[aria-label="Fact memory atom-fact"]', { hasText: "User birthday is June 12." }).waitFor();
   await memoryLibrary.locator('[aria-label="Preference memory atom-preference"]', { hasText: "desktop-main-session-preference" }).waitFor();
   await memoryLibrary.locator('[aria-label="Opinion memory atom-opinion"]', { hasText: "User dislikes pay-to-win game loops." }).waitFor();
   await memoryLibrary.locator('[aria-label="Relationship memory atom-relationship"]', { hasText: "First meeting anniversary ritual is giving roses." }).waitFor();
   await memoryLibrary.locator('[aria-label="Scene memory atom-scene"]', { hasText: "Shared rainy hotpot evening memory." }).waitFor();
+  await memoryLibrary.locator('[aria-label="Promise memory atom-promise"]', { hasText: atomPromiseText }).waitFor();
+  await memoryLibrary.locator('[aria-label="Promises memories"]', { hasText: "1 stored" }).waitFor();
   const availableSource = await openSourcePassage(memoryLibrary, "Source passage for Fact memory atom-fact");
   await availableSource.getByText("User birthday source says June 12.").waitFor();
   await availableSource.getByText("Turn").waitFor();
@@ -219,7 +247,7 @@ try {
   await switchCharacter(settings, otherRoleCharacterFile);
   await memoryLibrary.locator('[aria-label="Preference memory atom-other-role"]', { hasText: "Other role memory must stay isolated." }).waitFor();
   const roleBText = (await memoryLibrary.textContent()) ?? "";
-  if (roleBText.includes("User birthday is June 12.") || roleBText.includes(atomOpinionText)) {
+  if (roleBText.includes("User birthday is June 12.") || roleBText.includes(atomOpinionText) || roleBText.includes(atomPromiseText)) {
     throw new Error(`Role-B Memory Library rendered role-A atom memory: ${roleBText}`);
   }
   await switchCharacter(settings, currentRoleCharacterFile);
@@ -230,6 +258,10 @@ try {
   await settings.getByRole("button", { name: "Save memory atom-preference" }).click();
   await memoryLibrary.getByText("Atom memory atom-preference saved.").waitFor();
   await waitForAtom("atom-preference", (atom) => atom.text === editedAtomText);
+  await settings.getByLabel("Memory text atom-promise").fill(editedPromiseText);
+  await settings.getByRole("button", { name: "Save memory atom-promise" }).click();
+  await memoryLibrary.getByText("Atom memory atom-promise saved.").waitFor();
+  await waitForAtom("atom-promise", (atom) => atom.text === editedPromiseText);
 
   await settings.getByRole("button", { name: "Export memory atom-preference" }).click();
   await memoryLibrary.getByText("Atom memory atom-preference export is ready.").waitFor();
@@ -243,6 +275,15 @@ try {
   }
   if (singleAtomExport.includes("Other role memory must stay isolated.")) {
     throw new Error("Single-atom export included another role's atom.");
+  }
+  await settings.getByRole("button", { name: "Export memory atom-promise" }).click();
+  await memoryLibrary.getByText("Atom memory atom-promise export is ready.").waitFor();
+  const promiseAtomExport = await settings.getByLabel("Memory library export").inputValue();
+  if (!promiseAtomExport.includes(editedPromiseText)) {
+    throw new Error(`Promise atom export missed edited atom text: ${promiseAtomExport}`);
+  }
+  if (promiseAtomExport.includes(providerSecret)) {
+    throw new Error("Promise atom export included the configured provider API key.");
   }
   await assertSettingsPageDoesNotExposeProviderSecret(settings);
 
@@ -267,8 +308,10 @@ try {
   memoryLibrary = settings.locator('[aria-label="Memory Library"]');
   await memoryLibrary.locator('[aria-label="Preference memory atom-preference"]', { hasText: editedAtomText }).waitFor();
   await memoryLibrary.locator('[aria-label="Opinion memory atom-opinion"]', { hasText: atomOpinionText }).waitFor();
+  await memoryLibrary.locator('[aria-label="Promise memory atom-promise"]', { hasText: editedPromiseText }).waitFor();
   await assertCurrentRoleOnly(memoryLibrary);
   await waitForAtom("atom-preference", (atom) => atom.text === editedAtomText && atom.disabled === false);
+  await waitForAtom("atom-promise", (atom) => atom.text === editedPromiseText);
 
   clearCapturedRequests();
   await sendMessageAndWaitForNextAssistant(chat, "pay-to-win game loops 这条记忆还在吗？");
@@ -293,11 +336,12 @@ try {
   await assertSettingsPageDoesNotExposeProviderSecret(settings);
 
   await settings.getByRole("button", { name: "Clear current role atoms" }).click();
-  await memoryLibrary.getByText("Cleared 4 current role atom memories. Raw chat history and summaries were kept.").waitFor();
+  await memoryLibrary.getByText("Cleared 5 current role atom memories. Raw chat history and summaries were kept.").waitFor();
   await waitForMissingAtom("atom-fact");
   await waitForMissingAtom("atom-preference");
   await waitForMissingAtom("atom-relationship");
   await waitForMissingAtom("atom-scene");
+  await waitForMissingAtom("atom-promise");
   await waitForAtom("atom-other-role", (atom) => atom.threadId === otherThreadId);
   await memoryLibrary.locator(".memory-library__empty", { hasText: "No memories yet." }).waitFor();
   const afterClearText = (await memoryLibrary.textContent()) ?? "";
@@ -313,6 +357,7 @@ try {
       {
         ok: true,
         atomGroupsVisible: true,
+        promiseAtomVisibleAndManageable: true,
         atomEditPersisted: true,
         atomDisablePersisted: true,
         atomEnablePersisted: true,

@@ -762,7 +762,8 @@ const memoryAtomTypeConfigs: Array<{ type: DesktopMemoryAtom["type"]; label: str
   { type: "preference", label: "Preferences", singular: "Preference" },
   { type: "opinion", label: "Opinions", singular: "Opinion" },
   { type: "relationship_event", label: "Relationships", singular: "Relationship" },
-  { type: "episodic_scene", label: "Scenes", singular: "Scene" }
+  { type: "episodic_scene", label: "Scenes", singular: "Scene" },
+  { type: "promise", label: "Promises", singular: "Promise" }
 ];
 const memoryTypeLanes = computed<Array<{ label: string; detail: string }>>(() => [
   {
