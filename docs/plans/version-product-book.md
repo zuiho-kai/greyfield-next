@@ -131,11 +131,11 @@ V2.1 成功时，用户不需要打开调试面板，也不需要审批一堆候
 - 原始聊天不会被 summary 覆盖，summary 和 memory atom 可以带来源。
 - Settings Memory Library 已经能查看和管理 summary/current-role atom memory：编辑、禁用、启用、删除、导出、清空当前角色 atom、角色隔离、重启后持久化。
 - 桌面路径已经能显示低打扰 proactive memory bubble，并证明冷却、全局禁用和不污染聊天历史。
-- 旧游戏吐槽、生日/第一次相遇、玫瑰偏好、雨天虚拟家火锅这类样例已经能被 benchmark 看护：召回时可以带来源、预算、跳过原因和原文片段。
+- 旧游戏吐槽、生日/第一次相遇、玫瑰偏好、重要日子/礼物仪式、雨天虚拟家火锅这类样例已经能被 benchmark 看护：召回时可以带来源、预算、跳过原因和原文片段。
 
 仍然不能完整承诺的是：
 
-- 广义 semantic/vector recall、relationship graph、完整关系事件层还没有实现。
+- deterministic semantic/relationship graph-equivalent 最小路径已经能覆盖关系仪式召回；广义 embedding/vector DB、完整 relationship graph 和完整关系事件层还没有实现。
 - 桌宠还不会自动收集真实天气、虚拟家、屏幕、久别天数等信号并用生产 scheduler 主动触发记忆。
 - 原文回查还主要是 runtime/prompt evidence；每种记忆都能在 renderer 里点开“为什么想起这个”的 UI 仍未完成。
 - LLM-backed atom extraction 仍是显式 runtime 模式和 scripted provider 证据，不是默认 Settings/桌面产品流。
@@ -149,7 +149,7 @@ V2.1 成功时，用户不需要打开调试面板，也不需要审批一堆候
 | --- | --- | --- | --- |
 | 长聊压缩 | done | `pnpm harness:memory-benchmark` 通过 summary regression 和 long-chat source traceability；summary segment 带 source turn ids 和 recall cues。 | LLM summarizer 可后续提升质量，但最低 source-linked compression 已成立。 |
 | 结构化长期记忆 | partial | benchmark 覆盖 preference、relationship date、rose preference、game opinion、privacy rule、episodic scene 等 source-linked atoms；invalid LLM 输出会 fallback。 | 默认桌面 LLM extraction UX、更多 promise/relationship/scene 覆盖和更强 privacy classification 后移。 |
-| 触发召回 | partial | 覆盖 exact/cue/alias/secondary、calendar、false-positive rejection、budget、disabled skip、pure core scene proactive candidates。 | 广义 semantic/vector、relationship graph、真实环境 feed 和生产 scheduler 后移。 |
+| 触发召回 | partial | 覆盖 exact/cue/alias/secondary、calendar、deterministic semantic/relationship ritual recall、false-positive rejection、budget、disabled skip、pure core scene proactive candidates。 | 完整 embedding/vector DB、更广 relationship graph、真实环境 feed 和 production scheduler 后移。 |
 | 原文回查 | partial | atom recall 可把 linked raw source fragments 注入 prompt material；Memory Library source 状态由 Electron harness 覆盖。 | renderer 级完整 source-drilldown UI 后移。 |
 | 可管理和可退化 | partial | `harness:electron:memory-control` 与 `harness:electron:memory-atom-library` 证明编辑、禁用、启用、删除、导出、当前角色清空、角色隔离、reload persistence、secret 排除、无 pending approval；系统不依赖 vector/embedding。 | hard erasure、所有 memory type 的完整来源管理和更广 privacy/delete 语义后移。 |
 

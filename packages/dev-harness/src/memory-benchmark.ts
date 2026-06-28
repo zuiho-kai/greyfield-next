@@ -120,6 +120,7 @@ interface ExpectedSkipped {
 }
 
 type AtomRecallSourceEvidenceClass = "no_recall" | "memory_hit_without_raw_evidence" | "memory_hit_with_raw_source_evidence";
+type AtomRecallTriggerLane = keyof MemoryAtom["triggers"];
 
 interface AtomRecallFalsePositiveCase {
   id: string;
@@ -165,6 +166,7 @@ interface AtomBenchmarkCase {
     sourcePassageMaxCharacters?: number;
     sourcePassageMaxCharactersPerTurn?: number;
     sourcePassageMaxTurnsPerAtom?: number;
+    disabledTriggerLanes?: AtomRecallTriggerLane[];
     promptIncludes?: string[];
     promptExcludes?: string[];
     sourceEvidence?: {
@@ -226,15 +228,26 @@ interface CaseResult {
 }
 
 const defaultCreatedAt = "2026-06-26T01:00:00.000Z";
+const validAtomRecallTriggerLanes = new Set<AtomRecallTriggerLane>([
+  "exact",
+  "aliases",
+  "secondary",
+  "calendar",
+  "environment",
+  "semantic",
+  "relationship"
+]);
 const requiredV21aCapabilityIds = [
   "memory-atom-extraction",
   "calendar-recall",
+  "semantic-relationship-recall",
   "source-evidence-drilldown",
   "scene-proactive-trigger",
   "privacy-noise"
 ] as const;
 const requiredV21aScenarioIds = [
   "birthday-first-meeting-rose",
+  "semantic-relationship-ritual-recall",
   "game-negative-review-source-drilldown",
   "rainy-home-hotpot-proactive-trigger"
 ] as const;
@@ -255,7 +268,7 @@ const atomRecallScore = average(atomRecallResults.map((result) => result.score))
 const proactiveTriggerScore = average(proactiveTriggerResults.map((result) => result.score));
 const productReadinessResult = scoreProductReadiness(fixture.productReadiness);
 const ok =
-  fixture.version === 6 &&
+  fixture.version === 7 &&
   summaryScore >= fixture.thresholds.summaryScore &&
   recallScore >= fixture.thresholds.recallScore &&
   summaryScore >= fixture.baselineScores.summaryRegressionScore &&
@@ -332,7 +345,7 @@ async function loadFixture(): Promise<MemoryBenchmarkFixture> {
 }
 
 function validateFixture(candidate: MemoryBenchmarkFixture): void {
-  if (candidate.version !== 6) {
+  if (candidate.version !== 7) {
     throw new Error(`Unsupported memory benchmark fixture version: ${candidate.version}`);
   }
   validateScore("thresholds.summaryScore", candidate.thresholds.summaryScore);
@@ -502,6 +515,11 @@ function validateAtomCase(testCase: AtomBenchmarkCase, loadedFixture: MemoryBenc
       requiredFragments.length === 0
     ) {
       throw new Error(`Atom case ${testCase.id} sourceEvidence.requiredFragments must prove raw evidence`);
+    }
+  }
+  for (const lane of testCase.recall.disabledTriggerLanes ?? []) {
+    if (!validAtomRecallTriggerLanes.has(lane)) {
+      throw new Error(`Atom case ${testCase.id} uses unsupported recall.disabledTriggerLanes value ${lane}`);
     }
   }
 }
@@ -725,12 +743,13 @@ async function runAtomExtractionCase(testCase: AtomBenchmarkCase, loadedFixture:
 
 async function runAtomRecallCase(testCase: AtomBenchmarkCase, loadedFixture: MemoryBenchmarkFixture): Promise<CaseResult> {
   const atoms = await collectAtomCaseAtoms(testCase, loadedFixture);
+  const recallAtoms = applyDisabledRecallTriggerLanes(atoms, testCase.recall.disabledTriggerLanes);
   const expectationMatches = new Map(
     testCase.extraction.expectedAtoms.map((expectation) => [expectation.id, findBestAtomForExpectation(expectation, atoms)])
   );
   const context = buildMemoryAtomRecallContext({
     input: testCase.recall.input,
-    atoms,
+    atoms: recallAtoms,
     maxItems: testCase.recall.maxItems,
     maxCharacters: testCase.recall.maxCharacters,
     now: testCase.recall.now,
@@ -764,7 +783,7 @@ async function runAtomRecallCase(testCase: AtomBenchmarkCase, loadedFixture: Mem
   const internalPromptLeaks = promptTextInternalLeaks(promptText);
   const sourceEvidence = classifyAtomRecallSourceEvidence(testCase, context.items, promptText, missingRecall.length > 0);
   const falsePositiveResults = (testCase.recall.falsePositiveCases ?? []).map((negativeCase) =>
-    runAtomRecallFalsePositiveCase(negativeCase, atoms, expectationMatches, testCase, loadedFixture)
+    runAtomRecallFalsePositiveCase(negativeCase, recallAtoms, expectationMatches, testCase, loadedFixture)
   );
   const expectedCount = testCase.recall.expectedAtomExpectationIds.length;
   const hitScore =
@@ -812,6 +831,7 @@ async function runAtomRecallCase(testCase: AtomBenchmarkCase, loadedFixture: Mem
       scenarioId: testCase.scenarioId,
       minScore: testCase.recallMinScore,
       input: testCase.recall.input,
+      disabledTriggerLanes: testCase.recall.disabledTriggerLanes ?? [],
       actualIds,
       skipped: context.skipped,
       budget: context.budget,
@@ -873,6 +893,37 @@ function runAtomRecallFalsePositiveCase(
     rejectedHits,
     unexpectedPromptFragments
   };
+}
+
+function applyDisabledRecallTriggerLanes(atoms: MemoryAtom[], disabledTriggerLanes: AtomRecallTriggerLane[] | undefined): MemoryAtom[] {
+  if (!disabledTriggerLanes || disabledTriggerLanes.length === 0) {
+    return atoms;
+  }
+  const disabled = new Set(disabledTriggerLanes);
+  return atoms.map((atom) => {
+    const triggers = {
+      exact: disabled.has("exact") ? [] : atom.triggers.exact,
+      aliases: disabled.has("aliases") ? [] : atom.triggers.aliases,
+      secondary: disabled.has("secondary") ? [] : atom.triggers.secondary,
+      ...(atom.triggers.calendar || disabled.has("calendar")
+        ? { calendar: disabled.has("calendar") ? [] : atom.triggers.calendar }
+        : {}),
+      ...(atom.triggers.environment || disabled.has("environment")
+        ? { environment: disabled.has("environment") ? [] : atom.triggers.environment }
+        : {}),
+      ...(atom.triggers.semantic || disabled.has("semantic")
+        ? { semantic: disabled.has("semantic") ? [] : atom.triggers.semantic }
+        : {}),
+      ...(atom.triggers.relationship || disabled.has("relationship")
+        ? { relationship: disabled.has("relationship") ? [] : atom.triggers.relationship }
+        : {})
+    };
+    return {
+      ...atom,
+      triggers,
+      triggerKeys: [...new Set([triggers.exact, triggers.aliases, triggers.secondary].flat().map((key) => key.toLowerCase()))]
+    };
+  });
 }
 
 function classifyAtomRecallSourceEvidence(
