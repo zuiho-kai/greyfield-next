@@ -459,7 +459,7 @@ export function formatMemoryAtomRecallContextForPrompt(context: MemoryAtomRecall
         item.ritualAction ? `  Ritual action: ${item.ritualAction}` : ""
       ].filter(Boolean);
       return [
-        `- memory-atom ${item.id} (${item.type})`,
+        `- Source-linked ${formatMemoryAtomTypeLabel(item.type)}`,
         `  Reason: ${item.reason}`,
         `  Source turns: ${item.sourceTurnIds.join(", ")}`,
         item.matchedKeys.length > 0 ? `  Matched keys: ${item.matchedKeys.join(", ")}` : "",
@@ -492,8 +492,18 @@ export function memoryAtomRecallContextToMessage(context: MemoryAtomRecallContex
   }
   return {
     role: "system",
-    content: `Relevant recalled memory atoms:\n${formatted}`
+    content: `Relevant source-linked long-term memories:\n${formatted}`
   };
+}
+
+function formatMemoryAtomTypeLabel(type: MemoryAtomType): string {
+  if (type === "relationship_event") {
+    return "relationship memory";
+  }
+  if (type === "episodic_scene") {
+    return "scene memory";
+  }
+  return `${type} memory`;
 }
 
 export function normalizeTriggers(triggers: MemoryAtomTriggers): MemoryAtomTriggers {
@@ -1043,6 +1053,7 @@ interface SceneAttributes {
   activity?: SceneActivity;
   action?: SceneAction;
   relationshipMeaning?: SceneRelationshipMeaning;
+  sharedExperience?: boolean;
   timeOfDay?: SceneTimeOfDay;
   longAbsence?: boolean;
   longAbsenceDays?: number;
@@ -1057,6 +1068,9 @@ function extractEpisodicSceneAtom(
   }
   const attributes = extractSceneAttributes(text);
   if (countSceneSignals(attributes) < 2) {
+    return;
+  }
+  if (countConcreteSceneSignals(attributes) < 1) {
     return;
   }
   const triggerParts = buildSceneTriggerParts(text, attributes);
@@ -1094,6 +1108,7 @@ function extractSceneAttributes(text: string): SceneAttributes {
   const action = /关窗|关上窗|把窗户关/u.test(text) ? "close_window" : undefined;
   const longAbsence = /长期没上线|很久没上线|好久没来|很久不在|long absence/iu.test(text);
   const relationshipMeaning = extractSceneRelationshipMeaning(text, action, longAbsence);
+  const sharedExperience = hasSharedSceneSignal(text);
   return {
     weather,
     place,
@@ -1101,6 +1116,7 @@ function extractSceneAttributes(text: string): SceneAttributes {
     activity,
     action,
     relationshipMeaning,
+    sharedExperience,
     timeOfDay: extractSceneTimeOfDay(text),
     longAbsence,
     longAbsenceDays: longAbsence ? 30 : undefined
@@ -1183,6 +1199,19 @@ function countSceneSignals(attributes: SceneAttributes): number {
     attributes.activity,
     attributes.action,
     attributes.relationshipMeaning,
+    attributes.sharedExperience ? "shared_experience" : undefined,
+    attributes.timeOfDay,
+    attributes.longAbsence ? "long_absence" : undefined
+  ].filter(Boolean).length;
+}
+
+function countConcreteSceneSignals(attributes: SceneAttributes): number {
+  return [
+    attributes.weather,
+    attributes.place,
+    attributes.windowState,
+    attributes.activity,
+    attributes.action,
     attributes.timeOfDay,
     attributes.longAbsence ? "long_absence" : undefined
   ].filter(Boolean).length;
@@ -1231,7 +1260,7 @@ function buildSceneTriggerParts(
     ...(attributes.weather && attributes.activity ? [`${attributes.weather} ${attributes.activity} memory`] : []),
     ...(attributes.relationshipMeaning ? [attributes.relationshipMeaning.replace(/_/g, " ")] : []),
     ...(attributes.action === "close_window" ? ["low disturbance care reminder"] : []),
-    ...(attributes.relationshipMeaning || text.includes("一起") ? ["shared scene memory"] : [])
+    ...(attributes.sharedExperience ? ["shared scene memory"] : [])
   ];
   return { exact, aliases, secondary, environment, semantic };
 }
@@ -1298,7 +1327,11 @@ function formatSceneMemoryText(attributes: SceneAttributes): string {
     attributes.windowState === "open" ? "with an open window" : "",
     attributes.longAbsence ? "after a long absence" : "",
     attributes.action === "close_window" ? "where the user wanted Greyfield to remind them to 关窗" : "",
-    attributes.activity ? `and share ${sceneActivityEnglishLabel(attributes.activity)} together` : "",
+    attributes.activity
+      ? attributes.sharedExperience
+        ? `and share ${sceneActivityEnglishLabel(attributes.activity)} together`
+        : `with ${sceneActivityEnglishLabel(attributes.activity)}`
+      : "",
     attributes.relationshipMeaning ? `as ${sceneRelationshipEnglishLabel(attributes.relationshipMeaning)}` : ""
   ].filter(Boolean);
   return `Episodic scene: a ${descriptors.join(" ")} ${details.join(" ")}.`;
@@ -1328,9 +1361,14 @@ function buildSceneMetadata(attributes: SceneAttributes): Record<string, string 
     ...(attributes.activity ? { activity: attributes.activity } : {}),
     ...(attributes.action ? { action: attributes.action, actionText: sceneActionText(attributes.action) } : {}),
     ...(attributes.relationshipMeaning ? { relationshipMeaning: attributes.relationshipMeaning } : {}),
+    ...(attributes.sharedExperience !== undefined ? { sharedExperience: attributes.sharedExperience } : {}),
     ...(attributes.timeOfDay ? { timeOfDay: attributes.timeOfDay } : {}),
     ...(attributes.longAbsence ? { longAbsence: true, longAbsenceDays: attributes.longAbsenceDays ?? 30 } : {})
   };
+}
+
+function hasSharedSceneSignal(text: string): boolean {
+  return /(我们|一起|共同|陪伴|和你|和我|shared|together)/iu.test(text);
 }
 
 function sceneWeatherEnglishAdjective(weather: SceneWeather): string {

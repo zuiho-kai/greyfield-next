@@ -18,6 +18,7 @@ export interface ProactiveMemoryPolicy {
   perAtomCooldownMs?: number;
   maxCandidates?: number;
   defaultLongAbsenceDays?: number;
+  requireSharedScene?: boolean;
 }
 
 export interface ProactiveMemoryTriggerState {
@@ -45,9 +46,11 @@ export interface ProactiveMemorySkippedItem {
     | "no_environment_trigger"
     | "weather_missing"
     | "weather_mismatch"
+    | "virtual_home_missing"
     | "window_closed"
     | "last_seen_missing"
     | "recent_user_activity"
+    | "no_shared_scene"
     | "environment_mismatch"
     | "max_candidates";
 }
@@ -73,7 +76,8 @@ const defaultPolicy: Required<ProactiveMemoryPolicy> = {
   globalCooldownMs: 6 * 60 * 60 * 1000,
   perAtomCooldownMs: 7 * 24 * 60 * 60 * 1000,
   maxCandidates: 1,
-  defaultLongAbsenceDays: 30
+  defaultLongAbsenceDays: 30,
+  requireSharedScene: true
 };
 
 export function buildProactiveMemoryCandidates(
@@ -175,9 +179,13 @@ function matchEnvironmentTrigger(
   const environmentTriggers = atom.triggers.environment ?? [];
   const expectedWeather = getAtomWeather(atom) ?? inferWeatherFromKeys(environmentTriggers);
   const windowRequirement = getAtomWindowRequirement(atom, environmentTriggers);
+  const virtualHomeRequired = requiresVirtualHome(environmentTriggers, windowRequirement);
   const absenceDays = getLongAbsenceDays(atom, environmentTriggers, policy.defaultLongAbsenceDays);
   if (environmentTriggers.length === 0 && !expectedWeather && !windowRequirement && !absenceDays) {
     return { matched: false, reason: "no_environment_trigger" };
+  }
+  if (policy.requireSharedScene && atom.type === "episodic_scene" && !isSharedSceneAtom(atom)) {
+    return { matched: false, reason: "no_shared_scene" };
   }
 
   const matchedKeys = new Set<string>();
@@ -190,6 +198,13 @@ function matchEnvironmentTrigger(
       return { matched: false, reason: "weather_mismatch" };
     }
     matchedKeys.add(expectedWeather);
+  }
+
+  if (virtualHomeRequired && !environment.virtualHome) {
+    return { matched: false, reason: "virtual_home_missing" };
+  }
+  if (virtualHomeRequired) {
+    matchedKeys.add("virtual_home");
   }
 
   if (windowRequirement === "open") {
@@ -224,6 +239,23 @@ function matchEnvironmentTrigger(
     matchedKeys: [...matchedKeys],
     priorityBoost: windowRequirement === "open" || absenceDays !== undefined ? 10 : 0
   };
+}
+
+function requiresVirtualHome(environmentTriggers: string[], windowRequirement: "open" | undefined): boolean {
+  if (windowRequirement === "open") {
+    return true;
+  }
+  return environmentTriggers.some((key) => normalizeKey(key) === "virtual_home" || /虚拟家/u.test(key));
+}
+
+function isSharedSceneAtom(atom: MemoryAtom): boolean {
+  if (atom.metadata?.sharedExperience === true) {
+    return true;
+  }
+  if (atom.triggers.semantic?.some((key) => normalizeKey(key) === "shared scene memory")) {
+    return true;
+  }
+  return /(我们|一起|共同|陪伴|together|shared)/iu.test(atom.text);
 }
 
 function getAtomWeather(atom: MemoryAtom): NormalizedWeather | undefined {

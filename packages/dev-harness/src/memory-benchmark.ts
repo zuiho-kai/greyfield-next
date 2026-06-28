@@ -729,6 +729,7 @@ async function runAtomRecallCase(testCase: AtomBenchmarkCase, loadedFixture: Mem
   const reasonVisible = context.items.every((item) => item.reason.length > 0 && promptText.includes(item.reason));
   const missingPromptFragments = (testCase.recall.promptIncludes ?? []).filter((fragment) => !promptText.includes(fragment));
   const unexpectedPromptFragments = (testCase.recall.promptExcludes ?? []).filter((fragment) => promptText.includes(fragment));
+  const internalPromptLeaks = promptTextInternalLeaks(promptText);
   const expectedCount = testCase.recall.expectedAtomExpectationIds.length;
   const hitScore =
     expectedCount === 0
@@ -742,8 +743,10 @@ async function runAtomRecallCase(testCase: AtomBenchmarkCase, loadedFixture: Mem
   const visibilityScore = context.items.length > 0 && sourceVisible && reasonVisible ? 1 : 0;
   const promptScore =
     (testCase.recall.promptIncludes ?? []).length + (testCase.recall.promptExcludes ?? []).length === 0
-      ? 1
-      : missingPromptFragments.length === 0 && unexpectedPromptFragments.length === 0
+      ? internalPromptLeaks.length === 0
+        ? 1
+        : 0
+      : missingPromptFragments.length === 0 && unexpectedPromptFragments.length === 0 && internalPromptLeaks.length === 0
         ? 1
         : 0;
   const score = weightedAverage([
@@ -755,7 +758,7 @@ async function runAtomRecallCase(testCase: AtomBenchmarkCase, loadedFixture: Mem
 
   return {
     id: testCase.id,
-    passed: score >= testCase.recallMinScore,
+    passed: score >= testCase.recallMinScore && internalPromptLeaks.length === 0,
     score: roundScore(score),
     details: {
       description: testCase.description,
@@ -769,6 +772,7 @@ async function runAtomRecallCase(testCase: AtomBenchmarkCase, loadedFixture: Mem
       rejectedHits,
       missingPromptFragments,
       unexpectedPromptFragments,
+      internalPromptLeaks,
       unsupportedGaps: testCase.recall.unsupportedGaps ?? [],
       reasons: context.items.map((item) => ({ id: item.id, reason: item.reason, score: item.score })),
       sourceVisible,
@@ -914,6 +918,16 @@ function runProactiveNegativeCase(
 
 function candidateTextExposesInternals(text: string, atomId: string): boolean {
   return text.includes(atomId) || /memory-atom|source-turn|database|storage|turn-[\w-]+/iu.test(text);
+}
+
+function promptTextInternalLeaks(text: string): string[] {
+  const checks: Array<[RegExp, string]> = [
+    [/memory-atom/iu, "memory-atom"],
+    [/\batom-(?:fact|preference|opinion|relationship_event|episodic_scene)-[\w-]+/iu, "atom-id"],
+    [/\bdatabase\b/iu, "database"],
+    [/\bstorage\b/iu, "storage"]
+  ];
+  return checks.flatMap(([pattern, label]) => (pattern.test(text) ? [label] : []));
 }
 
 function createScriptedAtomLLMProvider(responses: Record<string, unknown>, turnId: string): LLMProvider {
