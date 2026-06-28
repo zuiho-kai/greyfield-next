@@ -1,5 +1,30 @@
 # QA Retro: Desktop Pet Interaction Miss
 
+## 2026-06-28 Regression: Product Book Became Engineering Ledger
+
+The V2.1 memory work made real backend progress, but the product conversation became hard to evaluate because the status was reported as issues, PRs, checks, and benchmark internals before the product experience was restated in plain language.
+
+What happened:
+
+- The user wanted a product book for long-term companion memory: what Greyfield should feel like, what memories it should form, and what future moments should trigger recall.
+- The agent reported implementation status first: merged PRs, benchmark scores, CI state, and sub-agent flow.
+- This made the work look like token burn with little visible product progress, even though some useful memory foundation had landed.
+- The core missing product layer was not stated early enough: source-linked recall is improving, but proactive scene memory and low-disturbance desktop expression are still not felt by the user.
+
+Root cause:
+
+- The planning loop treated "can be split into work" as if it were equivalent to "product is understood."
+- Benchmark evidence was allowed to lead the explanation instead of supporting a product claim.
+- Sub-agent/PR mechanics took attention away from the user-facing question: "Does the pet feel like it remembers me?"
+
+How we avoid repeating it:
+
+- Product/version work must start with a plain-language product story before issue splitting.
+- Every status update for roadmap work must separate three states: user-feelable now, backend/benchmark-only now, and not implemented.
+- A benchmark score can prove regression safety, but it cannot replace the product explanation.
+- If the user asks for a product book, do not answer with PR lists. Write the experience, current status, gaps, and next user-visible slice first.
+- For memory specifically, use the companion-memory examples as the acceptance anchor: anniversary/rose, game-critique source drilldown, and rainy virtual-home hotpot scene recall.
+
 ## 2026-06-26 Regression: Bot Review Findings Were Not Enforced
 
 A PR reached CI with bot-authored review findings still unresolved. Green build/test jobs were not enough because they did not encode the review thread state, so a submitted bot comment could be ignored without any machine blocker.

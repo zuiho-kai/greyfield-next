@@ -8,6 +8,19 @@ These rules are adapted from the worktree discipline in `zuiho-kai/claude-workfl
 - The primary checkout is the coordination/base workspace. Do not make business-code edits there during feature work.
 - Small docs-only edits, typo fixes, or one-file diagnostic tweaks may stay in the current checkout if the user did not ask for a PR flow.
 
+## Product Design Gate
+
+Product and version work has an extra gate before issues, branches, or sub-agents.
+
+Before assigning implementation work:
+
+1. Write the user-facing story in plain language: what the user should notice, feel, or be able to do.
+2. State the current felt product status: what already works in the app, what only works as backend/benchmark support, and what is still missing.
+3. Name the non-goals and the user-visible boundary of the next slice.
+4. Only then split atomic issues and verification gates.
+
+Do not substitute PR lists, merged commit lists, package names, or benchmark internals for the product story. Those belong after the product status, not before it.
+
 ## Issue And Slice Gate
 
 Roadmap and phase issues are coordination indexes. They are not ready-to-code scopes.
