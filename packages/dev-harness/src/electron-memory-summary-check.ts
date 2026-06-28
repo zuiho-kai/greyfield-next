@@ -16,6 +16,7 @@ const summaryPath = join(tempDir, "memory", "summary-segments.jsonl");
 const artifactDir = join(workspaceRoot, ".cache", "greyfield-memory-summary", "latest");
 const settingsScreenshotPath = join(artifactDir, "settings-memory.png");
 const providerSecret = "memory-library-provider-secret";
+const sourceSecret = "sk-summarySourceSecret123456789";
 
 let app: ElectronApplication | undefined;
 try {
@@ -62,7 +63,7 @@ try {
     (window as typeof window & { __greyfieldMemoryEvents?: unknown[] }).__greyfieldMemoryEvents = events;
   });
 
-  await sendMessage(chat, "第一轮：我喜欢 Hiyori。");
+  await sendMessage(chat, `第一轮：我喜欢 Hiyori。临时密钥 ${sourceSecret} 不应该出现在导出里。`);
   await waitForAssistantCount(chat, 1);
   await sendMessage(chat, "第二轮：记住 Live2D 模型偏好。");
   await waitForAssistantCount(chat, 2);
@@ -119,6 +120,14 @@ try {
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Scenes" }).waitFor();
   await memoryLibrary.locator(".memory-library__stats", { hasText: "Enabled" }).waitFor();
   await memoryLibrary.locator(".memory-library__meta", { hasText: "desktop-main-session-1" }).waitFor();
+  const summarySource = memoryLibrary.locator('[aria-label="Source passage summary-1"]');
+  await summarySource.locator("summary", { hasText: "Source passage" }).click();
+  await summarySource.locator(".memory-library__passage", { hasText: "desktop-main-session-1" }).waitFor();
+  await summarySource.locator(".memory-library__passage", { hasText: "第一轮：我喜欢 Hiyori。" }).waitFor();
+  const sourcePassageText = (await summarySource.textContent()) ?? "";
+  if (sourcePassageText.includes(sourceSecret) || !sourcePassageText.includes("[redacted-secret]")) {
+    throw new Error(`Summary source passage did not redact the provider-style secret: ${sourcePassageText}`);
+  }
   await memoryLibrary.locator(".memory-library__block--recall", { hasText: "Last recalled memory" }).waitFor();
   await memoryLibrary.locator(".memory-library__block--recall", { hasText: "cue:hiyori" }).waitFor();
   const memoryLibraryText = ((await memoryLibrary.textContent()) ?? "").toLowerCase();
@@ -129,6 +138,9 @@ try {
   }
   if (memoryLibraryText.includes(providerSecret)) {
     throw new Error("Memory Library rendered the configured provider API key.");
+  }
+  if (memoryLibraryText.includes(sourceSecret)) {
+    throw new Error("Memory Library rendered a provider-style secret from source turns.");
   }
 
   await settings.getByLabel("Memory text summary-1").fill("Edited memory: User prefers Hiyori and Sakura.");
@@ -146,8 +158,11 @@ try {
   if (!exportedMemoryText.includes("Edited memory: User prefers Hiyori and Sakura.") || !exportedMemoryText.includes("第一轮：我喜欢 Hiyori。")) {
     throw new Error(`Memory export missed edited summary or raw turn: ${exportedMemoryText}`);
   }
-  if (exportedMemoryText.includes(providerSecret)) {
-    throw new Error("Memory export included the configured provider API key.");
+  if (exportedMemoryText.includes(providerSecret) || exportedMemoryText.includes(sourceSecret)) {
+    throw new Error("Memory export included the configured provider API key or provider-style source secret.");
+  }
+  if (!exportedMemoryText.includes("[redacted-secret]")) {
+    throw new Error(`Memory export did not include a redacted placeholder for provider-style source secrets: ${exportedMemoryText}`);
   }
 
   await settings.getByRole("button", { name: "Disable memory summary-1" }).click();
@@ -200,6 +215,9 @@ try {
         clearedSummaryMemory: true,
         noPendingCandidateApprovalUi: true,
         memoryExportExcludedProviderSecret: true,
+        memoryExportRedactedProviderStyleSecret: true,
+        sourcePassageVisible: true,
+        sourcePassageRedactedProviderStyleSecret: true,
         settingsMemoryVisible: true,
         settingsScreenshotPath,
         summaryIncludesSourceTurns: true

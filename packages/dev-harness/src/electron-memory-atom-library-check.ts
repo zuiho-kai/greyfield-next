@@ -12,11 +12,13 @@ const desktopRoot = join(workspaceRoot, "apps", "desktop");
 const executablePath = await getElectronExecutablePath(desktopRoot);
 const tempDir = await mkdtemp(join(tmpdir(), "greyfield-electron-memory-atoms-"));
 const configPath = join(tempDir, "greyfield.config.json");
+const sessionPath = join(tempDir, "sessions", "desktop-main-session.jsonl");
 const atomPath = join(tempDir, "memory", "atoms.jsonl");
 const artifactDir = join(workspaceRoot, ".cache", "greyfield-memory-atom-library", "latest");
 const settingsInitialScreenshotPath = join(artifactDir, "settings-memory-atoms-initial.png");
 const settingsAfterClearScreenshotPath = join(artifactDir, "settings-memory-atoms-after-clear.png");
 const providerSecret = "memory-atom-library-provider-secret";
+const sourceSecret = "sk-atomSourceSecret123456789";
 const currentThreadId = "desktop:characters-greyfield-yaml";
 const otherThreadId = "desktop:characters-other-role-yaml";
 
@@ -39,6 +41,14 @@ try {
     )}\n`,
     "utf8"
   );
+  await writeSessionFile([
+    makeTurn("desktop-main-session-fact", "user", "我生日是 6 月 12 日。"),
+    makeTurn("desktop-main-session-preference", "user", `我偏好 Hiyori 模型。临时密钥 ${sourceSecret} 不能出现在导出里。`),
+    makeTurn("desktop-main-session-opinion", "user", "我讨厌 pay-to-win game loops，因为节奏和付费都很糟。"),
+    makeTurn("desktop-main-session-relationship", "user", "第一次见面纪念日要送玫瑰。"),
+    makeTurn("desktop-main-session-scene", "user", "下雨的晚上一起吃火锅。"),
+    makeTurn("desktop-main-session-other", "user", "Other role source must stay isolated.")
+  ]);
   await writeAtomFile([
     makeAtom({
       id: "atom-fact",
@@ -112,6 +122,14 @@ try {
   await memoryLibrary.locator(".memory-library__stats", { hasText: "Enabled 5" }).waitFor();
   await memoryLibrary.locator('[aria-label="Fact memory atom-fact"]', { hasText: "User birthday is June 12." }).waitFor();
   await memoryLibrary.locator('[aria-label="Preference memory atom-preference"]', { hasText: "desktop-main-session-preference" }).waitFor();
+  const preferenceSource = memoryLibrary.locator('[aria-label="Source passage atom-preference"]');
+  await preferenceSource.locator("summary", { hasText: "Source passage" }).click();
+  await preferenceSource.locator(".memory-library__passage", { hasText: "desktop-main-session-preference" }).waitFor();
+  await preferenceSource.locator(".memory-library__passage", { hasText: "我偏好 Hiyori 模型。" }).waitFor();
+  const preferenceSourceText = (await preferenceSource.textContent()) ?? "";
+  if (preferenceSourceText.includes(sourceSecret) || !preferenceSourceText.includes("[redacted-secret]")) {
+    throw new Error(`Atom source passage did not redact the provider-style secret: ${preferenceSourceText}`);
+  }
   await memoryLibrary.locator('[aria-label="Opinion memory atom-opinion"]', { hasText: "User dislikes pay-to-win game loops." }).waitFor();
   await memoryLibrary.locator('[aria-label="Relationship memory atom-relationship"]', { hasText: "First meeting anniversary ritual is giving roses." }).waitFor();
   await memoryLibrary.locator('[aria-label="Scene memory atom-scene"]', { hasText: "Shared rainy hotpot evening memory." }).waitFor();
@@ -121,6 +139,9 @@ try {
   await assertSettingsPageDoesNotExposeProviderSecret(settings);
   if (initialLibraryText.includes("Other role memory must stay isolated.")) {
     throw new Error("Memory Library rendered a different role's atom memory.");
+  }
+  if (initialLibraryText.includes(sourceSecret)) {
+    throw new Error("Memory Library rendered a provider-style secret from atom source turns.");
   }
   await settings.screenshot({ path: settingsInitialScreenshotPath, fullPage: true });
 
@@ -136,11 +157,14 @@ try {
   if (!singleAtomExport.includes("Edited atom memory: User prefers Sakura.")) {
     throw new Error(`Single-atom export missed edited atom text: ${singleAtomExport}`);
   }
-  if (singleAtomExport.includes(providerSecret)) {
-    throw new Error("Single-atom export included the configured provider API key.");
+  if (singleAtomExport.includes(providerSecret) || singleAtomExport.includes(sourceSecret)) {
+    throw new Error("Single-atom export included the configured provider API key or provider-style source secret.");
   }
   if (singleAtomExport.includes("Other role memory must stay isolated.")) {
     throw new Error("Single-atom export included another role's atom.");
+  }
+  if (!singleAtomExport.includes("[redacted-secret]")) {
+    throw new Error(`Single-atom export did not include a redacted source-secret placeholder: ${singleAtomExport}`);
   }
   await assertSettingsPageDoesNotExposeProviderSecret(settings);
 
@@ -158,8 +182,8 @@ try {
   if (libraryExport.includes("User dislikes pay-to-win game loops.")) {
     throw new Error(`Library export still included deleted atom-opinion: ${libraryExport}`);
   }
-  if (libraryExport.includes(providerSecret)) {
-    throw new Error("Memory Library export included the configured provider API key.");
+  if (libraryExport.includes(providerSecret) || libraryExport.includes(sourceSecret)) {
+    throw new Error("Memory Library export included the configured provider API key or provider-style source secret.");
   }
   await assertSettingsPageDoesNotExposeProviderSecret(settings);
 
@@ -191,6 +215,9 @@ try {
         memoryDomExcludedProviderSecret: true,
         settingsPageTextAndInputsExcludedProviderSecret: true,
         memoryExportExcludedProviderSecret: true,
+        memoryExportRedactedProviderStyleSecret: true,
+        sourcePassageVisible: true,
+        sourcePassageRedactedProviderStyleSecret: true,
         noPendingCandidateApprovalUi: true,
         settingsInitialScreenshotPath,
         settingsAfterClearScreenshotPath,
@@ -221,6 +248,11 @@ async function waitForRoleWindow(app: ElectronApplication, roleName: "settings")
 
 async function writeAtomFile(atoms: MemoryAtom[]): Promise<void> {
   await writeFile(atomPath, `${atoms.map((atom) => JSON.stringify(atom)).join("\n")}\n`, "utf8");
+}
+
+async function writeSessionFile(turns: Array<{ id: string; role: "user" | "assistant"; content: string; createdAt: string }>): Promise<void> {
+  await mkdir(join(tempDir, "sessions"), { recursive: true });
+  await writeFile(sessionPath, `${turns.map((turn) => JSON.stringify(turn)).join("\n")}\n`, "utf8");
 }
 
 async function readAtoms(): Promise<MemoryAtom[]> {
@@ -326,5 +358,14 @@ function makeAtom(overrides: Partial<MemoryAtom>): MemoryAtom {
     metadata: {},
     disabled: false,
     ...overrides
+  };
+}
+
+function makeTurn(id: string, role: "user" | "assistant", content: string): { id: string; role: "user" | "assistant"; content: string; createdAt: string } {
+  return {
+    id,
+    role,
+    content,
+    createdAt: "2026-06-28T00:00:00.000Z"
   };
 }

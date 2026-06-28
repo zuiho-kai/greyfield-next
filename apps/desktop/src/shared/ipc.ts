@@ -22,12 +22,29 @@ export interface DesktopVoiceTestResult {
   data?: Uint8Array;
 }
 
+export interface DesktopMemorySourcePassage {
+  turnId: string;
+  role: SessionTurn["role"];
+  text: string;
+  omittedCharacters?: number;
+}
+
+export type DesktopMemorySummarySegment = SummarySegment & {
+  sourcePassages: DesktopMemorySourcePassage[];
+  missingSourceTurnIds: string[];
+};
+
+export type DesktopMemoryAtom = MemoryAtom & {
+  sourcePassages: DesktopMemorySourcePassage[];
+  missingSourceTurnIds: string[];
+};
+
 export interface DesktopMemoryDebugSnapshot {
   threadId: string;
   sessionId: string;
   recentTurns: SessionTurn[];
-  summarySegments: SummarySegment[];
-  memoryAtoms: MemoryAtom[];
+  summarySegments: DesktopMemorySummarySegment[];
+  memoryAtoms: DesktopMemoryAtom[];
   lastRecallContext?: RecallContext;
   updatedAt: string;
 }
@@ -54,8 +71,8 @@ export interface DesktopMemoryExport {
   threadId: string;
   sessionId: string;
   recentTurns: SessionTurn[];
-  summarySegments: SummarySegment[];
-  memoryAtoms: MemoryAtom[];
+  summarySegments: DesktopMemorySummarySegment[];
+  memoryAtoms: DesktopMemoryAtom[];
   lastRecallContext?: RecallContext;
   exportedAt: string;
 }

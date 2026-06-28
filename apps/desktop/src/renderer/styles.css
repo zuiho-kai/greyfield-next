@@ -1317,6 +1317,66 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.memory-library__source {
+  min-width: 0;
+  border: 1px solid rgba(31, 41, 51, 0.1);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.memory-library__source summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 9px;
+  color: #1f2933;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.memory-library__source summary small {
+  color: #607080;
+  font-size: 11px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.memory-library__passage {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  margin: 0 9px 8px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(37, 56, 88, 0.06);
+}
+
+.memory-library__passage span {
+  color: #607080;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.memory-library__passage p,
+.memory-library__source-empty {
+  margin: 0;
+  color: #1f2933;
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.memory-library__source-empty {
+  margin: 0 9px 8px;
+  color: #607080;
+}
+
 .memory-library__editor {
   grid-template-columns: minmax(0, 1fr) !important;
   gap: 4px !important;

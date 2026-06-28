@@ -3,7 +3,14 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it, vi } from "vitest";
 import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
-import type { MemoryAtom, MemoryAtomStore, SummarySegment, UpdateMemoryAtom } from "@greyfield/core-runtime";
+import {
+  InMemorySessionStore,
+  type MemoryAtom,
+  type MemoryAtomStore,
+  type SummarySegment,
+  type SummarySegmentStore,
+  type UpdateMemoryAtom
+} from "@greyfield/core-runtime";
 import { createDesktopRuntimeStoreOptions } from "../desktop-runtime-stores";
 import { RuntimeService } from "../runtime-service";
 
@@ -1051,6 +1058,73 @@ describe("RuntimeService", () => {
     expect(memoryAtomStore.getAll().map((atom) => atom.id)).toEqual(["atom-other-role"]);
   });
 
+  it("adds bounded redacted source passages to memory library snapshots and exports", async () => {
+    const providerSecret = "unit-provider-secret";
+    const sourceSecret = "sk-unitSourceSecret123456789";
+    const sessionStore = new InMemorySessionStore("desktop-main-session");
+    const sourceTurn = await sessionStore.append({
+      role: "user",
+      content: `我喜欢 Hiyori。provider secret ${providerSecret} and ${sourceSecret} should be redacted.`
+    });
+    const summaries = [
+      {
+        ...makeSummarySegment("summary-source", "thread-a", `Summary mentions ${providerSecret} and ${sourceSecret}.`),
+        sourceTurns: [
+          {
+            sessionId: sessionStore.sessionId,
+            turnId: sourceTurn.id,
+            role: sourceTurn.role,
+            createdAt: sourceTurn.createdAt
+          }
+        ],
+        sourceTurnIds: [sourceTurn.id]
+      }
+    ];
+    const summarySegmentStore = new TestSummarySegmentStore(summaries);
+    const memoryAtomStore = new TestMemoryAtomStore([
+      makeMemoryAtom({
+        id: "atom-source",
+        threadId: "thread-a",
+        type: "preference",
+        text: `Atom mentions ${providerSecret} and ${sourceSecret}.`,
+        sourceTurnIds: [sourceTurn.id]
+      })
+    ]);
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          apiKey: providerSecret
+        }
+      },
+      {
+        threadId: "thread-a",
+        sessionStore,
+        summarySegmentStore,
+        memoryAtomStore
+      }
+    );
+
+    const snapshot = await service.getMemoryLibrarySnapshot();
+    const exported = await service.exportMemory();
+
+    expect(snapshot.summarySegments[0]?.sourcePassages[0]).toMatchObject({
+      turnId: sourceTurn.id,
+      role: "user",
+      text: expect.stringContaining("[redacted-secret]")
+    });
+    expect(snapshot.memoryAtoms[0]?.sourcePassages[0]).toMatchObject({
+      turnId: sourceTurn.id,
+      text: expect.stringContaining("[redacted-secret]")
+    });
+    expect(JSON.stringify(snapshot)).not.toContain(providerSecret);
+    expect(JSON.stringify(snapshot)).not.toContain(sourceSecret);
+    expect(JSON.stringify(exported)).not.toContain(providerSecret);
+    expect(JSON.stringify(exported)).not.toContain(sourceSecret);
+    expect(JSON.stringify(exported)).toContain("[redacted-secret]");
+  });
+
   it("keeps disabled and deleted memory atoms out of prompt recall", async () => {
     const memoryAtomStore = new TestMemoryAtomStore([
       makeMemoryAtom({
@@ -1283,6 +1357,41 @@ class TestMemoryAtomStore implements MemoryAtomStore {
 
   getAll(): MemoryAtom[] {
     return this.atoms;
+  }
+}
+
+class TestSummarySegmentStore implements SummarySegmentStore {
+  constructor(private segments: SummarySegment[]) {}
+
+  async append(): Promise<SummarySegment> {
+    throw new Error("append is not used by this test");
+  }
+
+  async get(id: string): Promise<SummarySegment | null> {
+    return this.segments.find((segment) => segment.id === id) ?? null;
+  }
+
+  async list(threadId: string): Promise<SummarySegment[]> {
+    return this.segments.filter((segment) => segment.threadId === threadId);
+  }
+
+  async update(id: string, patch: { summary?: string; recallCues?: string[]; disabled?: boolean; updatedAt?: string }): Promise<SummarySegment | null> {
+    const index = this.segments.findIndex((segment) => segment.id === id);
+    if (index === -1) {
+      return null;
+    }
+    this.segments[index] = {
+      ...this.segments[index]!,
+      ...patch,
+      updatedAt: patch.updatedAt ?? "2026-06-28T00:10:00.000Z"
+    };
+    return this.segments[index]!;
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const before = this.segments.length;
+    this.segments = this.segments.filter((segment) => segment.id !== id);
+    return this.segments.length !== before;
   }
 }
 

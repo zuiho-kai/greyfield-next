@@ -12,6 +12,8 @@ import {
   type MemoryStore,
   type RecallContext,
   type SessionStore,
+  type SessionTurn,
+  type SourceSessionStore,
   type SummarySegment,
   type SummarySegmentStore,
   type UpdateMemoryAtom,
@@ -63,12 +65,29 @@ export interface MemoryControlResult {
   snapshot?: Awaited<ReturnType<RuntimeService["getMemoryLibrarySnapshot"]>>;
 }
 
+export interface MemorySourcePassage {
+  turnId: string;
+  role: SessionTurn["role"];
+  text: string;
+  omittedCharacters?: number;
+}
+
+export type MemoryLibrarySummarySegment = SummarySegment & {
+  sourcePassages: MemorySourcePassage[];
+  missingSourceTurnIds: string[];
+};
+
+export type MemoryLibraryAtom = MemoryAtom & {
+  sourcePassages: MemorySourcePassage[];
+  missingSourceTurnIds: string[];
+};
+
 export interface MemoryLibrarySnapshot {
   threadId: string;
   sessionId: string;
   recentTurns: Awaited<ReturnType<SessionStore["getRecent"]>>;
-  summarySegments: SummarySegment[];
-  memoryAtoms: MemoryAtom[];
+  summarySegments: MemoryLibrarySummarySegment[];
+  memoryAtoms: MemoryLibraryAtom[];
   lastRecallContext?: RecallContext;
   updatedAt: string;
 }
@@ -77,8 +96,8 @@ export interface MemoryExportResult {
   threadId: string;
   sessionId: string;
   recentTurns: Awaited<ReturnType<SessionStore["getRecent"]>>;
-  summarySegments: SummarySegment[];
-  memoryAtoms: MemoryAtom[];
+  summarySegments: MemoryLibrarySummarySegment[];
+  memoryAtoms: MemoryLibraryAtom[];
   lastRecallContext?: RecallContext;
   exportedAt: string;
 }
@@ -171,13 +190,34 @@ export class RuntimeService {
   }
 
   async getMemoryLibrarySnapshot(limit = 20): Promise<MemoryLibrarySnapshot> {
+    const recentTurns = await this.sessionStore.getRecent(limit);
+    const summarySegments = (await this.summarySegmentStore?.list(this.threadId)) ?? [];
+    const memoryAtoms = (await this.memoryAtomStore?.list(this.threadId)) ?? [];
+    const sourceTurns = await this.loadMemorySourceTurns(summarySegments, memoryAtoms);
+    const providerSecrets = this.getProviderSecrets();
     return {
       threadId: this.threadId,
       sessionId: this.sessionStore.sessionId,
-      recentTurns: await this.sessionStore.getRecent(limit),
-      summarySegments: (await this.summarySegmentStore?.list(this.threadId)) ?? [],
-      memoryAtoms: (await this.memoryAtomStore?.list(this.threadId)) ?? [],
-      ...(this.lastRecallContext ? { lastRecallContext: this.lastRecallContext } : {}),
+      recentTurns: sanitizeSessionTurns(recentTurns, providerSecrets),
+      summarySegments: summarySegments.map((segment) =>
+        sanitizeSummarySegmentWithSourcePassages(
+          {
+            ...segment,
+            ...buildSourcePassageView(getSummarySourceTurnIds(segment), sourceTurns)
+          },
+          providerSecrets
+        )
+      ),
+      memoryAtoms: memoryAtoms.map((atom) =>
+        sanitizeMemoryAtomWithSourcePassages(
+          {
+            ...atom,
+            ...buildSourcePassageView(atom.sourceTurnIds, sourceTurns)
+          },
+          providerSecrets
+        )
+      ),
+      ...(this.lastRecallContext ? { lastRecallContext: sanitizeRecallContext(this.lastRecallContext, providerSecrets) } : {}),
       updatedAt: new Date().toISOString()
     };
   }
@@ -340,12 +380,16 @@ export class RuntimeService {
       return null;
     }
     const snapshot = await this.getMemoryLibrarySnapshot(0);
+    const exportedAtom = snapshot.memoryAtoms.find((item) => item.id === id);
+    if (!exportedAtom) {
+      return null;
+    }
     return {
       threadId: snapshot.threadId,
       sessionId: snapshot.sessionId,
       recentTurns: [],
       summarySegments: [],
-      memoryAtoms: [atom],
+      memoryAtoms: [exportedAtom],
       exportedAt: new Date().toISOString()
     };
   }
@@ -474,6 +518,21 @@ export class RuntimeService {
   private async getCurrentThreadMemoryAtom(id: string): Promise<MemoryAtom | null> {
     const atoms = (await this.memoryAtomStore?.list(this.threadId)) ?? [];
     return atoms.find((atom) => atom.id === id) ?? null;
+  }
+
+  private async loadMemorySourceTurns(summarySegments: SummarySegment[], memoryAtoms: MemoryAtom[]): Promise<SessionTurn[]> {
+    if (!isSourceSessionStore(this.sessionStore)) {
+      return [];
+    }
+    const sourceTurnIds = [
+      ...summarySegments.flatMap((segment) => getSummarySourceTurnIds(segment)),
+      ...memoryAtoms.flatMap((atom) => atom.sourceTurnIds)
+    ];
+    return this.sessionStore.getByIds(sourceTurnIds);
+  }
+
+  private getProviderSecrets(): string[] {
+    return [this.config.provider.apiKey].map((secret) => secret.trim()).filter(Boolean);
   }
 
   private createDefaultPersona(): CharacterPersona {
@@ -639,4 +698,163 @@ function normalizeMemoryAtomPatch(patch: UpdateMemoryAtom): UpdateMemoryAtom {
     ...(patch.triggers !== undefined ? { triggers: patch.triggers } : {}),
     ...(patch.updatedAt !== undefined ? { updatedAt: patch.updatedAt } : {})
   };
+}
+
+function isSourceSessionStore(store: SessionStore): store is SourceSessionStore {
+  return typeof (store as { getByIds?: unknown }).getByIds === "function";
+}
+
+function getSummarySourceTurnIds(segment: SummarySegment): string[] {
+  return [
+    ...new Set([...(segment.sourceTurnIds ?? []), ...segment.sourceTurns.map((turn) => turn.turnId)].map((turnId) => turnId.trim()).filter(Boolean))
+  ];
+}
+
+function buildSourcePassageView(sourceTurnIds: string[], sourceTurns: SessionTurn[]): {
+  sourcePassages: MemorySourcePassage[];
+  missingSourceTurnIds: string[];
+} {
+  const turnsById = new Map(sourceTurns.map((turn) => [turn.id, turn]));
+  const sourcePassages: MemorySourcePassage[] = [];
+  const missingSourceTurnIds: string[] = [];
+  for (const turnId of sourceTurnIds) {
+    const turn = turnsById.get(turnId);
+    if (!turn) {
+      missingSourceTurnIds.push(turnId);
+      continue;
+    }
+    if (turn.role !== "user" && turn.role !== "assistant") {
+      continue;
+    }
+    if (sourcePassages.length >= 3) {
+      continue;
+    }
+    const clipped = truncateSourcePassage(turn.content, 220);
+    sourcePassages.push({
+      turnId: turn.id,
+      role: turn.role,
+      text: clipped.text,
+      ...(clipped.omittedCharacters > 0 ? { omittedCharacters: clipped.omittedCharacters } : {})
+    });
+  }
+  return { sourcePassages, missingSourceTurnIds };
+}
+
+function truncateSourcePassage(text: string, maxCharacters: number): { text: string; omittedCharacters: number } {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxCharacters) {
+    return { text: normalized, omittedCharacters: 0 };
+  }
+  const clipped = normalized.slice(0, maxCharacters);
+  const lastPunctuation = Math.max(
+    clipped.lastIndexOf("。"),
+    clipped.lastIndexOf("！"),
+    clipped.lastIndexOf("？"),
+    clipped.lastIndexOf("."),
+    clipped.lastIndexOf("!"),
+    clipped.lastIndexOf("?")
+  );
+  const clippedText =
+    lastPunctuation > Math.floor(maxCharacters * 0.45)
+      ? `${clipped.slice(0, lastPunctuation + 1).trimEnd()}...`
+      : `${clipped.trimEnd()}...`;
+  return { text: clippedText, omittedCharacters: Math.max(0, normalized.length - clippedText.length) };
+}
+
+function sanitizeSessionTurns(turns: SessionTurn[], providerSecrets: string[]): SessionTurn[] {
+  return turns.map((turn) => ({
+    ...turn,
+    content: redactProviderSecrets(turn.content, providerSecrets),
+    ...(turn.meta ? { meta: sanitizeRecord(turn.meta, providerSecrets) } : {})
+  }));
+}
+
+function sanitizeSummarySegmentWithSourcePassages(
+  segment: MemoryLibrarySummarySegment,
+  providerSecrets: string[]
+): MemoryLibrarySummarySegment {
+  return {
+    ...segment,
+    summary: redactProviderSecrets(segment.summary, providerSecrets),
+    recallCues: segment.recallCues.map((cue) => redactProviderSecrets(cue, providerSecrets)),
+    sourcePassages: sanitizeSourcePassages(segment.sourcePassages, providerSecrets)
+  };
+}
+
+function sanitizeMemoryAtomWithSourcePassages(atom: MemoryLibraryAtom, providerSecrets: string[]): MemoryLibraryAtom {
+  return {
+    ...atom,
+    text: redactProviderSecrets(atom.text, providerSecrets),
+    triggerKeys: atom.triggerKeys.map((key) => redactProviderSecrets(key, providerSecrets)),
+    triggers: {
+      exact: atom.triggers.exact.map((key) => redactProviderSecrets(key, providerSecrets)),
+      aliases: atom.triggers.aliases.map((key) => redactProviderSecrets(key, providerSecrets)),
+      secondary: atom.triggers.secondary.map((key) => redactProviderSecrets(key, providerSecrets)),
+      ...(atom.triggers.calendar ? { calendar: atom.triggers.calendar.map((key) => redactProviderSecrets(key, providerSecrets)) } : {}),
+      ...(atom.triggers.environment ? { environment: atom.triggers.environment.map((key) => redactProviderSecrets(key, providerSecrets)) } : {}),
+      ...(atom.triggers.semantic ? { semantic: atom.triggers.semantic.map((key) => redactProviderSecrets(key, providerSecrets)) } : {}),
+      ...(atom.triggers.relationship ? { relationship: atom.triggers.relationship.map((key) => redactProviderSecrets(key, providerSecrets)) } : {})
+    },
+    ...(atom.metadata ? { metadata: sanitizeMemoryAtomMetadata(atom.metadata, providerSecrets) } : {}),
+    sourcePassages: sanitizeSourcePassages(atom.sourcePassages, providerSecrets)
+  };
+}
+
+function sanitizeSourcePassages(passages: MemorySourcePassage[], providerSecrets: string[]): MemorySourcePassage[] {
+  return passages.map((passage) => ({
+    ...passage,
+    text: redactProviderSecrets(passage.text, providerSecrets)
+  }));
+}
+
+function sanitizeRecallContext(context: RecallContext, providerSecrets: string[]): RecallContext {
+  return {
+    items: context.items.map((item) => ({
+      ...item,
+      summary: redactProviderSecrets(item.summary, providerSecrets),
+      recallCues: item.recallCues.map((cue) => redactProviderSecrets(cue, providerSecrets)),
+      reason: redactProviderSecrets(item.reason, providerSecrets)
+    })),
+    skipped: context.skipped.map((item) => ({
+      ...item,
+      reason: redactProviderSecrets(item.reason, providerSecrets)
+    }))
+  };
+}
+
+function sanitizeRecord(record: Record<string, unknown>, providerSecrets: string[]): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(record).map(([key, value]) => [key, sanitizeUnknown(value, providerSecrets)]));
+}
+
+function sanitizeMemoryAtomMetadata(
+  metadata: MemoryAtom["metadata"],
+  providerSecrets: string[]
+): MemoryAtom["metadata"] {
+  if (!metadata) {
+    return metadata;
+  }
+  return Object.fromEntries(
+    Object.entries(metadata).map(([key, value]) => [key, sanitizeUnknown(value, providerSecrets)])
+  ) as MemoryAtom["metadata"];
+}
+
+function sanitizeUnknown(value: unknown, providerSecrets: string[]): unknown {
+  if (typeof value === "string") {
+    return redactProviderSecrets(value, providerSecrets);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeUnknown(item, providerSecrets));
+  }
+  if (typeof value === "object" && value !== null) {
+    return sanitizeRecord(value as Record<string, unknown>, providerSecrets);
+  }
+  return value;
+}
+
+function redactProviderSecrets(value: string, providerSecrets: string[]): string {
+  let redacted = value.replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, "[redacted-secret]");
+  for (const secret of providerSecrets) {
+    redacted = redacted.split(secret).join("[redacted-secret]");
+  }
+  return redacted;
 }

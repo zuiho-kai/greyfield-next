@@ -993,6 +993,8 @@ describe("createDesktopRuntimeBridge", () => {
               createdAt: "2026-06-26T00:00:00.000Z"
             }
           ],
+          sourcePassages: [],
+          missingSourceTurnIds: [],
           createdAt: "2026-06-26T00:00:01.000Z"
         }
       ],
@@ -1011,7 +1013,9 @@ describe("createDesktopRuntimeBridge", () => {
             aliases: [],
             secondary: []
           },
-          metadata: {}
+          metadata: {},
+          sourcePassages: [],
+          missingSourceTurnIds: []
         }
       ],
       lastRecallContext: {
@@ -1166,7 +1170,9 @@ describe("createDesktopRuntimeBridge", () => {
               aliases: [],
               secondary: []
             },
-            metadata: {}
+            metadata: {},
+            sourcePassages: [],
+            missingSourceTurnIds: []
           }
         ],
         exportedAt: "2026-06-26T00:00:00.000Z"
