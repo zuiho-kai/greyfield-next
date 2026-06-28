@@ -102,7 +102,8 @@ describe("memory context", () => {
     });
 
     expect(context.items).toHaveLength(1);
-    expect(context.skipped).toEqual([{ kind: "summary-segment", id: "summary-2", reason: "max_items" }]);
+    expect(context.skipped).toEqual([{ kind: "summary-segment", id: "summary-2", reason: "over budget" }]);
+    expect(context.budget.itemCount).toEqual({ used: 1, limit: 1, skipped: 1 });
   });
 
   it("skips disabled summary segments so user-disabled memory is not injected into prompts", () => {
@@ -146,7 +147,23 @@ describe("memory context", () => {
 
     expect(segment.summary.length).toBeLessThan(renderedLength - 1);
     expect(context.items).toEqual([]);
-    expect(context.skipped).toEqual([{ kind: "summary-segment", id: "summary-1", reason: "max_characters" }]);
+    expect(context.skipped).toEqual([{ kind: "summary-segment", id: "summary-1", reason: "over budget" }]);
+    expect(context.budget.characters).toEqual({ used: 0, limit: renderedLength - 1, skipped: 1 });
+  });
+
+  it("records irrelevant skipped summaries without exposing trace in prompt text", () => {
+    const context = buildRecallContext({
+      input: "明天香港会不会下雨？",
+      summarySegments: [makeSegment("summary-1", "The user prefers Hiyori as the default model.", ["hiyori"], ["session-a-1"])]
+    });
+
+    expect(context.items).toEqual([]);
+    expect(context.skipped).toEqual([{ kind: "summary-segment", id: "summary-1", reason: "irrelevant" }]);
+    expect(context.budget).toMatchObject({
+      itemCount: { used: 0, limit: 3, skipped: 0 },
+      sourcePassages: { usedCharacters: 0, limitCharacters: 0, usedCount: 0, limitCount: 0, skippedCount: 0 }
+    });
+    expect(formatRecallContextForPrompt(context)).toBe("");
   });
 
   it("builds source drilldown results with missing raw turn ids surfaced", () => {

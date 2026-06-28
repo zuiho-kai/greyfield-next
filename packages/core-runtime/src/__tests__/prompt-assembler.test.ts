@@ -39,7 +39,12 @@ describe("assemblePrompt", () => {
             ritualAction: "送玫瑰"
           }
         ],
-        skipped: []
+        skipped: [],
+        budget: {
+          itemCount: { used: 1, limit: 4, skipped: 0 },
+          characters: { used: 0, limit: 1400, skipped: 0 },
+          sourcePassages: { usedCharacters: 0, limitCharacters: 0, usedCount: 0, limitCount: 0, skippedCount: 0 }
+        }
       },
       recallContext: {
         items: [
@@ -53,7 +58,12 @@ describe("assemblePrompt", () => {
             score: 6
           }
         ],
-        skipped: []
+        skipped: [],
+        budget: {
+          itemCount: { used: 1, limit: 3, skipped: 0 },
+          characters: { used: 0, limit: 1200, skipped: 0 },
+          sourcePassages: { usedCharacters: 0, limitCharacters: 0, usedCount: 0, limitCount: 0, skippedCount: 0 }
+        }
       }
     });
 

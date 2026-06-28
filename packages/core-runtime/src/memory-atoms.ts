@@ -1,6 +1,6 @@
 import type { ChatMessage, LLMProvider } from "./providers";
 import type { SessionTurn } from "./session-store";
-import { normalizeSourceTurnIds } from "./memory-context";
+import { normalizeSourceTurnIds, type RecallPromptBudgetTrace, type RecallSkipReason } from "./memory-context";
 
 export type MemoryAtomType = "fact" | "preference" | "opinion" | "relationship_event" | "episodic_scene";
 export type MemoryAtomSentiment = "positive" | "negative" | "neutral";
@@ -215,8 +215,9 @@ export interface MemoryAtomRecallContext {
   skipped: Array<{
     kind: "memory-atom";
     id: string;
-    reason: string;
+    reason: RecallSkipReason;
   }>;
+  budget: RecallPromptBudgetTrace;
 }
 
 export interface BuildMemoryAtomRecallContextOptions {
@@ -231,6 +232,7 @@ export interface BuildMemoryAtomRecallContextOptions {
   sourcePassageMaxCharacters?: number;
   sourcePassageMaxCharactersPerTurn?: number;
   sourcePassageMaxTurnsPerAtom?: number;
+  minScore?: number;
   // Future non-calendar lanes are explicit adapters. The default deterministic path uses exact, alias, secondary, and calendar keys.
   resolvers?: MemoryAtomRecallLaneResolver[];
 }
@@ -386,13 +388,22 @@ export function createMemoryAtomMergePatch(existing: MemoryAtom, candidate: Memo
 }
 
 export function buildMemoryAtomRecallContext(options: BuildMemoryAtomRecallContextOptions): MemoryAtomRecallContext {
-  const maxItems = options.maxItems ?? defaultMaxAtomRecallItems;
-  const maxCharacters = options.maxCharacters ?? defaultMaxAtomRecallCharacters;
+  const maxItems = Math.max(0, options.maxItems ?? defaultMaxAtomRecallItems);
+  const maxCharacters = Math.max(0, options.maxCharacters ?? defaultMaxAtomRecallCharacters);
+  const minScore = Math.max(0, options.minScore ?? 0);
+  const sourcePassageCharactersLimit =
+    options.sourceTurns !== undefined && options.sourcePassageMode !== "never"
+      ? Math.max(0, options.sourcePassageMaxCharacters ?? defaultSourcePassageMaxCharacters)
+      : 0;
+  const sourcePassageCountLimit =
+    options.sourceTurns !== undefined && options.sourcePassageMode !== "never"
+      ? maxItems * Math.max(0, options.sourcePassageMaxTurnsPerAtom ?? defaultSourcePassageMaxTurnsPerAtom)
+      : 0;
   const skipped: MemoryAtomRecallContext["skipped"] = options.atoms
     .filter((atom) => atom.disabled)
     .map((atom) => ({ kind: "memory-atom", id: atom.id, reason: "disabled" }));
 
-  const ranked = options.atoms
+  const scored = options.atoms
     .filter((atom) => !atom.disabled)
     .map((atom) => {
       const matches = [
@@ -408,12 +419,26 @@ export function buildMemoryAtomRecallContext(options: BuildMemoryAtomRecallConte
         Math.min(1, Math.max(0, atom.importance)) * 10 +
         recencyScore(atom.createdAt);
       return { atom, matches: uniqueMatches, score: uniqueMatches.length > 0 ? score : 0 };
-    })
-    .filter((item) => item.score > 0)
+    });
+  for (const item of scored) {
+    if (item.score <= 0) {
+      skipped.push({ kind: "memory-atom", id: item.atom.id, reason: "irrelevant" });
+      continue;
+    }
+    if (item.score < minScore) {
+      skipped.push({ kind: "memory-atom", id: item.atom.id, reason: "low score" });
+    }
+  }
+  const ranked = scored
+    .filter((item) => item.score > 0 && item.score >= minScore)
     .sort((a, b) => b.score - a.score || b.atom.createdAt.localeCompare(a.atom.createdAt));
 
   const items: MemoryAtomRecallContextItem[] = [];
   let usedCharacters = 0;
+  let usedSourcePassageCharacters = 0;
+  let usedSourcePassageCount = 0;
+  let skippedSourcePassageCount = 0;
+  let overBudgetSkipped = 0;
 
   for (const item of ranked) {
     const candidate: MemoryAtomRecallContextItem = {
@@ -429,25 +454,69 @@ export function buildMemoryAtomRecallContext(options: BuildMemoryAtomRecallConte
       recurrence: item.atom.recurrence,
       ritualAction: item.atom.ritualAction
     };
-    const candidateWithSources = attachSourcePassagesToRecallItem(candidate, options, maxCharacters - usedCharacters);
-    const nextCharacters =
-      usedCharacters + formatMemoryAtomRecallContextForPrompt({ items: [candidateWithSources], skipped: [] }).length;
-    if (items.length >= maxItems || nextCharacters > maxCharacters) {
+    if (items.length >= maxItems) {
       skipped.push({
         kind: "memory-atom",
         id: item.atom.id,
-        reason: items.length >= maxItems ? "max_items" : "max_characters"
+        reason: "over budget"
       });
+      overBudgetSkipped += 1;
       continue;
     }
+    const requestedSourcePassageCount = countRequestedSourcePassages(candidate, options);
+    const availableCharactersForItem = Math.max(0, maxCharacters - usedCharacters - (items.length > 0 ? 1 : 0));
+    const candidateWithSources = attachSourcePassagesToRecallItem(
+      candidate,
+      options,
+      availableCharactersForItem,
+      Math.max(0, sourcePassageCharactersLimit - usedSourcePassageCharacters)
+    );
+    const nextCharacters = formatMemoryAtomRecallContextForPrompt({ items: [...items, candidateWithSources] }).length;
+    if (nextCharacters > maxCharacters) {
+      skipped.push({
+        kind: "memory-atom",
+        id: item.atom.id,
+        reason: "over budget"
+      });
+      overBudgetSkipped += 1;
+      continue;
+    }
+    const sourcePassageStats = getSourcePassageStats(candidateWithSources);
     items.push(candidateWithSources);
     usedCharacters = nextCharacters;
+    usedSourcePassageCharacters += sourcePassageStats.characters;
+    usedSourcePassageCount += sourcePassageStats.count;
+    skippedSourcePassageCount += Math.max(0, requestedSourcePassageCount - sourcePassageStats.count);
   }
 
-  return { items, skipped };
+  return {
+    items,
+    skipped,
+    budget: {
+      itemCount: {
+        used: items.length,
+        limit: maxItems,
+        skipped: overBudgetSkipped
+      },
+      characters: {
+        used: usedCharacters,
+        limit: maxCharacters,
+        skipped: overBudgetSkipped
+      },
+      sourcePassages: {
+        usedCharacters: usedSourcePassageCharacters,
+        limitCharacters: sourcePassageCharactersLimit,
+        usedCount: usedSourcePassageCount,
+        limitCount: sourcePassageCountLimit,
+        skippedCount: skippedSourcePassageCount
+      }
+    }
+  };
 }
 
-export function formatMemoryAtomRecallContextForPrompt(context: MemoryAtomRecallContext): string {
+export function formatMemoryAtomRecallContextForPrompt(
+  context: Pick<MemoryAtomRecallContext, "items"> & Partial<Pick<MemoryAtomRecallContext, "skipped" | "budget">>
+): string {
   if (context.items.length === 0) {
     return "";
   }
@@ -1646,7 +1715,8 @@ function getEventMonthDay(eventDate: MemoryAtomEventDate): { month: number; day:
 function attachSourcePassagesToRecallItem(
   item: MemoryAtomRecallContextItem,
   options: BuildMemoryAtomRecallContextOptions,
-  availableCharacters: number
+  availableCharacters: number,
+  availableSourcePassageCharacters: number
 ): MemoryAtomRecallContextItem {
   if (
     options.sourcePassageMode === "never" ||
@@ -1659,7 +1729,8 @@ function attachSourcePassagesToRecallItem(
   const baseLength = formatMemoryAtomRecallContextForPrompt({ items: [item], skipped: [] }).length;
   const sourceBudget = Math.min(
     options.sourcePassageMaxCharacters ?? defaultSourcePassageMaxCharacters,
-    availableCharacters - baseLength
+    availableCharacters - baseLength,
+    availableSourcePassageCharacters
   );
   if (sourceBudget <= 0) {
     return item;
@@ -1689,7 +1760,7 @@ function attachSourcePassagesToRecallItem(
       continue;
     }
     const normalized = normalizeText(turn.content);
-    const clipped = truncateAtBoundary(normalized, remainingTextBudget);
+    const clipped = enforceCharacterLimit(truncateAtBoundary(normalized, remainingTextBudget), remainingTextBudget);
     usedTextCharacters += clipped.length;
     passages.push({
       turnId: turn.id,
@@ -1700,6 +1771,46 @@ function attachSourcePassagesToRecallItem(
   }
 
   return fitSourcePassageContext(item, passages, missingSourceTurnIds, availableCharacters);
+}
+
+function enforceCharacterLimit(text: string, maxCharacters: number): string {
+  return text.length <= maxCharacters ? text : text.slice(0, maxCharacters).trimEnd();
+}
+
+function countRequestedSourcePassages(
+  item: MemoryAtomRecallContextItem,
+  options: BuildMemoryAtomRecallContextOptions
+): number {
+  if (
+    options.sourcePassageMode === "never" ||
+    !shouldIncludeSourcePassages(options.input, item, options.sourcePassageMode ?? "auto") ||
+    options.sourceTurns === undefined
+  ) {
+    return 0;
+  }
+
+  const turnsById = new Map(options.sourceTurns.map((turn) => [turn.id, turn]));
+  const maxTurns = options.sourcePassageMaxTurnsPerAtom ?? defaultSourcePassageMaxTurnsPerAtom;
+  let count = 0;
+  for (const turnId of item.sourceTurnIds) {
+    const turn = turnsById.get(turnId);
+    if (!turn || (turn.role !== "user" && turn.role !== "assistant")) {
+      continue;
+    }
+    count += 1;
+    if (count >= maxTurns) {
+      return count;
+    }
+  }
+  return count;
+}
+
+function getSourcePassageStats(item: MemoryAtomRecallContextItem): { count: number; characters: number } {
+  const passages = item.sourcePassages ?? [];
+  return {
+    count: passages.length,
+    characters: passages.reduce((total, passage) => total + passage.text.length, 0)
+  };
 }
 
 function fitSourcePassageContext(

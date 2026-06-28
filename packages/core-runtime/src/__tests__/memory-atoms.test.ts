@@ -596,6 +596,50 @@ describe("memory atoms", () => {
     expect(missingPrompt).toContain("Memory: User has a negative opinion");
   });
 
+  it("records deterministic over-budget atom skips and source passage budget usage", () => {
+    const sourceTurns: SessionTurn[] = [
+      {
+        id: "turn-game",
+        role: "user",
+        content: "短原因：剧情很糟。这里还有一大段不应该在预算很小时完整塞进提示的原始吐槽。",
+        createdAt: "2026-06-28T00:00:00.000Z"
+      }
+    ];
+    const atoms = [
+      ...extractDeterministicMemoryAtoms({
+        ...baseInput,
+        sourceTurnIds: ["turn-game"],
+        text: "不要再推荐《星环旅店》了，我讨厌这个游戏的剧情。"
+      }),
+      ...extractDeterministicMemoryAtoms({
+        ...baseInput,
+        sourceTurnIds: ["turn-birthday"],
+        text: "记住我的生日是 6月12日。"
+      })
+    ];
+
+    const context = buildMemoryAtomRecallContext({
+      input: "星环旅店这个游戏为什么讨厌？6月12日也记得吗？",
+      atoms,
+      sourceTurns,
+      maxItems: 1,
+      sourcePassageMaxCharacters: 18,
+      sourcePassageMaxCharactersPerTurn: 18
+    });
+
+    expect(context.items).toHaveLength(1);
+    expect(context.skipped).toEqual(
+      expect.arrayContaining([{ kind: "memory-atom", id: expect.any(String), reason: "over budget" }])
+    );
+    expect(context.budget.itemCount).toEqual({ used: 1, limit: 1, skipped: 1 });
+    expect(context.budget.sourcePassages).toMatchObject({
+      usedCount: 1,
+      limitCount: 2,
+      limitCharacters: 18
+    });
+    expect(context.budget.sourcePassages.usedCharacters).toBeLessThanOrEqual(18);
+  });
+
   it("keeps unmatched atom recall empty instead of falling back to recent history", () => {
     const atoms = extractDeterministicMemoryAtoms({
       ...baseInput,
