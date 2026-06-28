@@ -17,6 +17,7 @@ const artifactDir = join(workspaceRoot, ".cache", "greyfield-memory-summary", "l
 const settingsSourceScreenshotPath = join(artifactDir, "settings-memory-source-passages.png");
 const settingsScreenshotPath = join(artifactDir, "settings-memory.png");
 const providerSecret = "memory-library-provider-secret";
+const summaryBoundedTail = "SUMMARY_SOURCE_PASSAGE_BOUNDARY_TAIL_SHOULD_NOT_RENDER";
 
 let app: ElectronApplication | undefined;
 try {
@@ -81,6 +82,7 @@ try {
     "desktop-main-session-1",
     "desktop-main-session-4"
   ]);
+  await appendSourcePassageTail("desktop-main-session-1");
   const events = await chat.evaluate(() => {
     return (window as typeof window & { __greyfieldMemoryEvents?: unknown[] }).__greyfieldMemoryEvents ?? [];
   });
@@ -127,7 +129,7 @@ try {
   await summarySource.getByText("第一轮：我喜欢 Hiyori。").waitFor();
   await assertSourceStateText(summarySource, {
     includes: ["User", "desktop-main-session-1", "第一轮：我喜欢 Hiyori。"],
-    excludes: ["Unknown role"]
+    excludes: ["Unknown role", summaryBoundedTail]
   });
   await memoryLibrary.locator(".memory-library__block--recall", { hasText: "Last recalled memory" }).waitFor();
   await memoryLibrary.locator(".memory-library__block--recall", { hasText: "cue:hiyori" }).waitFor();
@@ -249,7 +251,7 @@ async function assertSourceStateText(
   source: Locator,
   expected: { includes: string[]; excludes: string[] }
 ): Promise<void> {
-  const text = (await source.textContent()) ?? "";
+  const text = await source.innerText();
   for (const value of expected.includes) {
     if (!text.includes(value)) {
       throw new Error(`Source state missed ${value}: ${text}`);
@@ -299,6 +301,23 @@ async function waitForFileNotContaining(path: string, forbiddenText: string): Pr
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Timed out waiting for ${path} to stop containing ${forbiddenText}; content=${lastContent}`);
+}
+
+async function appendSourcePassageTail(turnId: string): Promise<void> {
+  const raw = await readFile(sessionPath, "utf8");
+  const turns = raw
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as { id: string; content: string });
+  const next = turns.map((turn) =>
+    turn.id === turnId
+      ? {
+          ...turn,
+          content: `${turn.content}${" 这是一段用于 source passage 截断看护的普通内容。".repeat(20)}${summaryBoundedTail}`
+        }
+      : turn
+  );
+  await writeFile(sessionPath, `${next.map((turn) => JSON.stringify(turn)).join("\n")}\n`, "utf8");
 }
 
 async function getLatestMemoryRecallEvent(page: Page): Promise<

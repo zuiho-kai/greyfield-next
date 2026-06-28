@@ -55,7 +55,7 @@ try {
     makeTurn({
       id: "desktop-main-session-preference",
       role: "assistant",
-      content: "Greyfield confirmed the user prefers the Hiyori model."
+      content: ""
     })
   ]);
   await writeAtomFile([
@@ -144,6 +144,14 @@ try {
   await assertSourceStateText(availableSource, {
     includes: ["User", "desktop-main-session-fact"],
     excludes: ["Unknown role"]
+  });
+  const availableEmptySource = await openSourcePassage(memoryLibrary, "Source passage for Preference memory atom-preference");
+  await availableEmptySource.getByText("Source passage").first().waitFor();
+  await availableEmptySource.getByText("desktop-main-session-preference").waitFor();
+  await availableEmptySource.getByText("Greyfield").first().waitFor();
+  await assertSourceStateText(availableEmptySource, {
+    includes: ["Source passage", "Greyfield", "desktop-main-session-preference"],
+    excludes: ["Source unavailable in this local session store", "Unknown role"]
   });
   const missingSource = await openSourcePassage(memoryLibrary, "Source passage for Opinion memory atom-opinion");
   await missingSource.getByText("Source unavailable in this local session store").first().waitFor();
@@ -347,7 +355,7 @@ async function assertSourceStateText(
   source: Locator,
   expected: { includes: string[]; excludes: string[] }
 ): Promise<void> {
-  const text = (await source.textContent()) ?? "";
+  const text = await source.innerText();
   for (const value of expected.includes) {
     if (!text.includes(value)) {
       throw new Error(`Source state missed ${value}: ${text}`);

@@ -968,7 +968,7 @@ function memorySourcePassageSummary(passages: DesktopMemorySourcePassage[]): str
   if (passages.length === 0) {
     return "No passage";
   }
-  const availableCount = passages.filter((passage) => passage.status === "available" && passage.text).length;
+  const availableCount = passages.filter((passage) => passage.status === "available").length;
   if (availableCount > 0) {
     return `${availableCount} source ${availableCount === 1 ? "passage" : "passages"}`;
   }
@@ -976,7 +976,7 @@ function memorySourcePassageSummary(passages: DesktopMemorySourcePassage[]): str
 }
 
 function sourcePassageStatusLabel(passage: DesktopMemorySourcePassage): string {
-  if (passage.status === "available" && passage.text) {
+  if (passage.status === "available") {
     return "Source passage";
   }
   if (passage.status === "missing" || passage.status === "unavailable") {
@@ -986,14 +986,14 @@ function sourcePassageStatusLabel(passage: DesktopMemorySourcePassage): string {
 }
 
 function sourcePassageHeading(passage: DesktopMemorySourcePassage): string {
-  if (passage.status === "available" && passage.text) {
-    return sourcePassageRoleLabel(passage.role);
+  if (passage.status === "available") {
+    return passage.role ? sourcePassageRoleLabel(passage.role) : "Source passage";
   }
   return "Source not available";
 }
 
 function sourcePassageRoleValue(passage: DesktopMemorySourcePassage): string {
-  if (passage.status === "available" && passage.text) {
+  if (passage.status === "available") {
     return sourcePassageRoleLabel(passage.role);
   }
   return "Not available";
@@ -1016,8 +1016,8 @@ function sourcePassageRoleLabel(role: DesktopMemorySourcePassage["role"]): strin
 }
 
 function sourcePassageBody(passage: DesktopMemorySourcePassage): string {
-  if (passage.status === "available" && passage.text) {
-    return boundSourcePassageText(passage.text);
+  if (passage.status === "available") {
+    return boundSourcePassageText(passage.text ?? "");
   }
   return passage.message ?? "Source unavailable in this local session store";
 }
