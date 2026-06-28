@@ -3,8 +3,12 @@ import {
   buildMemoryAtomRecallContext,
   DeterministicMemoryAtomExtractor,
   extractDeterministicMemoryAtoms,
-  formatMemoryAtomRecallContextForPrompt
+  filterMemoryAtomsForAutomaticWrite,
+  formatMemoryAtomRecallContextForPrompt,
+  LLMBackedMemoryAtomExtractor
 } from "../memory-atoms";
+import type { MemoryAtom } from "../memory-atoms";
+import type { LLMProvider, ChatMessage } from "../providers";
 import type { SessionTurn } from "../session-store";
 
 const baseInput = {
@@ -40,6 +44,228 @@ describe("memory atoms", () => {
       metadata: { preferenceType: "address_name", preferredName: "博士" }
     });
     expect(preference?.triggers.exact).toContain("博士");
+  });
+
+  it("combines deterministic atoms with validated LLM drafts in hybrid mode", async () => {
+    const provider = new ScriptedLLMProvider(
+      JSON.stringify({
+        atoms: [
+          {
+            type: "preference",
+            text: "User likes red roses as a meaningful flower.",
+            sourceTurnIds: ["turn-rose"],
+            importance: 0.86,
+            object: "rose",
+            triggers: {
+              exact: ["红玫瑰", "玫瑰"],
+              aliases: ["喜欢的花", "花"],
+              secondary: ["rose"]
+            },
+            metadata: {
+              preferenceType: "flower",
+              color: "red"
+            }
+          }
+        ]
+      })
+    );
+    const extractor = new LLMBackedMemoryAtomExtractor({ llm: provider, mode: "hybrid" });
+
+    const atoms = await extractor.extract({
+      ...baseInput,
+      sourceTurnIds: ["turn-rose"],
+      text: "我们第一次相遇是 2024 年 5 月 20 日，那天我拿着一支红玫瑰。"
+    });
+
+    expect(atoms.map((atom) => atom.type)).toEqual(expect.arrayContaining(["relationship_event", "preference"]));
+    expect(atoms.find((atom) => atom.type === "relationship_event")).toMatchObject({
+      sourceTurnIds: ["turn-rose"],
+      eventDate: { kind: "absolute", isoDate: "2024-05-20" }
+    });
+    expect(atoms.find((atom) => atom.type === "preference")).toMatchObject({
+      sourceTurnIds: ["turn-rose"],
+      object: "rose",
+      metadata: { preferenceType: "flower", color: "red" }
+    });
+    expect(provider.messages[0]?.[0]?.content).toContain("Allowed atom types");
+  });
+
+  it("writes explicit-save LLM drafts even when importance is moderate", async () => {
+    const extractor = new LLMBackedMemoryAtomExtractor({
+      llm: new ScriptedLLMProvider(
+        JSON.stringify({
+          atoms: [
+            {
+              type: "preference",
+              text: "User prefers quiet reminders after 22:30.",
+              sourceTurnIds: ["turn-quiet"],
+              importance: 0.45,
+              object: "quiet_reminder",
+              triggers: {
+                exact: ["22:30", "安静提醒"],
+                aliases: ["晚上提醒"],
+                secondary: []
+              },
+              metadata: { preferenceType: "reminder_style" }
+            }
+          ]
+        })
+      ),
+      mode: "llm"
+    });
+
+    const [atom] = await extractor.extract({
+      ...baseInput,
+      sourceTurnIds: ["turn-quiet"],
+      text: "记住以后 22:30 后只要安静提醒我休息，不要催我加班。"
+    });
+
+    expect(atom).toMatchObject({
+      type: "preference",
+      sourceTurnIds: ["turn-quiet"],
+      importance: 0.65,
+      metadata: { preferenceType: "reminder_style" }
+    });
+  });
+
+  it("falls back to deterministic extraction when the LLM returns invalid JSON", async () => {
+    const extractor = new LLMBackedMemoryAtomExtractor({
+      llm: new ScriptedLLMProvider("not-json"),
+      mode: "llm"
+    });
+
+    const atoms = await extractor.extract({
+      ...baseInput,
+      sourceTurnIds: ["turn-birthday"],
+      text: "记住我的生日是 9 月 7 日。"
+    });
+
+    expect(atoms).toHaveLength(1);
+    expect(atoms[0]).toMatchObject({
+      type: "fact",
+      sourceTurnIds: ["turn-birthday"],
+      eventDate: { kind: "month_day", month: 9, day: 7 }
+    });
+  });
+
+  it("rejects background UI event noise before calling the LLM provider", async () => {
+    const provider = new ScriptedLLMProvider(
+      JSON.stringify({
+        atoms: [
+          {
+            type: "fact",
+            text: "Settings window opened.",
+            sourceTurnIds: ["turn-noise"],
+            importance: 0.99,
+            triggers: { exact: ["settings window"], aliases: [], secondary: [] }
+          }
+        ]
+      })
+    );
+    const extractor = new LLMBackedMemoryAtomExtractor({ llm: provider, mode: "llm" });
+
+    const atoms = await extractor.extract({
+      ...baseInput,
+      sourceTurnIds: ["turn-noise"],
+      text: "settings window opened while user copied review text"
+    });
+
+    expect(atoms).toEqual([]);
+    expect(provider.messages).toEqual([]);
+  });
+
+  it("rejects LLM drafts with unsafe structured fields even when text is clean", async () => {
+    const provider = new ScriptedLLMProvider(
+      JSON.stringify({
+        atoms: [
+          {
+            type: "opinion",
+            text: "User left a clean game note.",
+            sourceTurnIds: ["turn-structured"],
+            importance: 0.95,
+            object: "sk-structuredsecret1234",
+            sentiment: "negative",
+            triggers: { exact: ["game note"], aliases: [], secondary: [] }
+          },
+          {
+            type: "relationship_event",
+            text: "User wants a clean anniversary reminder.",
+            sourceTurnIds: ["turn-structured"],
+            importance: 0.95,
+            ritualAction: "settings window opened",
+            eventDate: {
+              kind: "absolute",
+              sourceText: "2026-07-01",
+              precision: "day",
+              isoDate: "2026-07-01"
+            },
+            triggers: { exact: ["anniversary"], aliases: [], secondary: [] }
+          },
+          {
+            type: "fact",
+            text: "User shared a clean dated fact.",
+            sourceTurnIds: ["turn-structured"],
+            importance: 0.95,
+            eventDate: {
+              kind: "absolute",
+              sourceText: "sk-eventdate123456",
+              precision: "day",
+              isoDate: "2026-07-01"
+            },
+            triggers: { exact: ["dated fact"], aliases: [], secondary: [] }
+          },
+          {
+            type: "fact",
+            text: "User shared a clean recurring fact.",
+            sourceTurnIds: ["turn-structured"],
+            importance: 0.95,
+            recurrence: { frequency: "annual", sourceText: "settings window opened" },
+            triggers: { exact: ["recurring fact"], aliases: [], secondary: [] }
+          }
+        ]
+      })
+    );
+    const extractor = new LLMBackedMemoryAtomExtractor({ llm: provider, mode: "llm" });
+
+    const atoms = await extractor.extract({
+      ...baseInput,
+      sourceTurnIds: ["turn-structured"],
+      text: "记住这个结构化字段安全测试，只保留真正安全的长期记忆。"
+    });
+
+    expect(atoms).toEqual([]);
+    expect(provider.messages).toHaveLength(1);
+  });
+
+  it("rejects already-built atoms with unsafe structured fields during automatic writes", () => {
+    const atom: MemoryAtom = {
+      id: "atom-clean-text-secret-object",
+      threadId: baseInput.threadId,
+      type: "preference",
+      text: "User likes red roses.",
+      sourceTurnIds: ["turn-policy"],
+      sourceSessionId: baseInput.sourceSessionId,
+      createdAt: baseInput.createdAt,
+      importance: 0.9,
+      triggerKeys: ["red roses"],
+      triggers: {
+        exact: ["red roses"],
+        aliases: [],
+        secondary: []
+      },
+      object: "sk-redroseobject1234"
+    };
+
+    expect(
+      filterMemoryAtomsForAutomaticWrite(
+        {
+          ...baseInput,
+          sourceTurnIds: ["turn-policy"],
+          text: "记住我喜欢红玫瑰。"
+        },
+        [atom]
+      )
+    ).toEqual([]);
   });
 
   it("extracts an anniversary rose relationship atom with date, recurrence, and ritual action", () => {
@@ -386,3 +612,14 @@ describe("memory atoms", () => {
     expect(formatMemoryAtomRecallContextForPrompt(context)).toBe("");
   });
 });
+
+class ScriptedLLMProvider implements LLMProvider {
+  readonly messages: ChatMessage[][] = [];
+
+  constructor(private readonly response: string) {}
+
+  async *stream(messages: ChatMessage[]): AsyncIterable<string> {
+    this.messages.push(messages);
+    yield this.response;
+  }
+}

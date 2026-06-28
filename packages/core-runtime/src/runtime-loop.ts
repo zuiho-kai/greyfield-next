@@ -2,10 +2,16 @@ import { splitCompleteSentences, takeTtsTextWithinBudget } from "@greyfield/audi
 import type { RuntimeEventHandler, RuntimeInputEvent } from "./events";
 import {
   buildMemoryAtomRecallContext,
+  createMemoryAtomMergePatch,
   DeterministicMemoryAtomExtractor,
+  filterMemoryAtomsForAutomaticWrite,
+  findSimilarMemoryAtom,
+  LLMBackedMemoryAtomExtractor,
   type MemoryAtom,
+  type MemoryAtomExtractionMode,
   type MemoryAtomExtractor,
-  type MemoryAtomStore
+  type MemoryAtomStore,
+  type MemoryAtomWritePolicyOptions
 } from "./memory-atoms";
 import { buildRecallContext, createSummarySegmentDraft, getSummarySegmentSourceTurnIds, type SummarySegmentStore } from "./memory-context";
 import { assemblePrompt } from "./prompt-assembler";
@@ -22,6 +28,8 @@ export interface GreyfieldRuntimeOptions {
   summarySegmentStore?: SummarySegmentStore;
   memoryAtomStore?: MemoryAtomStore;
   memoryAtomExtractor?: MemoryAtomExtractor;
+  memoryAtomExtractionMode?: MemoryAtomExtractionMode;
+  memoryAtomWritePolicy?: MemoryAtomWritePolicyOptions;
   sessionStore: SessionStore;
   persona: CharacterPersona;
   voice: string;
@@ -332,19 +340,53 @@ export class GreyfieldRuntime {
       return;
     }
     try {
-      const extractor = this.options.memoryAtomExtractor ?? new DeterministicMemoryAtomExtractor();
+      const extractor = this.createMemoryAtomExtractor();
       const atoms = await extractor.extract({
         text,
         threadId: this.threadId,
         sourceTurnIds: [sourceTurnId],
-        sourceSessionId: this.options.sessionStore.sessionId
+        sourceSessionId: this.options.sessionStore.sessionId,
+        signal: this.activeAbortController?.signal
       });
-      for (const atom of atoms) {
-        await memoryAtomStore.append(atom);
+      const writableAtoms = filterMemoryAtomsForAutomaticWrite(
+        { text, threadId: this.threadId, sourceTurnIds: [sourceTurnId], sourceSessionId: this.options.sessionStore.sessionId },
+        atoms,
+        this.options.memoryAtomWritePolicy
+      );
+      const existingAtoms = await memoryAtomStore.list(this.threadId);
+      const knownAtoms = [...existingAtoms];
+      for (const atom of writableAtoms) {
+        const similar = findSimilarMemoryAtom(knownAtoms, atom);
+        if (similar) {
+          const updated = await memoryAtomStore.update(similar.id, createMemoryAtomMergePatch(similar, atom));
+          if (updated) {
+            const index = knownAtoms.findIndex((known) => known.id === updated.id);
+            if (index >= 0) {
+              knownAtoms[index] = updated;
+            }
+          }
+          continue;
+        }
+        knownAtoms.push(await memoryAtomStore.append(atom));
       }
     } catch (error) {
       console.warn(`Greyfield memory atom extraction unavailable: ${formatError(error)}`);
     }
+  }
+
+  private createMemoryAtomExtractor(): MemoryAtomExtractor {
+    if (this.options.memoryAtomExtractor) {
+      return this.options.memoryAtomExtractor;
+    }
+    const mode = this.options.memoryAtomExtractionMode ?? "deterministic";
+    if (mode === "llm" || mode === "hybrid") {
+      return new LLMBackedMemoryAtomExtractor({
+        llm: this.options.llm,
+        mode,
+        ...this.options.memoryAtomWritePolicy
+      });
+    }
+    return new DeterministicMemoryAtomExtractor();
   }
 
   private requireASRProvider(): ASRProvider {

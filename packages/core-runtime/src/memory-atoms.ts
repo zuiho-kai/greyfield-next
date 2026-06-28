@@ -1,8 +1,10 @@
-import type { ChatMessage } from "./providers";
+import type { ChatMessage, LLMProvider } from "./providers";
 import type { SessionTurn } from "./session-store";
+import { normalizeSourceTurnIds } from "./memory-context";
 
 export type MemoryAtomType = "fact" | "preference" | "opinion" | "relationship_event" | "episodic_scene";
 export type MemoryAtomSentiment = "positive" | "negative" | "neutral";
+export type MemoryAtomExtractionMode = "deterministic" | "llm" | "hybrid";
 export type MemoryAtomTriggerLane =
   | "exact"
   | "alias"
@@ -60,9 +62,18 @@ export interface MemoryAtom {
 
 export interface UpdateMemoryAtom {
   text?: string;
+  sourceTurnIds?: string[];
+  sourceSessionId?: string;
   disabled?: boolean;
   importance?: number;
   triggers?: Partial<MemoryAtomTriggers>;
+  eventDate?: MemoryAtomEventDate;
+  recurrence?: MemoryAtomRecurrence;
+  ritualAction?: string;
+  subject?: string;
+  object?: string;
+  sentiment?: MemoryAtomSentiment;
+  metadata?: Record<string, string | string[] | number | boolean | null>;
   updatedAt?: string;
 }
 
@@ -80,6 +91,7 @@ export interface MemoryAtomExtractionInput {
   sourceSessionId?: string;
   createdAt?: string;
   now?: string | Date;
+  signal?: AbortSignal;
 }
 
 export interface MemoryAtomExtractor {
@@ -89,6 +101,78 @@ export interface MemoryAtomExtractor {
 export class DeterministicMemoryAtomExtractor implements MemoryAtomExtractor {
   async extract(input: MemoryAtomExtractionInput): Promise<MemoryAtom[]> {
     return extractDeterministicMemoryAtoms(input);
+  }
+}
+
+export interface LLMBackedMemoryAtomExtractorOptions {
+  llm: LLMProvider;
+  mode?: Exclude<MemoryAtomExtractionMode, "deterministic">;
+  fallbackExtractor?: MemoryAtomExtractor | false;
+  maxResponseCharacters?: number;
+  maxAtomTextCharacters?: number;
+  maxTriggerCharacters?: number;
+  minBackgroundImportance?: number;
+  explicitSaveMinImportance?: number;
+  explicitSaveImportanceFloor?: number;
+  maxAtomsPerTurn?: number;
+}
+
+export interface MemoryAtomWritePolicyOptions {
+  minBackgroundImportance?: number;
+  explicitSaveMinImportance?: number;
+  explicitSaveImportanceFloor?: number;
+  maxAtomsPerTurn?: number;
+}
+
+export class LLMBackedMemoryAtomExtractor implements MemoryAtomExtractor {
+  private readonly fallbackExtractor: MemoryAtomExtractor | false;
+
+  constructor(private readonly options: LLMBackedMemoryAtomExtractorOptions) {
+    this.fallbackExtractor = options.fallbackExtractor === undefined ? new DeterministicMemoryAtomExtractor() : options.fallbackExtractor;
+  }
+
+  async extract(input: MemoryAtomExtractionInput): Promise<MemoryAtom[]> {
+    const fallbackAtoms = this.options.mode === "llm" ? [] : await this.extractFallback(input);
+    if (shouldSkipBackgroundMemoryWrite(input)) {
+      return [];
+    }
+
+    let llmAtoms: MemoryAtom[] | undefined;
+    try {
+      llmAtoms = await this.extractWithLLM(input);
+    } catch {
+      const degraded = this.options.mode === "llm" ? await this.extractFallback(input) : fallbackAtoms;
+      return filterMemoryAtomsForAutomaticWrite(input, degraded, this.options);
+    }
+
+    const atoms = this.options.mode === "llm" ? llmAtoms : [...llmAtoms, ...fallbackAtoms];
+    return filterMemoryAtomsForAutomaticWrite(input, dedupeAtomsByWriteKey(atoms), this.options);
+  }
+
+  private async extractFallback(input: MemoryAtomExtractionInput): Promise<MemoryAtom[]> {
+    if (!this.fallbackExtractor) {
+      return [];
+    }
+    return this.fallbackExtractor.extract(input);
+  }
+
+  private async extractWithLLM(input: MemoryAtomExtractionInput): Promise<MemoryAtom[]> {
+    const response = await collectLLMText(
+      this.options.llm,
+      buildLLMAtomExtractionMessages(input),
+      input.signal,
+      this.options.maxResponseCharacters ?? defaultLLMAtomResponseCharacters
+    );
+    const parsed = parseLLMAtomResponse(response);
+    const rawAtoms = Array.isArray(parsed.atoms) ? parsed.atoms : [];
+    return rawAtoms
+      .map((draft) =>
+        normalizeLLMAtomDraft(draft, input, {
+          maxAtomTextCharacters: this.options.maxAtomTextCharacters ?? defaultMaxLLMAtomTextCharacters,
+          maxTriggerCharacters: this.options.maxTriggerCharacters ?? defaultMaxLLMTriggerCharacters
+        })
+      )
+      .filter((atom): atom is MemoryAtom => Boolean(atom));
   }
 }
 
@@ -162,6 +246,16 @@ const defaultCalendarWindowDays = 1;
 const defaultSourcePassageMaxCharacters = 360;
 const defaultSourcePassageMaxCharactersPerTurn = 220;
 const defaultSourcePassageMaxTurnsPerAtom = 2;
+const defaultLLMAtomResponseCharacters = 12_000;
+const defaultMaxLLMAtomTextCharacters = 260;
+const defaultMaxLLMTriggerCharacters = 48;
+const defaultMaxMetadataStringCharacters = 90;
+const defaultMinBackgroundImportance = 0.78;
+const defaultExplicitSaveMinImportance = 0.4;
+const defaultExplicitSaveImportanceFloor = 0.65;
+const defaultMaxAtomsPerTurn = 8;
+const allowedMemoryAtomTypes = new Set<MemoryAtomType>(["fact", "preference", "opinion", "relationship_event", "episodic_scene"]);
+const allowedSentiments = new Set<MemoryAtomSentiment>(["positive", "negative", "neutral"]);
 
 export function extractDeterministicMemoryAtoms(input: MemoryAtomExtractionInput): MemoryAtom[] {
   const normalizedText = normalizeText(input.text);
@@ -227,6 +321,68 @@ export function extractDeterministicMemoryAtoms(input: MemoryAtomExtractionInput
   }
 
   return dedupeAtoms(atoms);
+}
+
+export function filterMemoryAtomsForAutomaticWrite(
+  input: MemoryAtomExtractionInput,
+  atoms: MemoryAtom[],
+  options: MemoryAtomWritePolicyOptions = {}
+): MemoryAtom[] {
+  const explicitSave = hasExplicitSaveIntent(normalizeText(input.text));
+  if (!explicitSave && shouldSkipBackgroundMemoryWrite(input)) {
+    return [];
+  }
+
+  const minBackgroundImportance = options.minBackgroundImportance ?? defaultMinBackgroundImportance;
+  const explicitSaveMinImportance = options.explicitSaveMinImportance ?? defaultExplicitSaveMinImportance;
+  const explicitSaveImportanceFloor = options.explicitSaveImportanceFloor ?? defaultExplicitSaveImportanceFloor;
+  const maxAtomsPerTurn = options.maxAtomsPerTurn ?? defaultMaxAtomsPerTurn;
+
+  const filtered = atoms
+    .map((atom) => (explicitSave && atom.importance < explicitSaveImportanceFloor ? { ...atom, importance: explicitSaveImportanceFloor } : atom))
+    .filter((atom) => {
+      if (atom.sourceTurnIds.some((turnId) => !input.sourceTurnIds.includes(turnId))) {
+        return false;
+      }
+      if (atom.disabled || atom.text.trim().length === 0 || memoryAtomContainsUnsafeText(atom)) {
+        return false;
+      }
+      if (!explicitSave && (isUiEventNoise(`${input.text} ${atom.text}`) || containsPrivateContextSignal(`${input.text} ${atom.text}`))) {
+        return false;
+      }
+      return explicitSave ? atom.importance >= explicitSaveMinImportance : atom.importance >= minBackgroundImportance;
+    });
+
+  return dedupeAtomsByWriteKey(filtered).slice(0, maxAtomsPerTurn);
+}
+
+export function findSimilarMemoryAtom(existingAtoms: MemoryAtom[], candidate: MemoryAtom): MemoryAtom | undefined {
+  const candidateKeys = buildMemoryAtomWriteKeys(candidate);
+  return existingAtoms.find((atom) => {
+    if (atom.threadId !== candidate.threadId || atom.type !== candidate.type || atom.disabled) {
+      return false;
+    }
+    const existingKeys = buildMemoryAtomWriteKeys(atom);
+    return candidateKeys.some((key) => existingKeys.includes(key));
+  });
+}
+
+export function createMemoryAtomMergePatch(existing: MemoryAtom, candidate: MemoryAtom, updatedAt = new Date().toISOString()): UpdateMemoryAtom {
+  return {
+    text: candidate.text.length > existing.text.length ? candidate.text : existing.text,
+    sourceTurnIds: normalizeSourceTurnIds([...existing.sourceTurnIds, ...candidate.sourceTurnIds]),
+    sourceSessionId: existing.sourceSessionId ?? candidate.sourceSessionId,
+    importance: Math.max(existing.importance, candidate.importance),
+    triggers: mergeMemoryAtomTriggers(existing.triggers, candidate.triggers),
+    eventDate: existing.eventDate ?? candidate.eventDate,
+    recurrence: existing.recurrence ?? candidate.recurrence,
+    ritualAction: existing.ritualAction ?? candidate.ritualAction,
+    subject: existing.subject ?? candidate.subject,
+    object: existing.object ?? candidate.object,
+    sentiment: existing.sentiment ?? candidate.sentiment,
+    metadata: mergeMemoryAtomMetadata(existing.metadata, candidate.metadata),
+    updatedAt
+  };
 }
 
 export function buildMemoryAtomRecallContext(options: BuildMemoryAtomRecallContextOptions): MemoryAtomRecallContext {
@@ -350,6 +506,386 @@ export function normalizeTriggers(triggers: MemoryAtomTriggers): MemoryAtomTrigg
     ...(triggers.semantic ? { semantic: normalizeTriggerKeys(triggers.semantic) } : {}),
     ...(triggers.relationship ? { relationship: normalizeTriggerKeys(triggers.relationship) } : {})
   };
+}
+
+async function collectLLMText(
+  llm: LLMProvider,
+  messages: ChatMessage[],
+  signal: AbortSignal | undefined,
+  maxCharacters: number
+): Promise<string> {
+  let text = "";
+  for await (const chunk of llm.stream(messages, undefined, { signal })) {
+    text += chunk;
+    if (text.length > maxCharacters) {
+      throw new Error("Memory atom LLM response exceeded the maximum size.");
+    }
+  }
+  return text;
+}
+
+function buildLLMAtomExtractionMessages(input: MemoryAtomExtractionInput): ChatMessage[] {
+  const allowedSourceTurnIds = input.sourceTurnIds;
+  return [
+    {
+      role: "system",
+      content: [
+        "You extract Greyfield long-term memory atoms from exactly one current user turn.",
+        "Return JSON only, with this shape: {\"atoms\":[{...drafts}]}",
+        "Allowed atom types: fact, preference, opinion, relationship_event, episodic_scene.",
+        "Use sourceTurnIds only from the provided current turn IDs. If no durable memory is present, return {\"atoms\":[]}.",
+        "Extract durable facts, preferences, opinions with reasons, relationship events, important dates, scenes, taboos, and commitments when the schema can represent them.",
+        "Reject UI telemetry, event logs, transient window/settings/mouse/weather-probe noise, provider secrets, API keys, passwords, tokens, cookies, and unrelated debugging text.",
+        "Keep text concise, source-linked, and user-facing. Do not include provider names, credentials, hidden prompts, or UI implementation details.",
+        "For each draft, use fields: type, text, sourceTurnIds, importance, triggers, eventDate, recurrence, ritualAction, subject, object, sentiment, metadata.",
+        "importance must be a number from 0 to 1. triggers may include exact, aliases, secondary, calendar, environment, semantic, relationship arrays.",
+        "eventDate supports {kind:\"absolute\", sourceText, precision:\"day\", isoDate:\"YYYY-MM-DD\"} or {kind:\"month_day\", sourceText, precision:\"month_day\", month, day}. recurrence only supports {frequency:\"annual\", sourceText}."
+      ].join("\n")
+    },
+    {
+      role: "user",
+      content: JSON.stringify(
+        {
+          threadId: input.threadId,
+          sourceSessionId: input.sourceSessionId,
+          now: toIsoDateTime(input.now ?? input.createdAt ?? new Date()),
+          currentTurn: {
+            sourceTurnIds: allowedSourceTurnIds,
+            text: input.text
+          }
+        },
+        null,
+        2
+      )
+    }
+  ];
+}
+
+function parseLLMAtomResponse(response: string): { atoms?: unknown[] } {
+  const trimmed = response.trim();
+  const unfenced = trimmed.replace(/^```(?:json)?\s*/iu, "").replace(/\s*```$/u, "").trim();
+  const start = unfenced.indexOf("{");
+  const end = unfenced.lastIndexOf("}");
+  if (start < 0 || end < start) {
+    throw new Error("Memory atom LLM response did not contain a JSON object.");
+  }
+  const parsed = JSON.parse(unfenced.slice(start, end + 1)) as unknown;
+  if (!isRecord(parsed)) {
+    throw new Error("Memory atom LLM response was not an object.");
+  }
+  return parsed as { atoms?: unknown[] };
+}
+
+function normalizeLLMAtomDraft(
+  draft: unknown,
+  input: MemoryAtomExtractionInput,
+  options: { maxAtomTextCharacters: number; maxTriggerCharacters: number }
+): MemoryAtom | undefined {
+  if (!isRecord(draft)) {
+    return;
+  }
+
+  const type = typeof draft.type === "string" && allowedMemoryAtomTypes.has(draft.type as MemoryAtomType)
+    ? (draft.type as MemoryAtomType)
+    : undefined;
+  const text = normalizeBoundedText(draft.text, options.maxAtomTextCharacters);
+  const sourceTurnIds = normalizeDraftSourceTurnIds(draft.sourceTurnIds, input.sourceTurnIds);
+  const importance = normalizeImportance(draft.importance);
+  if (!type || !text || !sourceTurnIds || importance === undefined || containsSecretLikeText(text) || isUiEventNoise(text)) {
+    return;
+  }
+
+  let eventDate: MemoryAtomEventDate | undefined;
+  let recurrence: MemoryAtomRecurrence | undefined;
+  try {
+    eventDate = normalizeDraftEventDate(draft.eventDate);
+    recurrence = normalizeDraftRecurrence(draft.recurrence);
+  } catch {
+    return;
+  }
+
+  const triggers = normalizeDraftTriggers(draft.triggers, text, input.text, options.maxTriggerCharacters);
+  const sentiment = typeof draft.sentiment === "string" && allowedSentiments.has(draft.sentiment as MemoryAtomSentiment)
+    ? (draft.sentiment as MemoryAtomSentiment)
+    : undefined;
+  const metadata = normalizeDraftMetadata(draft.metadata);
+  const createdAt = toIsoDateTime(input.createdAt ?? input.now ?? new Date());
+  const atom: MemoryAtom = {
+    id: "",
+    threadId: input.threadId,
+    type,
+    text,
+    sourceTurnIds,
+    sourceSessionId: input.sourceSessionId,
+    createdAt,
+    importance,
+    triggerKeys: [],
+    triggers,
+    eventDate,
+    recurrence,
+    ritualAction: normalizeOptionalBoundedText(draft.ritualAction, 48),
+    subject: normalizeOptionalBoundedText(draft.subject, 60),
+    object: normalizeOptionalBoundedText(draft.object, 80),
+    sentiment,
+    metadata
+  };
+  atom.triggerKeys = flattenTriggerKeys(atom.triggers);
+  if (memoryAtomContainsUnsafeText(atom)) {
+    return;
+  }
+  atom.id = buildMemoryAtomId(atom);
+  return atom;
+}
+
+function normalizeDraftSourceTurnIds(raw: unknown, allowedSourceTurnIds: string[]): string[] | undefined {
+  if (raw === undefined || raw === null) {
+    return normalizeSourceTurnIds(allowedSourceTurnIds);
+  }
+  if (!Array.isArray(raw)) {
+    return;
+  }
+  const sourceTurnIds = normalizeSourceTurnIds(raw.filter((value): value is string => typeof value === "string"));
+  if (sourceTurnIds.length === 0) {
+    return normalizeSourceTurnIds(allowedSourceTurnIds);
+  }
+  return sourceTurnIds.every((turnId) => allowedSourceTurnIds.includes(turnId)) ? sourceTurnIds : undefined;
+}
+
+function normalizeImportance(raw: unknown): number | undefined {
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0 || raw > 1) {
+    return;
+  }
+  return roundScore(raw);
+}
+
+function normalizeDraftTriggers(
+  raw: unknown,
+  atomText: string,
+  sourceText: string,
+  maxTriggerCharacters: number
+): MemoryAtomTriggers {
+  const rawTriggers = isRecord(raw) ? raw : {};
+  const normalized: MemoryAtomTriggers = {
+    exact: normalizeDraftTriggerLane(rawTriggers.exact, maxTriggerCharacters),
+    aliases: normalizeDraftTriggerLane(rawTriggers.aliases, maxTriggerCharacters),
+    secondary: normalizeDraftTriggerLane(rawTriggers.secondary, maxTriggerCharacters)
+  };
+  for (const lane of ["calendar", "environment", "semantic", "relationship"] as const) {
+    const values = normalizeDraftTriggerLane(rawTriggers[lane], maxTriggerCharacters);
+    if (values.length > 0) {
+      normalized[lane] = values;
+    }
+  }
+  if (flattenTriggerKeys(normalized).length === 0) {
+    normalized.exact = extractFallbackTriggerKeys(`${atomText} ${sourceText}`).slice(0, 6);
+  }
+  return normalizeTriggers(normalized);
+}
+
+function normalizeDraftTriggerLane(raw: unknown, maxTriggerCharacters: number): string[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return normalizeTriggerKeys(
+    raw
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => normalizeBoundedText(value, maxTriggerCharacters))
+      .filter((value): value is string => Boolean(value))
+      .filter((value) => !containsSecretLikeText(value) && !isUiEventNoise(value))
+  ).slice(0, 8);
+}
+
+function normalizeDraftEventDate(raw: unknown): MemoryAtomEventDate | undefined {
+  if (raw === undefined || raw === null) {
+    return;
+  }
+  if (!isRecord(raw) || typeof raw.kind !== "string" || typeof raw.sourceText !== "string") {
+    throw new Error("Invalid memory atom eventDate.");
+  }
+  if (raw.kind === "absolute") {
+    const isoDate = typeof raw.isoDate === "string" ? raw.isoDate : undefined;
+    const dateParts = isoDate?.match(/^(\d{4})-(\d{2})-(\d{2})$/u);
+    const normalizedIsoDate = dateParts
+      ? toIsoDateFromParts(Number(dateParts[1]), Number(dateParts[2]), Number(dateParts[3]))
+      : undefined;
+    if (!isoDate || normalizedIsoDate !== isoDate) {
+      throw new Error("Invalid absolute memory atom eventDate.");
+    }
+    return {
+      kind: "absolute",
+      sourceText: normalizeText(raw.sourceText).slice(0, 40),
+      precision: "day",
+      isoDate
+    };
+  }
+  if (raw.kind === "month_day") {
+    const month = typeof raw.month === "number" ? raw.month : Number.NaN;
+    const day = typeof raw.day === "number" ? raw.day : Number.NaN;
+    if (!isValidMonthDay(month, day)) {
+      throw new Error("Invalid month-day memory atom eventDate.");
+    }
+    return {
+      kind: "month_day",
+      sourceText: normalizeText(raw.sourceText).slice(0, 40),
+      precision: "month_day",
+      month,
+      day
+    };
+  }
+  throw new Error("Unsupported memory atom eventDate kind.");
+}
+
+function normalizeDraftRecurrence(raw: unknown): MemoryAtomRecurrence | undefined {
+  if (raw === undefined || raw === null) {
+    return;
+  }
+  if (!isRecord(raw) || raw.frequency !== "annual" || typeof raw.sourceText !== "string") {
+    throw new Error("Invalid memory atom recurrence.");
+  }
+  return {
+    frequency: "annual",
+    sourceText: normalizeText(raw.sourceText).slice(0, 40)
+  };
+}
+
+function normalizeDraftMetadata(raw: unknown): Record<string, string | string[] | number | boolean | null> | undefined {
+  if (!isRecord(raw)) {
+    return;
+  }
+  const entries = Object.entries(raw)
+    .filter(([key]) => isSafeMetadataKey(key))
+    .map(([key, value]) => [key, normalizeMetadataValue(value)] as const)
+    .filter((entry): entry is readonly [string, string | string[] | number | boolean | null] => entry[1] !== undefined)
+    .slice(0, 12);
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function normalizeMetadataValue(value: unknown): string | string[] | number | boolean | null | undefined {
+  if (value === null || typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : undefined;
+  }
+  if (typeof value === "string") {
+    return normalizeSafeMetadataString(value);
+  }
+  if (Array.isArray(value)) {
+    const items = value
+      .filter((item): item is string => typeof item === "string")
+      .map(normalizeSafeMetadataString)
+      .filter((item): item is string => Boolean(item))
+      .slice(0, 8);
+    return items.length > 0 ? items : undefined;
+  }
+  return;
+}
+
+function normalizeSafeMetadataString(value: string): string | undefined {
+  const normalized = normalizeText(value);
+  if (normalized.length === 0 || containsSecretLikeText(normalized) || isUiEventNoise(normalized)) {
+    return;
+  }
+  return truncateAtBoundary(normalized, defaultMaxMetadataStringCharacters);
+}
+
+function normalizeBoundedText(raw: unknown, maxCharacters: number): string | undefined {
+  if (typeof raw !== "string") {
+    return;
+  }
+  const normalized = normalizeText(raw);
+  if (normalized.length === 0) {
+    return;
+  }
+  return truncateAtBoundary(normalized, maxCharacters);
+}
+
+function normalizeOptionalBoundedText(raw: unknown, maxCharacters: number): string | undefined {
+  return raw === undefined || raw === null ? undefined : normalizeBoundedText(raw, maxCharacters);
+}
+
+function memoryAtomContainsUnsafeText(atom: MemoryAtom): boolean {
+  return collectPersistedMemoryAtomStrings(atom).some((value) => {
+    const text = normalizeText(value);
+    return text.length > 0 && (containsSecretLikeText(text) || isUiEventNoise(text));
+  });
+}
+
+function collectPersistedMemoryAtomStrings(atom: MemoryAtom): string[] {
+  return [
+    atom.text,
+    ...atom.sourceTurnIds,
+    atom.sourceSessionId,
+    atom.subject,
+    atom.object,
+    atom.ritualAction,
+    atom.eventDate?.sourceText,
+    atom.recurrence?.sourceText,
+    ...collectMemoryAtomTriggerStrings(atom.triggers),
+    ...collectMetadataStrings(atom.metadata)
+  ].filter((value): value is string => typeof value === "string");
+}
+
+function collectMemoryAtomTriggerStrings(triggers: MemoryAtomTriggers): string[] {
+  return [
+    ...triggers.exact,
+    ...triggers.aliases,
+    ...triggers.secondary,
+    ...(triggers.calendar ?? []),
+    ...(triggers.environment ?? []),
+    ...(triggers.semantic ?? []),
+    ...(triggers.relationship ?? [])
+  ];
+}
+
+function collectMetadataStrings(metadata: MemoryAtom["metadata"]): string[] {
+  if (!metadata) {
+    return [];
+  }
+  const strings: string[] = [];
+  for (const [key, value] of Object.entries(metadata)) {
+    strings.push(key);
+    if (typeof value === "string") {
+      strings.push(value);
+    } else if (Array.isArray(value)) {
+      strings.push(...value.filter((item): item is string => typeof item === "string"));
+    }
+  }
+  return strings;
+}
+
+function shouldSkipBackgroundMemoryWrite(input: MemoryAtomExtractionInput): boolean {
+  const text = normalizeText(input.text);
+  if (text.length === 0 || containsSecretLikeText(text)) {
+    return true;
+  }
+  if (hasExplicitSaveIntent(text)) {
+    return false;
+  }
+  return isUiEventNoise(text) || containsPrivateContextSignal(text);
+}
+
+function containsSecretLikeText(text: string): boolean {
+  return /(api[_\s-]?key|secret|token|password|authorization|bearer\s+[a-z0-9._-]+|sk-[a-z0-9_-]{12,}|cookie|credential)/iu.test(text);
+}
+
+function containsPrivateContextSignal(text: string): boolean {
+  return /(截图|屏幕|剪贴板|浏览器地址|窗口标题|screenshot|screen capture|clipboard|window title|browser url|private tab)/iu.test(text);
+}
+
+function isUiEventNoise(text: string): boolean {
+  return (
+    /\b(settings window|window blurred|window focused|window resized|mouse moved|cursor moved|transparent desktop|runtime event|ipc event|weather probe)\b/iu.test(text) ||
+    /\b(settings|window|mouse|cursor|drag|resize|blurred|focused|telemetry|probe)\b.*\b(opened|closed|resized|moved|blurred|focused|started)\b/iu.test(text)
+  );
+}
+
+function isSafeMetadataKey(key: string): boolean {
+  return /^[a-zA-Z0-9_:-]{1,40}$/u.test(key) && !/(api|key|secret|token|password|authorization|cookie|credential|provider)/iu.test(key);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function extractBirthdayAtom(
@@ -1228,6 +1764,89 @@ function flattenTriggerKeys(triggers: MemoryAtomTriggers): string[] {
   ]);
 }
 
+function dedupeAtomsByWriteKey(atoms: MemoryAtom[]): MemoryAtom[] {
+  const seen = new Set<string>();
+  const result: MemoryAtom[] = [];
+  for (const atom of atoms) {
+    const keys = buildMemoryAtomWriteKeys(atom);
+    if (keys.some((key) => seen.has(key))) {
+      continue;
+    }
+    for (const key of keys) {
+      seen.add(key);
+    }
+    result.push(atom);
+  }
+  return result;
+}
+
+function buildMemoryAtomWriteKeys(atom: MemoryAtom): string[] {
+  const keys = new Set<string>([`id:${atom.id}`]);
+  const text = comparableMemoryText(atom.text);
+  if (text.length > 0) {
+    keys.add(`${atom.threadId}:${atom.type}:text:${text}`);
+  }
+  const object = atom.object ? comparableMemoryText(atom.object) : "";
+  const subject = atom.subject ? comparableMemoryText(atom.subject) : "";
+  const date = atom.eventDate ? formatEventDate(atom.eventDate) : "";
+  const category = getMemoryAtomCategory(atom);
+  if (object.length > 0 || date.length > 0 || category.length > 0) {
+    keys.add(`${atom.threadId}:${atom.type}:slot:${category}:${object}:${date}:${atom.sentiment ?? ""}`);
+    if (subject.length > 0) {
+      keys.add(`${atom.threadId}:${atom.type}:slot:${category}:${subject}:${object}:${date}:${atom.sentiment ?? ""}`);
+    }
+  }
+  return [...keys];
+}
+
+function getMemoryAtomCategory(atom: MemoryAtom): string {
+  const metadata = atom.metadata ?? {};
+  for (const key of ["factType", "preferenceType", "opinionType", "eventType", "sceneType"] as const) {
+    const value = metadata[key];
+    if (typeof value === "string" && value.length > 0) {
+      return comparableMemoryText(value);
+    }
+  }
+  return "";
+}
+
+function comparableMemoryText(text: string): string {
+  return normalizeText(text).toLowerCase();
+}
+
+function mergeMemoryAtomTriggers(base: MemoryAtomTriggers, candidate: MemoryAtomTriggers): MemoryAtomTriggers {
+  return normalizeTriggers({
+    exact: [...base.exact, ...candidate.exact],
+    aliases: [...base.aliases, ...candidate.aliases],
+    secondary: [...base.secondary, ...candidate.secondary],
+    ...(base.calendar || candidate.calendar ? { calendar: [...(base.calendar ?? []), ...(candidate.calendar ?? [])] } : {}),
+    ...(base.environment || candidate.environment ? { environment: [...(base.environment ?? []), ...(candidate.environment ?? [])] } : {}),
+    ...(base.semantic || candidate.semantic ? { semantic: [...(base.semantic ?? []), ...(candidate.semantic ?? [])] } : {}),
+    ...(base.relationship || candidate.relationship ? { relationship: [...(base.relationship ?? []), ...(candidate.relationship ?? [])] } : {})
+  });
+}
+
+function mergeMemoryAtomMetadata(
+  base: MemoryAtom["metadata"] | undefined,
+  candidate: MemoryAtom["metadata"] | undefined
+): MemoryAtom["metadata"] | undefined {
+  if (!base && !candidate) {
+    return;
+  }
+  const merged: Record<string, string | string[] | number | boolean | null> = { ...(base ?? {}) };
+  for (const [key, value] of Object.entries(candidate ?? {})) {
+    const existing = merged[key];
+    if (Array.isArray(existing) && Array.isArray(value)) {
+      merged[key] = [...new Set([...existing, ...value])];
+      continue;
+    }
+    if (existing === undefined || existing === null || existing === "") {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
 function dedupeAtoms(atoms: MemoryAtom[]): MemoryAtom[] {
   const seen = new Set<string>();
   const result: MemoryAtom[] = [];
@@ -1253,6 +1872,10 @@ function stableHash(value: string): string {
     hash = Math.imul(hash, 16777619);
   }
   return (hash >>> 0).toString(36);
+}
+
+function roundScore(value: number): number {
+  return Math.round(value * 1000) / 1000;
 }
 
 function normalizeText(text: string): string {

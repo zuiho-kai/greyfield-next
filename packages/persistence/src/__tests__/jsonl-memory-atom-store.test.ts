@@ -56,8 +56,14 @@ describe("JsonlMemoryAtomStore", () => {
       const patched = await reloaded.update(first.id, {
         disabled: true,
         importance: 0.9,
+        sourceTurnIds: ["turn-1", "turn-2", "turn-3", "turn-3"],
+        object: "natori",
         triggers: {
           aliases: ["Natori", "natori"]
+        },
+        metadata: {
+          preferenceType: "live2d_model",
+          corrected: true
         },
         updatedAt: "2026-06-26T01:00:20.000Z"
       });
@@ -66,12 +72,17 @@ describe("JsonlMemoryAtomStore", () => {
         id: first.id,
         disabled: true,
         importance: 0.9,
-        sourceTurnIds: ["turn-1", "turn-2"],
+        sourceTurnIds: ["turn-1", "turn-2", "turn-3"],
+        object: "natori",
         updatedAt: "2026-06-26T01:00:20.000Z",
         triggers: {
           exact: ["hiyori", "natori"],
           aliases: ["natori"],
           secondary: ["live2d"]
+        },
+        metadata: {
+          preferenceType: "live2d_model",
+          corrected: true
         }
       });
       expect(patched?.triggerKeys).toEqual(["hiyori", "natori", "live2d"]);

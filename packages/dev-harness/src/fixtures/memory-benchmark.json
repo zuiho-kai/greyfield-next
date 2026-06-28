@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "thresholds": {
     "summaryScore": 0.95,
     "recallScore": 0.95
@@ -7,11 +7,11 @@
   "baselineScores": {
     "summaryRegressionScore": 1,
     "recallRegressionScore": 1,
-    "atomExtractionScore": 0.925,
-    "atomRecallScore": 0.75,
+    "atomExtractionScore": 0.95,
+    "atomRecallScore": 0.8,
     "proactiveTriggerScore": 1,
-    "productReadinessScore": 0.51,
-    "v21aScenarioScore": 0.5
+    "productReadinessScore": 0.55,
+    "v21aScenarioScore": 0.53
   },
   "productReadiness": {
     "targetScore": 1,
@@ -44,11 +44,11 @@
       },
       {
         "id": "memory-atom-extraction",
-        "description": "Deterministic extraction can produce typed, source-linked memory atoms for a narrow set of V2.1 scenarios, but LLM extraction/write policy and desktop proactive scheduling are not complete.",
+        "description": "Hybrid LLM-backed extraction can produce validated, source-linked atoms while deterministic extraction remains the fallback.",
         "status": "partial",
-        "score": 0.5,
+        "score": 0.6,
         "weight": 0.22,
-        "evidence": "atomExtraction benchmark dynamically runs extractDeterministicMemoryAtoms over birthday/first-meeting rose, game negative review, and rainy hotpot cases; desktop chat can write and recall deterministic atoms, but LLM extraction/write policy and desktop proactive scheduling remain incomplete"
+        "evidence": "atomExtraction benchmark dynamically runs LLMBackedMemoryAtomExtractor with scripted providers for rose preference and game-review reasons, proves invalid LLM output falls back deterministically, and runtime tests cover the explicit hybrid path. Real provider UX enabling remains explicit and not default."
       },
       {
         "id": "calendar-recall",
@@ -78,9 +78,9 @@
         "id": "privacy-noise",
         "description": "The memory path rejects UI/event noise and private context that was not explicitly saved.",
         "status": "partial",
-        "score": 0.25,
+        "score": 0.42,
         "weight": 0.11,
-        "evidence": "Extractive summaries ignore event turns and fixture checks privacy wording, but no atom privacy classifier exists"
+        "evidence": "LLM atom validation and automatic write policy reject scripted Settings/weather event source turns and secret-like provider text, including structured atom fields, before persistence. Broader privacy classification and raw-turn erasure remain incomplete."
       }
     ],
     "scenarios": [
@@ -89,7 +89,7 @@
         "title": "Birthday, first meeting, and rose atoms",
         "description": "The user gives durable relationship facts that should become separate source-linked atoms and later calendar recall.",
         "status": "partial",
-        "score": 0.55,
+        "score": 0.6,
         "weight": 0.34,
         "dimensions": [
           "memory-atom-extraction",
@@ -120,7 +120,7 @@
           "calendar recall should surface birthday and first-meeting anniversary without exact keyword overlap",
           "drilldown should show source turns rose-1 and rose-2"
         ],
-        "currentGap": "Current main can write and recall deterministic birthday and first-meeting rose atoms from the desktop chat path, date-aware atom recall can surface annual events, and Settings can manage existing current-role atoms in Memory Library. It still cannot extract a separate rose preference, run LLM-backed write policy, or erase raw turns/summaries through atom clear.",
+        "currentGap": "Hybrid LLM-backed extraction can now add the separate rose preference atom while deterministic extraction preserves birthday and first-meeting dates. Runtime use is explicit rather than default, renderer source drilldown UI is still absent, and atom clear still does not erase raw turns or summaries.",
         "sourceExpectations": {
           "sourceTurnIds": ["rose-1", "rose-2"],
           "exactFragments": ["我的生日是 9 月 7 日", "第一次相遇是 2024 年 5 月 20 日", "红玫瑰"]
@@ -131,7 +131,7 @@
         "title": "Game negative review original-text drilldown",
         "description": "The user later asks for the exact original wording of a game complaint, not just a paraphrased summary.",
         "status": "partial",
-        "score": 0.55,
+        "score": 0.6,
         "weight": 0.33,
         "dimensions": [
           "memory-atom-extraction",
@@ -154,6 +154,11 @@
             "id": "game-3",
             "role": "event",
             "content": "settings window opened while user copied review text"
+          },
+          {
+            "id": "game-4",
+            "role": "user",
+            "content": "这个游戏相关备注只是结构化字段安全过滤测试。"
           }
         ],
         "expectedBehavior": [
@@ -161,7 +166,7 @@
           "recall should expose exact original wording on source drilldown",
           "UI/event noise must not be mixed into the memory"
         ],
-        "currentGap": "Deterministic atom extraction and vague negative-game cue recall preserve the source turn ID for the game complaint, and atom recall can inject bounded raw source fragments on provenance-style prompts. LLM-backed extraction/write policy and a renderer drilldown surface remain future work.",
+        "currentGap": "Hybrid LLM-backed extraction can now preserve arbitrary game-review reasons from a scripted provider while rejecting UI/event noise, and atom recall can inject bounded raw source fragments. Renderer drilldown UI and real-provider UX enabling remain future work.",
         "sourceExpectations": {
           "sourceTurnIds": ["game-1"],
           "exactFragments": ["教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员"]
@@ -425,11 +430,34 @@
   "atomCases": [
     {
       "id": "birthday-first-meeting-rose-atoms",
-      "description": "Dynamically extracts birthday and first-meeting rose atoms, then recalls them through calendar dates while separate rose preference extraction remains incomplete.",
+      "description": "Dynamically extracts birthday, first-meeting anniversary, and a separate LLM-backed rose preference atom, then recalls dates and flower preference together.",
       "scenarioId": "birthday-first-meeting-rose",
-      "extractionMinScore": 0.6,
+      "extractionMinScore": 0.95,
       "recallMinScore": 0.95,
       "extraction": {
+        "extractorMode": "hybrid",
+        "scriptedLLMResponses": {
+          "rose-2": {
+            "atoms": [
+              {
+                "type": "preference",
+                "text": "User likes red roses as a meaningful flower.",
+                "sourceTurnIds": ["rose-2"],
+                "importance": 0.86,
+                "object": "rose",
+                "triggers": {
+                  "exact": ["红玫瑰", "玫瑰"],
+                  "aliases": ["喜欢的花", "花", "rose"],
+                  "secondary": ["纪念日礼物"]
+                },
+                "metadata": {
+                  "preferenceType": "flower",
+                  "color": "red"
+                }
+              }
+            ]
+          }
+        },
         "sourceTurnIds": ["rose-1", "rose-2"],
         "rejectedSourceTurnIds": [],
         "expectedAtoms": [
@@ -460,23 +488,18 @@
             "id": "separate-rose-preference",
             "type": "preference",
             "sourceTurnIds": ["rose-2"],
-            "textIncludes": ["rose"],
-            "triggerIncludes": ["玫瑰"],
+            "textIncludes": ["rose", "meaningful flower"],
+            "triggerIncludes": ["玫瑰", "喜欢的花"],
             "object": "rose",
-            "metadata": { "preferenceType": "flower" }
+            "metadata": { "preferenceType": "flower", "color": "red" }
           }
         ]
       },
       "recall": {
-        "input": "9月7日和5月20日这两个日子要准备什么？",
+        "input": "9月7日、5月20日这两个日子要准备什么？我还喜欢什么花？",
         "now": "2027-01-15T00:00:00.000Z",
-        "expectedAtomExpectationIds": ["birthday", "first-meeting-rose"],
-        "rejectedAtomExpectationIds": ["separate-rose-preference"],
-        "promptIncludes": ["Reason: calendar", "Source turns: rose-1", "Source turns: rose-2", "Ritual action: 送玫瑰"],
-        "unsupportedGaps": [
-          "separate rose preference extraction is not implemented",
-          "LLM extraction/write policy is not implemented"
-        ]
+        "expectedAtomExpectationIds": ["birthday", "first-meeting-rose", "separate-rose-preference"],
+        "promptIncludes": ["Reason: calendar", "Source turns: rose-1", "Source turns: rose-2", "Ritual action: 送玫瑰", "meaningful flower"]
       }
     },
     {
@@ -511,24 +534,115 @@
       }
     },
     {
+      "id": "invalid-llm-output-falls-back",
+      "description": "Invalid LLM atom JSON degrades to deterministic extraction for explicit birthday memory instead of failing the benchmark path.",
+      "scenarioId": "birthday-first-meeting-rose",
+      "extractionMinScore": 0.95,
+      "recallMinScore": 0.95,
+      "extraction": {
+        "extractorMode": "llm",
+        "scriptedLLMResponses": {
+          "rose-1": "not-json"
+        },
+        "sourceTurnIds": ["rose-1"],
+        "rejectedSourceTurnIds": [],
+        "expectedAtoms": [
+          {
+            "id": "birthday",
+            "type": "fact",
+            "sourceTurnIds": ["rose-1"],
+            "textIncludes": ["birthday", "09-07"],
+            "triggerIncludes": ["生日", "09-07"],
+            "eventDate": { "kind": "month_day", "month": 9, "day": 7 },
+            "recurrenceFrequency": "annual",
+            "object": "birthday",
+            "metadata": { "factType": "birthday" }
+          }
+        ]
+      },
+      "recall": {
+        "input": "9月7日要准备什么？",
+        "now": "2027-01-15T00:00:00.000Z",
+        "expectedAtomExpectationIds": ["birthday"],
+        "promptIncludes": ["Reason: calendar", "Source turns: rose-1"]
+      }
+    },
+    {
       "id": "game-negative-review-atoms",
       "description": "Dynamically extracts and recalls a negative game-review atom from vague negative-game cues with exact source-passage prompt material.",
       "scenarioId": "game-negative-review-source-drilldown",
       "extractionMinScore": 0.9,
       "recallMinScore": 0.95,
       "extraction": {
-        "sourceTurnIds": ["game-1", "game-3"],
-        "rejectedSourceTurnIds": ["game-3"],
+        "extractorMode": "hybrid",
+        "scriptedLLMResponses": {
+          "game-1": {
+            "atoms": [
+              {
+                "type": "opinion",
+                "text": "User has a negative opinion of 星环旅店 because the tutorial felt like a broken elevator and the story treated players like sleepy testers.",
+                "sourceTurnIds": ["game-1"],
+                "importance": 0.86,
+                "object": "星环旅店",
+                "sentiment": "negative",
+                "triggers": {
+                  "exact": ["星环旅店", "《星环旅店》"],
+                  "aliases": ["某个游戏", "之前那个游戏", "旧游戏"],
+                  "secondary": ["教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员", "剧情", "游戏差评", "傻逼", "像之前"]
+                },
+                "metadata": {
+                  "target": "星环旅店",
+                  "reasons": ["教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员"],
+                  "opinionType": "game_review"
+                }
+              }
+            ]
+          },
+          "game-3": {
+            "atoms": [
+              {
+                "type": "fact",
+                "text": "Settings window opened while the user copied review text.",
+                "sourceTurnIds": ["game-3"],
+                "importance": 0.99,
+                "triggers": {
+                  "exact": ["settings window"],
+                  "aliases": [],
+                  "secondary": []
+                }
+              }
+            ]
+          },
+          "game-4": {
+            "atoms": [
+              {
+                "type": "opinion",
+                "text": "User left a clean structured safety test note about a game.",
+                "sourceTurnIds": ["game-4"],
+                "importance": 0.91,
+                "object": "sk-structuredsecret1234",
+                "sentiment": "negative",
+                "triggers": {
+                  "exact": ["structured safety test"],
+                  "aliases": [],
+                  "secondary": ["game note"]
+                }
+              }
+            ]
+          }
+        },
+        "sourceTurnIds": ["game-1", "game-3", "game-4"],
+        "rejectedSourceTurnIds": ["game-3", "game-4"],
         "expectedAtoms": [
           {
             "id": "game-negative-review",
             "type": "opinion",
             "sourceTurnIds": ["game-1"],
-            "textIncludes": ["negative opinion", "星环旅店", "剧情"],
-            "triggerIncludes": ["星环旅店", "剧情", "游戏差评", "某个游戏", "傻逼", "像之前"],
+            "textIncludes": ["negative opinion", "星环旅店", "broken elevator", "sleepy testers"],
+            "triggerIncludes": ["星环旅店", "剧情", "游戏差评", "某个游戏", "傻逼", "像之前", "教程像坏掉的电梯"],
             "object": "星环旅店",
             "sentiment": "negative",
-            "metadata": { "target": "星环旅店", "reasons": ["剧情"], "opinionType": "game_review" }
+            "metadata": { "target": "星环旅店", "reasons": ["教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员"], "opinionType": "game_review" }
           }
         ]
       },
@@ -536,10 +650,7 @@
         "input": "这个新游戏也很傻逼，好像之前某个游戏，之前为什么这么说？",
         "expectedAtomExpectationIds": ["game-negative-review"],
         "promptIncludes": ["Source turns: game-1", "Source fragments:", "教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员"],
-        "promptExcludes": ["exact:星环旅店"],
-        "unsupportedGaps": [
-          "LLM extraction that preserves arbitrary complaint wording is not implemented"
-        ]
+        "promptExcludes": ["exact:星环旅店"]
       }
     },
     {

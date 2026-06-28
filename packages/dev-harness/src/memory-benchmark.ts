@@ -8,14 +8,16 @@ import {
   extractDeterministicMemoryAtoms,
   formatMemoryAtomRecallContextForPrompt,
   formatRecallContextForPrompt,
+  LLMBackedMemoryAtomExtractor,
   type EnvironmentTriggerState,
   type MemoryAtom,
+  type MemoryAtomExtractionMode,
   type MemoryAtomType,
   type ProactiveMemoryPolicy,
   type ProactiveMemoryTriggerState,
   type SummarySegment
 } from "@greyfield/core-runtime";
-import type { SessionTurn } from "@greyfield/core-runtime";
+import type { ChatMessage, LLMProvider, SessionTurn } from "@greyfield/core-runtime";
 
 interface MemoryBenchmarkFixture {
   version: number;
@@ -138,6 +140,8 @@ interface AtomBenchmarkCase {
     sourceTurnIds: string[];
     expectedAtoms: AtomExpectation[];
     rejectedSourceTurnIds?: string[];
+    extractorMode?: MemoryAtomExtractionMode;
+    scriptedLLMResponses?: Record<string, unknown>;
   };
   recall: {
     input: string;
@@ -220,11 +224,12 @@ const fixture = await loadFixture();
 const recallSegments = fixture.recallSegments.map((segment) => makeSegment(segment, fixture));
 const summaryResults = fixture.summaryCases.map((testCase) => runSummaryCase(testCase, fixture));
 const recallResults = fixture.recallCases.map((testCase) => runRecallCase(testCase));
-const atomExtractionResults = fixture.atomCases.map((testCase) => runAtomExtractionCase(testCase, fixture));
-const atomRecallResults = fixture.atomCases.map((testCase) => runAtomRecallCase(testCase, fixture));
-const proactiveTriggerResults = fixture.atomCases
+const atomCaseAtomCache = new Map<string, MemoryAtom[]>();
+const atomExtractionResults = await Promise.all(fixture.atomCases.map((testCase) => runAtomExtractionCase(testCase, fixture)));
+const atomRecallResults = await Promise.all(fixture.atomCases.map((testCase) => runAtomRecallCase(testCase, fixture)));
+const proactiveTriggerResults = await Promise.all(fixture.atomCases
   .filter(hasProactiveBenchmarkCase)
-  .map((testCase) => runAtomProactiveCase(testCase, fixture));
+  .map((testCase) => runAtomProactiveCase(testCase, fixture)));
 const summaryScore = average(summaryResults.map((result) => result.score));
 const recallScore = average(recallResults.map((result) => result.score));
 const atomExtractionScore = average(atomExtractionResults.map((result) => result.score));
@@ -232,7 +237,7 @@ const atomRecallScore = average(atomRecallResults.map((result) => result.score))
 const proactiveTriggerScore = average(proactiveTriggerResults.map((result) => result.score));
 const productReadinessResult = scoreProductReadiness(fixture.productReadiness);
 const ok =
-  fixture.version === 5 &&
+  fixture.version === 6 &&
   summaryScore >= fixture.thresholds.summaryScore &&
   recallScore >= fixture.thresholds.recallScore &&
   summaryScore >= fixture.baselineScores.summaryRegressionScore &&
@@ -309,7 +314,7 @@ async function loadFixture(): Promise<MemoryBenchmarkFixture> {
 }
 
 function validateFixture(candidate: MemoryBenchmarkFixture): void {
-  if (candidate.version !== 5) {
+  if (candidate.version !== 6) {
     throw new Error(`Unsupported memory benchmark fixture version: ${candidate.version}`);
   }
   validateScore("thresholds.summaryScore", candidate.thresholds.summaryScore);
@@ -655,8 +660,8 @@ function runRecallCase(testCase: RecallBenchmarkCase): CaseResult {
   };
 }
 
-function runAtomExtractionCase(testCase: AtomBenchmarkCase, loadedFixture: MemoryBenchmarkFixture): CaseResult {
-  const atoms = collectAtomCaseAtoms(testCase, loadedFixture);
+async function runAtomExtractionCase(testCase: AtomBenchmarkCase, loadedFixture: MemoryBenchmarkFixture): Promise<CaseResult> {
+  const atoms = await collectAtomCaseAtoms(testCase, loadedFixture);
   const expectationResults = testCase.extraction.expectedAtoms.map((expectation) =>
     scoreAtomExpectation(expectation, atoms)
   );
@@ -686,8 +691,8 @@ function runAtomExtractionCase(testCase: AtomBenchmarkCase, loadedFixture: Memor
   };
 }
 
-function runAtomRecallCase(testCase: AtomBenchmarkCase, loadedFixture: MemoryBenchmarkFixture): CaseResult {
-  const atoms = collectAtomCaseAtoms(testCase, loadedFixture);
+async function runAtomRecallCase(testCase: AtomBenchmarkCase, loadedFixture: MemoryBenchmarkFixture): Promise<CaseResult> {
+  const atoms = await collectAtomCaseAtoms(testCase, loadedFixture);
   const expectationMatches = new Map(
     testCase.extraction.expectedAtoms.map((expectation) => [expectation.id, findBestAtomForExpectation(expectation, atoms)])
   );
@@ -776,11 +781,11 @@ function hasProactiveBenchmarkCase(testCase: AtomBenchmarkCase): testCase is Ato
   return testCase.proactive !== undefined;
 }
 
-function runAtomProactiveCase(
+async function runAtomProactiveCase(
   testCase: AtomBenchmarkCase & { proactive: ProactiveBenchmarkCase },
   loadedFixture: MemoryBenchmarkFixture
-): CaseResult {
-  const atoms = collectAtomCaseAtoms(testCase, loadedFixture);
+): Promise<CaseResult> {
+  const atoms = await collectAtomCaseAtoms(testCase, loadedFixture);
   const expectationMatches = new Map(
     testCase.extraction.expectedAtoms.map((expectation) => [expectation.id, findBestAtomForExpectation(expectation, atoms)])
   );
@@ -911,26 +916,56 @@ function candidateTextExposesInternals(text: string, atomId: string): boolean {
   return text.includes(atomId) || /memory-atom|source-turn|database|storage|turn-[\w-]+/iu.test(text);
 }
 
-function collectAtomCaseAtoms(testCase: AtomBenchmarkCase, loadedFixture: MemoryBenchmarkFixture): MemoryAtom[] {
+function createScriptedAtomLLMProvider(responses: Record<string, unknown>, turnId: string): LLMProvider {
+  return {
+    stream: async function* (messages: ChatMessage[]): AsyncIterable<string> {
+      if (!messages[0]?.content.includes("You extract Greyfield long-term memory atoms")) {
+        throw new Error("Scripted atom LLM provider only supports memory atom extraction prompts.");
+      }
+      const response = responses[turnId] ?? { atoms: [] };
+      yield typeof response === "string" ? response : JSON.stringify(response);
+    }
+  };
+}
+
+async function collectAtomCaseAtoms(testCase: AtomBenchmarkCase, loadedFixture: MemoryBenchmarkFixture): Promise<MemoryAtom[]> {
+  const cached = atomCaseAtomCache.get(testCase.id);
+  if (cached) {
+    return cached;
+  }
   const scenario = findScenario(testCase.scenarioId, loadedFixture);
   if (!scenario) {
     throw new Error(`Atom case ${testCase.id} references missing scenario ${testCase.scenarioId}`);
   }
   const turnsById = new Map(scenario.turns.map((turn) => [turn.id, turn]));
-  return testCase.extraction.sourceTurnIds.flatMap((turnId) => {
-    const turn = turnsById.get(turnId);
-    if (!turn) {
-      throw new Error(`Atom case ${testCase.id} references missing scenario turn ${turnId}`);
-    }
-    return extractDeterministicMemoryAtoms({
-      text: turn.content,
-      threadId: loadedFixture.threadId,
-      sourceTurnIds: [turn.id],
-      sourceSessionId: loadedFixture.sessionId,
-      createdAt: turn.createdAt ?? defaultCreatedAt,
-      now: turn.createdAt ?? defaultCreatedAt
-    });
-  });
+  const atoms = (
+    await Promise.all(
+      testCase.extraction.sourceTurnIds.map(async (turnId) => {
+        const turn = turnsById.get(turnId);
+        if (!turn) {
+          throw new Error(`Atom case ${testCase.id} references missing scenario turn ${turnId}`);
+        }
+        const input = {
+          text: turn.content,
+          threadId: loadedFixture.threadId,
+          sourceTurnIds: [turn.id],
+          sourceSessionId: loadedFixture.sessionId,
+          createdAt: turn.createdAt ?? defaultCreatedAt,
+          now: turn.createdAt ?? defaultCreatedAt
+        };
+        if (testCase.extraction.extractorMode === "llm" || testCase.extraction.extractorMode === "hybrid") {
+          const extractor = new LLMBackedMemoryAtomExtractor({
+            llm: createScriptedAtomLLMProvider(testCase.extraction.scriptedLLMResponses ?? {}, turn.id),
+            mode: testCase.extraction.extractorMode
+          });
+          return extractor.extract(input);
+        }
+        return extractDeterministicMemoryAtoms(input);
+      })
+    )
+  ).flat();
+  atomCaseAtomCache.set(testCase.id, atoms);
+  return atoms;
 }
 
 function collectAtomCaseSourceTurns(testCase: AtomBenchmarkCase, loadedFixture: MemoryBenchmarkFixture): SessionTurn[] {
