@@ -31,6 +31,8 @@ Greyfield Next is a TypeScript monorepo for a Live2D desktop companion. This fil
 - Electron/browser harnesses that build desktop artifacts or launch windows must run serially unless isolation is explicitly proven. Parallelize unit/static checks, not shared Electron desktop flows.
 - In a fresh worktree, run dependency install, `pnpm` tests, and typecheck serially per worktree. Do not start two `pnpm` commands in the same worktree at the same time.
 - Prefer appending to existing knowledge docs over creating tiny one-off rule files.
+- Roadmap or phase issues are indexes, not implementation scope. Before assigning code work, split the next user-visible function point into an atomic issue with acceptance evidence, non-goals, owner files, and one expected PR.
+- Do not spawn an implementation sub-agent until the task names exactly one issue, one dedicated worktree, one branch, the owned file/module surface, and the verification gate. If that agent fails or is reassigned, close or explicitly retire it before another agent touches the same worktree.
 
 ## Required Reading Index
 
