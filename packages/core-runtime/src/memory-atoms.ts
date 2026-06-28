@@ -644,6 +644,7 @@ function buildLLMAtomExtractionMessages(input: MemoryAtomExtractionInput): ChatM
         "Use sourceTurnIds only from the provided current turn IDs. If no durable memory is present, return {\"atoms\":[]}.",
         "Extract durable facts, preferences, opinions with reasons, relationship events, important dates, scenes, taboos, and user/Greyfield promise commitments when the schema can represent them.",
         "Use type promise only for commitments between the user and Greyfield. Preserve subject, object, action concepts, sourceTurnIds, and semantic triggers. Reject unrelated work, project, customer, PR, or team promises.",
+        "For recurring relationship rituals, extract only rituals between the user and Greyfield. Preserve recurrence, ritualAction, event/date, relationship subject, sourceTurnIds, and reject generic holidays, coworker events, or unrelated gift planning.",
         "Reject UI telemetry, event logs, transient window/settings/mouse/weather-probe noise, provider secrets, API keys, passwords, tokens, cookies, and unrelated debugging text.",
         "Keep text concise, source-linked, and user-facing. Do not include provider names, credentials, hidden prompts, or UI implementation details.",
         "For each draft, use fields: type, text, sourceTurnIds, importance, triggers, eventDate, recurrence, ritualAction, subject, object, sentiment, metadata.",
@@ -1060,49 +1061,229 @@ function extractCallNameAtom(
   };
 }
 
+interface RelationshipEventAttributes {
+  text: string;
+  eventType: string;
+  object: string;
+  eventDate?: MemoryAtomEventDate;
+  recurrence?: MemoryAtomRecurrence;
+  ritualAction?: string;
+  exact: string[];
+  aliases: string[];
+  secondary: string[];
+  semantic: string[];
+  relationship: string[];
+  metadata: Record<string, string | string[] | number | boolean | null>;
+}
+
 function extractRelationshipEventAtom(
   text: string,
   input: MemoryAtomExtractionInput
 ): Omit<MemoryAtom, "id" | "createdAt" | "threadId" | "sourceTurnIds" | "triggerKeys"> | undefined {
-  if (!/(第一次遇见|初遇|相遇|纪念日)/u.test(text) || !/(记住|别忘|玫瑰|每年|纪念日)/u.test(text)) {
+  const attributes = extractRelationshipEventAttributes(text, input);
+  if (!attributes) {
     return;
   }
-  const hasRose = /玫瑰/u.test(text);
-  const eventDate = parseEventDate(text, input.now);
-  const dateKey = eventDate ? formatEventDate(eventDate) : "";
   return {
     type: "relationship_event",
+    text: attributes.text,
+    importance: 0.95,
+    subject: "user_and_greyfield",
+    object: attributes.object,
+    eventDate: attributes.eventDate,
+    recurrence: attributes.recurrence,
+    ritualAction: attributes.ritualAction,
+    triggers: {
+      exact: attributes.exact,
+      aliases: attributes.aliases,
+      secondary: attributes.secondary,
+      calendar: normalizeTriggerKeys([attributes.eventType, attributes.eventDate ? formatEventDate(attributes.eventDate) : ""]),
+      semantic: attributes.semantic,
+      relationship: attributes.relationship
+    },
+    metadata: attributes.metadata
+  };
+}
+
+function extractRelationshipEventAttributes(text: string, input: MemoryAtomExtractionInput): RelationshipEventAttributes | undefined {
+  if (!hasCompanionRelationshipTarget(text) || hasExternalRelationshipTarget(text)) {
+    return;
+  }
+  return extractFirstMeetingRelationshipEventAttributes(text, input) ?? extractRecurringRelationshipRitualAttributes(text, input);
+}
+
+function extractFirstMeetingRelationshipEventAttributes(
+  text: string,
+  input: MemoryAtomExtractionInput
+): RelationshipEventAttributes | undefined {
+  if (!/(第一次遇见|第一次见面|初遇|相遇|first meeting|first met)/iu.test(text)) {
+    return;
+  }
+  if (!/(记住|别忘|玫瑰|每年|纪念日|周年|anniversary)/iu.test(text)) {
+    return;
+  }
+  const hasRose = /玫瑰|rose/iu.test(text);
+  const eventDate = parseEventDate(text, input.now);
+  return {
     text: hasRose
       ? "Relationship event: the user marked the first meeting anniversary by giving Greyfield a rose."
       : "Relationship event: the user marked the first meeting anniversary.",
-    importance: 0.95,
-    subject: "user_and_greyfield",
+    eventType: "first_meeting_anniversary",
     object: "first_meeting_anniversary",
     eventDate,
-    recurrence: eventDate || /每年|纪念日/u.test(text)
-      ? { frequency: "annual", sourceText: /每年/u.test(text) ? "每年" : "first_meeting_anniversary" }
+    recurrence: eventDate || /每年|纪念日|周年|anniversary/iu.test(text)
+      ? { frequency: "annual", sourceText: /每年|annual/iu.test(text) ? "每年" : "first_meeting_anniversary" }
       : undefined,
     ritualAction: hasRose ? "送玫瑰" : undefined,
-    triggers: {
-      exact: ["第一次遇见", "纪念日"],
-      aliases: ["初遇", "相遇纪念日", "第一次见面"],
-      secondary: hasRose ? ["玫瑰", "送花", "礼物"] : ["关系事件"],
-      calendar: normalizeTriggerKeys(["first_meeting_anniversary", dateKey]),
-      semantic: ["relationship milestone", "important day", "anniversary ritual", ...(hasRose ? ["gift ritual", "rose ritual"] : [])],
-      relationship: [
-        "user_and_greyfield",
-        "relationship_event",
-        "first_meeting_anniversary",
-        "important_day",
-        "relationship_ritual",
-        ...(hasRose ? ["gift_ritual", "rose_ritual"] : [])
-      ]
-    },
+    exact: ["第一次遇见", "纪念日"],
+    aliases: ["初遇", "相遇纪念日", "第一次见面"],
+    secondary: hasRose ? ["玫瑰", "送花", "礼物"] : ["关系事件"],
+    semantic: ["relationship milestone", "important day", "anniversary ritual", ...(hasRose ? ["gift ritual", "rose ritual"] : [])],
+    relationship: [
+      "user_and_greyfield",
+      "relationship_event",
+      "first_meeting_anniversary",
+      "important_day",
+      "relationship_ritual",
+      ...(hasRose ? ["gift_ritual", "rose_ritual"] : [])
+    ],
     metadata: {
       eventType: "first_meeting_anniversary",
       gift: hasRose ? "rose" : null
     }
   };
+}
+
+function extractRecurringRelationshipRitualAttributes(
+  text: string,
+  input: MemoryAtomExtractionInput
+): RelationshipEventAttributes | undefined {
+  if (!hasRecurringRelationshipRitualSignal(text)) {
+    return;
+  }
+  const ritualAction = extractRelationshipRitualAction(text);
+  if (!ritualAction) {
+    return;
+  }
+  const eventDate = parseEventDate(text, input.now);
+  const dateKey = eventDate ? formatEventDate(eventDate) : "";
+  const ritualKind = classifyRelationshipRitualAction(ritualAction);
+  const recurrenceSourceText = extractAnnualRecurrenceSourceText(text);
+  const annualAliases = recurrenceSourceText ? ["年度仪式"] : [];
+  const annualSecondaryTriggers = recurrenceSourceText ? ["每年", "年度"] : [];
+  const annualSemanticTriggers = recurrenceSourceText ? ["annual ritual"] : [];
+  const annualRelationshipTriggers = recurrenceSourceText ? ["annual_ritual"] : [];
+  return {
+    text: `Relationship ritual: user and Greyfield repeat ${ritualAction}${recurrenceSourceText ? " annually" : ""}${dateKey ? ` on ${dateKey}` : ""}.`,
+    eventType: "recurring_relationship_ritual",
+    object: "recurring_relationship_ritual",
+    eventDate,
+    recurrence: recurrenceSourceText ? { frequency: "annual", sourceText: recurrenceSourceText } : undefined,
+    ritualAction,
+    exact: normalizeTriggerKeys([dateKey, ritualAction]),
+    aliases: ["我们的仪式", "固定仪式", ...annualAliases, "小仪式", "老规矩"],
+    secondary: normalizeTriggerKeys(["关系仪式", "重要日子", ...annualSecondaryTriggers, ritualAction]),
+    semantic: ["relationship ritual", "recurring ritual", ...annualSemanticTriggers, "important day", relationshipRitualSemanticLabel(ritualKind)],
+    relationship: [
+      "user_and_greyfield",
+      "relationship_event",
+      "relationship_ritual",
+      "recurring_relationship_ritual",
+      ...annualRelationshipTriggers,
+      "important_day",
+      ritualKind
+    ],
+    metadata: {
+      eventType: "recurring_relationship_ritual",
+      ritualAction,
+      ritualKind
+    }
+  };
+}
+
+function extractAnnualRecurrenceSourceText(text: string): string | undefined {
+  return text.match(/每年|年度|\bannually\b|\bannual\b/iu)?.[0];
+}
+
+function hasCompanionRelationshipTarget(text: string): boolean {
+  if (/(greyfield|小灰|你和我|我和你|和你|给你|送你|我们之间|user\s+and\s+greyfield)/iu.test(text)) {
+    return true;
+  }
+  return (
+    /我们(?!公司|团队|项目|会议|同事|客户).{0,18}(第一次|初遇|相遇|纪念|仪式|传统|每年|日子|约定)/u.test(text) ||
+    /(第一次|初遇|相遇|纪念|仪式|传统|每年|日子|约定).{0,18}我们/u.test(text)
+  );
+}
+
+function hasRecurringRelationshipRitualSignal(text: string): boolean {
+  return (
+    /(每年|年度|固定|传统|惯例|仪式|老规矩|annually|annual|recurring|tradition|ritual)/iu.test(text) &&
+    /(仪式|传统|惯例|老规矩|一起|给你|送你|陪你|和你|我们|greyfield|小灰|ritual|tradition)/iu.test(text)
+  );
+}
+
+function extractRelationshipRitualAction(text: string): string | undefined {
+  if (/(玫瑰|rose)/iu.test(text)) {
+    return "送玫瑰";
+  }
+  if (/桂花茶/u.test(text)) {
+    return "一起泡桂花茶";
+  }
+  if (/(热可可|hot cocoa)/iu.test(text)) {
+    return "一起喝热可可";
+  }
+  if (/(泡茶|喝茶|茶)/u.test(text)) {
+    return "一起泡茶";
+  }
+  if (/(手写信|写信|一封信|letter)/iu.test(text)) {
+    return "写手写信";
+  }
+  if (/(蛋糕|cake)/iu.test(text)) {
+    return "准备蛋糕";
+  }
+  if (/(散步|walk)/iu.test(text)) {
+    return "一起散步";
+  }
+  if (/(看电影|电影|movie)/iu.test(text)) {
+    return "一起看电影";
+  }
+  if (/(送礼|礼物|gift|present)/iu.test(text)) {
+    return "送礼物";
+  }
+  const explicit = text.match(/(?:仪式|传统|惯例|老规矩)\s*(?:是|就是|：|:)\s*([^。！？!?，,]{2,32})/u);
+  return explicit ? normalizeText(explicit[1]) : undefined;
+}
+
+function classifyRelationshipRitualAction(action: string): string {
+  if (/(玫瑰|rose|鲜花|花束)/iu.test(action)) {
+    return "rose_ritual";
+  }
+  if (/(茶|tea)/iu.test(action)) {
+    return "tea_ritual";
+  }
+  if (/(可可|cocoa)/iu.test(action)) {
+    return "hot_cocoa_ritual";
+  }
+  if (/(信|letter)/iu.test(action)) {
+    return "letter_ritual";
+  }
+  if (/(蛋糕|cake)/iu.test(action)) {
+    return "cake_ritual";
+  }
+  if (/(散步|walk)/iu.test(action)) {
+    return "walk_ritual";
+  }
+  if (/(电影|movie)/iu.test(action)) {
+    return "movie_ritual";
+  }
+  if (/(礼物|gift|present)/iu.test(action)) {
+    return "gift_ritual";
+  }
+  return "custom_ritual";
+}
+
+function relationshipRitualSemanticLabel(ritualKind: string): string {
+  return ritualKind.replace(/_/gu, " ");
 }
 
 type PromiseSubject = "user" | "greyfield";
@@ -1841,9 +2022,9 @@ function extractRelationshipRecallConcepts(input: string): { hasIntent: boolean;
   }
 
   const hasVagueMemoryReference =
-    /(那个|那件|那次|那天|当时|之前|以前|旧|记得|想起|回忆|重要日子|什么日子|remember|recall|before|old|important day|special day)/iu.test(text);
+    /(那个|那件|那次|那天|当时|之前|以前|旧|记得|想起|回忆|重要日子|什么日子|固定|传统|老规矩|每年|年度|remember|recall|before|old|important day|special day|tradition|annual|recurring)/iu.test(text);
   const hasRelationshipSignal =
-    /(我们|你和我|共同|关系|初遇|相遇|第一次|纪念|纪念日|仪式|礼物仪式|anniversary|ritual|greyfield)/iu.test(text);
+    /(我们|你和我|共同|关系|初遇|相遇|第一次|纪念|纪念日|周年|仪式|礼物仪式|传统|老规矩|anniversary|ritual|tradition|greyfield)/iu.test(text);
   if (!hasVagueMemoryReference || !hasRelationshipSignal) {
     return { hasIntent: false, concepts };
   }
@@ -1859,6 +2040,11 @@ function extractRelationshipRecallConcepts(input: string): { hasIntent: boolean;
   if (/(礼物|送礼|送|仪式|gift|ritual)/iu.test(text)) {
     concepts.add("relationship_ritual");
     concepts.add("gift_ritual");
+  }
+  if (/(每年|年度|固定|传统|老规矩|annual|annually|recurring|tradition)/iu.test(text)) {
+    concepts.add("relationship_ritual");
+    concepts.add("recurring_relationship_ritual");
+    concepts.add("annual_ritual");
   }
   if (/(玫瑰|花|rose|flower)/iu.test(text)) {
     concepts.add("gift_ritual");
@@ -1897,6 +2083,7 @@ function extractRelationshipAtomConcepts(atom: MemoryAtom): Set<string> {
   }
   if (atom.recurrence?.frequency === "annual") {
     add("annual_ritual");
+    add("recurring_relationship_ritual");
     add("relationship_ritual");
   }
   add(atom.object);
@@ -1907,9 +2094,16 @@ function extractRelationshipAtomConcepts(atom: MemoryAtom): Set<string> {
     add("anniversary");
     add("important_day");
   }
+  if (eventType === "recurring_relationship_ritual" || atom.object === "recurring_relationship_ritual") {
+    add("recurring_relationship_ritual");
+    add("annual_ritual");
+    add("relationship_ritual");
+    add("important_day");
+  }
   if (eventType) {
     add(eventType);
   }
+  add(metadataString(atom.metadata, "ritualKind"));
 
   const ritualAction = normalizeText(atom.ritualAction ?? "");
   if (ritualAction.length > 0) {
@@ -1918,7 +2112,7 @@ function extractRelationshipAtomConcepts(atom: MemoryAtom): Set<string> {
   if (/(礼物|送|gift)/iu.test(ritualAction)) {
     add("gift_ritual");
   }
-  if (/(玫瑰|rose|花)/iu.test(ritualAction)) {
+  if (/(玫瑰|rose|鲜花|花束)/iu.test(ritualAction)) {
     add("gift_ritual");
     add("rose_ritual");
   }
@@ -1939,7 +2133,19 @@ function isCompanionRelationshipAtom(atom: MemoryAtom): boolean {
 }
 
 function shouldSuppressCompanionRelationshipRecall(input: string, atom: MemoryAtom): boolean {
-  return isCompanionRelationshipAtom(atom) && hasExternalRelationshipTarget(input);
+  if (!isCompanionRelationshipAtom(atom)) {
+    return false;
+  }
+  if (hasExternalRelationshipTarget(input)) {
+    return true;
+  }
+  if (!isGenericHolidayOrGiftPlanningQuery(input)) {
+    return false;
+  }
+  if (extractRelationshipRecallConcepts(input).hasIntent) {
+    return false;
+  }
+  return true;
 }
 
 function shouldSuppressPromiseRecall(input: string, atom: MemoryAtom): boolean {
@@ -1950,7 +2156,15 @@ function shouldSuppressPromiseRecall(input: string, atom: MemoryAtom): boolean {
 }
 
 function hasExternalRelationshipTarget(text: string): boolean {
-  return /(同事|客户|公司|团队|项目|会议|婚礼|朋友的|别人的|colleague|client|company|meeting|wedding)/iu.test(text);
+  return /(同事|客户|公司|团队|项目|会议|婚礼|朋友|别人的|colleague|client|company|meeting|wedding|friend)/iu.test(text);
+}
+
+function isGenericHolidayOrGiftPlanningQuery(input: string): boolean {
+  const text = normalizeText(input);
+  const hasHolidayOrGift =
+    /(礼物|礼品|送礼|节日|假日|春节|中秋|端午|圣诞|七夕|情人节|holiday|gift|present)/iu.test(text);
+  const hasPlanningCue = /(怎么|如何|安排|计划|清单|推荐|建议|准备|买|选|idea|plan|shopping|recommend)/iu.test(text);
+  return hasHolidayOrGift && hasPlanningCue;
 }
 
 function metadataString(metadata: MemoryAtom["metadata"], key: string): string | undefined {
@@ -2040,10 +2254,28 @@ function relationshipConceptToSemanticConcept(concept: string): string | undefin
       return "relationship milestone";
     case "relationship_ritual":
       return "anniversary ritual";
+    case "recurring_relationship_ritual":
+      return "recurring ritual";
+    case "annual_ritual":
+      return "annual ritual";
     case "gift_ritual":
       return "gift ritual";
     case "rose_ritual":
       return "rose ritual";
+    case "tea_ritual":
+      return "tea ritual";
+    case "hot_cocoa_ritual":
+      return "hot cocoa ritual";
+    case "letter_ritual":
+      return "letter ritual";
+    case "cake_ritual":
+      return "cake ritual";
+    case "walk_ritual":
+      return "walk ritual";
+    case "movie_ritual":
+      return "movie ritual";
+    case "custom_ritual":
+      return "custom ritual";
     default:
       return;
   }
