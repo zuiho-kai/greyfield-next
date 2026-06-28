@@ -225,14 +225,22 @@ function getSceneWindowOpen(objects: RuntimeSceneObject[]): boolean | undefined 
     if (!state) {
       continue;
     }
-    if (/\b(open|opened|true)\b/iu.test(state)) {
+    if (isOpenWindowState(state)) {
       return true;
     }
-    if (/\b(closed|shut|false)\b/iu.test(state)) {
+    if (isClosedWindowState(state)) {
       return false;
     }
   }
   return;
+}
+
+function isOpenWindowState(value: string): boolean {
+  return /\b(open|opened|true)\b/iu.test(value) || /(开着|打开|开启|已开|开窗)/u.test(value);
+}
+
+function isClosedWindowState(value: string): boolean {
+  return /\b(closed|shut|false)\b/iu.test(value) || /(关着|关闭|关上|已关|关窗)/u.test(value);
 }
 
 function isWindowObject(value: string | undefined): boolean {
@@ -240,7 +248,7 @@ function isWindowObject(value: string | undefined): boolean {
     return false;
   }
   const normalized = normalizeKey(value).replace(/[-_.]+/g, " ");
-  return /\bwindow\b/iu.test(normalized);
+  return /\bwindow\b/iu.test(normalized) || /(窗户|窗)/u.test(value);
 }
 
 function sceneObjectHasHomeLocation(object: RuntimeSceneObject): boolean {
@@ -254,7 +262,12 @@ function isHomeLocation(value: string | undefined): boolean {
     return false;
   }
   const normalized = normalizeKey(value).replace(/[-_.\s]+/g, "_");
-  return normalized === "home" || normalized === "virtual_home" || normalized.includes("virtual_home");
+  return (
+    normalized === "home" ||
+    normalized === "virtual_home" ||
+    normalized.includes("virtual_home") ||
+    /(虚拟家|虚拟的家|家里|家中|在家|^家$)/u.test(value)
+  );
 }
 
 function buildCandidateCooldown(

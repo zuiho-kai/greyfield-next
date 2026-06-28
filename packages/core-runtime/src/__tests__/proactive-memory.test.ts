@@ -65,6 +65,32 @@ describe("proactive memory", () => {
     expect(result.candidates[0]?.text).not.toMatch(/weather api|screen|desktop state|memory-atom|source-turn|database|storage/iu);
   });
 
+  it("generates the same candidate from Chinese runtime scene context aliases", () => {
+    const atom = makeRainyWindowHotpotAtom();
+
+    const result = buildProactiveMemoryCandidatesFromSceneContext({
+      atoms: [atom],
+      sceneContext: {
+        currentTime: "2026-07-15T10:00:00.000Z",
+        weather: "下雨",
+        location: "虚拟家",
+        objects: [{ kind: "窗户", state: "开着" }, { kind: "火锅" }],
+        absenceDays: 45
+      },
+      policy: { globalCooldownMs: 0, perAtomCooldownMs: 0 }
+    });
+
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]).toMatchObject({
+      atomId: atom.id,
+      sourceTurnIds: ["turn-hotpot"],
+      matchedEnvironmentKeys: expect.arrayContaining(["rain", "virtual_home", "virtual_home.window=open", "last_seen_days>=30"])
+    });
+    expect(result.candidates[0]?.text).toContain("外面在下雨");
+    expect(result.candidates[0]?.text).toContain("虚拟家的窗户还开着");
+    expect(result.candidates[0]?.text).toContain("吃火锅");
+  });
+
   it("gates candidates by policy, disabled atoms, importance, and cooldowns", () => {
     const atom = makeRainyWindowHotpotAtom();
 
@@ -203,6 +229,20 @@ describe("proactive memory", () => {
     });
     expect(missingWindowState.candidates).toEqual([]);
     expect(missingWindowState.skipped).toEqual(expect.arrayContaining([{ atomId: atom.id, reason: "window_closed" }]));
+
+    const chineseClosedWindow = buildProactiveMemoryCandidatesFromSceneContext({
+      atoms: [atom],
+      sceneContext: {
+        currentTime: "2026-07-15T10:00:00.000Z",
+        weather: "下雨",
+        location: "虚拟家",
+        objects: [{ kind: "窗", state: "关着" }, { kind: "火锅" }],
+        absenceDays: 45
+      },
+      policy: { globalCooldownMs: 0, perAtomCooldownMs: 0 }
+    });
+    expect(chineseClosedWindow.candidates).toEqual([]);
+    expect(chineseClosedWindow.skipped).toEqual(expect.arrayContaining([{ atomId: atom.id, reason: "window_closed" }]));
 
     const nonSharedScene = makeNonSharedRainyWindowAtom();
     const noSharedExperience = buildProactiveMemoryCandidatesFromSceneContext({
