@@ -125,6 +125,10 @@ try {
   await summarySource.getByText("desktop-main-session-1").waitFor();
   await summarySource.getByText("User").first().waitFor();
   await summarySource.getByText("第一轮：我喜欢 Hiyori。").waitFor();
+  await assertSourceStateText(summarySource, {
+    includes: ["User", "desktop-main-session-1", "第一轮：我喜欢 Hiyori。"],
+    excludes: ["Unknown role"]
+  });
   await memoryLibrary.locator(".memory-library__block--recall", { hasText: "Last recalled memory" }).waitFor();
   await memoryLibrary.locator(".memory-library__block--recall", { hasText: "cue:hiyori" }).waitFor();
   const memoryLibraryText = ((await memoryLibrary.textContent()) ?? "").toLowerCase();
@@ -239,6 +243,23 @@ async function openSourcePassage(memoryLibrary: Locator, label: string): Promise
   const source = memoryLibrary.locator(`[aria-label="${label}"]`);
   await source.locator("summary").click();
   return source;
+}
+
+async function assertSourceStateText(
+  source: Locator,
+  expected: { includes: string[]; excludes: string[] }
+): Promise<void> {
+  const text = (await source.textContent()) ?? "";
+  for (const value of expected.includes) {
+    if (!text.includes(value)) {
+      throw new Error(`Source state missed ${value}: ${text}`);
+    }
+  }
+  for (const value of expected.excludes) {
+    if (text.includes(value)) {
+      throw new Error(`Source state included forbidden ${value}: ${text}`);
+    }
+  }
 }
 
 async function sendMessage(page: Page, text: string): Promise<void> {

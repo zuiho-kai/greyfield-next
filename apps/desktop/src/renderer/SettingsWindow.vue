@@ -391,7 +391,7 @@
                     :class="`memory-library__source-row--${passage.status}`"
                   >
                     <header>
-                      <strong>{{ sourcePassageRoleLabel(passage.role) }}</strong>
+                      <strong>{{ sourcePassageHeading(passage) }}</strong>
                       <span>{{ sourcePassageStatusLabel(passage) }}</span>
                     </header>
                     <dl>
@@ -401,7 +401,7 @@
                       </div>
                       <div>
                         <dt>Role</dt>
-                        <dd>{{ sourcePassageRoleLabel(passage.role) }}</dd>
+                        <dd>{{ sourcePassageRoleValue(passage) }}</dd>
                       </div>
                     </dl>
                     <p>{{ sourcePassageBody(passage) }}</p>
@@ -513,7 +513,7 @@
                       :class="`memory-library__source-row--${passage.status}`"
                     >
                       <header>
-                        <strong>{{ sourcePassageRoleLabel(passage.role) }}</strong>
+                        <strong>{{ sourcePassageHeading(passage) }}</strong>
                         <span>{{ sourcePassageStatusLabel(passage) }}</span>
                       </header>
                       <dl>
@@ -523,7 +523,7 @@
                         </div>
                         <div>
                           <dt>Role</dt>
-                          <dd>{{ sourcePassageRoleLabel(passage.role) }}</dd>
+                          <dd>{{ sourcePassageRoleValue(passage) }}</dd>
                         </div>
                       </dl>
                       <p>{{ sourcePassageBody(passage) }}</p>
@@ -985,6 +985,20 @@ function sourcePassageStatusLabel(passage: DesktopMemorySourcePassage): string {
   return "No passage";
 }
 
+function sourcePassageHeading(passage: DesktopMemorySourcePassage): string {
+  if (passage.status === "available" && passage.text) {
+    return sourcePassageRoleLabel(passage.role);
+  }
+  return "Source not available";
+}
+
+function sourcePassageRoleValue(passage: DesktopMemorySourcePassage): string {
+  if (passage.status === "available" && passage.text) {
+    return sourcePassageRoleLabel(passage.role);
+  }
+  return "Not available";
+}
+
 function sourcePassageRoleLabel(role: DesktopMemorySourcePassage["role"]): string {
   if (role === "assistant") {
     return "Greyfield";
@@ -998,7 +1012,7 @@ function sourcePassageRoleLabel(role: DesktopMemorySourcePassage["role"]): strin
   if (role === "event") {
     return "Event";
   }
-  return "Unknown role";
+  return "Not available";
 }
 
 function sourcePassageBody(passage: DesktopMemorySourcePassage): string {

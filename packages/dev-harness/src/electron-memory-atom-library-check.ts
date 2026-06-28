@@ -141,14 +141,38 @@ try {
   await availableSource.getByText("desktop-main-session-fact").waitFor();
   await availableSource.getByText("Role").waitFor();
   await availableSource.getByText("User").first().waitFor();
+  await assertSourceStateText(availableSource, {
+    includes: ["User", "desktop-main-session-fact"],
+    excludes: ["Unknown role"]
+  });
   const missingSource = await openSourcePassage(memoryLibrary, "Source passage for Opinion memory atom-opinion");
   await missingSource.getByText("Source unavailable in this local session store").first().waitFor();
   await missingSource.getByText("desktop-main-session-opinion").waitFor();
+  await assertSourceStateText(missingSource, {
+    includes: [
+      "Source unavailable in this local session store",
+      "Source turn is missing from the current session store.",
+      "Not available"
+    ],
+    excludes: ["Unknown role"]
+  });
   const unavailableSource = await openSourcePassage(memoryLibrary, "Source passage for Relationship memory atom-relationship");
   await unavailableSource.getByText("Source unavailable in this local session store").first().waitFor();
   await unavailableSource.getByText("desktop-main-session-relationship").waitFor();
+  await assertSourceStateText(unavailableSource, {
+    includes: [
+      "Source unavailable in this local session store",
+      "Source turn belongs to another session and is unavailable in the current local store.",
+      "Not available"
+    ],
+    excludes: ["Unknown role"]
+  });
   const noSource = await openSourcePassage(memoryLibrary, "Source passage for Scene memory atom-scene");
   await noSource.getByText("No passage").first().waitFor();
+  await assertSourceStateText(noSource, {
+    includes: ["No passage"],
+    excludes: ["Unknown role"]
+  });
   await captureSourceState(settings, availableSource, availableSourceScreenshotPath);
   await captureSourceState(settings, missingSource, missingSourceScreenshotPath);
   await captureSourceState(settings, unavailableSource, unavailableSourceScreenshotPath);
@@ -317,6 +341,23 @@ async function captureSourceState(page: Page, source: Locator, path: string): Pr
   await source.evaluate((element) => element.scrollIntoView({ block: "center", inline: "nearest" }));
   await page.waitForTimeout(100);
   await page.screenshot({ path });
+}
+
+async function assertSourceStateText(
+  source: Locator,
+  expected: { includes: string[]; excludes: string[] }
+): Promise<void> {
+  const text = (await source.textContent()) ?? "";
+  for (const value of expected.includes) {
+    if (!text.includes(value)) {
+      throw new Error(`Source state missed ${value}: ${text}`);
+    }
+  }
+  for (const value of expected.excludes) {
+    if (text.includes(value)) {
+      throw new Error(`Source state included forbidden ${value}: ${text}`);
+    }
+  }
 }
 
 function assertTextDoesNotExposeForbiddenMemoryUi(text: string): void {
