@@ -124,21 +124,34 @@ V2.1 成功时，用户不需要打开调试面板，也不需要审批一堆候
 
 ### 当前人话状态
 
-截至 2026-06-28，V2.1 不是完成态。
+截至 2026-06-29，current-head `1997fd2d1128fdb697ed64f12a3dc7d1be6ddae8` 已达到最低 MaiBot-style long-chat memory loop，可以作为 V2.1 收口；但它不是完整的长期记忆产品，也不是完整 MaiBot/A_Memorix parity。
 
-已经成立的是底层证据链：
+用户已经能感知到的是：
 
 - 原始聊天不会被 summary 覆盖，summary 和 memory atom 可以带来源。
-- Memory Library 已经开始支持查看记忆来源，记忆不再完全是黑盒。
-- Benchmark 已经能看护一条核心样例：旧游戏吐槽被压缩成记忆后，未来相似吐槽能找回旧记忆和原始细节。
-- Benchmark 分数不是满分，未完成能力仍然显式暴露。
+- Settings Memory Library 已经能查看和管理 summary/current-role atom memory：编辑、禁用、启用、删除、导出、清空当前角色 atom、角色隔离、重启后持久化。
+- 桌面路径已经能显示低打扰 proactive memory bubble，并证明冷却、全局禁用和不污染聊天历史。
+- 旧游戏吐槽、生日/第一次相遇、玫瑰偏好、雨天虚拟家火锅这类样例已经能被 benchmark 看护：召回时可以带来源、预算、跳过原因和原文片段。
 
-用户还不能完整感受到的是关系连续性：
+仍然不能完整承诺的是：
 
-- 桌宠还不会基于真实桌面/虚拟世界环境主动想起“下雨、家、窗、火锅、久别”这类共同经历。
-- 低打扰主动发话还没有产品化到桌面路径。
-- 长期记忆抽取、语义召回、场景触发、角色隔离和 Memory Library 管理还需要继续打磨。
-- 当前能力更像“记忆系统能证明自己在变好”，不是“用户日常已经觉得它活在关系里”。
+- 广义 semantic/vector recall、relationship graph、完整关系事件层还没有实现。
+- 桌宠还不会自动收集真实天气、虚拟家、屏幕、久别天数等信号并用生产 scheduler 主动触发记忆。
+- 原文回查还主要是 runtime/prompt evidence；每种记忆都能在 renderer 里点开“为什么想起这个”的 UI 仍未完成。
+- LLM-backed atom extraction 仍是显式 runtime 模式和 scripted provider 证据，不是默认 Settings/桌面产品流。
+- Privacy/erasure 还不完整：atom clear 不删除 raw turns 或 summaries， broader classification 仍要后移。
+
+所以 V2.1 的人话结论是：Greyfield 已经有最低长期聊天记忆闭环，用户能看到可管理记忆和主动气泡；核心记忆质量主要由 benchmark/backend 证明；完整“像共同生活很久一样自然想起”的产品体验进入 V2.2+。
+
+### #114 MaiBot parity 收口矩阵
+
+| #114 对标线 | V2.1 状态 | Current-head 证据 | 后移项 |
+| --- | --- | --- | --- |
+| 长聊压缩 | done | `pnpm harness:memory-benchmark` 通过 summary regression 和 long-chat source traceability；summary segment 带 source turn ids 和 recall cues。 | LLM summarizer 可后续提升质量，但最低 source-linked compression 已成立。 |
+| 结构化长期记忆 | partial | benchmark 覆盖 preference、relationship date、rose preference、game opinion、privacy rule、episodic scene 等 source-linked atoms；invalid LLM 输出会 fallback。 | 默认桌面 LLM extraction UX、更多 promise/relationship/scene 覆盖和更强 privacy classification 后移。 |
+| 触发召回 | partial | 覆盖 exact/cue/alias/secondary、calendar、false-positive rejection、budget、disabled skip、pure core scene proactive candidates。 | 广义 semantic/vector、relationship graph、真实环境 feed 和生产 scheduler 后移。 |
+| 原文回查 | partial | atom recall 可把 linked raw source fragments 注入 prompt material；Memory Library source 状态由 Electron harness 覆盖。 | renderer 级完整 source-drilldown UI 后移。 |
+| 可管理和可退化 | partial | `harness:electron:memory-control` 与 `harness:electron:memory-atom-library` 证明编辑、禁用、启用、删除、导出、当前角色清空、角色隔离、reload persistence、secret 排除、无 pending approval；系统不依赖 vector/embedding。 | hard erasure、所有 memory type 的完整来源管理和更广 privacy/delete 语义后移。 |
 
 ### 三个必须打穿的体验样例
 
@@ -456,11 +469,16 @@ V1 解决“能发声”。V2.5 解决“声音像这个角色”，同时要保
 | [#76](https://github.com/zuiho-kai/greyfield-next/issues/76) | V2.1e 情境记忆与低打扰主动触发 |
 | [#77](https://github.com/zuiho-kai/greyfield-next/issues/77) | V2.1f Memory Library UX 与隐私控制 |
 | [#78](https://github.com/zuiho-kai/greyfield-next/issues/78) | V2.1g 记忆分数门禁与 PR 回归流程 |
+| [#114](https://github.com/zuiho-kai/greyfield-next/issues/114) | V2.1 MaiBot parity evidence gate |
 
-## 当前优先队列
+## V2.1 issue 收口建议
 
-1. V2.1a：把 memory benchmark 变成真实低分基线和 CI gate。
-2. V2.1b：补强 raw evidence/source drilldown 设计和看护。
-3. V2.1c：实现长期 memory atom 抽取与写入。
-4. V2.1d：实现触发召回、日期召回、原文追溯。
-5. V2.1e：实现雨天/家/窗/火锅这类情境记忆和低打扰主动触发。
+不要在 closeout PR 里直接批量关闭父 issue；先用 #114 PR 记录 current-head 证据和后移边界。#114 合入后建议：
+
+| Issue | 建议 | 理由 |
+| --- | --- | --- |
+| #75 | 关闭 V2.1 最低切片，另开/后移 V2.2+ semantic/vector、relationship graph、完整 renderer drilldown。 | 日期召回、alias/secondary、false-positive、source fragment 和 prompt budget 已有证据；完整长期召回系统超出 V2.1。 |
+| #76 | 关闭 V2.1 最低切片，另开/后移真实 scene-feed scheduler、外部天气、虚拟家状态和更完整场景触发。 | core proactive candidate 与 desktop bubble 已有证据；真实信号采集还没做。 |
+| #77 | 关闭 V2.1 最低切片，另开/后移 hard erasure、完整 source management 和更广 privacy/delete 语义。 | Memory Library 已经用户可见并覆盖 summary/current-role atoms；完整隐私删除仍是后续工作。 |
+| #79 | #114 合入后关闭 roadmap。 | V2.1 最低闭环已有证据，剩余项应该拆成 V2.2+ atomic issues，避免 V2.1 无限扩张。 |
+| #114 | 用 docs/evidence-only PR 关闭。 | close condition 是 merged closeout PR 说明是否达到最低 MaiBot-style loop，以及哪些 memory ideas 后移。 |
