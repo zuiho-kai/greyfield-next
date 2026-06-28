@@ -74,14 +74,14 @@ The benchmark is intentionally local/fake and does not require external keys. It
 
 V2.1 work must extend this fixture before claiming memory atom extraction, scene memory, calendar recall, evidence drilldown, memory layering, or vector recall quality. A feature can add a new recall engine later, but it must keep the benchmark passing or explain the updated acceptance fixture in the same PR.
 
-The current V2.1e benchmark locks `summaryRegressionScore: 1`, `recallRegressionScore: 1`, `atomExtractionScore: 0.9`, `atomRecallScore: 0.61`, `proactiveTriggerScore: 0.95`, `productReadinessScore: 0.33`, and `v21aScenarioScore: 0.29`; the computed output is `atomExtractionScore: 0.9`, `atomRecallScore: 0.617`, `proactiveTriggerScore: 1`, `productReadiness.score: 0.349`, `capabilityScore: 0.37`, and `scenarioScore: 0.3`, with calendar recall, desktop proactive scheduling, external weather integration, semantic recall, LLM extraction, Memory Library atom controls, and source passage drilldown still below full implementation.
+The current V2.1f benchmark locks `summaryRegressionScore: 1`, `recallRegressionScore: 1`, `atomExtractionScore: 0.9`, `atomRecallScore: 0.61`, `proactiveTriggerScore: 0.95`, `productReadinessScore: 0.33`, and `v21aScenarioScore: 0.29`; the computed output is `atomExtractionScore: 0.9`, `atomRecallScore: 0.617`, `proactiveTriggerScore: 1`, `productReadinessScore: 0.349`, `productReadinessCapabilityScore: 0.37`, and `v21aScenarioScore: 0.3`. Summary and current-role atom Memory Library controls are proved by `pnpm harness:electron:memory-control`, `pnpm harness:electron:memory-atom-library`, and `pnpm harness:frontend-full`; `pnpm harness:memory-benchmark` remains a non-UI gate. Calendar recall, desktop proactive scheduling, external weather integration, semantic recall, LLM extraction, and source passage drilldown still remain below full implementation, and atom clear does not erase raw turns or summaries.
 
-Still not in this slice:
+Still incomplete after these V2.1 slices:
 
-- memory atom extraction and durable write policy.
+- LLM-based memory atom extraction and broader durable write policy.
 - explicit-save long-term memory writes.
-- relationship dates, rituals, and scene memories.
-- calendar/environment trigger recall.
+- complete relationship dates, rituals, and scene memory coverage.
+- calendar/environment trigger recall in the desktop runtime.
 - source drilldown from compressed memory back to raw chat details.
 - LLM-generated summarizer replacement for the extractive draft.
 - vector database recall.

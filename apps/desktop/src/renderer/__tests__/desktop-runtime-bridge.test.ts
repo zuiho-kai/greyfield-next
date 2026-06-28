@@ -996,6 +996,24 @@ describe("createDesktopRuntimeBridge", () => {
           createdAt: "2026-06-26T00:00:01.000Z"
         }
       ],
+      memoryAtoms: [
+        {
+          id: "atom-preference-hiyori",
+          threadId: "thread-a",
+          type: "preference",
+          text: "User prefers Hiyori.",
+          sourceTurnIds: ["session-a-1"],
+          createdAt: "2026-06-26T00:00:01.000Z",
+          importance: 0.8,
+          triggerKeys: ["hiyori"],
+          triggers: {
+            exact: ["Hiyori"],
+            aliases: [],
+            secondary: []
+          },
+          metadata: {}
+        }
+      ],
       lastRecallContext: {
         items: [
           {
@@ -1020,10 +1038,52 @@ describe("createDesktopRuntimeBridge", () => {
       snapshot: {
         threadId: "thread-a",
         summarySegments: [expect.objectContaining({ id: "summary-1" })],
+        memoryAtoms: [expect.objectContaining({ id: "atom-preference-hiyori" })],
         lastRecallContext: {
           items: [expect.objectContaining({ reason: "cue:hiyori" })]
         }
       }
+    });
+  });
+
+  it("sends memory atom control commands and records action results", () => {
+    const sent: Array<[string, unknown]> = [];
+    let memoryActionResult: ((result: import("../../shared/ipc").DesktopMemoryActionResult) => void) | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: (channel, payload) => sent.push([channel, payload]),
+      on: (channel, handler) => {
+        if (channel === "memory:action-result") {
+          memoryActionResult = handler as typeof memoryActionResult;
+        }
+        return () => undefined;
+      }
+    });
+
+    const saving = bridge.updateMemoryAtom({
+      id: "atom-preference-hiyori",
+      text: "Edited atom memory."
+    });
+    memoryActionResult?.({ ok: true, message: "Atom memory atom-preference-hiyori saved." });
+    bridge.updateMemoryAtom({ id: "atom-preference-hiyori", disabled: true });
+    bridge.exportMemoryAtom("atom-preference-hiyori");
+    bridge.deleteMemoryAtom("atom-preference-hiyori");
+    bridge.clearCurrentRoleMemoryAtoms();
+
+    expect(saving.memoryDebug).toMatchObject({
+      actionStatus: "working",
+      actionMessage: "Saving atom memory..."
+    });
+    expect(sent).toContainEqual([
+      "memory:atom-update",
+      { id: "atom-preference-hiyori", text: "Edited atom memory." }
+    ]);
+    expect(sent).toContainEqual(["memory:atom-update", { id: "atom-preference-hiyori", disabled: true }]);
+    expect(sent).toContainEqual(["memory:atom-export", { id: "atom-preference-hiyori" }]);
+    expect(sent).toContainEqual(["memory:atom-delete", { id: "atom-preference-hiyori" }]);
+    expect(sent).toContainEqual(["memory:atom-clear-current-role", {}]);
+    expect(bridge.getState().memoryDebug).toMatchObject({
+      actionStatus: "working",
+      actionMessage: "Clearing current role atom memory..."
     });
   });
 
@@ -1091,6 +1151,24 @@ describe("createDesktopRuntimeBridge", () => {
         sessionId: "session-a",
         recentTurns: [],
         summarySegments: [],
+        memoryAtoms: [
+          {
+            id: "atom-preference-hiyori",
+            threadId: "thread-a",
+            type: "preference",
+            text: "User prefers Hiyori.",
+            sourceTurnIds: ["session-a-1"],
+            createdAt: "2026-06-26T00:00:01.000Z",
+            importance: 0.8,
+            triggerKeys: ["hiyori"],
+            triggers: {
+              exact: ["Hiyori"],
+              aliases: [],
+              secondary: []
+            },
+            metadata: {}
+          }
+        ],
         exportedAt: "2026-06-26T00:00:00.000Z"
       }
     });
@@ -1105,5 +1183,6 @@ describe("createDesktopRuntimeBridge", () => {
       actionMessage: "Memory export is ready."
     });
     expect(bridge.getState().memoryDebug.exportText).toContain('"threadId": "thread-a"');
+    expect(bridge.getState().memoryDebug.exportText).toContain('"atom-preference-hiyori"');
   });
 });

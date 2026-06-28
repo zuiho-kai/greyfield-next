@@ -1202,6 +1202,33 @@ h1 {
   min-width: 0;
 }
 
+.memory-library__group {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.memory-library__group-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.memory-library__group-header h3 {
+  margin: 0;
+  color: #1f2933;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.memory-library__group-header span {
+  color: #607080;
+  font-size: 11px;
+  font-weight: 800;
+}
+
 .memory-library__segment {
   display: grid;
   gap: 8px;
@@ -1303,6 +1330,10 @@ h1 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
+}
+
+.memory-library__actions--atom {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .memory-library__actions button {

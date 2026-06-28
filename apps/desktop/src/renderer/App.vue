@@ -62,6 +62,10 @@
     @memory-summary-update="updateMemorySummary"
     @memory-summary-delete="deleteMemorySummary"
     @memory-summary-clear="clearMemorySummaries"
+    @memory-atom-update="updateMemoryAtom"
+    @memory-atom-delete="deleteMemoryAtom"
+    @memory-atom-clear-current-role="clearCurrentRoleMemoryAtoms"
+    @memory-atom-export="exportMemoryAtom"
     @memory-export="exportMemory"
     @open-chat="openChat"
   />
@@ -318,6 +322,22 @@ function deleteMemorySummary(payload: { id: string }): void {
 
 function clearMemorySummaries(): void {
   syncState(bridge.clearMemorySummaries());
+}
+
+function updateMemoryAtom(payload: { id: string; text?: string; disabled?: boolean }): void {
+  syncState(bridge.updateMemoryAtom(payload));
+}
+
+function deleteMemoryAtom(payload: { id: string }): void {
+  syncState(bridge.deleteMemoryAtom(payload.id));
+}
+
+function clearCurrentRoleMemoryAtoms(): void {
+  syncState(bridge.clearCurrentRoleMemoryAtoms());
+}
+
+function exportMemoryAtom(payload: { id: string }): void {
+  syncState(bridge.exportMemoryAtom(payload.id));
 }
 
 function exportMemory(): void {

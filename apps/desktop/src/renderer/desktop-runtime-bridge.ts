@@ -5,6 +5,7 @@ import type {
   DesktopIpcEventMap,
   DesktopIpcRequestChannel,
   DesktopIpcRequestMap,
+  DesktopMemoryAtomUpdate,
   DesktopMemoryDebugSnapshot,
   DesktopMemorySummaryUpdate
 } from "../shared/ipc";
@@ -455,6 +456,7 @@ export class DesktopRuntimeBridge {
             sessionId: "preview-session",
             recentTurns: [],
             summarySegments: [],
+            memoryAtoms: [],
             updatedAt: new Date().toISOString()
           }
         }
@@ -535,6 +537,110 @@ export class DesktopRuntimeBridge {
     return this.getState();
   }
 
+  updateMemoryAtom(payload: DesktopMemoryAtomUpdate): DesktopRendererState {
+    this.state = {
+      ...this.state,
+      memoryDebug: {
+        ...this.state.memoryDebug,
+        actionStatus: "working",
+        actionMessage: "Saving atom memory...",
+        exportText: ""
+      }
+    };
+    this.host?.send("memory:atom-update", payload);
+    if (!this.host) {
+      this.state = {
+        ...this.state,
+        memoryDebug: {
+          ...this.state.memoryDebug,
+          actionStatus: "success",
+          actionMessage: "Atom memory saved in preview."
+        }
+      };
+    }
+    return this.getState();
+  }
+
+  deleteMemoryAtom(id: string): DesktopRendererState {
+    this.state = {
+      ...this.state,
+      memoryDebug: {
+        ...this.state.memoryDebug,
+        actionStatus: "working",
+        actionMessage: "Deleting atom memory...",
+        exportText: ""
+      }
+    };
+    this.host?.send("memory:atom-delete", { id });
+    if (!this.host) {
+      this.state = {
+        ...this.state,
+        memoryDebug: {
+          ...this.state.memoryDebug,
+          actionStatus: "success",
+          actionMessage: "Atom memory deleted in preview."
+        }
+      };
+    }
+    return this.getState();
+  }
+
+  clearCurrentRoleMemoryAtoms(): DesktopRendererState {
+    this.state = {
+      ...this.state,
+      memoryDebug: {
+        ...this.state.memoryDebug,
+        actionStatus: "working",
+        actionMessage: "Clearing current role atom memory...",
+        exportText: ""
+      }
+    };
+    this.host?.send("memory:atom-clear-current-role", {});
+    if (!this.host) {
+      this.state = {
+        ...this.state,
+        memoryDebug: {
+          ...this.state.memoryDebug,
+          actionStatus: "success",
+          actionMessage: "Current role atom memory cleared in preview."
+        }
+      };
+    }
+    return this.getState();
+  }
+
+  exportMemoryAtom(id: string): DesktopRendererState {
+    this.state = {
+      ...this.state,
+      memoryDebug: {
+        ...this.state.memoryDebug,
+        actionStatus: "working",
+        actionMessage: "Preparing atom memory export..."
+      }
+    };
+    this.host?.send("memory:atom-export", { id });
+    if (!this.host) {
+      const previewExport = {
+        threadId: "preview-thread",
+        sessionId: "preview-session",
+        recentTurns: [],
+        summarySegments: [],
+        memoryAtoms: [],
+        exportedAt: new Date().toISOString()
+      };
+      this.state = {
+        ...this.state,
+        memoryDebug: {
+          ...this.state.memoryDebug,
+          actionStatus: "success",
+          actionMessage: "Atom memory export is ready.",
+          exportText: JSON.stringify(previewExport, null, 2)
+        }
+      };
+    }
+    return this.getState();
+  }
+
   exportMemory(): DesktopRendererState {
     this.state = {
       ...this.state,
@@ -551,6 +657,7 @@ export class DesktopRuntimeBridge {
         sessionId: "preview-session",
         recentTurns: [],
         summarySegments: [],
+        memoryAtoms: [],
         exportedAt: new Date().toISOString()
       };
       this.state = {

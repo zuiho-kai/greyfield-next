@@ -36,19 +36,19 @@
       },
       {
         "id": "memory-library-correction",
-        "description": "Memory Library can edit, disable, delete, and export existing summary memory, but not atom-level corrections yet.",
+        "description": "Memory Library can edit, disable, delete, export, and clear existing summary memory plus current-role atom memory; atom clear keeps raw turns and summaries, and source drilldown is still not implemented.",
         "status": "partial",
         "score": 0.6,
         "weight": 0.07,
-        "evidence": "harness:electron:memory-control covers summary-level correction only"
+        "evidence": "harness:electron:memory-control covers summary correction; harness:electron:memory-atom-library covers atom groups, edit, disable, delete, export, current-role clear, role isolation, and provider-secret exclusion. The memory benchmark itself remains non-UI and does not dynamically prove these UI controls."
       },
       {
         "id": "memory-atom-extraction",
-        "description": "Deterministic extraction can produce typed, source-linked memory atoms for a narrow set of V2.1 scenarios, but LLM extraction and atom-level product controls are not complete.",
+        "description": "Deterministic extraction can produce typed, source-linked memory atoms for a narrow set of V2.1 scenarios, but LLM extraction, calendar/source drilldown, and desktop proactive scheduling are not complete.",
         "status": "partial",
         "score": 0.45,
         "weight": 0.22,
-        "evidence": "atomExtraction benchmark dynamically runs extractDeterministicMemoryAtoms over birthday/first-meeting rose, game negative review, and rainy hotpot cases; desktop chat can write and recall deterministic atoms, but LLM extraction and atom-level Memory Library controls remain unimplemented"
+        "evidence": "atomExtraction benchmark dynamically runs extractDeterministicMemoryAtoms over birthday/first-meeting rose, game negative review, and rainy hotpot cases; desktop chat can write and recall deterministic atoms, but LLM extraction, calendar/source drilldown, and desktop proactive scheduling remain incomplete"
       },
       {
         "id": "calendar-recall",
@@ -120,7 +120,7 @@
           "calendar recall should surface birthday and first-meeting anniversary without exact keyword overlap",
           "drilldown should show source turns rose-1 and rose-2"
         ],
-        "currentGap": "Current main can write and recall deterministic birthday and first-meeting rose atoms from the desktop chat path, but it still cannot run date-aware recall, extract a separate rose preference, manage atoms in Memory Library, or drill down to exact source passages.",
+        "currentGap": "Current main can write and recall deterministic birthday and first-meeting rose atoms from the desktop chat path, and Settings can manage existing current-role atoms in Memory Library. It still cannot run date-aware recall, extract a separate rose preference, perform source passage drilldown, or erase raw turns/summaries through atom clear.",
         "sourceExpectations": {
           "sourceTurnIds": ["rose-1", "rose-2"],
           "exactFragments": ["我的生日是 9 月 7 日", "第一次相遇是 2024 年 5 月 20 日", "红玫瑰"]
