@@ -13,6 +13,7 @@ import type {
   SessionTurn,
   SummarySegment,
   SummarySegmentStore,
+  RuntimeSceneContext,
   UpdateMemoryAtom
 } from "@greyfield/core-runtime";
 import { createDesktopRuntimeStoreOptions } from "../desktop-runtime-stores";
@@ -1403,6 +1404,71 @@ describe("RuntimeService", () => {
     expect(requestBodies.at(-1)).not.toContain("Atom recall target: User prefers Hiyori.");
     expect((await service.getMemoryLibrarySnapshot()).memoryAtoms).toEqual([]);
     expect((await service.exportMemory()).memoryAtoms).toEqual([]);
+  });
+
+  it("builds proactive desktop messages from current-role atoms with cooldown and global disable", async () => {
+    const memoryAtomStore = new TestMemoryAtomStore([
+      makeMemoryAtom({
+        id: "atom-rainy-hotpot",
+        threadId: "thread-a",
+        type: "episodic_scene",
+        text: "We kept the home window open while having hotpot on a rainy night.",
+        importance: 0.91,
+        sourceTurnIds: ["turn-hotpot"],
+        triggers: {
+          exact: [],
+          aliases: [],
+          secondary: [],
+          environment: ["rain", "virtual_home", "virtual_home.window=open", "last_seen_days>=30"],
+          semantic: ["shared scene memory"]
+        },
+        metadata: {
+          sharedExperience: true,
+          activity: "hotpot",
+          weather: "rain",
+          windowState: "open",
+          longAbsenceDays: 30
+        }
+      })
+    ]);
+    const sceneContext: RuntimeSceneContext = {
+      currentTime: "2026-06-28T08:00:00.000Z",
+      weather: "rain",
+      location: "virtual_home",
+      objects: [{ kind: "window", state: "open", location: "virtual_home" }],
+      absenceDays: 45
+    };
+    const service = new RuntimeService(defaultGreyfieldConfig, {
+      threadId: "thread-a",
+      memoryAtomStore
+    });
+
+    const first = await service.checkProactiveMemory(sceneContext);
+    const second = await service.checkProactiveMemory(sceneContext);
+    const disabled = await new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        ui: {
+          ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: false
+        }
+      },
+      {
+        threadId: "thread-a",
+        memoryAtomStore
+      }
+    ).checkProactiveMemory(sceneContext);
+
+    expect(first).toMatchObject({
+      displayed: true,
+      message: {
+        text: "It's raining again. I remembered our hotpot night at home.",
+        createdAt: "2026-06-28T08:00:00.000Z"
+      }
+    });
+    expect(first.message?.text).not.toMatch(/atom|score|trace|database|candidate/iu);
+    expect(second).toEqual({ displayed: false, reason: "cooldown" });
+    expect(disabled).toEqual({ displayed: false, reason: "disabled" });
   });
 
   it("interrupt aborts the active OpenAI-compatible request", async () => {

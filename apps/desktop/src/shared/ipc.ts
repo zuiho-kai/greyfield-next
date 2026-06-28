@@ -3,6 +3,7 @@ import type {
   RecallContext,
   RuntimeInputEvent,
   RuntimeOutputEvent,
+  RuntimeSceneContext,
   SessionTurn,
   SummarySegment
 } from "@greyfield/core-runtime";
@@ -78,6 +79,15 @@ export interface DesktopMemoryExport {
   exportedAt: string;
 }
 
+export interface DesktopProactiveCheckRequest {
+  sceneContext: RuntimeSceneContext;
+}
+
+export interface DesktopProactiveMessage {
+  text: string;
+  createdAt: string;
+}
+
 export interface DesktopIpcRequestMap {
   "runtime:input": RuntimeInputEvent;
   "runtime:speech-playback": DesktopSpeechPlaybackEvent;
@@ -92,6 +102,7 @@ export interface DesktopIpcRequestMap {
   "memory:atom-clear-current-role": {};
   "memory:atom-export": { id: string };
   "memory:export-request": {};
+  "proactive:check": DesktopProactiveCheckRequest;
   "settings:update": GreyfieldConfigPatch;
   "window:set-click-through": { enabled: boolean };
   "window:set-hit-test": { passthrough: boolean; reason: "transparent-area" | "model-pass-through" | "model-hit" };
@@ -127,6 +138,7 @@ export interface DesktopIpcEventMap {
   "memory:debug-snapshot": DesktopMemoryDebugSnapshot;
   "memory:action-result": DesktopMemoryActionResult;
   "memory:export-result": DesktopMemoryActionResult & { export?: DesktopMemoryExport };
+  "proactive:message": DesktopProactiveMessage;
   "settings:changed": RendererGreyfieldConfig;
   "window:state": {
     modelPassThrough: boolean;

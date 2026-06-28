@@ -162,6 +162,38 @@ describe("createDesktopRuntimeBridge", () => {
     ]);
   });
 
+  it("renders proactive pet messages outside chat history and clears them when disabled", () => {
+    const sent: Array<[string, unknown]> = [];
+    let proactiveMessage:
+      | ((event: import("../../shared/ipc").DesktopProactiveMessage) => void)
+      | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: (channel, payload) => sent.push([channel, payload]),
+      on: (channel, handler) => {
+        if (channel === "proactive:message") {
+          proactiveMessage = handler as typeof proactiveMessage;
+        }
+        return () => undefined;
+      }
+    });
+
+    proactiveMessage?.({
+      text: "It's raining again. I remembered our hotpot night at home.",
+      createdAt: "2026-06-28T00:00:00.000Z"
+    });
+
+    expect(bridge.getState().proactiveMessage).toEqual({
+      text: "It's raining again. I remembered our hotpot night at home.",
+      createdAt: "2026-06-28T00:00:00.000Z"
+    });
+    expect(bridge.getState().messages).toEqual([]);
+
+    bridge.updateSettings({ proactiveMemoryEnabled: false });
+
+    expect(bridge.getState().proactiveMessage).toBeNull();
+    expect(sent).toContainEqual(["settings:update", { ui: { proactiveMemoryEnabled: false } }]);
+  });
+
   it("sends an LLM provider test request and reduces the result", () => {
     const sent: Array<[string, unknown]> = [];
     let providerTestResult:

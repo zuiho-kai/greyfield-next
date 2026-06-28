@@ -313,6 +313,15 @@
                 @change="$emit('update-boolean-setting', 'speechBubbleEnabled', checkedFrom($event))"
               />
             </label>
+            <label>
+              <span>Remembered moments</span>
+              <input
+                :checked="state.settings.proactiveMemoryEnabled"
+                aria-label="Remembered moments"
+                type="checkbox"
+                @change="$emit('update-boolean-setting', 'proactiveMemoryEnabled', checkedFrom($event))"
+              />
+            </label>
           </div>
         </div>
 
@@ -680,7 +689,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   "update-setting": [key: keyof DesktopSettingsState, value: string];
   "update-numeric-setting": [key: "modelScale" | "modelX" | "modelY" | "voiceVolume", value: string];
-  "update-boolean-setting": [key: "speechBubbleEnabled" | "voiceSpeechEnabled", value: boolean];
+  "update-boolean-setting": [key: "speechBubbleEnabled" | "voiceSpeechEnabled" | "proactiveMemoryEnabled", value: boolean];
   "update:model-pass-through": [value: boolean];
   "update:locked": [value: boolean];
   "choose-model": [];

@@ -14,6 +14,7 @@ export function reduceRuntimeEvent(
       return {
         ...state,
         status: event.status,
+        proactiveMessage: null,
         voiceInput: {
           status: "idle",
           message: ""
@@ -56,6 +57,7 @@ export function reduceRuntimeEvent(
       status: "error",
       errorMessage: event.message,
       voiceErrorMessage: "",
+      proactiveMessage: null,
       voiceInput: {
         status: "error",
         message: event.message
@@ -81,6 +83,7 @@ export function reduceRuntimeEvent(
         message: ""
       },
       errorMessage: "",
+      proactiveMessage: null,
       messages: [...state.messages, { role: "user", text: event.text }]
     };
   }
@@ -92,6 +95,7 @@ export function reduceRuntimeEvent(
     return {
       ...state,
       voiceErrorMessage: "",
+      proactiveMessage: null,
       assistantDraft: `${state.assistantDraft}${event.text}`
     };
   }
@@ -106,6 +110,7 @@ export function reduceRuntimeEvent(
     return {
       ...state,
       assistantDraft: "",
+      proactiveMessage: null,
       messages: [...state.messages, { role: "assistant", text: event.text }]
     };
   }

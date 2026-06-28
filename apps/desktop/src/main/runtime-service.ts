@@ -4,6 +4,8 @@ import {
   OpenAICompatibleASRProvider,
   OpenAICompatibleLLMProvider,
   OpenAICompatibleTTSProvider,
+  buildProactiveMemoryCandidates,
+  sceneContextToEnvironmentTriggerState,
   type ASRProvider,
   type CharacterPersona,
   type LLMProvider,
@@ -22,6 +24,8 @@ import {
   type RuntimeEventHandler,
   type RuntimeInputEvent,
   type RuntimeOutputEvent,
+  type RuntimeSceneContext,
+  type ProactiveMemoryTriggerState,
   type TTSProvider,
   type ChatMessage
 } from "@greyfield/core-runtime";
@@ -103,6 +107,17 @@ export interface MemoryExportResult {
   exportedAt: string;
 }
 
+export interface ProactiveDesktopMessage {
+  text: string;
+  createdAt: string;
+}
+
+export interface ProactiveDesktopCheckResult {
+  displayed: boolean;
+  message?: ProactiveDesktopMessage;
+  reason?: "disabled" | "missing_atom_store" | "active_runtime" | "cooldown" | "no_candidate";
+}
+
 export class RuntimeService {
   private config: GreyfieldConfig;
   private readonly stage = new FakeStageDriver();
@@ -112,6 +127,7 @@ export class RuntimeService {
   private readonly memoryAtomStore: MemoryAtomStore | undefined;
   private readonly interactionProfile = createDefaultInteractionProfile();
   private lastRecallContext: RecallContext | undefined;
+  private proactiveTriggerState: ProactiveMemoryTriggerState = {};
   private activeRuntime: GreyfieldRuntime | undefined;
   private testingLLM = false;
   private testingVoice = false;
@@ -293,6 +309,45 @@ export class RuntimeService {
       memoryAtoms: snapshot.memoryAtoms,
       ...(snapshot.lastRecallContext ? { lastRecallContext: snapshot.lastRecallContext } : {}),
       exportedAt: new Date().toISOString()
+    };
+  }
+
+  async checkProactiveMemory(sceneContext: RuntimeSceneContext): Promise<ProactiveDesktopCheckResult> {
+    if (!this.config.ui.proactiveMemoryEnabled) {
+      return { displayed: false, reason: "disabled" };
+    }
+    if (this.activeRuntime) {
+      return { displayed: false, reason: "active_runtime" };
+    }
+    if (!this.memoryAtomStore) {
+      return { displayed: false, reason: "missing_atom_store" };
+    }
+
+    const atoms = await this.memoryAtomStore.list(this.threadId);
+    const result = buildProactiveMemoryCandidates({
+      atoms,
+      environment: sceneContextToEnvironmentTriggerState(sceneContext),
+      policy: {
+        enabled: true,
+        minImportance: 0.7,
+        maxCandidates: 1
+      },
+      triggerState: this.proactiveTriggerState
+    });
+    const candidate = result.candidates[0];
+    if (!candidate) {
+      const cooldownSkipped = result.skipped.some((item) => item.reason === "global_cooldown" || item.reason === "atom_cooldown");
+      return { displayed: false, reason: cooldownSkipped ? "cooldown" : "no_candidate" };
+    }
+
+    this.proactiveTriggerState = result.nextTriggerState;
+    const atom = atoms.find((item) => item.id === candidate.atomId);
+    return {
+      displayed: true,
+      message: {
+        text: formatDesktopProactiveMessage(atom, sceneContext),
+        createdAt: result.nextTriggerState.lastTriggeredAt ?? formatProactiveCreatedAt(sceneContext.currentTime ?? new Date())
+      }
     };
   }
 
@@ -845,6 +900,73 @@ function deriveThreadId(config: GreyfieldConfig): string {
   const source = config.characterFile.trim() || "default-character";
   const slug = source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return `desktop:${slug || "default-character"}`;
+}
+
+function formatDesktopProactiveMessage(
+  atom: MemoryAtom | undefined,
+  sceneContext: RuntimeSceneContext
+): string {
+  const weatherClause = formatDesktopWeatherClause(sceneContext.weather);
+  const activity = readAtomMetadataString(atom, "activity");
+  const memoryClause = formatDesktopMemoryClause(activity, atom);
+  return `${weatherClause || "This moment feels familiar."} I remembered ${memoryClause}.`;
+}
+
+function formatProactiveCreatedAt(value: string | Date): string {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+}
+
+function formatDesktopMemoryClause(activity: string | undefined, atom: MemoryAtom | undefined): string {
+  const activityClause = formatDesktopActivityClause(activity);
+  const shared = atom?.metadata?.sharedExperience === true || /\b(we|us|together|shared)\b/iu.test(atom?.text ?? "");
+  if (activityClause) {
+    return shared ? activityClause.shared : activityClause.personal;
+  }
+  return shared ? "a quiet scene we shared" : "something you cared about";
+}
+
+function formatDesktopWeatherClause(weather: string | undefined): string {
+  if (!weather) {
+    return "";
+  }
+  if (/\brain|raining|rainy\b/iu.test(weather)) {
+    return "It's raining again.";
+  }
+  if (/\bsnow|snowing|snowy\b/iu.test(weather)) {
+    return "It's snowing again.";
+  }
+  if (/\bwind|windy\b/iu.test(weather)) {
+    return "The wind picked up again.";
+  }
+  return "";
+}
+
+function formatDesktopActivityClause(activity: string | undefined): { shared: string; personal: string } | undefined {
+  if (activity === "hotpot") {
+    return { shared: "our hotpot night at home", personal: "your hotpot night at home" };
+  }
+  if (activity === "tea") {
+    return { shared: "us making tea together", personal: "you making tea" };
+  }
+  if (activity === "movie") {
+    return { shared: "us watching a movie together", personal: "your movie night" };
+  }
+  if (activity === "lego") {
+    return { shared: "us building Lego together", personal: "your Lego build" };
+  }
+  if (activity === "shared_meal") {
+    return { shared: "us sharing a meal", personal: "your meal at home" };
+  }
+  return;
+}
+
+function readAtomMetadataString(atom: MemoryAtom | undefined, key: string): string | undefined {
+  const value = atom?.metadata?.[key];
+  return typeof value === "string" ? value : undefined;
 }
 
 function normalizeMemoryAtomPatch(patch: UpdateMemoryAtom): UpdateMemoryAtom {

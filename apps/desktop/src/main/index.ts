@@ -15,6 +15,7 @@ import { RuntimeService } from "./runtime-service";
 import { redactConfigForRenderer } from "./settings-redaction";
 import { SettingsController } from "./settings-controller";
 import { getUsableWindow, hideWindowIfUsable, showWindowIfUsable } from "./window-lifecycle";
+import type { DesktopProactiveCheckRequest } from "../shared/ipc";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 let petWindow: BrowserWindow | undefined;
@@ -184,6 +185,10 @@ function registerIpc(): void {
 
   ipcMain.on("memory:export-request", (event) => {
     void exportMemory(event.sender);
+  });
+
+  ipcMain.on("proactive:check", (_event, payload) => {
+    void checkProactiveMemory(payload);
   });
 
   ipcMain.on("window:set-click-through", (_event, payload: { enabled: boolean }) => {
@@ -415,6 +420,16 @@ async function exportMemoryAtom(sender: Electron.WebContents, id: string): Promi
     message: `Atom memory ${id} export is ready.`,
     export: exported
   });
+}
+
+async function checkProactiveMemory(payload: DesktopProactiveCheckRequest): Promise<void> {
+  const result = await runtimeService?.checkProactiveMemory(payload.sceneContext);
+  if (!result?.message) {
+    return;
+  }
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send("proactive:message", result.message);
+  }
 }
 
 function broadcastMemoryActionResult(result: { ok: boolean; message: string }): void {

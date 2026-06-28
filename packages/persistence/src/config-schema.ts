@@ -38,6 +38,7 @@ export interface GreyfieldConfig {
   };
   ui: {
     speechBubbleEnabled: boolean;
+    proactiveMemoryEnabled: boolean;
   };
   characterFile: string;
 }
@@ -85,7 +86,8 @@ export const defaultGreyfieldConfig: GreyfieldConfig = {
     toggleClickThrough: "CommandOrControl+Shift+P"
   },
   ui: {
-    speechBubbleEnabled: true
+    speechBubbleEnabled: true,
+    proactiveMemoryEnabled: true
   },
   characterFile: "characters/greyfield.yaml"
 };
