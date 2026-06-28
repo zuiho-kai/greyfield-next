@@ -74,7 +74,7 @@ The benchmark is intentionally local/fake and does not require external keys. It
 
 V2.1 work must extend this fixture before claiming memory atom extraction, scene memory, calendar recall, evidence drilldown, memory layering, or vector recall quality. A feature can add a new recall engine later, but it must keep the benchmark passing or explain the updated acceptance fixture in the same PR.
 
-The current V2.1g benchmark locks `summaryRegressionScore: 1`, `recallRegressionScore: 1`, `atomExtractionScore: 0.82`, `atomRecallScore: 0.61`, `productReadinessScore: 0.27`, and `v21aScenarioScore: 0.2`; the computed output is `atomExtractionScore: 0.825`, `atomRecallScore: 0.617`, `productReadiness.score: 0.277`, `capabilityScore: 0.311`, and `scenarioScore: 0.201`, with calendar recall, scene proactive trigger, LLM extraction, semantic recall, and source passage drilldown still below full implementation.
+The current V2.1e benchmark locks `summaryRegressionScore: 1`, `recallRegressionScore: 1`, `atomExtractionScore: 0.9`, `atomRecallScore: 0.61`, `proactiveTriggerScore: 0.95`, `productReadinessScore: 0.33`, and `v21aScenarioScore: 0.29`; the computed output is `atomExtractionScore: 0.9`, `atomRecallScore: 0.617`, `proactiveTriggerScore: 1`, `productReadiness.score: 0.349`, `capabilityScore: 0.37`, and `scenarioScore: 0.3`, with calendar recall, desktop proactive scheduling, external weather integration, semantic recall, LLM extraction, Memory Library atom controls, and source passage drilldown still below full implementation.
 
 Still not in this slice:
 

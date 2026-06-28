@@ -97,7 +97,30 @@ describe("memory atoms", () => {
       }
     });
     expect(atom?.triggers.environment).toEqual(expect.arrayContaining(["下雨", "雨天"]));
-    expect(atom?.triggers.semantic).toEqual(expect.arrayContaining(["cozy shared meal", "rainy evening memory"]));
+    expect(atom?.triggers.semantic).toEqual(expect.arrayContaining(["rain hotpot memory", "shared scene memory"]));
+  });
+
+  it("extracts a non-hotpot episodic scene with weather, place, object, meaning, and time", () => {
+    const [atom] = extractDeterministicMemoryAtoms({
+      ...baseInput,
+      sourceTurnIds: ["turn-lego"],
+      text: "记住那个下雪的下午，我们在虚拟家的窗边一起拼乐高，像一次安静的陪伴。"
+    });
+
+    expect(atom).toMatchObject({
+      type: "episodic_scene",
+      object: "snow_virtual_home_lego_scene",
+      metadata: {
+        sceneType: "episodic_scene",
+        weather: "snow",
+        place: "virtual_home",
+        activity: "lego",
+        relationshipMeaning: "quiet_companionship",
+        timeOfDay: "afternoon"
+      }
+    });
+    expect(atom?.triggers.environment).toEqual(expect.arrayContaining(["下雪", "雪天", "virtual_home"]));
+    expect(atom?.triggers.exact).toEqual(expect.arrayContaining(["拼乐高", "乐高"]));
   });
 
   it("recalls atoms through exact, alias, and secondary trigger lanes", () => {
