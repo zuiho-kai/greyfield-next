@@ -1168,23 +1168,28 @@ function extractRecurringRelationshipRitualAttributes(
   const eventDate = parseEventDate(text, input.now);
   const dateKey = eventDate ? formatEventDate(eventDate) : "";
   const ritualKind = classifyRelationshipRitualAction(ritualAction);
+  const recurrenceSourceText = extractAnnualRecurrenceSourceText(text);
+  const annualAliases = recurrenceSourceText ? ["年度仪式"] : [];
+  const annualSecondaryTriggers = recurrenceSourceText ? ["每年", "年度"] : [];
+  const annualSemanticTriggers = recurrenceSourceText ? ["annual ritual"] : [];
+  const annualRelationshipTriggers = recurrenceSourceText ? ["annual_ritual"] : [];
   return {
-    text: `Relationship ritual: user and Greyfield repeat ${ritualAction} annually${dateKey ? ` on ${dateKey}` : ""}.`,
+    text: `Relationship ritual: user and Greyfield repeat ${ritualAction}${recurrenceSourceText ? " annually" : ""}${dateKey ? ` on ${dateKey}` : ""}.`,
     eventType: "recurring_relationship_ritual",
     object: "recurring_relationship_ritual",
     eventDate,
-    recurrence: { frequency: "annual", sourceText: /每年|annual/iu.test(text) ? "每年" : "relationship_ritual" },
+    recurrence: recurrenceSourceText ? { frequency: "annual", sourceText: recurrenceSourceText } : undefined,
     ritualAction,
     exact: normalizeTriggerKeys([dateKey, ritualAction]),
-    aliases: ["我们的仪式", "固定仪式", "年度仪式", "小仪式", "老规矩"],
-    secondary: normalizeTriggerKeys(["关系仪式", "重要日子", "每年", "年度", ritualAction]),
-    semantic: ["relationship ritual", "recurring ritual", "annual ritual", "important day", relationshipRitualSemanticLabel(ritualKind)],
+    aliases: ["我们的仪式", "固定仪式", ...annualAliases, "小仪式", "老规矩"],
+    secondary: normalizeTriggerKeys(["关系仪式", "重要日子", ...annualSecondaryTriggers, ritualAction]),
+    semantic: ["relationship ritual", "recurring ritual", ...annualSemanticTriggers, "important day", relationshipRitualSemanticLabel(ritualKind)],
     relationship: [
       "user_and_greyfield",
       "relationship_event",
       "relationship_ritual",
       "recurring_relationship_ritual",
-      "annual_ritual",
+      ...annualRelationshipTriggers,
       "important_day",
       ritualKind
     ],
@@ -1194,6 +1199,10 @@ function extractRecurringRelationshipRitualAttributes(
       ritualKind
     }
   };
+}
+
+function extractAnnualRecurrenceSourceText(text: string): string | undefined {
+  return text.match(/每年|年度|\bannually\b|\bannual\b/iu)?.[0];
 }
 
 function hasCompanionRelationshipTarget(text: string): boolean {

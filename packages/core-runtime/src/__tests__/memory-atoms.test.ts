@@ -622,6 +622,33 @@ describe("memory atoms", () => {
     );
   });
 
+  it("does not add annual recurrence to fixed rituals without yearly wording", () => {
+    const [atom] = extractDeterministicMemoryAtoms({
+      ...baseInput,
+      sourceTurnIds: ["turn-fixed-letter-ritual"],
+      text: "记住我们和 Greyfield 的固定仪式是写一封手写信，这不是普通礼物计划。"
+    });
+
+    expect(atom).toMatchObject({
+      type: "relationship_event",
+      sourceTurnIds: ["turn-fixed-letter-ritual"],
+      subject: "user_and_greyfield",
+      object: "recurring_relationship_ritual",
+      ritualAction: "写手写信",
+      metadata: {
+        eventType: "recurring_relationship_ritual",
+        ritualAction: "写手写信",
+        ritualKind: "letter_ritual"
+      }
+    });
+    expect(atom?.recurrence).toBeUndefined();
+    expect(atom?.text).not.toContain("annually");
+    expect(atom?.triggers.relationship).toEqual(
+      expect.arrayContaining(["user_and_greyfield", "relationship_ritual", "recurring_relationship_ritual", "letter_ritual"])
+    );
+    expect(atom?.triggers.relationship ?? []).not.toContain("annual_ritual");
+  });
+
   it("recalls non-rose recurring rituals through relationship concepts without exact keywords", () => {
     const sourceTurns: SessionTurn[] = [
       {
