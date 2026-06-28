@@ -1125,6 +1125,76 @@ describe("RuntimeService", () => {
     expect(JSON.stringify(exported)).toContain("[redacted-secret]");
   });
 
+  it("redacts structured memory atom fields in snapshots and exports", async () => {
+    const providerSecret = "unit-provider-secret";
+    const structuredSecret = "sk-structuredAtomSecret123456789";
+    const memoryAtomStore = new TestMemoryAtomStore([
+      makeMemoryAtom({
+        id: "atom-structured-secret",
+        threadId: "thread-a",
+        type: "relationship_event",
+        text: "Structured atom text is safe.",
+        sourceTurnIds: ["turn-safe-structured"],
+        sourceSessionId: `session-${providerSecret}`,
+        subject: `companion ${providerSecret}`,
+        object: `keepsake ${structuredSecret}`,
+        ritualAction: `bring flowers with ${providerSecret}`,
+        eventDate: {
+          kind: "absolute",
+          sourceText: `anniversary ${structuredSecret}`,
+          precision: "day",
+          isoDate: "2026-06-28"
+        },
+        recurrence: {
+          frequency: "annual",
+          sourceText: `repeat ${providerSecret}`
+        },
+        triggerKeys: ["safe-trigger"],
+        triggers: {
+          exact: ["safe-trigger"],
+          aliases: [],
+          secondary: []
+        }
+      })
+    ]);
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          apiKey: providerSecret
+        }
+      },
+      {
+        threadId: "thread-a",
+        memoryAtomStore
+      }
+    );
+
+    const snapshot = await service.getMemoryLibrarySnapshot();
+    const exported = await service.exportMemory();
+    const snapshotText = JSON.stringify(snapshot);
+    const exportedText = JSON.stringify(exported);
+    const atom = snapshot.memoryAtoms[0];
+
+    expect(snapshotText).not.toContain(providerSecret);
+    expect(snapshotText).not.toContain(structuredSecret);
+    expect(exportedText).not.toContain(providerSecret);
+    expect(exportedText).not.toContain(structuredSecret);
+    expect(snapshotText).toContain("[redacted-secret]");
+    expect(exportedText).toContain("[redacted-secret]");
+    expect(atom).toMatchObject({
+      id: "atom-structured-secret",
+      sourceTurnIds: ["turn-safe-structured"],
+      sourceSessionId: "session-[redacted-secret]",
+      subject: "companion [redacted-secret]",
+      object: "keepsake [redacted-secret]",
+      ritualAction: "bring flowers with [redacted-secret]",
+      eventDate: expect.objectContaining({ sourceText: "anniversary [redacted-secret]" }),
+      recurrence: { frequency: "annual", sourceText: "repeat [redacted-secret]" }
+    });
+  });
+
   it("keeps disabled and deleted memory atoms out of prompt recall", async () => {
     const memoryAtomStore = new TestMemoryAtomStore([
       makeMemoryAtom({

@@ -785,6 +785,9 @@ function sanitizeMemoryAtomWithSourcePassages(atom: MemoryLibraryAtom, providerS
   return {
     ...atom,
     text: redactProviderSecrets(atom.text, providerSecrets),
+    ...(atom.sourceSessionId !== undefined
+      ? { sourceSessionId: redactProviderSecrets(atom.sourceSessionId, providerSecrets) }
+      : {}),
     triggerKeys: atom.triggerKeys.map((key) => redactProviderSecrets(key, providerSecrets)),
     triggers: {
       exact: atom.triggers.exact.map((key) => redactProviderSecrets(key, providerSecrets)),
@@ -795,8 +798,41 @@ function sanitizeMemoryAtomWithSourcePassages(atom: MemoryLibraryAtom, providerS
       ...(atom.triggers.semantic ? { semantic: atom.triggers.semantic.map((key) => redactProviderSecrets(key, providerSecrets)) } : {}),
       ...(atom.triggers.relationship ? { relationship: atom.triggers.relationship.map((key) => redactProviderSecrets(key, providerSecrets)) } : {})
     },
+    ...(atom.eventDate ? { eventDate: sanitizeMemoryAtomEventDate(atom.eventDate, providerSecrets) } : {}),
+    ...(atom.recurrence ? { recurrence: sanitizeMemoryAtomRecurrence(atom.recurrence, providerSecrets) } : {}),
+    ...(atom.ritualAction !== undefined
+      ? { ritualAction: redactProviderSecrets(atom.ritualAction, providerSecrets) }
+      : {}),
+    ...(atom.subject !== undefined ? { subject: redactProviderSecrets(atom.subject, providerSecrets) } : {}),
+    ...(atom.object !== undefined ? { object: redactProviderSecrets(atom.object, providerSecrets) } : {}),
     ...(atom.metadata ? { metadata: sanitizeMemoryAtomMetadata(atom.metadata, providerSecrets) } : {}),
     sourcePassages: sanitizeSourcePassages(atom.sourcePassages, providerSecrets)
+  };
+}
+
+function sanitizeMemoryAtomEventDate(
+  eventDate: MemoryAtom["eventDate"],
+  providerSecrets: string[]
+): MemoryAtom["eventDate"] {
+  if (!eventDate) {
+    return eventDate;
+  }
+  return {
+    ...eventDate,
+    sourceText: redactProviderSecrets(eventDate.sourceText, providerSecrets)
+  };
+}
+
+function sanitizeMemoryAtomRecurrence(
+  recurrence: MemoryAtom["recurrence"],
+  providerSecrets: string[]
+): MemoryAtom["recurrence"] {
+  if (!recurrence) {
+    return recurrence;
+  }
+  return {
+    ...recurrence,
+    sourceText: redactProviderSecrets(recurrence.sourceText, providerSecrets)
   };
 }
 
