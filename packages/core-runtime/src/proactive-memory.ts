@@ -2,7 +2,7 @@ import type { MemoryAtom } from "./memory-atoms";
 
 export interface EnvironmentTriggerState {
   now?: string | Date;
-  weather?: string;
+  weather?: NormalizedWeather;
   timeOfDay?: string;
   virtualHome?: {
     windowOpen?: boolean;
@@ -11,26 +11,33 @@ export interface EnvironmentTriggerState {
   lastSeenDays?: number;
 }
 
-export interface RuntimeSceneObjectSignal {
-  kind: string;
-  state?: string;
-  location?: string;
+export type RuntimeScenePlaceSignal = "home" | "away" | "unknown";
+
+export interface RuntimeSceneVirtualHomeSignal {
+  present?: boolean;
+  windowOpen?: boolean;
 }
 
-export type RuntimeSceneObject = string | RuntimeSceneObjectSignal;
-
 export interface RuntimeSceneContext {
-  // Explicit caller-supplied scene signals only; this module never reads weather, screen, or OS state.
+  // V2.1 production contract: only controlled app/runtime scene signals are accepted here.
+  // Broad legacy context fields such as weather/location/objects are intentionally not normalized.
+  // This module never reads weather APIs, screen content, GPS, or OS state.
   currentTime?: string | Date;
-  weather?: string;
-  location?: string;
-  objects?: RuntimeSceneObject[];
+  rain?: boolean;
+  place?: RuntimeScenePlaceSignal;
+  virtualHome?: RuntimeSceneVirtualHomeSignal;
   absenceDays?: number;
   lastSeenAt?: string | Date;
 }
 
+export interface ProactiveMemoryQuietWindow {
+  start: string;
+  end: string;
+}
+
 export interface ProactiveMemoryPolicy {
   enabled?: boolean;
+  quietWindows?: ProactiveMemoryQuietWindow[];
   minImportance?: number;
   globalCooldownMs?: number;
   perAtomCooldownMs?: number;
@@ -68,6 +75,7 @@ export interface ProactiveMemorySkippedItem {
   atomId?: string;
   reason:
     | "policy_disabled"
+    | "quiet_window"
     | "global_cooldown"
     | "disabled"
     | "importance_below_threshold"
@@ -76,6 +84,7 @@ export interface ProactiveMemorySkippedItem {
     | "weather_missing"
     | "weather_mismatch"
     | "virtual_home_missing"
+    | "window_state_missing"
     | "window_closed"
     | "last_seen_missing"
     | "recent_user_activity"
@@ -131,6 +140,7 @@ type NormalizedWeather = "rain" | "snow" | "wind" | "heat" | "normal";
 
 const defaultPolicy: Required<ProactiveMemoryPolicy> = {
   enabled: true,
+  quietWindows: [{ start: "22:00", end: "08:00" }],
   minImportance: 0.7,
   globalCooldownMs: 6 * 60 * 60 * 1000,
   perAtomCooldownMs: 7 * 24 * 60 * 60 * 1000,
@@ -191,12 +201,17 @@ export function buildProactiveMemoryDisplayMessage(
 }
 
 export function sceneContextToEnvironmentTriggerState(sceneContext: RuntimeSceneContext): EnvironmentTriggerState {
-  const windowOpen = getSceneWindowOpen(sceneContext.objects ?? []);
-  const homePresent = isHomeLocation(sceneContext.location) || sceneContext.objects?.some(sceneObjectHasHomeLocation) === true;
+  const homePresent =
+    sceneContext.place === "home" || (sceneContext.virtualHome !== undefined && sceneContext.virtualHome.present !== false);
   return {
     now: sceneContext.currentTime,
-    weather: sceneContext.weather,
-    ...(homePresent ? { virtualHome: windowOpen === undefined ? {} : { windowOpen } } : {}),
+    weather: sceneContext.rain === undefined ? undefined : sceneContext.rain ? "rain" : "normal",
+    ...(homePresent
+      ? {
+          virtualHome:
+            sceneContext.virtualHome?.windowOpen === undefined ? {} : { windowOpen: sceneContext.virtualHome.windowOpen }
+        }
+      : {}),
     lastSeenAt: sceneContext.lastSeenAt,
     lastSeenDays: sceneContext.absenceDays
   };
@@ -212,6 +227,13 @@ export function buildProactiveMemoryCandidates(
     return {
       candidates: [],
       skipped: [{ reason: "policy_disabled" }],
+      nextTriggerState: triggerState
+    };
+  }
+  if (isWithinQuietWindow(options.environment.now ?? new Date(), policy.quietWindows)) {
+    return {
+      candidates: [],
+      skipped: [{ reason: "quiet_window" }],
       nextTriggerState: triggerState
     };
   }
@@ -276,61 +298,6 @@ export function buildProactiveMemoryCandidates(
     nextTriggerState:
       candidates.length > 0 ? recordProactiveMemoryTriggers(triggerState, candidates, options.environment.now ?? new Date()) : triggerState
   };
-}
-
-function getSceneWindowOpen(objects: RuntimeSceneObject[]): boolean | undefined {
-  for (const object of objects) {
-    const kind = typeof object === "string" ? object : object.kind;
-    if (!isWindowObject(kind)) {
-      continue;
-    }
-    const state = typeof object === "string" ? object : object.state;
-    if (!state) {
-      continue;
-    }
-    if (isOpenWindowState(state)) {
-      return true;
-    }
-    if (isClosedWindowState(state)) {
-      return false;
-    }
-  }
-  return;
-}
-
-function isOpenWindowState(value: string): boolean {
-  return /\b(open|opened|true)\b/iu.test(value) || /(开着|打开|开启|已开|开窗)/u.test(value);
-}
-
-function isClosedWindowState(value: string): boolean {
-  return /\b(closed|shut|false)\b/iu.test(value) || /(关着|关闭|关上|已关|关窗)/u.test(value);
-}
-
-function isWindowObject(value: string | undefined): boolean {
-  if (!value) {
-    return false;
-  }
-  const normalized = normalizeKey(value).replace(/[-_.]+/g, " ");
-  return /\bwindow\b/iu.test(normalized) || /(窗户|窗)/u.test(value);
-}
-
-function sceneObjectHasHomeLocation(object: RuntimeSceneObject): boolean {
-  const values =
-    typeof object === "string" ? [object] : [object.location, object.kind].filter((value): value is string => Boolean(value));
-  return values.some(isHomeLocation);
-}
-
-function isHomeLocation(value: string | undefined): boolean {
-  if (!value) {
-    return false;
-  }
-  const normalized = normalizeKey(value).replace(/[-_.\s]+/g, "_");
-  return (
-    normalized === "home" ||
-    normalized === "virtual_home" ||
-    normalized.includes("virtual_home") ||
-    /(虚拟家|虚拟的家|家里|家中|在家|^家$)/u.test(value)
-  );
 }
 
 function buildCandidateCooldown(
@@ -410,7 +377,10 @@ function matchEnvironmentTrigger(
   }
 
   if (windowRequirement === "open") {
-    if (environment.virtualHome?.windowOpen !== true) {
+    if (environment.virtualHome?.windowOpen === undefined) {
+      return { matched: false, reason: "window_state_missing" };
+    }
+    if (environment.virtualHome.windowOpen !== true) {
       return { matched: false, reason: "window_closed" };
     }
     matchedKeys.add("virtual_home.window=open");
@@ -592,7 +562,7 @@ function formatActivity(activity: string | undefined): string | undefined {
 }
 
 function formatProactiveDisplayText(atom: MemoryAtom | undefined, sceneContext: RuntimeSceneContext): string {
-  const weatherClause = formatDisplayWeatherClause(sceneContext.weather);
+  const weatherClause = formatDisplayWeatherClause(sceneContext.rain);
   const activity = atom ? readStringMetadata(atom, "activity") : undefined;
   const memoryClause = formatDisplayMemoryClause(activity, atom);
   return `${weatherClause || "This moment feels familiar."} I remembered ${memoryClause}.`;
@@ -607,18 +577,9 @@ function formatDisplayMemoryClause(activity: string | undefined, atom: MemoryAto
   return shared ? "a quiet scene we shared" : "something you cared about";
 }
 
-function formatDisplayWeatherClause(weather: string | undefined): string {
-  if (!weather) {
-    return "";
-  }
-  if (/\brain|raining|rainy\b/iu.test(weather)) {
+function formatDisplayWeatherClause(rain: boolean | undefined): string {
+  if (rain === true) {
     return "It's raining again.";
-  }
-  if (/\bsnow|snowing|snowy\b/iu.test(weather)) {
-    return "It's snowing again.";
-  }
-  if (/\bwind|windy\b/iu.test(weather)) {
-    return "The wind picked up again.";
   }
   return "";
 }
@@ -662,6 +623,49 @@ function isWithinCooldown(lastTriggeredAt: string | undefined, now: number, cool
   }
   const lastTriggeredTime = Date.parse(lastTriggeredAt);
   return Number.isFinite(lastTriggeredTime) && now - lastTriggeredTime < cooldownMs;
+}
+
+function isWithinQuietWindow(value: string | Date, quietWindows: ProactiveMemoryQuietWindow[]): boolean {
+  const currentMinutes = getClockMinutes(value);
+  if (currentMinutes === undefined) {
+    return false;
+  }
+  return quietWindows.some((quietWindow) => {
+    const start = parseClockMinutes(quietWindow.start);
+    const end = parseClockMinutes(quietWindow.end);
+    if (start === undefined || end === undefined || start === end) {
+      return false;
+    }
+    return start < end ? currentMinutes >= start && currentMinutes < end : currentMinutes >= start || currentMinutes < end;
+  });
+}
+
+function getClockMinutes(value: string | Date): number | undefined {
+  if (value instanceof Date) {
+    return value.getHours() * 60 + value.getMinutes();
+  }
+  const explicitTime = value.match(/T(\d{2}):(\d{2})/u);
+  if (explicitTime) {
+    return Number(explicitTime[1]) * 60 + Number(explicitTime[2]);
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return;
+  }
+  return parsed.getHours() * 60 + parsed.getMinutes();
+}
+
+function parseClockMinutes(value: string): number | undefined {
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/u);
+  if (!match) {
+    return;
+  }
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    return;
+  }
+  return hours * 60 + minutes;
 }
 
 function readStringMetadata(atom: MemoryAtom, key: string): string | undefined {

@@ -88,7 +88,7 @@
         "status": "partial",
         "score": 0.4,
         "weight": 0.12,
-        "evidence": "proactiveTrigger benchmark dynamically runs pure core candidates from explicit runtime scene context over shared scene atoms with enabled, disabled, importance, global cooldown, per-atom cooldown, weather, virtual-home window, missing virtual-home state, and last-seen gates; desktop scheduler, external weather feed, and notification/UI integration remain unimplemented"
+        "evidence": "proactiveTrigger benchmark dynamically runs pure core candidates from explicit V2.1 scene signals over shared scene atoms with enabled, disabled, quiet-window, importance, global cooldown, per-atom cooldown, rain flag, virtual-home window, missing signal, and last-seen gates; the Electron proactive harness routes one accepted memory into the existing desktop pet message surface and proves quiet/recent/missing/cooldown/disabled negatives do not display."
       },
       {
         "id": "privacy-noise",
@@ -331,7 +331,7 @@
           "trigger recall should run from environment state without a direct chat keyword",
           "event telemetry, coworker scenes, generic weather, and non-shared scenes should not become shared scene memories"
         ],
-        "currentGap": "Deterministic extraction can form source-linked shared scene atoms, recover bounded raw source fragments for vague shared-scene recall, and pure core proactive candidate generation consumes explicit runtime scene context for the matching scene plus quiet negative gates for recent activity, normal weather, and missing virtual-home/window state. Current runtime still has no desktop proactive scheduler, notification surface, real virtual-home state feed, external weather integration, renderer source drilldown UI, or privacy hard-erasure semantics.",
+        "currentGap": "Deterministic extraction can form source-linked shared scene atoms, recover bounded raw source fragments for vague shared-scene recall, and the minimal proactive scheduler consumes explicit V2.1 scene signals for the matching scene plus quiet negative gates for quiet windows, recent activity, normal rain flag, and missing virtual-home/window state. Real virtual-home signal production, renderer source drilldown UI, and privacy hard-erasure semantics remain separate follow-ups.",
         "sourceExpectations": {
           "sourceTurnIds": ["hotpot-1", "hotpot-2", "hotpot-5"],
           "exactFragments": ["下雨", "虚拟家的窗户开着", "长期没上线", "一起吃火锅", "家里开着窗一起吃晚饭", "避风港", "雨声和桌上的粥"]
@@ -1038,9 +1038,9 @@
         "minScore": 0.95,
         "sceneContext": {
           "currentTime": "2026-07-15T10:00:00.000Z",
-          "weather": "raining",
-          "location": "virtual_home",
-          "objects": [{ "kind": "window", "state": "open" }, { "kind": "hotpot" }],
+          "rain": true,
+          "place": "home",
+          "virtualHome": { "windowOpen": true },
           "absenceDays": 45
         },
         "policy": {
@@ -1057,19 +1057,39 @@
             "id": "yesterday-seen",
             "sceneContext": {
               "currentTime": "2026-07-15T10:00:00.000Z",
-              "weather": "raining",
-              "location": "virtual_home",
-              "objects": [{ "kind": "window", "state": "open" }, { "kind": "hotpot" }],
+              "rain": true,
+              "place": "home",
+              "virtualHome": { "windowOpen": true },
               "absenceDays": 1
             },
             "expectedSkippedReasons": ["recent_user_activity"]
           },
           {
+            "id": "quiet-window",
+            "sceneContext": {
+              "currentTime": "2026-07-15T23:00:00.000Z",
+              "rain": true,
+              "place": "home",
+              "virtualHome": { "windowOpen": true },
+              "absenceDays": 45
+            },
+            "expectedSkippedReasons": ["quiet_window"]
+          },
+          {
+            "id": "missing-rain-signal",
+            "sceneContext": {
+              "currentTime": "2026-07-15T10:00:00.000Z",
+              "place": "home",
+              "virtualHome": { "windowOpen": true },
+              "absenceDays": 45
+            },
+            "expectedSkippedReasons": ["weather_missing"]
+          },
+          {
             "id": "missing-virtual-home",
             "sceneContext": {
               "currentTime": "2026-07-15T10:00:00.000Z",
-              "weather": "raining",
-              "objects": [{ "kind": "window", "state": "open" }, { "kind": "hotpot" }],
+              "rain": true,
               "absenceDays": 45
             },
             "expectedSkippedReasons": ["virtual_home_missing", "no_shared_scene"]
@@ -1078,20 +1098,20 @@
             "id": "missing-window-state",
             "sceneContext": {
               "currentTime": "2026-07-15T10:00:00.000Z",
-              "weather": "raining",
-              "location": "virtual_home",
-              "objects": [{ "kind": "hotpot" }],
+              "rain": true,
+              "place": "home",
+              "virtualHome": {},
               "absenceDays": 45
             },
-            "expectedSkippedReasons": ["window_closed"]
+            "expectedSkippedReasons": ["window_state_missing"]
           },
           {
             "id": "window-closed",
             "sceneContext": {
               "currentTime": "2026-07-15T10:00:00.000Z",
-              "weather": "raining",
-              "location": "virtual_home",
-              "objects": [{ "kind": "window", "state": "closed" }, { "kind": "hotpot" }],
+              "rain": true,
+              "place": "home",
+              "virtualHome": { "windowOpen": false },
               "absenceDays": 45
             },
             "expectedSkippedReasons": ["window_closed"]
@@ -1100,9 +1120,9 @@
             "id": "normal-weather",
             "sceneContext": {
               "currentTime": "2026-07-15T10:00:00.000Z",
-              "weather": "ordinary",
-              "location": "virtual_home",
-              "objects": [{ "kind": "window", "state": "open" }, { "kind": "hotpot" }],
+              "rain": false,
+              "place": "home",
+              "virtualHome": { "windowOpen": true },
               "absenceDays": 45
             },
             "expectedSkippedReasons": ["weather_mismatch"]
