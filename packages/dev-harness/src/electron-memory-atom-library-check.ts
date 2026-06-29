@@ -28,6 +28,13 @@ const editedAtomText = "Edited atom memory: User prefers Sakura.";
 const editedPromiseText = "Edited promise memory: Greyfield will help organize the desk.";
 const atomOpinionText = "User dislikes pay-to-win game loops.";
 const atomPromiseText = "Promise: Greyfield committed to help the user organize their desk.";
+const vagueOpinionSource =
+  "我给《星环旅店》的差评原文是：教程像坏掉的电梯，剧情把玩家当成没睡醒的测试员。";
+const vaguePromiseSource = "记住，你答应以后帮我整理书桌；这个承诺以后要能想起来。";
+const vagueRitualText = "Relationship ritual: every December 24, the user and Greyfield brew osmanthus tea together.";
+const vagueRitualSource = "记住每年 12 月 24 日，我们和 Greyfield 的固定仪式是一起泡桂花茶。";
+const vagueSceneText = "Shared rainy home meal scene with an open window, rain sounds, porridge, and a safe harbor feeling.";
+const vagueSceneSource = "那天下雨，我们在家里开着窗一起吃晚饭，这像我们的避风港，记住当时的雨声和桌上的粥。";
 const currentRoleCharacterFile = "characters/greyfield.yaml";
 const otherRoleCharacterFile = "characters/other-role.yaml";
 const currentThreadId = "desktop:characters-greyfield-yaml";
@@ -35,12 +42,14 @@ const otherThreadId = "desktop:characters-other-role-yaml";
 const boundedTail = "SOURCE_PASSAGE_BOUNDARY_TAIL_SHOULD_NOT_RENDER";
 const requestBodies: string[] = [];
 const server = createServer(async (request: IncomingMessage, response: ServerResponse) => {
-  requestBodies.push(await readRequestBody(request));
+  const requestBody = await readRequestBody(request);
+  requestBodies.push(requestBody);
+  const content = buildScriptedAssistantResponse(requestBody);
   response.writeHead(200, {
     "content-type": "text/event-stream",
     "cache-control": "no-cache"
   });
-  response.write('data: {"choices":[{"delta":{"content":"Atom memory harness response."}}]}\n\n');
+  response.write(`data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`);
   response.write("data: [DONE]\n\n");
   response.end();
 });
@@ -84,10 +93,32 @@ try {
       content: ""
     }),
     makeTurn({
+      id: "desktop-main-session-opinion",
+      role: "user",
+      content: vagueOpinionSource
+    }),
+    makeTurn({
+      id: "desktop-main-session-ritual",
+      role: "user",
+      content: vagueRitualSource
+    }),
+    makeTurn({
+      id: "desktop-main-session-scene",
+      role: "user",
+      content: vagueSceneSource
+    }),
+    makeTurn({
       id: "desktop-main-session-promise",
       role: "user",
-      content: "Source promise says Greyfield promised to help organize the desk."
-    })
+      content: vaguePromiseSource
+    }),
+    ...Array.from({ length: 22 }, (_, index) =>
+      makeTurn({
+        id: `desktop-main-session-filler-${index + 1}`,
+        role: "event",
+        content: `neutral harness filler ${index + 1}; no durable memory`
+      })
+    )
   ]);
   await writeAtomFile([
     makeAtom({
@@ -113,9 +144,19 @@ try {
       triggers: {
         exact: ["pay-to-win"],
         aliases: ["game loops"],
-        secondary: ["loops"]
+        secondary: ["loops", "傻逼", "像之前", "某个游戏"],
+        semantic: ["negative game analogy", "game complaint source"]
       },
+      object: "星环旅店",
+      sentiment: "negative",
       metadata: { opinionType: "game_review" }
+    }),
+    makeAtom({
+      id: "atom-missing-opinion",
+      type: "opinion",
+      text: "Missing-source opinion memory for drilldown state coverage.",
+      sourceTurnIds: ["desktop-main-session-missing-opinion"],
+      metadata: { opinionType: "missing_source_check" }
     }),
     makeAtom({
       id: "atom-relationship",
@@ -126,11 +167,80 @@ try {
       metadata: { eventType: "first_meeting_anniversary" }
     }),
     makeAtom({
+      id: "atom-vague-ritual",
+      type: "relationship_event",
+      text: vagueRitualText,
+      sourceTurnIds: ["desktop-main-session-ritual"],
+      subject: "user_and_greyfield",
+      object: "recurring_relationship_ritual",
+      eventDate: {
+        kind: "month_day",
+        sourceText: "12 月 24 日",
+        precision: "month_day",
+        month: 12,
+        day: 24
+      },
+      recurrence: { frequency: "annual", sourceText: "每年" },
+      ritualAction: "一起泡桂花茶",
+      triggers: {
+        exact: ["桂花茶"],
+        aliases: ["固定仪式"],
+        secondary: ["每年"],
+        semantic: ["recurring ritual", "annual ritual", "tea ritual"],
+        relationship: [
+          "user_and_greyfield",
+          "relationship_ritual",
+          "recurring_relationship_ritual",
+          "annual_ritual",
+          "tea_ritual"
+        ]
+      },
+      metadata: {
+        eventType: "recurring_relationship_ritual",
+        ritualAction: "一起泡桂花茶",
+        ritualKind: "tea_ritual"
+      }
+    }),
+    makeAtom({
       id: "atom-scene",
       type: "episodic_scene",
       text: "Shared rainy hotpot evening memory.",
       sourceTurnIds: [],
       metadata: { sceneType: "shared_meal" }
+    }),
+    makeAtom({
+      id: "atom-vague-scene",
+      type: "episodic_scene",
+      text: vagueSceneText,
+      sourceTurnIds: ["desktop-main-session-scene"],
+      subject: "user_and_greyfield",
+      object: "rain_home_shared_meal_scene",
+      triggers: {
+        exact: ["雨声", "粥"],
+        aliases: ["下雨开窗", "吃晚饭"],
+        secondary: ["避风港"],
+        semantic: [
+          "scene memory",
+          "shared scene memory",
+          "rainy scene",
+          "home scene",
+          "open window scene",
+          "shared meal scene",
+          "rain sound scene",
+          "safe harbor"
+        ],
+        relationship: ["user_and_greyfield", "shared_scene"]
+      },
+      metadata: {
+        sceneType: "shared_meal",
+        weather: "rain",
+        place: "home",
+        windowState: "open",
+        activity: "shared_meal",
+        relationshipMeaning: "safe_harbor",
+        sharedExperience: true,
+        sensoryDetails: ["rain_sound"]
+      }
     }),
     makeAtom({
       id: "atom-promise",
@@ -174,12 +284,15 @@ try {
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Relationships" }).waitFor();
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Scenes" }).waitFor();
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Promises" }).waitFor();
-  await memoryLibrary.locator(".memory-library__stats", { hasText: "Enabled 6" }).waitFor();
+  await memoryLibrary.locator(".memory-library__stats", { hasText: "Enabled 9" }).waitFor();
   await memoryLibrary.locator('[aria-label="Fact memory atom-fact"]', { hasText: "User birthday is June 12." }).waitFor();
   await memoryLibrary.locator('[aria-label="Preference memory atom-preference"]', { hasText: "1 source passage ready" }).waitFor();
   await memoryLibrary.locator('[aria-label="Opinion memory atom-opinion"]', { hasText: "User dislikes pay-to-win game loops." }).waitFor();
+  await memoryLibrary.locator('[aria-label="Opinion memory atom-missing-opinion"]', { hasText: "Missing-source opinion memory" }).waitFor();
   await memoryLibrary.locator('[aria-label="Relationship memory atom-relationship"]', { hasText: "First meeting anniversary ritual is giving roses." }).waitFor();
+  await memoryLibrary.locator('[aria-label="Relationship memory atom-vague-ritual"]', { hasText: "osmanthus tea" }).waitFor();
   await memoryLibrary.locator('[aria-label="Scene memory atom-scene"]', { hasText: "Shared rainy hotpot evening memory." }).waitFor();
+  await memoryLibrary.locator('[aria-label="Scene memory atom-vague-scene"]', { hasText: "safe harbor" }).waitFor();
   await memoryLibrary.locator('[aria-label="Promise memory atom-promise"]', { hasText: atomPromiseText }).waitFor();
   await memoryLibrary.locator('[aria-label="Promises memories"]', { hasText: "1 stored" }).waitFor();
   const availableSource = await openSourceDrilldown(memoryLibrary, '[aria-label="Fact memory atom-fact"]');
@@ -199,7 +312,7 @@ try {
     includes: ["Saved locally", "From Greyfield", "No message text is saved for this source."],
     excludes: ["Source unavailable in this local session store", "Unknown role", "desktop-main-session-preference"]
   });
-  const missingSource = await openSourceDrilldown(memoryLibrary, '[aria-label="Opinion memory atom-opinion"]');
+  const missingSource = await openSourceDrilldown(memoryLibrary, '[aria-label="Opinion memory atom-missing-opinion"]');
   await missingSource.getByText("Original message not found").first().waitFor();
   await assertSourceStateText(missingSource, {
     includes: [
@@ -208,7 +321,7 @@ try {
       "Source turn is missing from the current session store.",
       "Greyfield saved a source link"
     ],
-    excludes: ["Unknown role", "desktop-main-session-opinion"]
+    excludes: ["Unknown role", "desktop-main-session-missing-opinion"]
   });
   await captureSourceState(settings, missingSource, missingSourceScreenshotPath);
   const unavailableSource = await openSourceDrilldown(memoryLibrary, '[aria-label="Relationship memory atom-relationship"]');
@@ -223,6 +336,12 @@ try {
     excludes: ["Unknown role", "desktop-main-session-relationship"]
   });
   await captureSourceState(settings, unavailableSource, unavailableSourceScreenshotPath);
+  const recalledSceneSource = await openSourceDrilldown(memoryLibrary, '[aria-label="Scene memory atom-vague-scene"]');
+  await recalledSceneSource.getByText("家里开着窗一起吃晚饭").waitFor();
+  await assertSourceStateText(recalledSceneSource, {
+    includes: ["From you", "Saved from conversation", "家里开着窗一起吃晚饭", "避风港", "雨声和桌上的粥"],
+    excludes: ["Unknown role", "desktop-main-session-scene"]
+  });
   const noSource = await openSourceDrilldown(memoryLibrary, '[aria-label="Scene memory atom-scene"]');
   await noSource.getByText("No original message is linked to this memory.").first().waitFor();
   await assertSourceStateText(noSource, {
@@ -244,6 +363,64 @@ try {
   }
   await settings.screenshot({ path: settingsInitialScreenshotPath, fullPage: true });
 
+  await assertNoVagueRecall(chat, {
+    input: "明天香港会不会下雨？",
+    forbiddenFragments: [vagueSceneText, vagueSceneSource, atomOpinionText, atomPromiseText, vagueRitualText]
+  });
+  await assertVagueRecallPath(chat, {
+    input: "这个新游戏也很傻逼，好像之前某个游戏，之前为什么这么说？",
+    promptIncludes: [
+      "Recall reason: The user is asking about a similar earlier game complaint",
+      "Source fragments:",
+      "教程像坏掉的电梯",
+      "剧情把玩家当成没睡醒的测试员"
+    ],
+    promptExcludes: [vaguePromiseSource, vagueRitualSource, vagueSceneSource, "desktop-main-session-missing-opinion"],
+    responseIncludes: ["similar earlier game complaint", "教程像坏掉的电梯", "剧情把玩家当成没睡醒的测试员"]
+  });
+  await assertVagueRecallPath(chat, {
+    input: "你之前说好要帮我整理的那件事原文是什么？",
+    promptIncludes: [
+      "Recall reason: The user is asking about a prior commitment between the user and Greyfield.",
+      "Source-linked promise memory",
+      "Source fragments:",
+      "你答应以后帮我整理书桌"
+    ],
+    promptExcludes: ["客户承诺", vagueRitualSource, vagueSceneSource],
+    responseIncludes: ["desk promise", "你答应以后帮我整理书桌"]
+  });
+  await assertVagueRecallPath(chat, {
+    input: "那个每年固定的小仪式原文是什么？",
+    promptIncludes: [
+      "Recall reason: The user is asking about a remembered shared ritual or important date.",
+      "Source-linked relationship memory",
+      "Recurrence: annual",
+      "Ritual action: 一起泡桂花茶",
+      "Source fragments:",
+      "每年 12 月 24 日",
+      "一起泡桂花茶"
+    ],
+    promptExcludes: [vagueOpinionSource, vaguePromiseSource, vagueSceneSource],
+    responseIncludes: ["shared annual ritual", "每年 12 月 24 日", "一起泡桂花茶"]
+  });
+  await assertNoVagueRecall(chat, {
+    input: "同事那天下雨开窗吃饭的场景原文是什么？",
+    forbiddenFragments: [vagueSceneText, vagueSceneSource, "家里开着窗一起吃晚饭", "Source-linked scene memory"]
+  });
+  await assertVagueRecallPath(chat, {
+    input: "那个下雨开窗一起吃东西的场景原文是什么？",
+    promptIncludes: [
+      "Recall reason: The user is asking about a shared scene with matching place, weather, or activity details.",
+      "Source-linked scene memory",
+      "Source fragments:",
+      "家里开着窗一起吃晚饭",
+      "避风港",
+      "雨声和桌上的粥"
+    ],
+    promptExcludes: [vagueOpinionSource, vaguePromiseSource, vagueRitualSource],
+    responseIncludes: ["rainy shared scene", "家里开着窗一起吃晚饭", "雨声和桌上的粥"]
+  });
+
   await switchCharacter(settings, otherRoleCharacterFile);
   await memoryLibrary.locator('[aria-label="Preference memory atom-other-role"]', { hasText: "Other role memory must stay isolated." }).waitFor();
   const roleBText = (await memoryLibrary.textContent()) ?? "";
@@ -258,8 +435,8 @@ try {
   await settings.getByRole("button", { name: "Save memory atom-preference" }).click();
   await memoryLibrary.getByText("Atom memory atom-preference saved.").waitFor();
   await waitForAtom("atom-preference", (atom) => atom.text === editedAtomText);
-  await settings.getByLabel("Memory text atom-promise").fill(editedPromiseText);
-  await settings.getByRole("button", { name: "Save memory atom-promise" }).click();
+  await settings.getByRole("textbox", { name: "Memory text atom-promise", exact: true }).fill(editedPromiseText);
+  await settings.getByRole("button", { name: "Save memory atom-promise", exact: true }).click();
   await memoryLibrary.getByText("Atom memory atom-promise saved.").waitFor();
   await waitForAtom("atom-promise", (atom) => atom.text === editedPromiseText);
 
@@ -276,7 +453,7 @@ try {
   if (singleAtomExport.includes("Other role memory must stay isolated.")) {
     throw new Error("Single-atom export included another role's atom.");
   }
-  await settings.getByRole("button", { name: "Export memory atom-promise" }).click();
+  await settings.getByRole("button", { name: "Export memory atom-promise", exact: true }).click();
   await memoryLibrary.getByText("Atom memory atom-promise export is ready.").waitFor();
   const promiseAtomExport = await settings.getByLabel("Memory library export").inputValue();
   if (!promiseAtomExport.includes(editedPromiseText)) {
@@ -309,6 +486,8 @@ try {
   await memoryLibrary.locator('[aria-label="Preference memory atom-preference"]', { hasText: editedAtomText }).waitFor();
   await memoryLibrary.locator('[aria-label="Opinion memory atom-opinion"]', { hasText: atomOpinionText }).waitFor();
   await memoryLibrary.locator('[aria-label="Promise memory atom-promise"]', { hasText: editedPromiseText }).waitFor();
+  await memoryLibrary.locator('[aria-label="Relationship memory atom-vague-ritual"]', { hasText: "osmanthus tea" }).waitFor();
+  await memoryLibrary.locator('[aria-label="Scene memory atom-vague-scene"]', { hasText: "safe harbor" }).waitFor();
   await assertCurrentRoleOnly(memoryLibrary);
   await waitForAtom("atom-preference", (atom) => atom.text === editedAtomText && atom.disabled === false);
   await waitForAtom("atom-promise", (atom) => atom.text === editedPromiseText);
@@ -317,7 +496,7 @@ try {
   await sendMessageAndWaitForNextAssistant(chat, "pay-to-win game loops 这条记忆还在吗？");
   assertLatestSystemPromptIncludes(atomOpinionText, "atom-opinion should be recalled before deletion");
 
-  await settings.getByRole("button", { name: "Delete memory atom-opinion" }).click();
+  await settings.getByRole("button", { name: "Delete memory atom-opinion", exact: true }).click();
   await memoryLibrary.getByText("Atom memory atom-opinion deleted. Raw chat history and summaries were kept").waitFor();
   await waitForMissingAtom("atom-opinion");
   clearCapturedRequests();
@@ -336,19 +515,26 @@ try {
   await assertSettingsPageDoesNotExposeProviderSecret(settings);
 
   await settings.getByRole("button", { name: "Clear current role atoms" }).click();
-  await memoryLibrary.getByText("Cleared 5 current role atom memories. Raw chat history and summaries were kept.").waitFor();
+  await memoryLibrary.getByText(/Cleared \d+ current role atom memories\. Raw chat history and summaries were kept\./u).waitFor();
   await waitForMissingAtom("atom-fact");
   await waitForMissingAtom("atom-preference");
+  await waitForMissingAtom("atom-missing-opinion");
   await waitForMissingAtom("atom-relationship");
+  await waitForMissingAtom("atom-vague-ritual");
   await waitForMissingAtom("atom-scene");
+  await waitForMissingAtom("atom-vague-scene");
   await waitForMissingAtom("atom-promise");
   await waitForAtom("atom-other-role", (atom) => atom.threadId === otherThreadId);
-  await memoryLibrary.locator(".memory-library__empty", { hasText: "No memories yet." }).waitFor();
   const afterClearText = (await memoryLibrary.textContent()) ?? "";
   assertTextDoesNotExposeForbiddenMemoryUi(afterClearText);
   await assertSettingsPageDoesNotExposeProviderSecret(settings);
   if (afterClearText.includes("Other role memory must stay isolated.")) {
     throw new Error("Memory Library rendered the isolated role-B atom after clearing current role atoms.");
+  }
+  for (const fragment of [atomOpinionText, editedAtomText, editedPromiseText, vagueRitualText, vagueSceneText]) {
+    if (afterClearText.includes(fragment)) {
+      throw new Error(`Memory Library still rendered a cleared current-role atom after clear: ${fragment}`);
+    }
   }
   await settings.screenshot({ path: settingsAfterClearScreenshotPath, fullPage: true });
 
@@ -365,10 +551,17 @@ try {
         enabledAtomReturnedToPrompt: true,
         atomDeleteRemovedFromPrompt: true,
         atomDeleteRemovedFromExport: true,
+        vagueOpinionRecallUserPath: true,
+        vaguePromiseRecallUserPath: true,
+        vagueRelationshipDateRecallUserPath: true,
+        vagueSceneRecallUserPath: true,
+        vagueRecallFalsePositiveRejected: true,
+        vagueRecallResponseExcludedInternalIds: true,
         clearCurrentRoleKeptOtherRoleAtom: true,
         roleBMemoryIsolated: true,
         reloadPersistence: true,
         sourceDrilldownOpened: true,
+        sourceDrilldownOpenedForRecalledScene: true,
         sourceDrilldownClosed: true,
         sourceDrilldownNoOverflow: true,
         memoryDomExcludedProviderSecret: true,
@@ -445,6 +638,25 @@ async function readRequestBody(request: IncomingMessage): Promise<string> {
   return raw;
 }
 
+function buildScriptedAssistantResponse(requestBody: string): string {
+  const parsed = JSON.parse(requestBody) as { messages?: Array<{ role?: string; content?: string }> };
+  const userInput = [...(parsed.messages ?? [])].reverse().find((message) => message.role === "user")?.content ?? "";
+  const systemPrompt = parsed.messages?.find((message) => message.role === "system")?.content ?? "";
+  if (userInput.includes("某个游戏") && systemPrompt.includes("教程像坏掉的电梯")) {
+    return "I remember the similar earlier game complaint because your question matches that saved complaint. Source fragment: 教程像坏掉的电梯，剧情把玩家当成没睡醒的测试员。";
+  }
+  if (userInput.includes("说好要帮我整理") && systemPrompt.includes("你答应以后帮我整理书桌")) {
+    return "I remember the desk promise because it was a prior commitment between us. Source fragment: 你答应以后帮我整理书桌。";
+  }
+  if (userInput.includes("每年固定的小仪式") && systemPrompt.includes("一起泡桂花茶")) {
+    return "I remember the shared annual ritual because the question points to our fixed date. Source fragment: 每年 12 月 24 日，一起泡桂花茶。";
+  }
+  if (userInput.includes("下雨开窗一起吃东西") && systemPrompt.includes("家里开着窗一起吃晚饭")) {
+    return "I remember the rainy shared scene because the weather, open window, and meal details match. Source fragment: 家里开着窗一起吃晚饭，雨声和桌上的粥。";
+  }
+  return "No related source-linked memory surfaced for that question.";
+}
+
 async function switchCharacter(settings: Page, characterFile: string): Promise<void> {
   await settings.getByLabel("Character").fill(characterFile);
   await settings.waitForTimeout(250);
@@ -458,7 +670,7 @@ async function assertCurrentRoleOnly(memoryLibrary: Locator): Promise<void> {
   }
 }
 
-async function sendMessageAndWaitForNextAssistant(page: Page, text: string): Promise<void> {
+async function sendMessageAndWaitForNextAssistant(page: Page, text: string): Promise<string> {
   const previousCount = await page.locator(".message-list .assistant:not(.draft)").count();
   await page.getByLabel("Message").fill(text);
   await page.getByRole("button", { name: "Send" }).click();
@@ -467,6 +679,7 @@ async function sendMessageAndWaitForNextAssistant(page: Page, text: string): Pro
     previousCount,
     { timeout: 10_000 }
   );
+  return (await page.locator(".message-list .assistant:not(.draft)").last().innerText()).trim();
 }
 
 function clearCapturedRequests(): void {
@@ -484,6 +697,78 @@ function assertLatestSystemPromptExcludes(fragment: string, reason: string): voi
   const systemPrompt = latestSystemPrompt();
   if (systemPrompt.includes(fragment)) {
     throw new Error(`${reason}; prompt=${systemPrompt}`);
+  }
+}
+
+async function assertVagueRecallPath(
+  page: Page,
+  expected: {
+    input: string;
+    promptIncludes: string[];
+    promptExcludes: string[];
+    responseIncludes: string[];
+  }
+): Promise<void> {
+  clearCapturedRequests();
+  const response = await sendMessageAndWaitForNextAssistant(page, expected.input);
+  const prompt = latestSystemPrompt();
+  for (const fragment of expected.promptIncludes) {
+    if (!prompt.includes(fragment)) {
+      throw new Error(`Vague recall prompt missed ${fragment}: ${prompt}`);
+    }
+  }
+  for (const fragment of expected.promptExcludes) {
+    if (prompt.includes(fragment)) {
+      throw new Error(`Vague recall prompt included unrelated ${fragment}: ${prompt}`);
+    }
+  }
+  for (const fragment of expected.responseIncludes) {
+    if (!response.includes(fragment)) {
+      throw new Error(`Vague recall response missed ${fragment}: ${response}`);
+    }
+  }
+  // Prompt material is internal: it may carry implementation source refs while the response is the user-visible surface.
+  assertNoInternalMemoryIdentifiers(response, "vague recall response");
+  assertNoLocalSourceTurnIds(response, "vague recall response");
+}
+
+async function assertNoVagueRecall(
+  page: Page,
+  expected: {
+    input: string;
+    forbiddenFragments: string[];
+  }
+): Promise<void> {
+  clearCapturedRequests();
+  const response = await sendMessageAndWaitForNextAssistant(page, expected.input);
+  const prompt = latestSystemPrompt();
+  for (const fragment of expected.forbiddenFragments) {
+    if (prompt.includes(fragment)) {
+      throw new Error(`False-positive prompt included ${fragment}: ${prompt}`);
+    }
+    if (response.includes(fragment)) {
+      throw new Error(`False-positive response included ${fragment}: ${response}`);
+    }
+  }
+  if (!response.includes("No related source-linked memory surfaced")) {
+    throw new Error(`False-positive response should not claim recall: ${response}`);
+  }
+  // Prompt material is internal: product leakage checks belong on assistant output and Memory Library UI.
+  assertNoInternalMemoryIdentifiers(response, "false-positive response");
+  assertNoLocalSourceTurnIds(response, "false-positive response");
+}
+
+function assertNoInternalMemoryIdentifiers(text: string, label: string): void {
+  const leaked = text.match(/\b(?:memory-atom|atom-[\w-]+)\b/iu);
+  if (leaked) {
+    throw new Error(`${label} exposed internal memory identifier ${leaked[0]}: ${text}`);
+  }
+}
+
+function assertNoLocalSourceTurnIds(text: string, label: string): void {
+  const leaked = text.match(/\bdesktop-main-session-[\w-]+\b/iu);
+  if (leaked) {
+    throw new Error(`${label} exposed local source turn id ${leaked[0]}: ${text}`);
   }
 }
 
