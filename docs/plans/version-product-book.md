@@ -136,7 +136,7 @@ V2.1 成功时，用户不需要打开调试面板，也不需要审批一堆候
 
 仍然不能完整承诺的是：
 
-- deterministic semantic/relationship graph-equivalent 最小路径已经能覆盖关系仪式召回；广义 embedding/vector DB、完整 relationship graph 和完整关系事件层还没有实现。
+- deterministic semantic/relationship graph-equivalent 最小路径已经能覆盖关系仪式召回；广义 embedding/vector DB、完整 node-edge relationship graph 和完整关系事件层还没有实现，这组 A-Memorix 级基础设施后移到 V3 遗留，不作为 V2.2 要求。
 - 桌面路径已有受控 scene-signal scheduler 和 proactive bubble；真实外部天气、虚拟家、屏幕、久别天数等信号采集还没有实现。
 - Memory Library 已有 harnessed source views；每种记忆都能在 renderer 里点开“为什么想起这个”的 polished UI 仍未完成。
 - LLM-backed atom extraction 仍是显式 runtime 模式和 scripted provider 证据，不是默认 Settings/桌面产品流。
@@ -150,7 +150,7 @@ V2.1 成功时，用户不需要打开调试面板，也不需要审批一堆候
 | --- | --- | --- | --- |
 | 长聊压缩 | done | `pnpm harness:memory-benchmark` 通过 summary regression 和 long-chat source traceability；summary segment 带 source turn ids 和 recall cues。 | LLM summarizer 可后续提升质量，但最低 source-linked compression 已成立。 |
 | 结构化长期记忆 | partial | benchmark 覆盖 preference、relationship date、rose preference、game opinion、privacy rule、episodic scene 等 source-linked atoms；invalid LLM 输出会 fallback。 | 默认桌面 LLM extraction UX、更多 promise/relationship/scene 覆盖和更强 privacy classification 后移。 |
-| 触发召回 | partial | 覆盖 exact/cue/alias/secondary、calendar、deterministic semantic/relationship ritual recall、false-positive rejection、budget、disabled skip、pure core scene proactive candidates，以及 production scene-signal scheduler + desktop proactive message。 | 完整 embedding/vector DB、更广 relationship graph、真实环境/虚拟家 signal feed 后移。 |
+| 触发召回 | partial | 覆盖 exact/cue/alias/secondary、calendar、deterministic semantic/relationship ritual recall、false-positive rejection、budget、disabled skip、pure core scene proactive candidates，以及 production scene-signal scheduler + desktop proactive message。 | 完整 embedding/vector DB 与 node-edge relationship graph 后移到 V3；真实环境/虚拟家 signal feed 仍是后续产品化工作。 |
 | 原文回查 | partial | atom recall 可把 linked raw source fragments 注入 prompt material；Memory Library source 状态和截图由 Electron harness 覆盖。 | 每种 memory type 的 polished source-explanation UI 后移。 |
 | 可管理和可退化 | partial | `harness:electron:memory-control` 与 `harness:electron:memory-atom-library` 证明编辑、禁用、启用、删除、导出、当前角色清空、角色隔离、reload persistence、secret 排除、无 pending approval、hard-erased remembered evidence 不再进入产品召回/来源/导出/prompt；系统不依赖 vector/embedding。 | raw JSONL 本地非产品存储、默认 LLM extraction UX、所有 memory type 的完整来源管理和更广 privacy classification 后移。 |
 
@@ -435,11 +435,14 @@ V1 解决“能发声”。V2.5 解决“声音像这个角色”，同时要保
 
 只有当桌宠、记忆、角色、屏幕感知、操作和声音都稳定后，Greyfield 才适合开放内容包和工具生态。
 
+V3 同时承接 A-Memorix 级记忆基础设施遗留：V2.1 已经打通最低 MaiBot-style 记忆闭环，但不追完整 embedding/vector DB、vector recall、node-edge long-term memory graph、graph retrieval fusion、backfill/migration 和 graph/source/profile 管理体验。
+
 ### 要做什么
 
 - 角色包：Live2D、人设、声音、动作、气泡样式。
 - 内容包：世界书、知识库、台词库。
 - 工具包：权限声明、测试夹具、UI 声明。
+- 记忆基础设施：embedding provider、vector store、vector recall、node-edge relationship graph、source/evidence graph、backfill/migration、graph/vector retrieval fusion。
 - 本地 sandbox 和资产 license 检查。
 
 ### 预期效果
@@ -478,7 +481,7 @@ V1 解决“能发声”。V2.5 解决“声音像这个角色”，同时要保
 
 | Issue | 建议 | 理由 |
 | --- | --- | --- |
-| #75 | 关闭 V2.1 最低切片，另开/后移 V2.2+ semantic/vector、relationship graph、完整 renderer drilldown。 | 日期召回、alias/secondary、false-positive、source fragment 和 prompt budget 已有证据；完整长期召回系统超出 V2.1。 |
+| #75 | 关闭 V2.1 最低切片；完整 renderer drilldown 作为后续产品化工作，semantic/vector DB 与 node-edge relationship graph 后移 V3。 | 日期召回、alias/secondary、false-positive、source fragment 和 prompt budget 已有证据；A-Memorix 级长期记忆基础设施不作为 V2.2 要求。 |
 | #76 | 关闭 V2.1 最低切片，另开/后移真实外部 scene feed、天气、虚拟家状态和更完整场景触发。 | core proactive candidate、minimum production scene-signal scheduler 与 desktop bubble 已有证据；真实信号采集还没做。 |
 | #77 | 关闭 V2.1 最低切片，另开/后移 broader privacy classification、完整 source management 和更广 privacy/delete 语义。 | Memory Library 已经用户可见并覆盖 summary/current-role atoms；hard-erased remembered evidence 已从产品召回/来源/导出/prompt 路径隐藏。 |
 | #79 | #125 合入后关闭 roadmap。 | V2.1 最低闭环已有证据，剩余项应该拆成 V2.2+ atomic issues，避免 V2.1 无限扩张。 |

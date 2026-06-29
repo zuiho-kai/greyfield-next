@@ -21,7 +21,7 @@ What the user can trust now:
 
 What is still partial or post-V2.1:
 
-- A deterministic semantic/relationship graph-equivalent minimum path exists for source-linked relationship rituals, but a full embedding/vector database and broad relationship graph are not implemented.
+- A deterministic semantic/relationship graph-equivalent minimum path exists for source-linked relationship rituals, but a full embedding/vector database and broad node-edge relationship graph are not implemented; these A-Memorix-class infrastructure pieces are V3 backlog, not V2.2 scope.
 - The desktop runtime has a minimum production scheduler input, but it still does not gather real weather, virtual-home, screen, or absence signals from external feeds.
 - Renderer-level source drilldown exists for the Memory Library harnessed paths, but a polished "why I remembered this" explanation surface for every memory type is still future work.
 - LLM-backed atom extraction exists behind explicit runtime modes and scripted benchmark providers, not as a default Settings/desktop product flow.
@@ -107,7 +107,7 @@ Still incomplete after these V2.1 slices:
 - production scene-signal collection for real weather, virtual-home, screen, and absence context.
 - polished source-explanation UI for every memory type; harnessed Memory Library source views and atom prompt material already include bounded source fragments.
 - LLM-generated summarizer replacement for the extractive draft.
-- full embedding/vector database recall and broader relationship graph coverage beyond the deterministic #120 minimum path.
+- full embedding/vector database recall and broader node-edge relationship graph coverage beyond the deterministic #120 minimum path; this is V3 memory-infrastructure backlog.
 
 ## V2.1 Product Direction
 
@@ -128,7 +128,7 @@ The #125 closeout uses "minimum MaiBot-style loop" as the bar: old chat leaves s
 | --- | --- | --- | --- |
 | Long-chat compression | Done | `pnpm harness:memory-benchmark` passes summary regression and long-chat source traceability with source turn IDs and recall cues. | LLM-generated summary replacement can improve quality later, but the minimum source-linked compression loop exists. |
 | Structured long-term memory | Partial | Dynamic benchmark cases cover source-linked atoms for preferences, relationship dates, rose preference, game opinion, privacy rule, and rainy virtual-home hotpot scene; invalid LLM output falls back deterministically. | Default Settings/desktop UX for LLM-backed extraction, broader promise/relationship coverage, and stronger privacy classification remain later work. |
-| Trigger recall | Partial | Benchmark covers deterministic summary recall, alias/secondary/negative-game cues, calendar recall, #120 deterministic semantic/relationship ritual recall with raw source evidence, false-positive rejection, prompt budget, disabled-memory skips, pure core proactive scene candidates, and desktop proactive bubble display. | Full embedding/vector DB recall, broader relationship graph coverage, and real environment/virtual-home signal feeds remain post-V2.1. |
+| Trigger recall | Partial | Benchmark covers deterministic summary recall, alias/secondary/negative-game cues, calendar recall, #120 deterministic semantic/relationship ritual recall with raw source evidence, false-positive rejection, prompt budget, disabled-memory skips, pure core proactive scene candidates, and desktop proactive bubble display. | Full embedding/vector DB recall and broader node-edge relationship graph coverage are V3 backlog; real environment/virtual-home signal feeds remain post-V2.1 productization work. |
 | Original-text drilldown | Partial | Atom recall can inject bounded raw source fragments from linked turns for the game-review drilldown case, and Memory Library source states are covered by Electron harness screenshots. | A polished source-explanation UI for every memory type is still missing. |
 | Manageable and degradable | Partial | `pnpm harness:electron:memory-control` and `pnpm harness:electron:memory-atom-library` prove edit, disable, enable, delete, export, current-role atom clear, role isolation, reload persistence, provider-secret exclusion, no pending-candidate approval UI, and hard-erased source evidence hidden from product recall/source/export/prompt paths; no vector database is required. | Raw session JSONL remains local non-product storage, default LLM extraction UX and broader privacy classification remain future work, and source management is not complete for every memory type. |
 
@@ -136,7 +136,7 @@ Issue closeout recommendation after the #125 closeout PR merges:
 
 | Issue | Recommendation | Reason |
 | --- | --- | --- |
-| #75 | Close for the V2.1 minimum slice; move full embedding/vector DB, broader relationship graph, and full renderer drilldown to V2.2+. | Calendar, alias/secondary, #120 deterministic semantic/relationship minimum, false-positive, prompt-budget, and source-fragment evidence now exists, but the full long-term recall system is still larger than V2.1. |
+| #75 | Close for the V2.1 minimum slice; move full renderer drilldown to post-V2.1 product work, and move full embedding/vector DB plus broader node-edge relationship graph to V3. | Calendar, alias/secondary, #120 deterministic semantic/relationship minimum, false-positive, prompt-budget, and source-fragment evidence now exists, but the A-Memorix-class memory engine is deliberately not a V2.2 requirement. |
 | #76 | Close for the V2.1 minimum slice; move real external weather/virtual-home integration and richer scene feeds to V2.2+. | Core scene candidates, minimum production scene-signal scheduler, and desktop proactive bubble display are proved, but real signal collection is not implemented. |
 | #77 | Close for the V2.1 minimum slice; move broader privacy classification and complete source-management UX to V2.2+. | Memory Library management is user-visible and harnessed for summary/current-role atoms, and hard-erased remembered evidence is hidden from product recall/source/export/prompt paths. |
 | #79 | Close after #125 merges if maintainers accept this minimum-loop definition. | The roadmap has reached a documented closeout decision; remaining ideas should become narrower V2.2+ issues instead of keeping V2.1 open indefinitely. |
