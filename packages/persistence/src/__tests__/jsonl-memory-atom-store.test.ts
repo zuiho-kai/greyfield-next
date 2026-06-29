@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { MemoryAtom } from "@greyfield/core-runtime";
 import { describe, expect, it } from "vitest";
 import { JsonlMemoryAtomStore } from "../jsonl-memory-atom-store";
+import { JsonlDeletedMemoryEvidenceStore } from "../jsonl-deleted-memory-evidence-store";
 
 describe("JsonlMemoryAtomStore", () => {
   it("persists, upserts, updates, dedupes, deletes, and preserves source turn ids", async () => {
@@ -118,6 +119,38 @@ describe("JsonlMemoryAtomStore", () => {
       expect(await store.list("thread-a")).toEqual([]);
       expect(await store.list("thread-b")).toEqual([]);
       expect(await readFile(atomPath, "utf8")).toBe("");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("JsonlDeletedMemoryEvidenceStore", () => {
+  it("persists deleted evidence tombstones without raw source text", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "greyfield-deleted-evidence-"));
+    try {
+      const path = join(dir, "deleted-evidence.jsonl");
+      const store = new JsonlDeletedMemoryEvidenceStore(path);
+
+      const stored = await store.append({
+        threadId: "thread-a",
+        kind: "memory-atom",
+        memoryId: "atom-hiyori",
+        sourceSessionId: "session-a",
+        sourceTurnIds: [" turn-a ", "turn-a", "turn-b"],
+        deletedAt: "2026-06-29T00:00:00.000Z"
+      });
+
+      expect(stored).toMatchObject({
+        threadId: "thread-a",
+        kind: "memory-atom",
+        memoryId: "atom-hiyori",
+        sourceSessionId: "session-a",
+        sourceTurnIds: ["turn-a", "turn-b"],
+        deletedAt: "2026-06-29T00:00:00.000Z"
+      });
+      await expect(new JsonlDeletedMemoryEvidenceStore(path).list("thread-a")).resolves.toEqual([stored]);
+      expect(await readFile(path, "utf8")).not.toContain("Hiyori source raw text");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

@@ -1,6 +1,7 @@
 import { isAbsolute, join } from "node:path";
 import type { GreyfieldConfig } from "@greyfield/persistence/config-schema";
 import {
+  JsonlDeletedMemoryEvidenceStore,
   JsonlMemoryAtomStore,
   JsonlSessionStore,
   JsonlSummarySegmentStore,
@@ -16,14 +17,15 @@ export interface DesktopRuntimeStoreOptions {
 
 export function createDesktopRuntimeStoreOptions(options: DesktopRuntimeStoreOptions): Pick<
   RuntimeServiceOptions,
-  "loadPersona" | "memoryStore" | "sessionStore" | "summarySegmentStore" | "memoryAtomStore"
+  "loadPersona" | "memoryStore" | "sessionStore" | "summarySegmentStore" | "memoryAtomStore" | "deletedMemoryEvidenceStore"
 > {
   return {
     loadPersona: (config) => loadCharacterPersona(resolveCharacterPath(config, options.projectRoot)),
     memoryStore: new MarkdownMemoryStore(join(options.projectRoot, "data", "memory.md")),
     sessionStore: new JsonlSessionStore("desktop-main-session", join(options.userDataPath, "sessions", "desktop-main-session.jsonl")),
     summarySegmentStore: new JsonlSummarySegmentStore(join(options.userDataPath, "memory", "summary-segments.jsonl")),
-    memoryAtomStore: new JsonlMemoryAtomStore(join(options.userDataPath, "memory", "atoms.jsonl"))
+    memoryAtomStore: new JsonlMemoryAtomStore(join(options.userDataPath, "memory", "atoms.jsonl")),
+    deletedMemoryEvidenceStore: new JsonlDeletedMemoryEvidenceStore(join(options.userDataPath, "memory", "deleted-evidence.jsonl"))
   };
 }
 

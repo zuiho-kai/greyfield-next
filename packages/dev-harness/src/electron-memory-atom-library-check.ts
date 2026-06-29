@@ -497,7 +497,9 @@ try {
   assertLatestSystemPromptIncludes(atomOpinionText, "atom-opinion should be recalled before deletion");
 
   await settings.getByRole("button", { name: "Delete memory atom-opinion", exact: true }).click();
-  await memoryLibrary.getByText("Atom memory atom-opinion deleted. Raw chat history and summaries were kept").waitFor();
+  await memoryLibrary
+    .getByText("Atom memory atom-opinion deleted. Remembered source evidence was hidden from recall, source views, and exports.")
+    .waitFor();
   await waitForMissingAtom("atom-opinion");
   clearCapturedRequests();
   await sendMessageAndWaitForNextAssistant(chat, "pay-to-win game loops 删除后不应该再召回。");
@@ -515,7 +517,11 @@ try {
   await assertSettingsPageDoesNotExposeProviderSecret(settings);
 
   await settings.getByRole("button", { name: "Clear current role atoms" }).click();
-  await memoryLibrary.getByText(/Cleared \d+ current role atom memories\. Raw chat history and summaries were kept\./u).waitFor();
+  await memoryLibrary
+    .getByText(
+      /Cleared \d+ current role atom memories\. Remembered source evidence was hidden from recall, source views, and exports\./u
+    )
+    .waitFor();
   await waitForMissingAtom("atom-fact");
   await waitForMissingAtom("atom-preference");
   await waitForMissingAtom("atom-missing-opinion");

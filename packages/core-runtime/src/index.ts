@@ -1,6 +1,7 @@
 export * from "./events";
 export * from "./memory-atoms";
 export * from "./memory-context";
+export * from "./memory-erasure";
 export * from "./openai-compatible-provider";
 export * from "./openai-compatible-tts-provider";
 export * from "./openai-compatible-asr-provider";

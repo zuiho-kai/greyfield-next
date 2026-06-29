@@ -10,6 +10,7 @@ import {
   formatMemoryAtomRecallContextForPrompt,
   formatRecallContextForPrompt,
   LLMBackedMemoryAtomExtractor,
+  sourceTurnIdsContainDeletedEvidence,
   type EnvironmentTriggerState,
   type MemoryAtom,
   type MemoryAtomExtractionMode,
@@ -138,6 +139,7 @@ interface RecallBenchmarkCase {
   expectedSkipped?: ExpectedSkipped[];
   maxItems?: number;
   maxCharacters?: number;
+  deletedSourceTurnIds?: string[];
   promptIncludes?: string[];
   promptExcludes?: string[];
 }
@@ -642,9 +644,34 @@ function runSummaryCase(testCase: SummaryBenchmarkCase, loadedFixture: MemoryBen
 }
 
 function runRecallCase(testCase: RecallBenchmarkCase): CaseResult {
+  const deletedEvidence =
+    testCase.deletedSourceTurnIds && testCase.deletedSourceTurnIds.length > 0
+      ? [
+          {
+            id: `benchmark-deleted-${testCase.id}`,
+            threadId: fixture.threadId,
+            kind: "summary-segment" as const,
+            memoryId: testCase.rejectedIds[0] ?? "benchmark-memory",
+            sourceTurnIds: testCase.deletedSourceTurnIds,
+            sourceSessionId: fixture.sessionId,
+            deletedAt: new Date(0).toISOString()
+          }
+        ]
+      : [];
+  const summarySegments =
+    deletedEvidence.length === 0
+      ? recallSegments
+      : recallSegments.filter(
+          (segment) =>
+            !sourceTurnIdsContainDeletedEvidence(
+              segment.sourceTurns.map((turn) => turn.turnId),
+              deletedEvidence,
+              fixture.sessionId
+            )
+        );
   const context = buildRecallContext({
     input: testCase.input,
-    summarySegments: recallSegments,
+    summarySegments,
     maxItems: testCase.maxItems,
     maxCharacters: testCase.maxCharacters
   });
@@ -703,6 +730,7 @@ function runRecallCase(testCase: RecallBenchmarkCase): CaseResult {
       budget: context.budget,
       missingExpected,
       rejectedHits,
+      deletedSourceTurnIds: testCase.deletedSourceTurnIds ?? [],
       missingSkipped,
       missingPromptFragments,
       unexpectedPromptFragments,

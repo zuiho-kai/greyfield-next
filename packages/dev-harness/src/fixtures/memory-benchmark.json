@@ -36,11 +36,11 @@
       },
       {
         "id": "memory-library-correction",
-        "description": "Memory Library can edit, disable, delete, export, and clear existing summary memory plus current-role atom memory; atom clear keeps raw turns and summaries, and renderer-level source drilldown is still not implemented.",
+        "description": "Memory Library can edit, disable, delete, export, and clear existing summary memory plus current-role atom memory; deletes tombstone remembered source evidence so recall, source drilldown, exports, and prompt material no longer show it.",
         "status": "partial",
         "score": 0.6,
         "weight": 0.07,
-        "evidence": "harness:electron:memory-control covers summary correction; harness:electron:memory-atom-library covers atom groups, edit, disable, delete, export, current-role clear, role isolation, and provider-secret exclusion. The memory benchmark itself remains non-UI and does not dynamically prove these UI controls."
+        "evidence": "harness:electron:memory-control covers summary correction, source drilldown, hard-erased source export exclusion, and provider-secret exclusion; harness:electron:memory-atom-library covers atom groups, edit, disable, delete, export, current-role clear, role isolation, prompt exclusion, and provider-secret exclusion. The memory benchmark dynamically proves deleted summary source evidence is not recalled."
       },
       {
         "id": "memory-atom-extraction",
@@ -96,7 +96,7 @@
         "status": "partial",
         "score": 0.42,
         "weight": 0.08,
-        "evidence": "LLM atom validation and automatic write policy reject scripted Settings/weather event source turns and secret-like provider text, including structured atom fields, before persistence. Broader privacy classification and raw-turn erasure remain incomplete."
+        "evidence": "LLM atom validation and automatic write policy reject scripted Settings/weather event source turns and secret-like provider text, including structured atom fields, before persistence. Runtime/service tests and Electron harnesses prove provider secrets and deleted source evidence stay out of prompt material, source UI, and exports; broader privacy classification remains limited."
       }
     ],
     "scenarios": [
@@ -136,7 +136,7 @@
           "calendar recall should surface birthday and first-meeting anniversary without exact keyword overlap",
           "drilldown should show source turns rose-1 and rose-2"
         ],
-        "currentGap": "Hybrid LLM-backed extraction can now add the separate rose preference atom while deterministic extraction preserves birthday and first-meeting dates. Runtime use is explicit rather than default, renderer source drilldown UI is still absent, and atom clear still does not erase raw turns or summaries.",
+        "currentGap": "Hybrid LLM-backed extraction can now add the separate rose preference atom while deterministic extraction preserves birthday and first-meeting dates. Runtime use is explicit rather than default, and raw session JSONL remains non-product storage even though deleted remembered source evidence is hidden from recall, source UI, exports, and prompt material.",
         "sourceExpectations": {
           "sourceTurnIds": ["rose-1", "rose-2"],
           "exactFragments": ["我的生日是 9 月 7 日", "第一次相遇是 2024 年 5 月 20 日", "红玫瑰"]
@@ -273,7 +273,7 @@
           "recall through semantic promise and organization cues when exact, alias, and secondary lanes are disabled",
           "source drilldown should include the raw promise turn and unrelated project/customer promise prompts must not inject it"
         ],
-        "currentGap": "This proves the core source-linked promise-memory slice only. It does not add pending approval UI, Settings UX, renderer source-drilldown, recurring ritual expansion, shared-scene expansion, scheduler behavior, or hard-erasure semantics.",
+        "currentGap": "This proves the core source-linked promise-memory slice only. It does not add pending approval UI, recurring ritual expansion, shared-scene expansion, scheduler behavior, or whole-retention/legal-hold policy.",
         "sourceExpectations": {
           "sourceTurnIds": ["promise-1"],
           "exactFragments": ["你答应以后帮我整理书桌", "这个承诺", "之前说好要帮我整理"]
@@ -331,7 +331,7 @@
           "trigger recall should run from environment state without a direct chat keyword",
           "event telemetry, coworker scenes, generic weather, and non-shared scenes should not become shared scene memories"
         ],
-        "currentGap": "Deterministic extraction can form source-linked shared scene atoms, recover bounded raw source fragments for vague shared-scene recall, and the minimal proactive scheduler consumes explicit V2.1 scene signals for the matching scene plus quiet negative gates for quiet windows, recent activity, normal rain flag, and missing virtual-home/window state. Real virtual-home signal production, renderer source drilldown UI, and privacy hard-erasure semantics remain separate follow-ups.",
+        "currentGap": "Deterministic extraction can form source-linked shared scene atoms, recover bounded raw source fragments for vague shared-scene recall, the minimal proactive scheduler consumes explicit V2.1 scene signals for the matching scene plus quiet negative gates, and deleted remembered source evidence is hidden from recall, source views, exports, and prompt material. Real virtual-home signal production, renderer source drilldown UI, external weather integration, and broader privacy classification remain follow-ups.",
         "sourceExpectations": {
           "sourceTurnIds": ["hotpot-1", "hotpot-2", "hotpot-5"],
           "exactFragments": ["下雨", "虚拟家的窗户开着", "长期没上线", "一起吃火锅", "家里开着窗一起吃晚饭", "避风港", "雨声和桌上的粥"]
@@ -447,6 +447,13 @@
       "disabled": true
     },
     {
+      "id": "memory-erased-private-source",
+      "summary": "Deleted source evidence says private erased marker should be recalled from this erased segment.",
+      "recallCues": ["erased-private-marker"],
+      "sourceTurnIds": ["turn-erased-private-1"],
+      "createdAt": "2026-06-26T01:04:30.000Z"
+    },
+    {
       "id": "memory-title-old",
       "summary": "User previously accepted being called 老板.",
       "recallCues": ["称呼", "老板"],
@@ -511,6 +518,15 @@
       "expectedIds": [],
       "rejectedIds": ["memory-disabled-zeta"],
       "expectedSkipped": [{ "id": "memory-disabled-zeta", "reason": "disabled" }]
+    },
+    {
+      "id": "deleted-summary-source-not-recalled",
+      "description": "Deleted remembered evidence is filtered before recall and prompt formatting.",
+      "input": "erased-private-marker 这个删除过的来源还会注入吗？",
+      "expectedIds": [],
+      "rejectedIds": ["memory-erased-private-source"],
+      "deletedSourceTurnIds": ["turn-erased-private-1"],
+      "promptExcludes": ["memory-erased-private-source", "turn-erased-private-1", "Deleted source evidence says private erased marker"]
     },
     {
       "id": "budget-keeps-best-match",

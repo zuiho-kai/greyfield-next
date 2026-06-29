@@ -5,6 +5,9 @@ import { describe, expect, it, vi } from "vitest";
 import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
 import type {
   AppendSummarySegment,
+  AppendDeletedMemoryEvidence,
+  DeletedMemoryEvidence,
+  DeletedMemoryEvidenceStore,
   AppendSessionTurn,
   MemoryAtom,
   MemoryAtomStore,
@@ -997,7 +1000,7 @@ describe("RuntimeService", () => {
 
     expect(result).toMatchObject({
       ok: true,
-      message: "Cleared 2 summary memories. Raw chat history was kept.",
+      message: "Cleared 2 summary memories. Remembered source evidence was hidden from recall, source views, and exports.",
       snapshot: {
         summarySegments: []
       }
@@ -1243,7 +1246,7 @@ describe("RuntimeService", () => {
     const deleted = await service.deleteMemoryAtom("atom-current-fact");
     expect(deleted).toMatchObject({
       ok: true,
-      message: "Atom memory atom-current-fact deleted. Raw chat history and summaries were kept.",
+      message: "Atom memory atom-current-fact deleted. Remembered source evidence was hidden from recall, source views, and exports.",
       snapshot: {
         memoryAtoms: [expect.objectContaining({ id: "atom-current-preference" })]
       }
@@ -1253,7 +1256,7 @@ describe("RuntimeService", () => {
     const cleared = await service.clearCurrentRoleMemoryAtoms();
     expect(cleared).toMatchObject({
       ok: true,
-      message: "Cleared 1 current role atom memory. Raw chat history and summaries were kept.",
+      message: "Cleared 1 current role atom memory. Remembered source evidence was hidden from recall, source views, and exports.",
       snapshot: {
         memoryAtoms: []
       }
@@ -1581,6 +1584,187 @@ describe("RuntimeService", () => {
     expect(requestBodies.at(-1)).not.toContain("Atom recall target: User prefers Hiyori.");
     expect((await service.getMemoryLibrarySnapshot()).memoryAtoms).toEqual([]);
     expect((await service.exportMemory()).memoryAtoms).toEqual([]);
+  });
+
+  it("hard-erases deleted atom source evidence from library, export, recent views, and prompts", async () => {
+    const erasedRaw = "ERASED_HIYORI_SOURCE should never be visible after delete.";
+    const privateEventNoise = "window:set-hit-test apiKey=sk-privateevent123456";
+    const memoryAtomStore = new TestMemoryAtomStore([
+      makeMemoryAtom({
+        id: "atom-erased-hiyori",
+        threadId: "thread-a",
+        type: "preference",
+        text: "Erased atom text: User prefers Hiyori.",
+        sourceSessionId: "session-erasure",
+        sourceTurnIds: ["turn-erased"],
+        triggers: {
+          exact: ["Hiyori"],
+          aliases: [],
+          secondary: []
+        },
+        triggerKeys: ["hiyori"]
+      })
+    ]);
+    const deletedMemoryEvidenceStore = new TestDeletedMemoryEvidenceStore([]);
+    const sessionStore = new TestSessionStore("session-erasure", [
+      {
+        id: "turn-erased",
+        role: "user",
+        content: `${erasedRaw} sk-sourcekey123456`,
+        createdAt: "2026-06-29T00:00:00.000Z"
+      },
+      {
+        id: "turn-event",
+        role: "event",
+        content: privateEventNoise,
+        createdAt: "2026-06-29T00:00:01.000Z"
+      }
+    ]);
+    const requestBodies: string[] = [];
+    const fetch = vi.fn(async (_url, init) => {
+      requestBodies.push(String(init?.body ?? ""));
+      return createSseResponse("ok");
+    });
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "sk-configuredsecret123456",
+          model: "remote-model"
+        }
+      },
+      {
+        threadId: "thread-a",
+        memoryAtomStore,
+        deletedMemoryEvidenceStore,
+        sessionStore,
+        fetch
+      }
+    );
+
+    const beforeDelete = await service.getMemoryLibrarySnapshot();
+    expect(beforeDelete.memoryAtoms[0]?.sourcePassages[0]?.text).toContain(erasedRaw);
+
+    await service.deleteMemoryAtom("atom-erased-hiyori");
+    const afterDelete = await service.getMemoryLibrarySnapshot();
+    const exported = await service.exportMemory();
+    const recent = await service.getRecentTurns(10);
+
+    expect(await deletedMemoryEvidenceStore.list("thread-a")).toEqual([
+      expect.objectContaining({
+        kind: "memory-atom",
+        memoryId: "atom-erased-hiyori",
+        sourceSessionId: "session-erasure",
+        sourceTurnIds: ["turn-erased"]
+      })
+    ]);
+    expect(afterDelete.memoryAtoms).toEqual([]);
+    expect(JSON.stringify(afterDelete)).not.toContain(erasedRaw);
+    expect(JSON.stringify(exported)).not.toContain(erasedRaw);
+    expect(JSON.stringify(recent)).not.toContain(erasedRaw);
+    expect(JSON.stringify(afterDelete)).not.toContain(privateEventNoise);
+    expect(JSON.stringify(exported)).not.toContain(privateEventNoise);
+
+    await service.handle({ type: "text.input", text: "Hiyori 还记得吗？apiKey=sk-currentinput123456" }, () => undefined);
+    const promptBody = requestBodies.at(-1) ?? "";
+    expect(promptBody).not.toContain("Erased atom text");
+    expect(promptBody).not.toContain(erasedRaw);
+    expect(promptBody).not.toContain(privateEventNoise);
+    expect(promptBody).not.toMatch(/\bsk-[A-Za-z0-9_-]{8,}\b/u);
+    expect(promptBody).toContain(redactedSecretPlaceholder);
+  });
+
+  it("does not delete atom memory when deleted evidence tombstone append fails", async () => {
+    const memoryAtomStore = new TestMemoryAtomStore([
+      makeMemoryAtom({
+        id: "atom-erasure-order",
+        threadId: "thread-a",
+        sourceSessionId: "session-erasure-order",
+        sourceTurnIds: ["turn-erasure-order"]
+      })
+    ]);
+    const deletedMemoryEvidenceStore: DeletedMemoryEvidenceStore = {
+      append: async () => {
+        throw new Error("tombstone append failed");
+      },
+      list: async () => []
+    };
+    const service = new RuntimeService(defaultGreyfieldConfig, {
+      threadId: "thread-a",
+      memoryAtomStore,
+      deletedMemoryEvidenceStore
+    });
+
+    await expect(service.deleteMemoryAtom("atom-erasure-order")).rejects.toThrow("tombstone append failed");
+    expect(memoryAtomStore.getAll().map((atom) => atom.id)).toContain("atom-erasure-order");
+  });
+
+  it("does not clear summary memories when deleted evidence tombstone append fails", async () => {
+    const summarySegmentStore = new TestSummarySegmentStore([
+      makeSummarySegment("summary-erasure-order", "desktop:characters-greyfield-yaml", "Current thread memory.")
+    ]);
+    const deletedMemoryEvidenceStore: DeletedMemoryEvidenceStore = {
+      append: async () => {
+        throw new Error("tombstone append failed");
+      },
+      list: async () => []
+    };
+    const service = new RuntimeService(defaultGreyfieldConfig, {
+      summarySegmentStore,
+      deletedMemoryEvidenceStore
+    });
+
+    await expect(service.clearMemorySummaries()).rejects.toThrow("tombstone append failed");
+    expect((await summarySegmentStore.list("desktop:characters-greyfield-yaml")).map((segment) => segment.id)).toEqual([
+      "summary-erasure-order"
+    ]);
+  });
+
+  it("fails closed for library, export, and proactive recall when deleted evidence cannot be loaded", async () => {
+    const erasedRaw = "ERASED_SOURCE_VISIBLE_IF_FAIL_OPEN";
+    const memoryAtomStore = new TestMemoryAtomStore([
+      makeMemoryAtom({
+        id: "atom-erasure-list-failure",
+        threadId: "thread-a",
+        text: "User prefers Hiyori.",
+        sourceSessionId: "session-erasure-list-failure",
+        sourceTurnIds: ["turn-erasure-list-failure"]
+      })
+    ]);
+    const deletedMemoryEvidenceStore: DeletedMemoryEvidenceStore = {
+      append: async () => {
+        throw new Error("append is not used by this test");
+      },
+      list: async () => {
+        throw new Error("deleted evidence list failed");
+      }
+    };
+    const service = new RuntimeService(defaultGreyfieldConfig, {
+      threadId: "thread-a",
+      memoryAtomStore,
+      deletedMemoryEvidenceStore,
+      sessionStore: new TestSessionStore("session-erasure-list-failure", [
+        {
+          id: "turn-erasure-list-failure",
+          role: "user",
+          content: erasedRaw,
+          createdAt: "2026-06-29T00:00:00.000Z"
+        }
+      ])
+    });
+    const sceneContext: RuntimeSceneContext = {
+      currentTime: "2026-06-29T00:00:00.000Z",
+      rain: false,
+      place: "home",
+      virtualHome: { windowOpen: false }
+    };
+
+    await expect(service.getMemoryLibrarySnapshot()).rejects.toThrow("deleted evidence list failed");
+    await expect(service.exportMemory()).rejects.toThrow("deleted evidence list failed");
+    await expect(service.checkProactiveMemory(sceneContext)).rejects.toThrow("deleted evidence list failed");
   });
 
   it("builds proactive desktop messages from current-role atoms with cooldown and global disable", async () => {
@@ -2031,6 +2215,28 @@ class TestSummarySegmentStore implements SummarySegmentStore {
     const before = this.summaries.length;
     this.summaries = this.summaries.filter((summary) => summary.id !== id);
     return this.summaries.length !== before;
+  }
+}
+
+class TestDeletedMemoryEvidenceStore implements DeletedMemoryEvidenceStore {
+  constructor(private records: DeletedMemoryEvidence[]) {}
+
+  async append(record: AppendDeletedMemoryEvidence): Promise<DeletedMemoryEvidence> {
+    const stored: DeletedMemoryEvidence = {
+      id: `deleted-${record.kind}-${record.memoryId}-${this.records.length + 1}`,
+      threadId: record.threadId,
+      kind: record.kind,
+      memoryId: record.memoryId,
+      sourceTurnIds: record.sourceTurnIds,
+      ...(record.sourceSessionId ? { sourceSessionId: record.sourceSessionId } : {}),
+      deletedAt: record.deletedAt ?? "2026-06-29T00:00:00.000Z"
+    };
+    this.records.push(stored);
+    return stored;
+  }
+
+  async list(threadId: string): Promise<DeletedMemoryEvidence[]> {
+    return this.records.filter((record) => record.threadId === threadId);
   }
 }
 

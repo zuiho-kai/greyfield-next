@@ -3,6 +3,7 @@ import { GreyfieldRuntime } from "../runtime-loop";
 import { InMemorySessionStore } from "../session-store";
 import type { AppendSessionTurn, SessionHandoff, SessionStore, SessionTurn } from "../session-store";
 import { normalizeSummarySegment, type SummarySegmentStore } from "../memory-context";
+import type { AppendDeletedMemoryEvidence, DeletedMemoryEvidence, DeletedMemoryEvidenceStore } from "../memory-erasure";
 import type { MemoryAtom, MemoryAtomStore, UpdateMemoryAtom } from "../memory-atoms";
 import type { LLMProvider, MemoryStore, TTSProvider } from "../providers";
 import type { RuntimeOutputEvent } from "../events";
@@ -113,6 +114,57 @@ describe("GreyfieldRuntime", () => {
         })
       })
     );
+  });
+
+  it("preserves the session store handoff summary when it does not contain filtered turn content", async () => {
+    let capturedMessages: Parameters<LLMProvider["stream"]>[0] = [];
+    let sequence = 0;
+    const sessionStore: SessionStore = {
+      sessionId: "session-compact-handoff",
+      append: async (turn: AppendSessionTurn): Promise<SessionTurn> => {
+        sequence += 1;
+        return {
+          id: `session-compact-handoff-${sequence}`,
+          role: turn.role,
+          content: turn.content,
+          createdAt: turn.createdAt ?? "2026-06-29T00:00:00.000Z",
+          meta: turn.meta
+        };
+      },
+      getRecent: async () => [],
+      createHandoff: async (): Promise<SessionHandoff> => ({
+        sessionId: "session-compact-handoff",
+        summary: "COMPACT_HANDOFF_SUMMARY_FROM_STORE",
+        turns: [
+          {
+            id: "session-compact-handoff-old",
+            role: "user",
+            content: "raw old turn text should not replace the store handoff summary",
+            createdAt: "2026-06-28T00:00:00.000Z"
+          }
+        ]
+      })
+    };
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* (messages) {
+          capturedMessages = messages;
+          yield "Store summary preserved.";
+        }
+      },
+      tts: { synthesize: async (text) => new Uint8Array([text.length]) },
+      memoryStore,
+      sessionStore,
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default",
+      threadId: "thread-compact-handoff"
+    });
+
+    await runtime.handle({ type: "text.input", text: "继续" }, () => undefined);
+
+    const system = capturedMessages[0]?.content ?? "";
+    expect(system).toContain("Recent handoff:\nCOMPACT_HANDOFF_SUMMARY_FROM_STORE");
+    expect(system).not.toContain("raw old turn text should not replace");
   });
 
   it("extracts memory atoms after a successful turn and recalls them into later prompts", async () => {
@@ -301,6 +353,132 @@ describe("GreyfieldRuntime", () => {
     expect(system).toContain("Source fragments:");
     expect(system).toContain("教程像坏掉的电梯");
     expect(system).toContain("剧情把玩家当成没睡醒的测试员");
+  });
+
+  it("keeps deleted evidence and provider secrets out of prompt material", async () => {
+    const memoryAtomStore = new TestMemoryAtomStore([
+      {
+        id: "atom-hiyori-deleted",
+        threadId: "thread-erased",
+        type: "preference",
+        text: "Deleted evidence target: User prefers Hiyori.",
+        sourceTurnIds: ["session-erased-1"],
+        sourceSessionId: "session-erased",
+        createdAt: "2026-06-29T00:00:00.000Z",
+        updatedAt: "2026-06-29T00:00:00.000Z",
+        importance: 0.9,
+        triggerKeys: ["hiyori"],
+        triggers: {
+          exact: ["Hiyori"],
+          aliases: [],
+          secondary: []
+        }
+      }
+    ]);
+    const deletedEvidenceStore = new TestDeletedMemoryEvidenceStore([
+      {
+        id: "deleted-evidence-atom-hiyori",
+        threadId: "thread-erased",
+        kind: "memory-atom",
+        memoryId: "atom-hiyori-deleted",
+        sourceSessionId: "session-erased",
+        sourceTurnIds: ["session-erased-1"],
+        deletedAt: "2026-06-29T00:00:01.000Z"
+      }
+    ]);
+    const sessionStore = new InMemorySessionStore("session-erased");
+    await sessionStore.append({
+      role: "user",
+      content: "Deleted raw source says Hiyori is my favorite model and sk-erasedsource123456.",
+      createdAt: "2026-06-29T00:00:00.000Z"
+    });
+    await sessionStore.append({
+      role: "event",
+      content: "window:set-hit-test private event noise with apiKey=sk-privateevent123456",
+      createdAt: "2026-06-29T00:00:01.000Z"
+    });
+    let capturedMessages: Parameters<LLMProvider["stream"]>[0] = [];
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* (messages) {
+          capturedMessages = messages;
+          yield "No deleted evidence.";
+        }
+      },
+      tts: { synthesize: async (text) => new Uint8Array([text.length]) },
+      memoryStore: {
+        load: async () => "- Provider key sk-memoryprompt123456 should be redacted.",
+        save: async () => undefined,
+        consolidate: async () => ""
+      },
+      memoryAtomStore,
+      deletedMemoryEvidenceStore: deletedEvidenceStore,
+      sessionStore,
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default",
+      threadId: "thread-erased",
+      promptRedactionSecrets: ["configured-provider-secret"]
+    });
+
+    await runtime.handle({ type: "text.input", text: "Hiyori 还记得吗？apiKey=sk-currentinput123456" }, () => undefined);
+
+    const system = capturedMessages[0]?.content ?? "";
+    const serializedMessages = JSON.stringify(capturedMessages);
+    expect(system).not.toContain("Deleted evidence target");
+    expect(system).not.toContain("Deleted raw source says Hiyori");
+    expect(serializedMessages).not.toContain("window:set-hit-test");
+    expect(serializedMessages).not.toMatch(/\bsk-[A-Za-z0-9_-]{8,}\b/u);
+    expect(serializedMessages).toContain("[redacted-secret]");
+  });
+
+  it("fails closed before prompt assembly when deleted evidence cannot be loaded", async () => {
+    let streamCalled = false;
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* () {
+          streamCalled = true;
+          yield "Should not be generated.";
+        }
+      },
+      tts: { synthesize: async (text) => new Uint8Array([text.length]) },
+      memoryStore,
+      memoryAtomStore: new TestMemoryAtomStore([
+        {
+          id: "atom-erased",
+          threadId: "thread-erased",
+          type: "preference",
+          text: "Deleted evidence target: User prefers Hiyori.",
+          sourceTurnIds: ["session-erased-1"],
+          sourceSessionId: "session-erased",
+          createdAt: "2026-06-29T00:00:00.000Z",
+          updatedAt: "2026-06-29T00:00:00.000Z",
+          importance: 0.9,
+          triggerKeys: ["hiyori"],
+          triggers: {
+            exact: ["Hiyori"],
+            aliases: [],
+            secondary: []
+          }
+        }
+      ]),
+      deletedMemoryEvidenceStore: {
+        append: async () => {
+          throw new Error("append is not used by this test");
+        },
+        list: async () => {
+          throw new Error("deleted evidence unavailable");
+        }
+      },
+      sessionStore: new InMemorySessionStore("session-erased"),
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default",
+      threadId: "thread-erased"
+    });
+
+    await expect(runtime.handle({ type: "text.input", text: "Hiyori 还记得吗？" }, () => undefined)).rejects.toThrow(
+      "deleted evidence unavailable"
+    );
+    expect(streamCalled).toBe(false);
   });
 
   it("keeps chat usable when memory atom storage is unavailable", async () => {
@@ -814,7 +992,7 @@ describe("GreyfieldRuntime", () => {
 });
 
 class TestMemoryAtomStore implements MemoryAtomStore {
-  private readonly atoms: MemoryAtom[] = [];
+  constructor(private readonly atoms: MemoryAtom[] = []) {}
 
   async append(atom: MemoryAtom): Promise<MemoryAtom> {
     const existingIndex = this.atoms.findIndex((stored) => stored.id === atom.id);
@@ -846,5 +1024,27 @@ class TestMemoryAtomStore implements MemoryAtomStore {
     }
     this.atoms.splice(index, 1);
     return true;
+  }
+}
+
+class TestDeletedMemoryEvidenceStore implements DeletedMemoryEvidenceStore {
+  constructor(private records: DeletedMemoryEvidence[]) {}
+
+  async append(record: AppendDeletedMemoryEvidence): Promise<DeletedMemoryEvidence> {
+    const stored: DeletedMemoryEvidence = {
+      id: `deleted-${record.kind}-${record.memoryId}-${this.records.length + 1}`,
+      threadId: record.threadId,
+      kind: record.kind,
+      memoryId: record.memoryId,
+      sourceTurnIds: record.sourceTurnIds,
+      ...(record.sourceSessionId ? { sourceSessionId: record.sourceSessionId } : {}),
+      deletedAt: record.deletedAt ?? "2026-06-29T00:00:00.000Z"
+    };
+    this.records.push(stored);
+    return stored;
+  }
+
+  async list(threadId: string): Promise<DeletedMemoryEvidence[]> {
+    return this.records.filter((record) => record.threadId === threadId);
   }
 }
