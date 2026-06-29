@@ -8,7 +8,7 @@ Greyfield memory should become a source-linked, user-correctable companion memor
 
 ## Plain-Language Product Status
 
-As of current-head `1997fd2d1128fdb697ed64f12a3dc7d1be6ddae8`, V2.1 reaches the minimum MaiBot-style long-chat memory loop, but it is not full memory-product parity.
+As of current-head `73e275b44e0d04191af0fb874f96d722229a4e04`, V2.1 reaches the minimum MaiBot-style long-chat memory loop, but it is not full memory-product parity.
 
 What the user can trust now:
 
@@ -17,14 +17,15 @@ What the user can trust now:
 - A recall can carry source turn IDs and bounded raw source fragments, so the runtime can recover details instead of only using a vague summary.
 - Settings Memory can inspect, edit, disable, enable, delete, export, clear current-role atom memory, and keep role memory isolated.
 - A low-disturbance proactive memory bubble can be shown on the desktop pet path, with cooldown and disable gates.
+- Deleted remembered evidence is tombstoned and filtered from recall, source views, exports, proactive recall, and prompt material.
 
 What is still partial or post-V2.1:
 
 - A deterministic semantic/relationship graph-equivalent minimum path exists for source-linked relationship rituals, but a full embedding/vector database and broad relationship graph are not implemented.
-- The desktop runtime still does not gather real weather, virtual-home, screen, or absence signals into a production proactive scheduler.
-- Renderer-level source drilldown UI is still incomplete; source fragments are prompt/runtime evidence, not a polished "why I remembered this" panel for every memory.
+- The desktop runtime has a minimum production scheduler input, but it still does not gather real weather, virtual-home, screen, or absence signals from external feeds.
+- Renderer-level source drilldown exists for the Memory Library harnessed paths, but a polished "why I remembered this" explanation surface for every memory type is still future work.
 - LLM-backed atom extraction exists behind explicit runtime modes and scripted benchmark providers, not as a default Settings/desktop product flow.
-- Broader privacy classification and hard erasure semantics remain unfinished; atom clear keeps raw turns and summaries.
+- Broader privacy classification remains limited; raw session JSONL stays as local non-product storage even though deleted remembered evidence no longer appears through product recall/source/export/prompt paths.
 
 The first engineering goal, V2.0a, is merged into `main` via [#63](https://github.com/zuiho-kai/greyfield-next/pull/63):
 
@@ -94,17 +95,17 @@ The benchmark is intentionally local/fake and does not require external keys. It
 
 V2.1 work must extend this fixture before claiming memory atom extraction, scene memory, calendar recall, evidence drilldown, memory layering, or vector recall quality. A feature can add a new recall engine later, but it must keep the benchmark passing or explain the updated acceptance fixture in the same PR.
 
-The current V2.1 benchmark locks `summaryRegressionScore: 1`, `recallRegressionScore: 1`, `atomExtractionScore: 0.95`, `atomRecallScore: 0.88`, `proactiveTriggerScore: 1`, `productReadinessScore: 0.58`, and `v21aScenarioScore: 0.56`; the #120 PR-local output is `summaryRegressionScore: 1`, `recallRegressionScore: 1`, `atomExtractionScore: 1`, `atomRecallScore: 0.883`, `proactiveTriggerScore: 1`, `productReadinessScore: 0.582`, `productReadinessCapabilityScore: 0.591`, and `v21aScenarioScore: 0.563`. Summary and current-role atom Memory Library controls are proved by `pnpm harness:electron:memory-control` and `pnpm harness:electron:memory-atom-library`; proactive desktop display is proved by `pnpm harness:electron:proactive-desktop-message`; `pnpm harness:memory-benchmark` remains a non-UI gate. Calendar-aware atom recall, unrelated weather false-positive rejection, Chinese full-date anniversary extraction, atom source-passage prompt material from vague negative-game cues, deterministic semantic/relationship recall for a first-meeting rose/gift ritual, colleague/wedding false-positive rejection, prompt material without atom ID/database terminology, scripted LLM atom extraction, invalid LLM fallback, UI/event noise rejection, and pure core rainy virtual-home hotpot proactive trigger gates for long absence, missing virtual-home state, normal weather, recent activity, cooldown, and non-shared scenes are now covered by dynamic benchmark cases. A full embedding/vector database, broader relationship graph, production environment feeds, default desktop UX for enabling LLM extraction, and renderer-level source drilldown remain below full implementation. Atom clear does not erase raw turns or summaries.
+The current V2.1 benchmark locks `summaryRegressionScore: 1`, `recallRegressionScore: 1`, `atomExtractionScore: 0.95`, `atomRecallScore: 0.99`, `atomWritebackScore: 1`, `proactiveTriggerScore: 1`, `productReadinessScore: 0.581`, and `v21aScenarioScore: 0.573`. Current-head output on `73e275b44e0d04191af0fb874f96d722229a4e04` is `summaryRegressionScore: 1`, `recallRegressionScore: 1`, `atomExtractionScore: 1`, `atomRecallScore: 0.995`, `atomWritebackScore: 1`, `proactiveTriggerScore: 1`, `productReadinessScore: 0.581`, `productReadinessCapabilityScore: 0.585`, and `v21aScenarioScore: 0.573`. Summary and current-role atom Memory Library controls are proved by `pnpm harness:electron:memory-control` and `pnpm harness:electron:memory-atom-library`; proactive desktop display is proved by `pnpm harness:electron:proactive-desktop-message`; `pnpm harness:memory-benchmark` remains a non-UI gate. Calendar-aware atom recall, unrelated weather false-positive rejection, Chinese full-date anniversary extraction, atom source-passage prompt material from vague negative-game cues, deterministic semantic/relationship recall for a first-meeting rose/gift ritual, colleague/wedding false-positive rejection, prompt material without atom ID/database terminology, scripted LLM atom extraction, automatic long-chat writeback, invalid LLM fallback, UI/event noise rejection, deleted-evidence filtering, and pure core rainy virtual-home hotpot proactive trigger gates for long absence, missing virtual-home state, normal weather, recent activity, cooldown, and non-shared scenes are now covered by dynamic benchmark cases. A full embedding/vector database, broader relationship graph, external production environment feeds, default desktop UX for enabling LLM extraction, and polished source-explanation UI for every memory type remain below full implementation.
 
-V2.1e.1 adds an internal `RuntimeSceneContext` input model for proactive memory candidates. Callers must explicitly pass scene signals such as weather, location, objects, absence days, and current time; the memory runtime does not read real weather, screen state, OS state, or desktop windows. #116 adds a desktop proactive-message display path for selected memory candidates, while the production scheduler and real scene-signal feed remain follow-up work.
+V2.1e.1 adds an internal `RuntimeSceneContext` input model for proactive memory candidates. Callers must explicitly pass controlled scene signals such as rain, home/window state, absence days, and current time; the memory runtime does not read real weather, screen state, OS state, or desktop windows. The desktop path now has a minimum proactive-message scheduler and display surface for selected memory candidates, while real external scene-signal feeds remain follow-up work.
 
 Still incomplete after these V2.1 slices:
 
 - desktop/Settings UX for enabling LLM-backed atom extraction by default.
 - broader durable-write privacy classification beyond the current strict noise/secret filters.
-- complete relationship dates, rituals, and scene memory coverage.
-- production scene-signal collection and scheduler for real weather, virtual-home, screen, and absence context.
-- renderer-level source drilldown UI; atom prompt material can already include bounded source fragments.
+- broader relationship graph, scene memory, and ritual coverage beyond the representative V2.1 gates.
+- production scene-signal collection for real weather, virtual-home, screen, and absence context.
+- polished source-explanation UI for every memory type; harnessed Memory Library source views and atom prompt material already include bounded source fragments.
 - LLM-generated summarizer replacement for the extractive draft.
 - full embedding/vector database recall and broader relationship graph coverage beyond the deterministic #120 minimum path.
 
@@ -121,25 +122,25 @@ V2.1 is not a pending-candidate approval product. Users should not review a dail
 
 ## V2.1 MaiBot Parity Closeout
 
-The #114 closeout uses "minimum MaiBot-style loop" as the bar: old chat leaves short context, durable memory can be recalled later, source evidence can recover details, and users can correct or remove memory without approving a daily candidate queue. Current-head meets that minimum loop, with clear post-V2.1 leftovers.
+The #125 closeout uses "minimum MaiBot-style loop" as the bar: old chat leaves short context, durable memory can be recalled later, source evidence can recover details, and users can correct or remove memory without approving a daily candidate queue. Current-head meets that minimum loop, with clear post-V2.1 leftovers.
 
-| #114 gate | V2.1 status | Current-head evidence | Post-V2.1 remainder |
+| #125 gate | V2.1 status | Current-head evidence | Post-V2.1 remainder |
 | --- | --- | --- | --- |
 | Long-chat compression | Done | `pnpm harness:memory-benchmark` passes summary regression and long-chat source traceability with source turn IDs and recall cues. | LLM-generated summary replacement can improve quality later, but the minimum source-linked compression loop exists. |
 | Structured long-term memory | Partial | Dynamic benchmark cases cover source-linked atoms for preferences, relationship dates, rose preference, game opinion, privacy rule, and rainy virtual-home hotpot scene; invalid LLM output falls back deterministically. | Default Settings/desktop UX for LLM-backed extraction, broader promise/relationship coverage, and stronger privacy classification remain later work. |
-| Trigger recall | Partial | Benchmark covers deterministic summary recall, alias/secondary/negative-game cues, calendar recall, #120 deterministic semantic/relationship ritual recall with raw source evidence, false-positive rejection, prompt budget, disabled-memory skips, and pure core proactive scene candidates. | Full embedding/vector DB recall, broader relationship graph coverage, and real environment/virtual-home signal feeds remain post-V2.1. |
-| Original-text drilldown | Partial | Atom recall can inject bounded raw source fragments from linked turns for the game-review drilldown case, and Memory Library source states are covered by Electron harnesses. | A polished renderer-level drilldown UI for every memory type is still missing. |
-| Manageable and degradable | Partial | `pnpm harness:electron:memory-control` and `pnpm harness:electron:memory-atom-library` prove edit, disable, enable, delete, export, current-role atom clear, role isolation, reload persistence, provider-secret exclusion, and no pending-candidate approval UI; no vector database is required. | Atom clear keeps raw turns and summaries, hard erasure semantics are incomplete, and source management is not yet complete for every memory type. |
+| Trigger recall | Partial | Benchmark covers deterministic summary recall, alias/secondary/negative-game cues, calendar recall, #120 deterministic semantic/relationship ritual recall with raw source evidence, false-positive rejection, prompt budget, disabled-memory skips, pure core proactive scene candidates, and desktop proactive bubble display. | Full embedding/vector DB recall, broader relationship graph coverage, and real environment/virtual-home signal feeds remain post-V2.1. |
+| Original-text drilldown | Partial | Atom recall can inject bounded raw source fragments from linked turns for the game-review drilldown case, and Memory Library source states are covered by Electron harness screenshots. | A polished source-explanation UI for every memory type is still missing. |
+| Manageable and degradable | Partial | `pnpm harness:electron:memory-control` and `pnpm harness:electron:memory-atom-library` prove edit, disable, enable, delete, export, current-role atom clear, role isolation, reload persistence, provider-secret exclusion, no pending-candidate approval UI, and hard-erased source evidence hidden from product recall/source/export/prompt paths; no vector database is required. | Raw session JSONL remains local non-product storage, default LLM extraction UX and broader privacy classification remain future work, and source management is not complete for every memory type. |
 
-Issue closeout recommendation after the #114 PR merges:
+Issue closeout recommendation after the #125 closeout PR merges:
 
 | Issue | Recommendation | Reason |
 | --- | --- | --- |
 | #75 | Close for the V2.1 minimum slice; move full embedding/vector DB, broader relationship graph, and full renderer drilldown to V2.2+. | Calendar, alias/secondary, #120 deterministic semantic/relationship minimum, false-positive, prompt-budget, and source-fragment evidence now exists, but the full long-term recall system is still larger than V2.1. |
-| #76 | Close for the V2.1 minimum slice; move production scene-feed scheduler and real external weather/virtual-home integration to V2.2+. | Core scene candidates and desktop proactive bubble display are proved, but real signal collection is not implemented. |
-| #77 | Close for the V2.1 minimum slice; move full erasure semantics and complete source-management UX to V2.2+. | Memory Library management is user-visible and harnessed for summary/current-role atoms, while broader privacy/deletion behavior remains partial. |
-| #79 | Close after #114 merges if maintainers accept this minimum-loop definition. | The roadmap has reached a documented closeout decision; remaining ideas should become narrower V2.2+ issues instead of keeping V2.1 open indefinitely. |
-| #114 | Close with this docs/evidence PR. | The close condition is a merged closeout PR with current-head evidence and explicit post-V2.1 boundaries. |
+| #76 | Close for the V2.1 minimum slice; move real external weather/virtual-home integration and richer scene feeds to V2.2+. | Core scene candidates, minimum production scene-signal scheduler, and desktop proactive bubble display are proved, but real signal collection is not implemented. |
+| #77 | Close for the V2.1 minimum slice; move broader privacy classification and complete source-management UX to V2.2+. | Memory Library management is user-visible and harnessed for summary/current-role atoms, and hard-erased remembered evidence is hidden from product recall/source/export/prompt paths. |
+| #79 | Close after #125 merges if maintainers accept this minimum-loop definition. | The roadmap has reached a documented closeout decision; remaining ideas should become narrower V2.2+ issues instead of keeping V2.1 open indefinitely. |
+| #125 | Close with this docs/evidence PR. | The close condition is a merged closeout PR with current-head evidence and explicit post-V2.1 boundaries. |
 
 ## Verification
 
@@ -164,5 +165,5 @@ CI guard:
 - CI uploads the benchmark JSON summary from `.cache/greyfield-memory-benchmark/latest/summary.json`, so PR review can compare actual scores instead of only reading pass/fail status.
 - `pnpm harness:electron:memory-summary` runs `packages/dev-harness/src/electron-memory-summary-check.ts` and keeps the V2.0a persistence path stable; `pnpm harness:electron:memory-control` runs `packages/dev-harness/src/electron-memory-control-check.ts` as a separate gate for edit, disable, delete, and export.
 - `frontend-full-check.ts` runs `pnpm harness:electron:memory-control`, so baseline frontend-visible memory-control regressions are covered by the aggregate gate.
-- #114 current-head evidence on `1997fd2d1128fdb697ed64f12a3dc7d1be6ddae8` passed `pnpm typecheck`, `pnpm harness:memory-benchmark`, `pnpm harness:electron:memory-control`, `pnpm harness:electron:memory-atom-library`, and `pnpm harness:electron:proactive-desktop-message`. The docs-only closeout PR does not change runtime behavior.
+- #125 current-head evidence on `73e275b44e0d04191af0fb874f96d722229a4e04` passed `pnpm harness:memory-benchmark`, `pnpm harness:electron:memory-control`, `pnpm harness:electron:memory-atom-library`, `pnpm harness:electron:proactive-desktop-message`, and `pnpm harness:frontend-full`. Key artifact screenshots inspected: Memory source passages, atom source passage, and proactive memory bubble.
 - Earlier main run `28289995890` on head `731f951` passed Fast checks, including `pnpm harness:memory-benchmark`, and `frontend-full`, including the memory-control harness with `memoryEditVisible: true`, `memoryExportVisible: true`, `disabledMemorySkipped: true`, `deletedMemoryKeptRawTurns: true`, and `summaryIncludesSourceTurns: true`.
