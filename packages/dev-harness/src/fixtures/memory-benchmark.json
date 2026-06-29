@@ -1669,9 +1669,9 @@
           "longchat-cat-game-review"
         ],
         "maxItems": 9,
-        "maxCharacters": 3000,
+        "maxCharacters": 4200,
         "sourcePassageMode": "always",
-        "sourcePassageMaxCharacters": 900,
+        "sourcePassageMaxCharacters": 1400,
         "promptIncludes": [
           "Source turns: longchat-1",
           "Source turns: longchat-3",

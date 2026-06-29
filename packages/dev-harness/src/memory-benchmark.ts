@@ -1039,13 +1039,17 @@ function scoreWritebackDurableRecall(
   actualIds: string[];
   missingDurableExpectation: string[];
   missingRecall: Array<{ expectationId: string; atomId?: string }>;
+  aggregateMissingRecall: Array<{ expectationId: string; atomId?: string }>;
   rejectedHits: Array<{ expectationId: string; atomId?: string }>;
   missingPromptFragments: string[];
+  aggregateMissingPromptFragments: string[];
   unexpectedPromptFragments: string[];
   internalPromptLeaks: string[];
   sourceEvidenceClass: AtomRecallSourceEvidenceClass;
+  aggregateSourceEvidenceClass: AtomRecallSourceEvidenceClass;
   expectedSourceEvidenceClass?: AtomRecallSourceEvidenceClass;
   missingSourceEvidenceFragments: string[];
+  sourceChecks: ReturnType<typeof scoreWritebackDurableSourceCheck>[];
   falsePositiveResults: ReturnType<typeof runAtomRecallFalsePositiveCase>[];
   budget: ReturnType<typeof buildMemoryAtomRecallContext>["budget"];
   reasons: Array<{ id: string; reason: string; score: number }>;
@@ -1054,13 +1058,14 @@ function scoreWritebackDurableRecall(
   const expectationMatches = new Map(
     testCase.extraction.expectedAtoms.map((expectation) => [expectation.id, findBestAtomForExpectation(expectation, durableAtoms)])
   );
+  const sourceTurns = collectAtomCaseSourceTurns(testCase, loadedFixture);
   const context = buildMemoryAtomRecallContext({
     input: testCase.recall.input,
     atoms: recallAtoms,
     maxItems: testCase.recall.maxItems,
     maxCharacters: testCase.recall.maxCharacters,
     now: testCase.recall.now,
-    sourceTurns: collectAtomCaseSourceTurns(testCase, loadedFixture),
+    sourceTurns,
     sourcePassageMode: testCase.recall.sourcePassageMode,
     sourcePassageMaxCharacters: testCase.recall.sourcePassageMaxCharacters,
     sourcePassageMaxCharactersPerTurn: testCase.recall.sourcePassageMaxCharactersPerTurn,
@@ -1076,27 +1081,59 @@ function scoreWritebackDurableRecall(
   const missingDurableExpectation = expectedMatches
     .filter((match) => !match.atom)
     .map((match) => match.expectationId);
-  const missingRecall = expectedMatches
+  const aggregateMissingRecall = expectedMatches
     .filter((match) => match.atom && !actualIdSet.has(match.atom.id))
     .map((match) => ({ expectationId: match.expectationId, atomId: match.atom?.id }));
   const rejectedHits = (testCase.recall.rejectedAtomExpectationIds ?? [])
     .map((expectationId) => ({ expectationId, atom: expectationMatches.get(expectationId)?.atom }))
     .filter((match) => match.atom && actualIdSet.has(match.atom.id))
     .map((match) => ({ expectationId: match.expectationId, atomId: match.atom?.id }));
-  const missingPromptFragments = (testCase.recall.promptIncludes ?? []).filter((fragment) => !promptText.includes(fragment));
+  const aggregateMissingPromptFragments = (testCase.recall.promptIncludes ?? []).filter((fragment) => !promptText.includes(fragment));
   const unexpectedPromptFragments = (testCase.recall.promptExcludes ?? []).filter((fragment) => promptText.includes(fragment));
   const internalPromptLeaks = promptTextInternalLeaks(promptText);
-  const sourceEvidence = classifyAtomRecallSourceEvidence(testCase, context.items, promptText, missingRecall.length > 0);
+  const aggregateSourceEvidence = classifyAtomRecallSourceEvidence(
+    testCase,
+    context.items,
+    promptText,
+    aggregateMissingRecall.length > 0
+  );
+  const sourceChecks = expectedMatches.map((match) =>
+    scoreWritebackDurableSourceCheck({
+      testCase,
+      expectation: testCase.extraction.expectedAtoms.find((expectation) => expectation.id === match.expectationId)!,
+      atom: match.atom,
+      recallAtoms,
+      sourceTurns
+    })
+  );
+  const missingRecall = sourceChecks
+    .filter((check) => check.atomId && !check.actualIds.includes(check.atomId))
+    .map((check) => ({ expectationId: check.expectationId, atomId: check.atomId }));
+  const missingPromptFragments = [
+    ...new Set(
+      sourceChecks.flatMap((check) => [
+        ...check.missingSourceTurnIds.map((turnId) => `Source turns: ${turnId}`),
+        ...check.missingSourceFragments
+      ])
+    )
+  ];
+  const missingSourceEvidenceFragments = [...new Set(sourceChecks.flatMap((check) => check.missingSourceFragments))];
+  const sourceEvidenceClass =
+    sourceChecks.length > 0 && sourceChecks.every((check) => check.sourceEvidenceClass === "memory_hit_with_raw_source_evidence")
+      ? "memory_hit_with_raw_source_evidence"
+      : sourceChecks.some((check) => check.sourceEvidenceClass === "memory_hit_without_raw_evidence")
+        ? "memory_hit_without_raw_evidence"
+        : "no_recall";
   const falsePositiveResults = (testCase.recall.falsePositiveCases ?? []).map((negativeCase) =>
     runAtomRecallFalsePositiveCase(negativeCase, recallAtoms, expectationMatches, testCase, loadedFixture)
   );
   const expectedCount = testCase.recall.expectedAtomExpectationIds.length;
-  const hitScore =
+  const sourceCheckScore =
     expectedCount === 0
       ? actualIds.length === 0
         ? 1
         : 0
-      : ratio(expectedCount - missingDurableExpectation.length - missingRecall.length, expectedCount);
+      : ratio(sourceChecks.filter((check) => check.passed).length, expectedCount);
   const rejectedExpectationCount = (testCase.recall.rejectedAtomExpectationIds ?? []).length;
   const primaryRejectionScore =
     rejectedExpectationCount === 0 ? 1 : ratio(rejectedExpectationCount - rejectedHits.length, rejectedExpectationCount);
@@ -1106,16 +1143,18 @@ function scoreWritebackDurableRecall(
       : ratio(falsePositiveResults.filter((negativeResult) => negativeResult.passed).length, falsePositiveResults.length);
   const rejectionScore = average([primaryRejectionScore, falsePositiveScore]);
   const promptScore =
-    (testCase.recall.promptIncludes ?? []).length + (testCase.recall.promptExcludes ?? []).length === 0
-      ? internalPromptLeaks.length === 0
-        ? 1
-        : 0
-      : missingPromptFragments.length === 0 && unexpectedPromptFragments.length === 0 && internalPromptLeaks.length === 0
-        ? 1
-        : 0;
-  const sourceEvidenceScore = scoreAtomRecallSourceEvidence(testCase, sourceEvidence.classification);
+    missingPromptFragments.length === 0 &&
+    unexpectedPromptFragments.length === 0 &&
+    internalPromptLeaks.length === 0 &&
+    sourceChecks.every((check) => check.unexpectedPromptFragments.length === 0 && check.internalPromptLeaks.length === 0)
+      ? 1
+      : 0;
+  const sourceEvidenceScore =
+    sourceChecks.length === 0
+      ? scoreAtomRecallSourceEvidence(testCase, aggregateSourceEvidence.classification)
+      : average(sourceChecks.map((check) => scoreAtomRecallSourceEvidence(testCase, check.sourceEvidenceClass)));
   const score = weightedAverage([
-    [hitScore, 0.45],
+    [sourceCheckScore, 0.45],
     [sourceEvidenceScore, 0.3],
     [promptScore, 0.15],
     [rejectionScore, 0.1]
@@ -1126,23 +1165,135 @@ function scoreWritebackDurableRecall(
       internalPromptLeaks.length === 0 &&
       missingPromptFragments.length === 0 &&
       unexpectedPromptFragments.length === 0 &&
-      sourceEvidence.expectedClassSatisfied &&
+      sourceChecks.every((check) => check.passed) &&
       falsePositiveResults.every((negativeResult) => negativeResult.passed),
     score: roundScore(score),
     actualIds,
     missingDurableExpectation,
     missingRecall,
+    aggregateMissingRecall,
     rejectedHits,
     missingPromptFragments,
+    aggregateMissingPromptFragments,
     unexpectedPromptFragments,
     internalPromptLeaks,
-    sourceEvidenceClass: sourceEvidence.classification,
+    sourceEvidenceClass,
+    aggregateSourceEvidenceClass: aggregateSourceEvidence.classification,
     expectedSourceEvidenceClass: testCase.recall.sourceEvidence?.expectedClass,
-    missingSourceEvidenceFragments: sourceEvidence.missingFragments,
+    missingSourceEvidenceFragments,
+    sourceChecks,
     falsePositiveResults,
     budget: context.budget,
     reasons: context.items.map((item) => ({ id: item.id, reason: item.reason, score: item.score }))
   };
+}
+
+function scoreWritebackDurableSourceCheck(input: {
+  testCase: AtomBenchmarkCase;
+  expectation: AtomExpectation;
+  atom?: MemoryAtom;
+  recallAtoms: MemoryAtom[];
+  sourceTurns: SessionTurn[];
+}): {
+  expectationId: string;
+  atomId?: string;
+  passed: boolean;
+  input: string;
+  actualIds: string[];
+  sourceEvidenceClass: AtomRecallSourceEvidenceClass;
+  missingSourceTurnIds: string[];
+  requiredSourceFragments: string[];
+  missingSourceFragments: string[];
+  unexpectedPromptFragments: string[];
+  internalPromptLeaks: string[];
+  budget: ReturnType<typeof buildMemoryAtomRecallContext>["budget"];
+  reasons: Array<{ id: string; reason: string; score: number }>;
+} {
+  const probeInput = buildWritebackDurableRecallProbe(input.expectation);
+  const context = buildMemoryAtomRecallContext({
+    input: probeInput,
+    atoms: input.recallAtoms,
+    maxItems: input.testCase.recall.maxItems,
+    maxCharacters: input.testCase.recall.maxCharacters,
+    now: input.testCase.recall.now,
+    sourceTurns: input.sourceTurns,
+    sourcePassageMode: input.testCase.recall.sourcePassageMode,
+    sourcePassageMaxCharacters: input.testCase.recall.sourcePassageMaxCharacters,
+    sourcePassageMaxCharactersPerTurn: input.testCase.recall.sourcePassageMaxCharactersPerTurn,
+    sourcePassageMaxTurnsPerAtom: input.testCase.recall.sourcePassageMaxTurnsPerAtom
+  });
+  const promptText = formatMemoryAtomRecallContextForPrompt(context);
+  const actualIds = context.items.map((item) => item.id);
+  const matchedItem = input.atom ? context.items.find((item) => item.id === input.atom?.id) : undefined;
+  const requiredSourceFragments = collectRequiredSourceFragmentsForExpectation(
+    input.expectation,
+    input.sourceTurns,
+    input.testCase
+  );
+  const missingSourceTurnIds = input.expectation.sourceTurnIds.filter((turnId) => !promptText.includes(`Source turns: ${turnId}`));
+  const missingSourceFragments = requiredSourceFragments.filter((fragment) => !promptText.includes(fragment));
+  const unexpectedPromptFragments = (input.testCase.recall.promptExcludes ?? []).filter((fragment) => promptText.includes(fragment));
+  const internalPromptLeaks = promptTextInternalLeaks(promptText);
+  const expectedClass = input.testCase.recall.sourceEvidence?.expectedClass;
+  const sourceEvidenceClass =
+    !matchedItem
+      ? "no_recall"
+      : (matchedItem.sourcePassages ?? []).length > 0 && missingSourceTurnIds.length === 0 && missingSourceFragments.length === 0
+        ? "memory_hit_with_raw_source_evidence"
+        : "memory_hit_without_raw_evidence";
+  return {
+    expectationId: input.expectation.id,
+    atomId: input.atom?.id,
+    passed:
+      input.atom !== undefined &&
+      matchedItem !== undefined &&
+      missingSourceTurnIds.length === 0 &&
+      missingSourceFragments.length === 0 &&
+      unexpectedPromptFragments.length === 0 &&
+      internalPromptLeaks.length === 0 &&
+      (expectedClass === undefined || sourceEvidenceClass === expectedClass),
+    input: probeInput,
+    actualIds,
+    sourceEvidenceClass,
+    missingSourceTurnIds,
+    requiredSourceFragments,
+    missingSourceFragments,
+    unexpectedPromptFragments,
+    internalPromptLeaks,
+    budget: context.budget,
+    reasons: context.items.map((item) => ({ id: item.id, reason: item.reason, score: item.score }))
+  };
+}
+
+function buildWritebackDurableRecallProbe(expectation: AtomExpectation): string {
+  return [
+    ...(expectation.triggerIncludes ?? []),
+    ...(expectation.textIncludes ?? []),
+    expectation.subject,
+    expectation.object,
+    expectation.sentiment
+  ]
+    .filter((part): part is string => typeof part === "string" && part.length > 0)
+    .join(" ");
+}
+
+function collectRequiredSourceFragmentsForExpectation(
+  expectation: AtomExpectation,
+  sourceTurns: SessionTurn[],
+  testCase: AtomBenchmarkCase
+): string[] {
+  const sourceTurnTexts = new Map(sourceTurns.map((turn) => [turn.id, turn.content]));
+  const candidateFragments = [
+    ...(testCase.recall.sourceEvidence?.requiredFragments ?? []),
+    ...(testCase.recall.promptIncludes ?? [])
+  ].filter((fragment) => fragment !== "Source fragments:" && !fragment.startsWith("Source turns:"));
+  return [
+    ...new Set(
+      candidateFragments.filter((fragment) =>
+        expectation.sourceTurnIds.some((turnId) => sourceTurnTexts.get(turnId)?.includes(fragment))
+      )
+    )
+  ];
 }
 
 function applyMemoryAtomMergePatchForBenchmark(existing: MemoryAtom, candidate: MemoryAtom): MemoryAtom {
