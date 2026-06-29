@@ -22,7 +22,7 @@
 
 Current product plan: [Greyfield Next V1 产品计划](plans/v1-product-plan.md).
 
-Post-V1 roadmap: [Greyfield Next 版本产品书](plans/version-product-book.md) defines V1.1 productization, V2.1 long-term memory and relationship continuity, V2.2 character/persona customization, V2.3 screen awareness, V2.4 controlled desktop operation, V2.5 voice identity, and the later platform direction.
+Post-V1 roadmap: [Greyfield Next 版本产品书](plans/version-product-book.md) defines V1.1 productization, V2.1 long-term memory and relationship continuity, V2.2 single-persona stabilization, V2.3 interaction model plus user-triggered screenshot awareness, V2.4 voice identity with built-in audio versions, V2.5 controlled desktop operation, and the later platform direction.
 
 V2.1 memory research notes: [Clowder AI](research/v2-memory/clowder-ai.md), [SillyTavern](research/v2-memory/sillytavern.md), [MaiBot](research/v2-memory/maibot.md), and [Greyfield synthesis](research/v2-memory/synthesis.md).
 
