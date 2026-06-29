@@ -22,6 +22,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -34,32 +36,47 @@ jobs:
     name: Fast checks
     runs-on: windows-latest
     timeout-minutes: 10
-    needs: pr-bot-review-gate
+    needs:
+      - pr-bot-review-gate
+      - changes
     permissions:
       contents: read
     steps:
+      - name: Skip fast checks for docs-only changes
+        if: needs.changes.outputs.code_checks != 'true'
+        run: echo "Fast checks skipped because this change only touched docs/planning paths."
       - uses: actions/checkout@v4
+        if: needs.changes.outputs.code_checks == 'true'
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@v4
+        if: needs.changes.outputs.code_checks == 'true'
         with:
           version: 9.15.9
       - uses: actions/setup-node@v4
+        if: needs.changes.outputs.code_checks == 'true'
         with:
           node-version: 24
           cache: pnpm
       - name: Install
+        if: needs.changes.outputs.code_checks == 'true'
         run: pnpm install --frozen-lockfile
       - name: Typecheck
+        if: needs.changes.outputs.code_checks == 'true'
         run: pnpm typecheck
       - name: Unit tests
+        if: needs.changes.outputs.code_checks == 'true'
         run: pnpm test
       - name: Acceptance harness
+        if: needs.changes.outputs.code_checks == 'true'
         run: pnpm harness:acceptance
       - name: Memory benchmark
+        if: needs.changes.outputs.code_checks == 'true'
         env:
           GREYFIELD_MEMORY_BENCHMARK_ARTIFACT_DIR: .cache/greyfield-memory-benchmark/latest
         run: pnpm harness:memory-benchmark
       - name: Upload memory benchmark summary
-        if: always()
+        if: always() && needs.changes.outputs.code_checks == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: memory-benchmark-summary
@@ -70,50 +87,84 @@ jobs:
     name: Desktop pet quick harness
     runs-on: windows-latest
     timeout-minutes: 10
-    needs: fast
+    needs:
+      - fast
+      - changes
     steps:
+      - name: Skip desktop pet quick harness for non-desktop changes
+        if: needs.changes.outputs.desktop_pet != 'true'
+        run: echo "Desktop pet quick harness skipped because this change did not touch desktop pet paths."
       - uses: actions/checkout@v4
+        if: needs.changes.outputs.desktop_pet == 'true'
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@v4
+        if: needs.changes.outputs.desktop_pet == 'true'
         with:
           version: 9.15.9
       - uses: actions/setup-node@v4
+        if: needs.changes.outputs.desktop_pet == 'true'
         with:
           node-version: 24
           cache: pnpm
       - name: Install
+        if: needs.changes.outputs.desktop_pet == 'true'
         run: pnpm install --frozen-lockfile
       - name: Install Electron binary
+        if: needs.changes.outputs.desktop_pet == 'true'
         run: pnpm --dir apps/desktop ensure:electron
       - name: Build desktop once
+        if: needs.changes.outputs.desktop_pet == 'true'
         run: pnpm build:desktop
       - name: Pet quick harness
+        if: needs.changes.outputs.desktop_pet == 'true'
         run: pnpm harness:pet:quick
 
   changes:
     name: Change classifier
     runs-on: windows-latest
     outputs:
+      code_checks: ${{ steps.filter.outputs.code_checks }}
+      desktop_pet: ${{ steps.filter.outputs.desktop_pet }}
       frontend_full: ${{ steps.filter.outputs.frontend_full }}
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           fetch-depth: 0
       - id: filter
         shell: pwsh
         run: |
-          if ("${{ github.event_name }}" -eq "pull_request") {
-            $base = "${{ github.event.pull_request.base.sha }}"
-            $head = "${{ github.event.pull_request.head.sha }}"
-          } elseif ("${{ github.event_name }}" -eq "push") {
-            $base = "${{ github.event.before }}"
-            $head = "${{ github.sha }}"
-          } else {
+          if ("${{ github.event_name }}" -ne "pull_request") {
+            "code_checks=true" >> $env:GITHUB_OUTPUT
+            "desktop_pet=true" >> $env:GITHUB_OUTPUT
             "frontend_full=true" >> $env:GITHUB_OUTPUT
             exit 0
           }
 
+          $base = "${{ github.event.pull_request.base.sha }}"
+          $head = "${{ github.event.pull_request.head.sha }}"
+
           $files = git diff --name-only $base $head
-          $patterns = @(
+          $codePatterns = @(
+            '^apps/',
+            '^packages/',
+            '^scripts/',
+            '^package\.json$',
+            '^pnpm-lock\.yaml$',
+            '^tsconfig',
+            '^\.github/workflows/ci\.yml$'
+          )
+          $desktopPatterns = @(
+            '^apps/desktop/',
+            '^packages/stage-live2d/',
+            '^packages/dev-harness/',
+            '^package\.json$',
+            '^pnpm-lock\.yaml$',
+            '^tsconfig',
+            '^\.github/workflows/ci\.yml$'
+          )
+          $frontendPatterns = @(
             '^apps/desktop/',
             '^packages/stage-live2d/',
             '^packages/audio-runtime/',
@@ -123,19 +174,32 @@ jobs:
             '^tsconfig',
             '^\.github/workflows/ci\.yml$'
           )
-          $matched = $false
+          $codeMatched = $false
+          $desktopMatched = $false
+          $frontendMatched = $false
           foreach ($file in $files) {
-            foreach ($pattern in $patterns) {
+            foreach ($pattern in $codePatterns) {
               if ($file -match $pattern) {
-                $matched = $true
+                $codeMatched = $true
                 break
               }
             }
-            if ($matched) {
-              break
+            foreach ($pattern in $desktopPatterns) {
+              if ($file -match $pattern) {
+                $desktopMatched = $true
+                break
+              }
+            }
+            foreach ($pattern in $frontendPatterns) {
+              if ($file -match $pattern) {
+                $frontendMatched = $true
+                break
+              }
             }
           }
-          "frontend_full=$($matched.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "code_checks=$($codeMatched.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "desktop_pet=$($desktopMatched.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "frontend_full=$($frontendMatched.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
 
   frontend-full:
     name: frontend-full
@@ -150,6 +214,8 @@ jobs:
         run: echo "frontend-full skipped because this change did not touch frontend-visible paths."
       - uses: actions/checkout@v4
         if: needs.changes.outputs.frontend_full == 'true'
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@v4
         if: needs.changes.outputs.frontend_full == 'true'
         with:
