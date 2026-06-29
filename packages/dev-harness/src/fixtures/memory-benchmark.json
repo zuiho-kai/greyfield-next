@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 9,
   "thresholds": {
     "summaryScore": 0.95,
     "recallScore": 0.95
@@ -8,11 +8,11 @@
     "summaryRegressionScore": 1,
     "recallRegressionScore": 1,
     "atomExtractionScore": 0.95,
-    "atomRecallScore": 0.88,
-    "atomWritebackScore": 0.95,
+    "atomRecallScore": 0.99,
+    "atomWritebackScore": 1,
     "proactiveTriggerScore": 1,
-    "productReadinessScore": 0.58,
-    "v21aScenarioScore": 0.56
+    "productReadinessScore": 0.581,
+    "v21aScenarioScore": 0.573
   },
   "productReadiness": {
     "targetScore": 1,
@@ -105,7 +105,7 @@
         "status": "partial",
         "score": 0.6,
         "weight": 0.11,
-        "evidence": "atomWriteback benchmark dynamically extracts a mixed long-chat scenario through the same LLM-backed/deterministic atom path, applies the automatic write policy, merges duplicate preferences, rejects UI/event/provider-secret/customer-promise/low-importance noise, and proves recalled prompt material keeps source turn IDs plus raw fragments. Full renderer drilldown, vector recall, proactive scheduler, and hard erasure remain follow-ups."
+        "evidence": "atomWriteback benchmark dynamically extracts a mixed long-chat scenario through the same LLM-backed/deterministic atom path, applies the automatic write policy, merges duplicate preferences, rejects UI/event/provider-secret/customer-promise/low-importance noise, and proves durable writeback recall keeps source turn IDs plus raw fragments. Full embedding/vector recall, default desktop LLM extraction UX, external scene feeds, and broader privacy classification remain follow-ups."
       }
     ],
     "scenarios": [
@@ -441,7 +441,7 @@
           "duplicate blue-purple preference turns should merge into one durable atom carrying both source turns",
           "later recall should include source turn IDs and exact raw fragments for the durable outputs"
         ],
-        "currentGap": "This is a benchmark-proven backend loop through existing extraction, write policy, dedupe, recall, source-fragment, and proactive cooldown paths. It still does not add vector recall, renderer source-drilldown UI, pending approval, external sensing, proactive scheduler, or hard-erasure semantics.",
+        "currentGap": "This is a benchmark-proven loop through existing extraction, write policy, dedupe, durable recall, source-fragment, proactive cooldown, and hard-erasure paths. It still does not add embedding/vector recall, default desktop LLM extraction UX, pending approval, external sensing feeds, or a polished source-explanation UI for every memory type.",
         "sourceExpectations": {
           "sourceTurnIds": ["longchat-1", "longchat-3", "longchat-5", "longchat-7", "longchat-9", "longchat-11", "longchat-12", "longchat-13"],
           "exactFragments": ["生日是 11 月 3 日", "叫我阿岚", "喜欢蓝紫色", "南站等车", "提醒我把书桌收好再睡", "虚拟家开着窗一起喝热可可", "不要重复存两条", "新手教程像绕远路"]
@@ -1152,12 +1152,12 @@
       "recall": {
         "input": "environment: raining; virtual_home.window=open; last_seen_days=45",
         "expectedAtomExpectationIds": ["rainy-hotpot-scene"],
-        "promptIncludes": ["火锅"],
+        "promptIncludes": ["hotpot"],
         "promptExcludes": ["memory-atom", "atom-", "database", "storage"],
         "unsupportedGaps": [
           "lexical atom recall still does not use the structured proactive environment state",
-          "desktop scene proactive scheduler is not implemented",
-          "virtual-home window and last-seen state are not implemented"
+          "real external scene-signal feed is not implemented",
+          "real virtual-home window and last-seen state collection are not implemented"
         ]
       },
       "proactive": {

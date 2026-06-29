@@ -295,7 +295,7 @@ const atomWritebackScore = average(atomWritebackResults.map((result) => result.s
 const proactiveTriggerScore = average(proactiveTriggerResults.map((result) => result.score));
 const productReadinessResult = scoreProductReadiness(fixture.productReadiness);
 const ok =
-  fixture.version === 8 &&
+  fixture.version === 9 &&
   summaryScore >= fixture.thresholds.summaryScore &&
   recallScore >= fixture.thresholds.recallScore &&
   summaryScore >= fixture.baselineScores.summaryRegressionScore &&
@@ -379,7 +379,7 @@ async function loadFixture(): Promise<MemoryBenchmarkFixture> {
 }
 
 function validateFixture(candidate: MemoryBenchmarkFixture): void {
-  if (candidate.version !== 8) {
+  if (candidate.version !== 9) {
     throw new Error(`Unsupported memory benchmark fixture version: ${candidate.version}`);
   }
   validateScore("thresholds.summaryScore", candidate.thresholds.summaryScore);
