@@ -1,5 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { parse, stringify } from "yaml";
+import { isMap, parse, parseDocument } from "yaml";
 import type { CharacterPersona } from "@greyfield/core-runtime";
 
 export async function loadCharacterPersona(path: string): Promise<CharacterPersona> {
@@ -16,22 +16,50 @@ export async function loadCharacterPersona(path: string): Promise<CharacterPerso
 
 export async function saveCharacterPersona(path: string, persona: CharacterPersona): Promise<CharacterPersona> {
   const normalized = normalizeCharacterPersona(persona, path);
-  const content = stringify(
-    {
-      name: normalized.name,
-      userAddress: normalized.userAddress,
-      background: normalized.background,
-      personality: normalized.personality,
-      speakingStyle: normalized.speakingStyle,
-      tone: normalized.tone,
-      boundaries: normalized.boundaries,
-      greeting: normalized.greeting,
-      expressionMap: normalized.expressionMap
-    },
-    { lineWidth: 0 }
-  );
-  await writeFile(path, content, "utf8");
+  const document = await readPersonaDocumentForSave(path);
+  for (const [field, value] of managedPersonaFields(normalized)) {
+    document.set(field, value);
+  }
+  await writeFile(path, document.toString({ lineWidth: 0 }), "utf8");
   return normalized;
+}
+
+async function readPersonaDocumentForSave(path: string) {
+  let raw = "";
+  try {
+    raw = await readFile(path, "utf8");
+  } catch (error) {
+    if (!isFileNotFound(error)) {
+      throw error;
+    }
+  }
+
+  const document = parseDocument(raw);
+  if (document.errors.length > 0) {
+    throw new Error(`Character persona file is invalid YAML: ${path}: ${document.errors[0]?.message ?? "unknown parse error"}`);
+  }
+  if (raw.trim().length > 0 && !isMap(document.contents)) {
+    throw new Error(`Character persona file must contain an object: ${path}`);
+  }
+  return document;
+}
+
+function managedPersonaFields(persona: CharacterPersona): Array<[string, unknown]> {
+  return [
+    ["name", persona.name],
+    ["userAddress", persona.userAddress],
+    ["background", persona.background],
+    ["personality", persona.personality],
+    ["speakingStyle", persona.speakingStyle],
+    ["tone", persona.tone],
+    ["boundaries", persona.boundaries],
+    ["greeting", persona.greeting],
+    ["expressionMap", persona.expressionMap]
+  ];
+}
+
+function isFileNotFound(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
 }
 
 function parseCharacterPersona(value: unknown, path: string): CharacterPersona {

@@ -12,7 +12,8 @@ const desktopRoot = join(workspaceRoot, "apps", "desktop");
 const artifactDir = join(workspaceRoot, "artifacts", "v22-single-persona-editor");
 const tempDir = await mkdtemp(join(tmpdir(), "greyfield-single-persona-"));
 const configPath = join(tempDir, "greyfield.config.json");
-const personaPath = join(tempDir, "greyfield-persona.yaml");
+const personaAPath = join(tempDir, "greyfield-persona-a.yaml");
+const personaBPath = join(tempDir, "greyfield-persona-b.yaml");
 const requests: Array<{ messages?: Array<{ role: string; content: string }> }> = [];
 
 const server = createServer(async (request: IncomingMessage, response: ServerResponse) => {
@@ -29,7 +30,7 @@ await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 const port = (server.address() as AddressInfo).port;
 
 await mkdir(artifactDir, { recursive: true });
-await writePersonaFile([
+await writePersonaFile(personaAPath, [
   "name: Greyfield",
   "userAddress: you",
   "background: A local Live2D companion.",
@@ -42,12 +43,26 @@ await writePersonaFile([
   "expressionMap:",
   "  neutral: default"
 ]);
+await writePersonaFile(personaBPath, [
+  "name: Beryl",
+  "userAddress: partner",
+  "background: A second local Live2D companion file.",
+  "personality: patient and direct",
+  "speakingStyle: measured and practical",
+  "tone: steady",
+  "boundaries:",
+  "  - Keep persona B separate.",
+  "greeting: Hello from B.",
+  "expressionMap:",
+  "  neutral: default",
+  "defaultExpression: neutral"
+]);
 await writeFile(
   configPath,
   `${JSON.stringify(
     {
       ...defaultGreyfieldConfig,
-      characterFile: personaPath,
+      characterFile: personaAPath,
       provider: {
         ...defaultGreyfieldConfig.provider,
         llm: "openai-compatible",
@@ -113,12 +128,38 @@ try {
     await expectInputValue(settingsWindow, "Greyfield name", "Mira");
     await expectInputValue(settingsWindow, "User address", "captain");
     await expectInputValue(settingsWindow, "Greeting", "Welcome back, captain.");
+
+    const characterFileInput = settingsWindow.getByLabel("Character");
+    await characterFileInput.scrollIntoViewIfNeeded();
+    await characterFileInput.fill(personaBPath);
+    await waitForInputValue(settingsWindow, "Greyfield name", "Beryl");
+    await expectInputValue(settingsWindow, "User address", "partner");
+    await settingsWindow.getByLabel("Greeting").fill("B saved without A draft.");
+    await settingsWindow.getByRole("button", { name: "Save persona" }).click();
+    await settingsWindow.locator(".provider-test-result--success", { hasText: "Saved persona" }).waitFor({
+      timeout: 10_000
+    });
+    await settingsWindow.screenshot({ path: join(artifactDir, "settings-persona-switch-character-file.png"), fullPage: true });
+
+    const personaARaw = await readFile(personaAPath, "utf8");
+    const personaBRaw = await readFile(personaBPath, "utf8");
+    if (!personaARaw.includes("name: Mira") || !personaARaw.includes("Welcome back, captain.")) {
+      throw new Error(`Switching characterFile unexpectedly changed persona A; content=${personaARaw}`);
+    }
+    if (
+      !personaBRaw.includes("name: Beryl") ||
+      !personaBRaw.includes("B saved without A draft.") ||
+      personaBRaw.includes("Mira") ||
+      personaBRaw.includes("Welcome back, captain.")
+    ) {
+      throw new Error(`Switching characterFile saved the wrong persona draft into B; content=${personaBRaw}`);
+    }
     await settingsWindow.screenshot({ path: join(artifactDir, "settings-persona-restart.png"), fullPage: true });
   } finally {
     await secondApp.close();
   }
 
-  await writePersonaFile(["name: 123", "boundaries: nope", "expressionMap:", "  neutral: default"]);
+  await writePersonaFile(personaBPath, ["name: 123", "boundaries: nope", "expressionMap:", "  neutral: default"]);
   const thirdApp = await launchApp();
   try {
     const settingsWindow = await waitForRoleWindow(thirdApp, "settings");
@@ -133,7 +174,7 @@ try {
     await thirdApp.close();
   }
 
-  const savedPersona = await readFile(personaPath, "utf8").catch(() => "");
+  const savedPersona = await readFile(personaBPath, "utf8").catch(() => "");
   console.log(
     JSON.stringify(
       {
@@ -142,9 +183,11 @@ try {
         promptContainsEditedPersona: true,
         restartPersisted: true,
         invalidPersonaReadableError: true,
-        personaPath,
+        personaAPath,
+        personaBPath,
         artifacts: [
           join(artifactDir, "settings-persona-saved.png"),
+          join(artifactDir, "settings-persona-switch-character-file.png"),
           join(artifactDir, "settings-persona-restart.png"),
           join(artifactDir, "settings-persona-invalid.png")
         ],
@@ -217,8 +260,21 @@ async function expectInputValue(page: Page, label: string, expected: string): Pr
   }
 }
 
-async function writePersonaFile(lines: string[]): Promise<void> {
-  await writeFile(personaPath, `${lines.join("\n")}\n`, "utf8");
+async function waitForInputValue(page: Page, label: string, expected: string): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < 10_000) {
+    const value = await page.getByLabel(label).inputValue().catch(() => "");
+    if (value === expected) {
+      return;
+    }
+    await delay(100);
+  }
+  const actual = await page.getByLabel(label).inputValue().catch(() => "");
+  throw new Error(`Timed out waiting for ${label} value; expected=${expected}; actual=${actual}`);
+}
+
+async function writePersonaFile(path: string, lines: string[]): Promise<void> {
+  await writeFile(path, `${lines.join("\n")}\n`, "utf8");
 }
 
 async function readRequestBody(request: IncomingMessage): Promise<string> {

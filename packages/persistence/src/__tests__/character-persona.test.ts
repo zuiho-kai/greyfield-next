@@ -114,6 +114,83 @@ describe("loadCharacterPersona", () => {
     }
   });
 
+  it("preserves unknown top-level YAML data while overwriting managed persona fields", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "greyfield-persona-preserve-"));
+    try {
+      const path = join(dir, "advanced.yaml");
+      await writeFile(
+        path,
+        [
+          "# keep persona metadata",
+          "name: Old Greyfield",
+          "userAddress: old-user",
+          "background: Old background.",
+          "personality: old personality",
+          "speakingStyle: old style",
+          "tone: old tone",
+          "boundaries:",
+          "  - Old boundary.",
+          "greeting: Old greeting.",
+          "expressionMap:",
+          "  neutral: default",
+          "defaultExpression: neutral",
+          "voiceProfile:",
+          "  id: voice-keep",
+          "metadata:",
+          "  owner: local-user",
+          "customFutureField:",
+          "  enabled: true",
+          "prompt:",
+          "  identity: Legacy identity should remain as source data.",
+          "  style:",
+          "    - Legacy style should remain as source data."
+        ].join("\n"),
+        "utf8"
+      );
+
+      await saveCharacterPersona(path, {
+        name: "Mira",
+        userAddress: "captain",
+        background: "A focused desktop companion.",
+        personality: "calm, precise",
+        speakingStyle: "short sentences with warm callbacks",
+        tone: "calm",
+        boundaries: ["Do not browse silently.", "Ask before risky actions."],
+        greeting: "Welcome back.",
+        expressionMap: {
+          neutral: "default",
+          speaking: "smile"
+        }
+      });
+
+      const raw = await readFile(path, "utf8");
+      expect(raw).toContain("# keep persona metadata");
+      expect(raw).toContain("name: Mira");
+      expect(raw).toContain("userAddress: captain");
+      expect(raw).toContain("defaultExpression: neutral");
+      expect(raw).toContain("voiceProfile:");
+      expect(raw).toContain("id: voice-keep");
+      expect(raw).toContain("metadata:");
+      expect(raw).toContain("owner: local-user");
+      expect(raw).toContain("customFutureField:");
+      expect(raw).toContain("enabled: true");
+      expect(raw).toContain("prompt:");
+      expect(raw).toContain("Legacy identity should remain as source data.");
+      await expect(loadCharacterPersona(path)).resolves.toMatchObject({
+        name: "Mira",
+        userAddress: "captain",
+        speakingStyle: "short sentences with warm callbacks",
+        boundaries: ["Do not browse silently.", "Ask before risky actions."],
+        expressionMap: {
+          neutral: "default",
+          speaking: "smile"
+        }
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("reports readable schema errors for broken persona files", async () => {
     const dir = await mkdtemp(join(tmpdir(), "greyfield-persona-bad-"));
     try {

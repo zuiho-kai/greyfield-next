@@ -141,12 +141,12 @@ export class DesktopRuntimeBridge {
   private state: DesktopRendererState = createInitialDesktopRendererState();
   private readonly stateChangeHandlers = new Set<DesktopStateChangeHandler>();
   private readonly interactionProfile = createDefaultInteractionProfile();
+  private personaCharacterFile = defaultGreyfieldConfig.characterFile;
   private speechPlaybackEpoch = 0;
   private speechPlaybackChain: Promise<void> = Promise.resolve();
 
   constructor(private readonly host?: DesktopHostApi, private readonly speechOutput?: SpeechOutput) {
     this.host?.on("settings:changed", (config) => {
-      const previousCharacterFile = this.state.settings.characterFile;
       const settings = settingsFromConfig(config);
       if (isMaskedApiKey(config.provider.apiKey) && this.state.settings.providerApiKey.length > 0) {
         settings.providerApiKey = this.state.settings.providerApiKey;
@@ -163,9 +163,8 @@ export class DesktopRuntimeBridge {
         }
       };
       if (
-        settings.characterFile !== previousCharacterFile &&
-        this.state.persona.status !== "idle" &&
-        this.state.persona.status !== "loading"
+        settings.characterFile !== this.personaCharacterFile &&
+        this.state.persona.status !== "idle"
       ) {
         this.requestPersona();
       }
@@ -456,12 +455,14 @@ export class DesktopRuntimeBridge {
   }
 
   requestPersona(): DesktopRendererState {
+    this.personaCharacterFile = this.state.settings.characterFile;
     this.state = {
       ...this.state,
       persona: {
-        ...this.state.persona,
+        path: this.state.settings.characterFile,
         status: "loading",
-        message: "Loading persona..."
+        message: "Loading persona...",
+        form: createDefaultPersonaForm()
       }
     };
     this.host?.send("persona:load", {});

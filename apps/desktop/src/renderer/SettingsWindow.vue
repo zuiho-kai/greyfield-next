@@ -1107,6 +1107,14 @@ watch(
 );
 
 watch(
+  () => props.state.persona.path,
+  () => {
+    personaDraftDirty.value = false;
+    personaDraft.value = { ...props.state.persona.form, expressionMap: { ...props.state.persona.form.expressionMap } };
+  }
+);
+
+watch(
   memorySegments,
   (segments) => {
     const nextSummaryDrafts: Record<string, string> = {};

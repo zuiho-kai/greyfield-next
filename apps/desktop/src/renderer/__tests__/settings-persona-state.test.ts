@@ -81,4 +81,92 @@ describe("Settings persona state", () => {
       }
     ]);
   });
+
+  it("reloads persona after changing the Settings character file and does not save the old draft", () => {
+    const sent: Array<[DesktopIpcRequestChannel, unknown]> = [];
+    const handlers = new Map<DesktopIpcEventChannel, (payload: unknown) => void>();
+    const host: DesktopHostApi = {
+      send<Channel extends DesktopIpcRequestChannel>(channel: Channel, payload: DesktopIpcRequestMap[Channel]) {
+        sent.push([channel, payload]);
+      },
+      on(channel, handler) {
+        handlers.set(channel, handler as (payload: unknown) => void);
+        return () => handlers.delete(channel);
+      }
+    };
+    const bridge = createDesktopRuntimeBridge(host);
+
+    bridge.requestPersona();
+    handlers.get("persona:state")?.({
+      status: "ready",
+      path: "characters/a.yaml",
+      message: "Loaded persona A",
+      persona: {
+        name: "Aster",
+        userAddress: "pilot",
+        background: "Persona A background.",
+        personality: "A personality",
+        speakingStyle: "A style",
+        tone: "A tone",
+        boundaries: ["A boundary"],
+        greeting: "Hello from A.",
+        expressionMap: { neutral: "default" }
+      }
+    } satisfies DesktopIpcEventMap["persona:state"]);
+
+    const oldDraft = { ...bridge.getState().persona.form, name: "Aster draft" };
+    bridge.updatePersonaDraft(oldDraft);
+    sent.splice(0);
+
+    bridge.updateSettings({ characterFile: "characters/b.yaml" });
+    const config = bridge.getConfigSnapshot();
+    handlers.get("settings:changed")?.({
+      ...config,
+      characterFile: "characters/b.yaml",
+      provider: { ...config.provider, apiKey: "", hasApiKey: false }
+    } satisfies DesktopIpcEventMap["settings:changed"]);
+
+    expect(sent).toContainEqual(["settings:update", { characterFile: "characters/b.yaml" }]);
+    expect(sent).toContainEqual(["persona:load", {}]);
+    expect(bridge.getState().persona).toMatchObject({
+      status: "loading",
+      path: "characters/b.yaml",
+      form: expect.not.objectContaining({ name: "Aster draft" })
+    });
+
+    handlers.get("persona:state")?.({
+      status: "ready",
+      path: "characters/b.yaml",
+      message: "Loaded persona B",
+      persona: {
+        name: "Beryl",
+        userAddress: "captain",
+        background: "Persona B background.",
+        personality: "B personality",
+        speakingStyle: "B style",
+        tone: "B tone",
+        boundaries: ["B boundary"],
+        greeting: "Hello from B.",
+        expressionMap: { neutral: "default", speaking: "smile" }
+      }
+    } satisfies DesktopIpcEventMap["persona:state"]);
+
+    expect(bridge.getState().persona.form).toMatchObject({
+      name: "Beryl",
+      userAddress: "captain",
+      boundariesText: "B boundary"
+    });
+
+    bridge.savePersona(bridge.getState().persona.form);
+    expect(sent.at(-1)).toEqual([
+      "persona:save",
+      {
+        persona: expect.objectContaining({
+          name: "Beryl",
+          userAddress: "captain",
+          boundaries: ["B boundary"]
+        })
+      }
+    ]);
+  });
 });
