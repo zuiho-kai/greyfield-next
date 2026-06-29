@@ -66,7 +66,12 @@ git worktree add ../greyfield-next-main-runtime-persistence -b feature/main-runt
 - One branch targets one cohesive user-facing goal.
 - One implementation sub-agent targets one atomic issue and one expected PR.
 - A sub-agent prompt must name the assigned issue, worktree, branch, owned files/modules, non-goals, and verification commands before coding starts.
+- For feature implementation after an approved product/issue split, the coordinating agent's start sequence is: confirm issue -> create or select worktree/branch -> spawn the implementation sub-agent -> only then wait/review/merge. The coordinator must not begin business-code edits in the assigned worktree while the sub-agent has not been spawned.
+- Worktree creation is not proof that delegation happened. If the user asks why no sub-agent was opened, the answer should be treated as a process miss and landed in these rules or the retro before continuing implementation.
+- Before a sub-agent hands off or reports a blocker, the coordinator should not inspect that worker's business diff for early review. Readiness review starts after handoff. If the coordinator has budget while a worker runs, use it on non-overlapping issue delegation, PR/issue coordination, or documentation/rule work.
 - Do not let two agents edit the same file set unless a coordinating agent explicitly assigns the split.
+- Adjacent atomic issues may still run in parallel even when both could touch `packages/dev-harness` or nearby runtime files. Record the expected collision risk in each prompt, keep branches separate, and resolve conflicts by PR review/rebase after the first provider PR lands. Do not serialize the whole roadmap just because conflicts are possible.
+- After spawning workers, the coordinator must not end with a final response that leaves worker completion unattended. Stay in an active wait loop, continue non-overlapping coordination, or create an explicit follow-up wakeup/check. Treat passive `subagent_notification` delivery as status data, not as a reliable main-agent trigger.
 - Each agent must read `AGENTS.md` and relevant guardrail docs inside its own worktree before editing.
 - Agents must report changed files, verification commands, and unresolved risks before handoff.
 - A coordinating agent merges results by PR review, not by copying unreviewed files between worktrees.
@@ -76,10 +81,12 @@ git worktree add ../greyfield-next-main-runtime-persistence -b feature/main-runt
 - In each fresh worktree, run `pnpm install`, `pnpm typecheck`, and `pnpm` test/harness commands serially. Parallel agents may run in separate worktrees, but a single worktree must not run two `pnpm` commands concurrently.
 - Remote CI waiting should not occupy the main implementation loop. Use a low-frequency watcher or check once at merge readiness while the coordinator continues non-overlapping local work.
 - If a sub-agent returns no usable result, hits a limit, or abandons the task, close or explicitly retire it before assigning another agent to the same worktree. Do not keep two live agents on the same worktree.
+- Do not close an implementation sub-agent just because it reached a final response, hit a budget ceiling, or says the implementation is ready. The worker still owns that issue/worktree through coordinator review, requested rework, PR feedback, and merge readiness. Prefer `resume` or follow-up input to the same worker when budget returns or review finds defects. Close the worker only after the PR is merged, the PR/worktree is abandoned, or the coordinator records that this worker is retired and no longer owns the worktree.
 
 ## Pull Request Rules
 
 - New feature work should end as a pull request to the repository, not an untracked local patch.
+- Once an implementation sub-agent hands off a validated branch and coordinator review finds no blocker, open the PR immediately instead of leaving the branch local-only. If workers are expected to open PRs themselves, the assignment prompt must say so explicitly and must require a Chinese PR body plus exact verification results.
 - Do not push directly to `main`.
 - Keep PRs small enough to review: one atomic feature point, one checkpoint phase with explicit scenario acceptance, or one bug class per PR.
 - PR description must include purpose, changed packages, linked V1 feature IDs if any, and exact verification commands/results.
