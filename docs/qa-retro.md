@@ -1,5 +1,38 @@
 # QA Retro: Desktop Pet Interaction Miss
 
+## 2026-06-29 Regression: Coordinator Started A Feature Without Spawning The Worker
+
+After V2.1 MaiBot parity was re-split into product loops and atomic issues, the next implementation step should have opened a dedicated implementation sub-agent for the selected issue. Instead, the coordinating agent started by selecting #118, checking worktrees, fetching `origin/main`, and creating the feature worktree, but did not spawn the worker before the user interrupted.
+
+What happened:
+
+- The repo rule already said one implementation sub-agent targets one atomic issue and one expected PR.
+- The coordinating agent treated worktree setup as if it were the start of implementation.
+- The missing step was the actual worker spawn with issue, worktree, branch, owned files, non-goals, and verification gate.
+- No business code was changed, but the process drift would have let the coordinator self-implement if the user had not stopped it.
+
+Root cause:
+
+- The rule blocked spawning a sub-agent too early, but did not explicitly block the coordinator from self-implementing after the issue/worktree gate was ready.
+- The implementation start checklist did not distinguish setup from delegation.
+
+How we avoid repeating it:
+
+- For approved feature slices, the coordinator must spawn the assigned implementation sub-agent before touching business code.
+- The required sequence is: confirm atomic issue, create/select worktree and branch, spawn worker, then review/merge.
+- Worktree creation is only setup. It is not evidence that delegation happened.
+- If sub-agent spawning is unavailable or blocked, stop and report the blocker instead of silently switching to self-implementation.
+
+Follow-up clarification:
+
+- A worker returning a final message, running out of budget, or saying "done" does not end its ownership.
+- Keep the same worker attached through review and rework so budget restoration or PR feedback can resume the original context.
+- Closing the worker is allowed only after merge, abandonment, or an explicit coordinator retirement decision.
+- The coordinator should not pre-review a worker's business diff while that worker is still running. Wait for handoff or a blocker, and use available time on non-overlapping issue delegation or coordination instead.
+- Do not use possible `dev-harness` or adjacent runtime conflicts as a reason to serialize all remaining atomic issues. Parallel branches can conflict; the coordinator should handle that with review, rebase, and explicit conflict resolution after provider PRs land.
+- Do not end the coordinator turn while implementation workers are still expected to hand off unless a concrete follow-up wakeup/check is scheduled. The coordinator owns polling/review continuity; passive notifications alone are not enough to resume work.
+- Do not leave a reviewed, validated worker branch as local-only. The coordinator should push/open the PR after review, or explicitly delegate PR creation authority in the worker prompt.
+
 ## 2026-06-28 Regression: Product Book Became Engineering Ledger
 
 The V2.1 memory work made real backend progress, but the product conversation became hard to evaluate because the status was reported as issues, PRs, checks, and benchmark internals before the product experience was restated in plain language.
