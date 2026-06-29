@@ -14,9 +14,9 @@ const configPath = join(tempDir, "greyfield.config.json");
 const threadId = "desktop:characters-greyfield-yaml";
 const sceneContext: RuntimeSceneContext = {
   currentTime: "2026-06-28T08:00:00.000Z",
-  weather: "rain",
-  location: "virtual_home",
-  objects: [{ kind: "window", state: "open", location: "virtual_home" }],
+  rain: true,
+  place: "home",
+  virtualHome: { windowOpen: true },
   absenceDays: 45
 };
 const expectedText = "It's raining again. I remembered our hotpot night at home.";
@@ -57,7 +57,27 @@ try {
       attachProactiveEventProbe(controlsWindow)
     ]);
 
-    await triggerProactiveCheck(petWindow);
+    await triggerProactiveCheck(petWindow, {
+      ...sceneContext,
+      currentTime: "2026-06-28T23:00:00.000Z"
+    });
+    await assertProactiveEventCountStays(petWindow, 0, "quiet window allowed proactive display");
+    await assertNoChatMessages(chatWindow);
+
+    await triggerProactiveCheck(petWindow, { ...sceneContext, absenceDays: 1 });
+    await assertProactiveEventCountStays(petWindow, 0, "recent activity allowed proactive display");
+    await assertNoChatMessages(chatWindow);
+
+    await triggerProactiveCheck(petWindow, {
+      currentTime: "2026-06-28T10:00:00.000Z",
+      place: "home",
+      virtualHome: { windowOpen: true },
+      absenceDays: 45
+    });
+    await assertProactiveEventCountStays(petWindow, 0, "missing rain signal allowed proactive display");
+    await assertNoChatMessages(chatWindow);
+
+    await triggerProactiveCheck(petWindow, sceneContext);
     const firstEvent = await waitForProactiveEvent(petWindow, 1);
     await assertProactiveEventCount(settingsWindow, 0, "settings window received proactive message");
     await assertProactiveEventCount(chatWindow, 0, "chat window received proactive message");
@@ -70,13 +90,13 @@ try {
     const screenshotPath = join(artifactDir, "proactive-memory-bubble.png");
     await petWindow.screenshot({ path: screenshotPath });
 
-    await triggerProactiveCheck(petWindow);
-    await assertProactiveEventCountStays(petWindow, 1, "cooldown did not block repeated proactive display");
+    await triggerProactiveCheck(petWindow, sceneContext);
+    await assertProactiveEventCountStays(petWindow, 1, "cooldown allowed repeated proactive display");
 
     await settingsWindow.getByLabel("Remembered moments").setChecked(false);
     await petWindow.locator(".speech-bubble").waitFor({ state: "detached", timeout: 5_000 });
-    await triggerProactiveCheck(petWindow);
-    await assertProactiveEventCountStays(petWindow, 1, "global disable did not block proactive display");
+    await triggerProactiveCheck(petWindow, sceneContext);
+    await assertProactiveEventCountStays(petWindow, 1, "global disable allowed proactive display");
     await petWindow.locator(".speech-bubble").waitFor({ state: "detached", timeout: 1_000 });
 
     console.log(
@@ -85,6 +105,9 @@ try {
           ok: true,
           displayedNaturalBubble: true,
           scopedToPetWindow: true,
+          quietWindowBlockedDisplay: true,
+          recentActivityBlockedDisplay: true,
+          missingSignalBlockedDisplay: true,
           cooldownBlockedRepeat: true,
           globalDisableBlockedDisplay: true,
           chatHistoryUnchanged: true,
@@ -164,7 +187,7 @@ async function attachProactiveEventProbe(page: Page): Promise<void> {
   });
 }
 
-async function triggerProactiveCheck(page: Page): Promise<void> {
+async function triggerProactiveCheck(page: Page, sceneContext: RuntimeSceneContext): Promise<void> {
   await page.evaluate((sceneContext) => {
     window.greyfield?.send("proactive:check", { sceneContext });
   }, sceneContext);

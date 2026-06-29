@@ -1610,9 +1610,9 @@ describe("RuntimeService", () => {
     ]);
     const sceneContext: RuntimeSceneContext = {
       currentTime: "2026-06-28T08:00:00.000Z",
-      weather: "rain",
-      location: "virtual_home",
-      objects: [{ kind: "window", state: "open", location: "virtual_home" }],
+      rain: true,
+      place: "home",
+      virtualHome: { windowOpen: true },
       absenceDays: 45
     };
     const service = new RuntimeService(defaultGreyfieldConfig, {
@@ -1648,12 +1648,62 @@ describe("RuntimeService", () => {
     expect(disabled).toEqual({ displayed: false, reason: "disabled" });
   });
 
+  it("uses the default low-disturbance policy for quiet windows and recent activity", async () => {
+    const memoryAtomStore = new TestMemoryAtomStore([
+      makeMemoryAtom({
+        id: "atom-rainy-hotpot",
+        threadId: "thread-a",
+        type: "episodic_scene",
+        text: "We kept the home window open while having hotpot on a rainy night.",
+        importance: 0.91,
+        sourceTurnIds: ["turn-hotpot"],
+        triggers: {
+          exact: [],
+          aliases: [],
+          secondary: [],
+          environment: ["rain", "virtual_home", "virtual_home.window=open", "last_seen_days>=30"],
+          semantic: ["shared scene memory"]
+        },
+        metadata: {
+          sharedExperience: true,
+          activity: "hotpot",
+          weather: "rain",
+          windowState: "open",
+          longAbsenceDays: 30
+        }
+      })
+    ]);
+    const service = new RuntimeService(defaultGreyfieldConfig, {
+      threadId: "thread-a",
+      memoryAtomStore
+    });
+
+    await expect(
+      service.checkProactiveMemory({
+        currentTime: "2026-06-28T23:00:00.000Z",
+        rain: true,
+        place: "home",
+        virtualHome: { windowOpen: true },
+        absenceDays: 45
+      })
+    ).resolves.toEqual({ displayed: false, reason: "no_candidate" });
+    await expect(
+      service.checkProactiveMemory({
+        currentTime: "2026-06-28T10:00:00.000Z",
+        rain: true,
+        place: "home",
+        virtualHome: { windowOpen: true },
+        absenceDays: 1
+      })
+    ).resolves.toEqual({ displayed: false, reason: "no_candidate" });
+  });
+
   it("resets proactive cooldown when the derived thread changes", async () => {
     const sceneContext: RuntimeSceneContext = {
       currentTime: "2026-06-28T08:00:00.000Z",
-      weather: "rain",
-      location: "virtual_home",
-      objects: [{ kind: "window", state: "open", location: "virtual_home" }],
+      rain: true,
+      place: "home",
+      virtualHome: { windowOpen: true },
       absenceDays: 45
     };
     const memoryAtomStore = new TestMemoryAtomStore([
