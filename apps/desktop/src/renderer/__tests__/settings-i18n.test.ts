@@ -18,4 +18,13 @@ describe("settings i18n", () => {
       "收到首个 token：pong。真实聊天可以使用这个服务。"
     );
   });
+
+  it("maps Memory Library control labels in zh-CN", () => {
+    expect(settingsT("zh-CN", "memory.controls.title")).toBe("本地记忆控制");
+    expect(settingsT("zh-CN", "memory.stats.rawTurns", { count: 2 })).toBe("原始轮次 2");
+    expect(settingsT("zh-CN", "memory.field.text")).toBe("记忆文本");
+    expect(settingsT("zh-CN", "memory.field.recallCues")).toBe("召回线索");
+    expect(settingsT("zh-CN", "memory.action.viewSource")).toBe("查看来源");
+    expect(settingsT("zh-CN", "memory.empty")).toBe("暂无记忆。");
+  });
 });

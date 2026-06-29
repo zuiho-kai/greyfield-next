@@ -701,12 +701,14 @@ async function verifySettingsNavAndI18n(
   await waitForSettingsText(settingsWindow, "窗口");
   await settingsWindow.getByRole("button", { name: "窗口", exact: true }).waitFor();
   await settingsWindow.getByRole("heading", { name: "窗口" }).waitFor();
+  await assertNoEnglishMemoryLibraryLabels(settingsWindow);
   await settingsWindow.screenshot({ path: settingsNarrowScreenshotPath, fullPage: true });
   await closeAndReopenWindow("settings");
   await settingsWindow.waitForSelector(".greyfield-shell");
   await waitForSettingsText(settingsWindow, "窗口");
   await settingsWindow.getByRole("button", { name: "窗口", exact: true }).waitFor();
   await settingsWindow.getByRole("heading", { name: "窗口" }).waitFor();
+  await assertNoEnglishMemoryLibraryLabels(settingsWindow);
   await settingsWindow.getByRole("button", { name: "聊天", exact: true }).click();
   const chatWindow = await waitForRoleWindow("chat");
   await chatWindow.waitForSelector(".chat-shell");
@@ -722,6 +724,40 @@ async function verifySettingsNavAndI18n(
     screenshot: settingsNarrowScreenshotPath,
     zhLabelsVisible: true
   };
+}
+
+async function assertNoEnglishMemoryLibraryLabels(settingsWindow: Page): Promise<void> {
+  const forbiddenLabels = [
+    "Local memory controls",
+    "Exports include memory text",
+    "Raw turns",
+    "Enabled",
+    "Disabled",
+    "No memories yet",
+    "Memory text",
+    "Recall cues",
+    "Save",
+    "Enable",
+    "Disable",
+    "Delete",
+    "Export",
+    "View source",
+    "Source",
+    "Updated",
+    "Last used",
+    "Last recalled memory",
+    "Memory library export"
+  ];
+  const result = await settingsWindow.evaluate((labels) => {
+    const text = document.querySelector<HTMLElement>(".memory-library")?.innerText ?? "";
+    return {
+      text,
+      hits: labels.filter((label) => text.includes(label))
+    };
+  }, forbiddenLabels);
+  if (result.hits.length > 0) {
+    throw new Error(`zh-CN Memory Library kept English labels: ${JSON.stringify(result.hits)} in ${result.text}`);
+  }
 }
 
 async function waitForSettingsText(settingsWindow: Page, text: string): Promise<void> {

@@ -516,11 +516,11 @@
           </header>
 
           <div class="memory-library__privacy" role="note">
-            <strong>Local memory controls</strong>
-            <span>Exports include memory text and source turns. Delete and clear remove library memories, not raw chat history; provider credentials stay out.</span>
+            <strong>{{ t("memory.controls.title") }}</strong>
+            <span>{{ t("memory.controls.detail") }}</span>
           </div>
 
-          <div class="memory-library__lanes" aria-label="Memory types">
+          <div class="memory-library__lanes" :aria-label="t('memory.types.label')">
             <span
               v-for="lane in memoryTypeLanes"
               :key="lane.label"
@@ -532,22 +532,24 @@
           </div>
 
           <div class="memory-library__stats">
-            <span>Raw turns {{ memoryRawCount }}</span>
-            <span>Enabled {{ memoryEnabledCount }}</span>
-            <span>Disabled {{ memoryDisabledCount }}</span>
+            <span>{{ t("memory.stats.rawTurns", { count: memoryRawCount }) }}</span>
+            <span>{{ t("memory.stats.enabled", { count: memoryEnabledCount }) }}</span>
+            <span>{{ t("memory.stats.disabled", { count: memoryDisabledCount }) }}</span>
           </div>
 
           <section
             v-if="selectedSourceDrilldown"
             class="memory-library__drilldown"
-            aria-label="Memory source drilldown"
+            :aria-label="t('memory.source.drilldown')"
           >
             <header class="memory-library__drilldown-header">
               <div>
                 <small>{{ selectedSourceKindLabel }}</small>
                 <h3>{{ selectedSourceTitle }}</h3>
               </div>
-              <button type="button" aria-label="Close source drilldown" @click="closeSourceDrilldown">Close</button>
+              <button type="button" :aria-label="t('memory.source.close')" @click="closeSourceDrilldown">
+                {{ t("memory.source.close") }}
+              </button>
             </header>
             <p class="memory-library__drilldown-summary">{{ selectedSourceSummary }}</p>
 
@@ -557,7 +559,7 @@
                 :key="`${passage.sessionId}:${passage.turnId}`"
                 class="memory-library__source-row"
                 :class="`memory-library__source-row--${passage.status}`"
-                :aria-label="`Source passage ${index + 1}`"
+                :aria-label="t('memory.source.passage', { index: index + 1 })"
               >
                 <header>
                   <strong>{{ sourcePassageHeading(passage) }}</strong>
@@ -565,16 +567,16 @@
                 </header>
                 <small>{{ sourcePassageMetaLabel(passage) }}</small>
                 <p>{{ sourcePassageBody(passage) }}</p>
-                <small v-if="sourcePassageShortened(passage)">Long source shortened for display.</small>
+                <small v-if="sourcePassageShortened(passage)">{{ t("memory.source.longShortened") }}</small>
               </article>
             </div>
-            <p v-else class="memory-library__source-empty">No original message is linked to this memory.</p>
+            <p v-else class="memory-library__source-empty">{{ t("memory.source.noOriginal") }}</p>
 
             <div v-if="selectedSummarySource" class="memory-library__drilldown-controls">
               <label class="memory-library__editor">
-                <span>Memory text</span>
+                <span>{{ t("memory.field.text") }}</span>
                 <textarea
-                  :aria-label="`Selected memory text`"
+                  :aria-label="t('memory.field.text')"
                   :value="memorySummaryDrafts[selectedSummarySource.id] ?? selectedSummarySource.summary"
                   rows="3"
                   spellcheck="false"
@@ -582,9 +584,9 @@
                 />
               </label>
               <label class="memory-library__editor">
-                <span>Recall cues</span>
+                <span>{{ t("memory.field.recallCues") }}</span>
                 <input
-                  :aria-label="`Selected recall cues`"
+                  :aria-label="t('memory.field.recallCues')"
                   :value="memoryCueDrafts[selectedSummarySource.id] ?? selectedSummarySource.recallCues.join(', ')"
                   autocomplete="off"
                   spellcheck="false"
@@ -592,35 +594,35 @@
                 />
               </label>
               <div class="memory-library__actions memory-library__actions--drilldown">
-                <button type="button" aria-label="Save selected memory" @click="saveMemorySummary(selectedSummarySource)">
-                  Save
+                <button type="button" :aria-label="t('memory.action.save')" @click="saveMemorySummary(selectedSummarySource)">
+                  {{ t("memory.action.save") }}
                 </button>
                 <button
                   type="button"
-                  :aria-label="`${selectedSummarySource.disabled ? 'Enable' : 'Disable'} selected memory`"
+                  :aria-label="memoryToggleActionLabel(selectedSummarySource.disabled)"
                   @click="toggleMemorySummary(selectedSummarySource)"
                 >
-                  {{ selectedSummarySource.disabled ? "Enable" : "Disable" }}
+                  {{ memoryToggleActionLabel(selectedSummarySource.disabled) }}
                 </button>
                 <button
                   type="button"
                   class="memory-library__danger"
-                  aria-label="Delete selected memory"
+                  :aria-label="t('memory.action.delete')"
                   @click="$emit('memory-summary-delete', { id: selectedSummarySource.id })"
                 >
-                  Delete
+                  {{ t("memory.action.delete") }}
                 </button>
-                <button type="button" aria-label="Export memory library" @click="$emit('memory-export')">
-                  Export library
+                <button type="button" :aria-label="t('button.exportLibrary')" @click="$emit('memory-export')">
+                  {{ t("button.exportLibrary") }}
                 </button>
               </div>
             </div>
 
             <div v-else-if="selectedAtomSource" class="memory-library__drilldown-controls">
               <label class="memory-library__editor">
-                <span>Memory text</span>
+                <span>{{ t("memory.field.text") }}</span>
                 <textarea
-                  :aria-label="`Selected memory text`"
+                  :aria-label="t('memory.field.text')"
                   :value="memoryAtomDrafts[selectedAtomSource.id] ?? selectedAtomSource.text"
                   rows="3"
                   spellcheck="false"
@@ -628,42 +630,42 @@
                 />
               </label>
               <div class="memory-library__actions memory-library__actions--drilldown">
-                <button type="button" aria-label="Save selected memory" @click="saveMemoryAtom(selectedAtomSource)">
-                  Save
+                <button type="button" :aria-label="t('memory.action.save')" @click="saveMemoryAtom(selectedAtomSource)">
+                  {{ t("memory.action.save") }}
                 </button>
-                <button type="button" aria-label="Export selected memory" @click="exportMemoryAtom(selectedAtomSource)">
-                  Export
+                <button type="button" :aria-label="t('memory.action.export')" @click="exportMemoryAtom(selectedAtomSource)">
+                  {{ t("memory.action.export") }}
                 </button>
                 <button
                   type="button"
-                  :aria-label="`${selectedAtomSource.disabled ? 'Enable' : 'Disable'} selected memory`"
+                  :aria-label="memoryToggleActionLabel(selectedAtomSource.disabled)"
                   @click="toggleMemoryAtom(selectedAtomSource)"
                 >
-                  {{ selectedAtomSource.disabled ? "Enable" : "Disable" }}
+                  {{ memoryToggleActionLabel(selectedAtomSource.disabled) }}
                 </button>
                 <button
                   type="button"
                   class="memory-library__danger"
-                  aria-label="Delete selected memory"
+                  :aria-label="t('memory.action.delete')"
                   @click="$emit('memory-atom-delete', { id: selectedAtomSource.id })"
                 >
-                  Delete
+                  {{ t("memory.action.delete") }}
                 </button>
               </div>
             </div>
           </section>
 
-          <div v-if="memorySegments.length > 0" class="memory-library__list" aria-label="Summary memories">
+          <div v-if="memorySegments.length > 0" class="memory-library__list" :aria-label="t('memory.summaryMemories')">
             <article
               v-for="segment in memorySegments"
               :key="segment.id"
               class="memory-library__segment"
               :class="{ 'memory-library__segment--disabled': segment.disabled }"
-              :aria-label="`Summary memory ${segment.id}`"
+              :aria-label="`${t('memory.summaryMemory')} ${segment.id}`"
             >
               <header class="memory-library__segment-header">
                 <div>
-                  <small>Summary memory</small>
+                  <small>{{ t("memory.summaryMemory") }}</small>
                   <strong>{{ segment.summary }}</strong>
                 </div>
                 <span>{{ memorySegmentStatus(segment) }}</span>
@@ -671,15 +673,15 @@
 
               <dl class="memory-library__meta">
                 <div>
-                  <dt>Source</dt>
+                  <dt>{{ t("memory.meta.source") }}</dt>
                   <dd>{{ memorySourceLabel(segment) }}</dd>
                 </div>
                 <div>
-                  <dt>Last used</dt>
+                  <dt>{{ t("memory.meta.lastUsed") }}</dt>
                   <dd>{{ memoryLastUsedLabel(segment) }}</dd>
                 </div>
                 <div>
-                  <dt>Updated</dt>
+                  <dt>{{ t("memory.meta.updated") }}</dt>
                   <dd>{{ memoryUpdatedLabel(segment) }}</dd>
                 </div>
               </dl>
@@ -687,17 +689,17 @@
               <button
                 type="button"
                 class="memory-library__source-link"
-                :aria-label="`View source for summary memory`"
+                :aria-label="t('memory.action.viewSource')"
                 @click="openSummarySourceDrilldown(segment)"
               >
                 <span>{{ memorySourceLabel(segment) }}</span>
-                <strong>View source</strong>
+                <strong>{{ t("memory.action.viewSource") }}</strong>
               </button>
 
               <label class="memory-library__editor">
-                <span>Memory text</span>
+                <span>{{ t("memory.field.text") }}</span>
                 <textarea
-                  :aria-label="`Memory text ${segment.id}`"
+                  :aria-label="`${t('memory.field.text')} ${segment.id}`"
                   :value="memorySummaryDrafts[segment.id] ?? segment.summary"
                   rows="3"
                   spellcheck="false"
@@ -705,9 +707,9 @@
                 />
               </label>
               <label class="memory-library__editor">
-                <span>Recall cues</span>
+                <span>{{ t("memory.field.recallCues") }}</span>
                 <input
-                  :aria-label="`Recall cues ${segment.id}`"
+                  :aria-label="`${t('memory.field.recallCues')} ${segment.id}`"
                   :value="memoryCueDrafts[segment.id] ?? segment.recallCues.join(', ')"
                   autocomplete="off"
                   spellcheck="false"
@@ -717,39 +719,39 @@
               <div class="memory-library__actions">
                 <button
                   type="button"
-                  :aria-label="`Save memory ${segment.id}`"
+                  :aria-label="`${t('memory.action.save')} ${segment.id}`"
                   @click="saveMemorySummary(segment)"
                 >
-                  Save
+                  {{ t("memory.action.save") }}
                 </button>
                 <button
                   type="button"
-                  :aria-label="`${segment.disabled ? 'Enable' : 'Disable'} memory ${segment.id}`"
+                  :aria-label="`${memoryToggleActionLabel(segment.disabled)} ${segment.id}`"
                   @click="toggleMemorySummary(segment)"
                 >
-                  {{ segment.disabled ? "Enable" : "Disable" }}
+                  {{ memoryToggleActionLabel(segment.disabled) }}
                 </button>
                 <button
                   type="button"
                   class="memory-library__danger"
-                  :aria-label="`Delete memory ${segment.id}`"
+                  :aria-label="`${t('memory.action.delete')} ${segment.id}`"
                   @click="$emit('memory-summary-delete', { id: segment.id })"
                 >
-                  Delete
+                  {{ t("memory.action.delete") }}
                 </button>
               </div>
             </article>
           </div>
-          <div v-if="memoryAtomGroups.length > 0" class="memory-library__list" aria-label="Atom memories">
+          <div v-if="memoryAtomGroups.length > 0" class="memory-library__list" :aria-label="t('memory.atomMemories')">
             <section
               v-for="group in memoryAtomGroups"
               :key="group.type"
               class="memory-library__group"
-              :aria-label="`${group.label} memories`"
+              :aria-label="`${group.label} ${t('nav.memory')}`"
             >
               <header class="memory-library__group-header">
                 <h3>{{ group.label }}</h3>
-                <span>{{ group.atoms.length }} stored</span>
+                <span>{{ t("memory.stored", { count: group.atoms.length }) }}</span>
               </header>
               <article
                 v-for="atom in group.atoms"
@@ -768,15 +770,15 @@
 
                 <dl class="memory-library__meta">
                   <div>
-                    <dt>Source</dt>
+                    <dt>{{ t("memory.meta.source") }}</dt>
                     <dd>{{ memoryAtomSourceLabel(atom) }}</dd>
                   </div>
                   <div>
-                    <dt>Group</dt>
+                    <dt>{{ t("memory.meta.group") }}</dt>
                     <dd>{{ memoryAtomGroupLabel(atom.type) }}</dd>
                   </div>
                   <div>
-                    <dt>Updated</dt>
+                    <dt>{{ t("memory.meta.updated") }}</dt>
                     <dd>{{ memoryAtomUpdatedLabel(atom) }}</dd>
                   </div>
                 </dl>
@@ -784,17 +786,17 @@
                 <button
                   type="button"
                   class="memory-library__source-link"
-                  :aria-label="`View source for ${memoryAtomTypeLabel(atom)} memory`"
+                  :aria-label="t('memory.action.viewSource')"
                   @click="openAtomSourceDrilldown(atom)"
                 >
                   <span>{{ memoryAtomSourceLabel(atom) }}</span>
-                  <strong>View source</strong>
+                  <strong>{{ t("memory.action.viewSource") }}</strong>
                 </button>
 
                 <label class="memory-library__editor">
-                  <span>Memory text</span>
+                  <span>{{ t("memory.field.text") }}</span>
                   <textarea
-                    :aria-label="`Memory text ${atom.id}`"
+                    :aria-label="`${t('memory.field.text')} ${atom.id}`"
                     :value="memoryAtomDrafts[atom.id] ?? atom.text"
                     rows="3"
                     spellcheck="false"
@@ -802,36 +804,36 @@
                   />
                 </label>
                 <div class="memory-library__actions memory-library__actions--atom">
-                  <button type="button" :aria-label="`Save memory ${atom.id}`" @click="saveMemoryAtom(atom)">
-                    Save
+                  <button type="button" :aria-label="`${t('memory.action.save')} ${atom.id}`" @click="saveMemoryAtom(atom)">
+                    {{ t("memory.action.save") }}
                   </button>
-                  <button type="button" :aria-label="`Export memory ${atom.id}`" @click="exportMemoryAtom(atom)">
-                    Export
+                  <button type="button" :aria-label="`${t('memory.action.export')} ${atom.id}`" @click="exportMemoryAtom(atom)">
+                    {{ t("memory.action.export") }}
                   </button>
                   <button
                     type="button"
-                    :aria-label="`${atom.disabled ? 'Enable' : 'Disable'} memory ${atom.id}`"
+                    :aria-label="`${memoryToggleActionLabel(atom.disabled)} ${atom.id}`"
                     @click="toggleMemoryAtom(atom)"
                   >
-                    {{ atom.disabled ? "Enable" : "Disable" }}
+                    {{ memoryToggleActionLabel(atom.disabled) }}
                   </button>
                   <button
                     type="button"
                     class="memory-library__danger"
-                    :aria-label="`Delete memory ${atom.id}`"
+                    :aria-label="`${t('memory.action.delete')} ${atom.id}`"
                     @click="$emit('memory-atom-delete', { id: atom.id })"
                   >
-                    Delete
+                    {{ t("memory.action.delete") }}
                   </button>
                 </div>
               </article>
             </section>
           </div>
           <div v-if="memorySegments.length === 0 && memoryAtoms.length === 0" class="memory-library__empty">
-            No memories yet.
+            {{ t("memory.empty") }}
           </div>
           <div v-if="latestRecallItem" class="memory-library__block memory-library__block--recall">
-            <strong>Last recalled memory</strong>
+            <strong>{{ t("memory.lastRecalled") }}</strong>
             <p>{{ recallReasonLabel(latestRecallItem.reason) }}</p>
             <small>{{ recalledSourceLabel(latestRecallItem.sourceTurnIds.length) }}</small>
           </div>
@@ -846,7 +848,7 @@
           <textarea
             v-if="state.memoryDebug.exportText"
             class="memory-library__export"
-            aria-label="Memory library export"
+            :aria-label="t('memory.export.label')"
             :value="state.memoryDebug.exportText"
             readonly
             rows="5"
@@ -1064,26 +1066,37 @@ const latestRecallById = computed(() => {
   const entries = (memorySnapshot.value?.lastRecallContext?.items ?? []).map((item) => [item.id, item] as const);
   return new Map(entries);
 });
-const memoryAtomTypeConfigs: Array<{ type: DesktopMemoryAtom["type"]; label: string; singular: string }> = [
-  { type: "fact", label: "Facts", singular: "Fact" },
-  { type: "preference", label: "Preferences", singular: "Preference" },
-  { type: "opinion", label: "Opinions", singular: "Opinion" },
-  { type: "relationship_event", label: "Relationships", singular: "Relationship" },
-  { type: "episodic_scene", label: "Scenes", singular: "Scene" },
-  { type: "promise", label: "Promises", singular: "Promise" }
+const memoryAtomTypeConfigKeys: Array<{
+  type: DesktopMemoryAtom["type"];
+  labelKey: SettingsI18nKey;
+  singularKey: SettingsI18nKey;
+}> = [
+  { type: "fact", labelKey: "memory.type.facts", singularKey: "memory.type.fact" },
+  { type: "preference", labelKey: "memory.type.preferences", singularKey: "memory.type.preference" },
+  { type: "opinion", labelKey: "memory.type.opinions", singularKey: "memory.type.opinion" },
+  { type: "relationship_event", labelKey: "memory.type.relationships", singularKey: "memory.type.relationship" },
+  { type: "episodic_scene", labelKey: "memory.type.scenes", singularKey: "memory.type.scene" },
+  { type: "promise", labelKey: "memory.type.promises", singularKey: "memory.type.promise" }
 ];
+const memoryAtomTypeConfigs = computed(() =>
+  memoryAtomTypeConfigKeys.map((config) => ({
+    type: config.type,
+    label: t(config.labelKey),
+    singular: t(config.singularKey)
+  }))
+);
 const memoryTypeLanes = computed<Array<{ label: string; detail: string }>>(() => [
   {
-    label: "Summary",
-    detail: `${memorySummaryCount.value} stored`
+    label: t("memory.type.summary"),
+    detail: t("memory.stored", { count: memorySummaryCount.value })
   },
-  ...memoryAtomTypeConfigs.map((config) => ({
+  ...memoryAtomTypeConfigs.value.map((config) => ({
     label: config.label,
-    detail: `${memoryAtoms.value.filter((atom) => atom.type === config.type).length} stored`
+    detail: t("memory.stored", { count: memoryAtoms.value.filter((atom) => atom.type === config.type).length })
   }))
 ]);
 const memoryAtomGroups = computed(() =>
-  memoryAtomTypeConfigs
+  memoryAtomTypeConfigs.value
     .map((config) => ({
       ...config,
       atoms: memoryAtoms.value.filter((atom) => atom.type === config.type)
@@ -1131,10 +1144,10 @@ const selectedSourcePassages = computed(() =>
 );
 const selectedSourceKindLabel = computed(() => {
   if (selectedSourceDrilldown.value?.kind === "summary") {
-    return "Summary memory source";
+    return t("memory.source.kind.summary");
   }
   if (selectedSourceDrilldown.value?.kind === "atom") {
-    return `${memoryAtomTypeLabel(selectedSourceDrilldown.value.item)} memory source`;
+    return t("memory.source.kind.atom", { type: memoryAtomTypeLabel(selectedSourceDrilldown.value.item) });
   }
   return "";
 });
@@ -1157,7 +1170,7 @@ const selectedSourceSummary = computed(() => {
   return describeMemorySourceCount({
     sourcePassages: memorySourcePassages(item),
     sourceIds
-  });
+  }, locale.value);
 });
 const currentBundledLive2DModel = computed(() => findBundledLive2DModel(props.state.settings.modelPath));
 const isCustomLive2DModel = computed(() => currentBundledLive2DModel.value === undefined);
@@ -1255,6 +1268,10 @@ function valueFrom(event: Event): string {
 
 function checkedFrom(event: Event): boolean {
   return event.target instanceof HTMLInputElement ? event.target.checked : false;
+}
+
+function memoryToggleActionLabel(disabled: boolean): string {
+  return disabled ? t("memory.action.enable") : t("memory.action.disable");
 }
 
 function sectionAriaLabel(id: SettingsSectionId | "provider"): string {
@@ -1384,25 +1401,25 @@ function closeSourceDrilldown(): void {
 }
 
 function memorySegmentStatus(segment: DesktopMemorySummarySegment): string {
-  return segment.disabled ? "Disabled" : "Enabled";
+  return memoryToggleStateLabel(segment.disabled);
 }
 
 function memorySourceLabel(segment: DesktopMemorySummarySegment): string {
   return describeMemorySourceCount({
     sourcePassages: memorySourcePassages(segment),
     sourceIds: summarySourceIds(segment)
-  });
+  }, locale.value);
 }
 
 function memoryLastUsedLabel(segment: DesktopMemorySummarySegment): string {
   if (segment.disabled) {
-    return "Disabled";
+    return memoryToggleStateLabel(true);
   }
   const recall = latestRecallById.value.get(segment.id);
   if (!recall) {
-    return "Not recalled this session";
+    return locale.value === "zh-CN" ? "本次会话未召回" : "Not recalled this session";
   }
-  return describeRecallReason(recall.reason);
+  return describeRecallReason(recall.reason, locale.value);
 }
 
 function memoryUpdatedLabel(segment: DesktopMemorySummarySegment): string {
@@ -1410,22 +1427,22 @@ function memoryUpdatedLabel(segment: DesktopMemorySummarySegment): string {
 }
 
 function memoryAtomStatus(atom: DesktopMemoryAtom): string {
-  return atom.disabled ? "Disabled" : "Enabled";
+  return memoryToggleStateLabel(atom.disabled);
 }
 
 function memoryAtomTypeLabel(atom: DesktopMemoryAtom): string {
-  return memoryAtomTypeConfigs.find((config) => config.type === atom.type)?.singular ?? "Memory";
+  return memoryAtomTypeConfigs.value.find((config) => config.type === atom.type)?.singular ?? t("memory.type.memory");
 }
 
 function memoryAtomGroupLabel(type: DesktopMemoryAtom["type"]): string {
-  return memoryAtomTypeConfigs.find((config) => config.type === type)?.label ?? "Memory";
+  return memoryAtomTypeConfigs.value.find((config) => config.type === type)?.label ?? t("memory.type.memory");
 }
 
 function memoryAtomSourceLabel(atom: DesktopMemoryAtom): string {
   return describeMemorySourceCount({
     sourcePassages: memorySourcePassages(atom),
     sourceIds: atom.sourceTurnIds
-  });
+  }, locale.value);
 }
 
 function memoryAtomUpdatedLabel(atom: DesktopMemoryAtom): string {
@@ -1437,19 +1454,19 @@ function memorySourcePassages(item: { sourcePassages?: DesktopMemorySourcePassag
 }
 
 function sourcePassageStatusLabel(passage: DesktopMemorySourcePassage): string {
-  return describeSourcePassageStatus(passage);
+  return describeSourcePassageStatus(passage, locale.value);
 }
 
 function sourcePassageHeading(passage: DesktopMemorySourcePassage): string {
-  return describeSourcePassageHeading(passage);
+  return describeSourcePassageHeading(passage, locale.value);
 }
 
 function sourcePassageMetaLabel(passage: DesktopMemorySourcePassage): string {
-  return describeSourcePassageMeta(passage);
+  return describeSourcePassageMeta(passage, locale.value);
 }
 
 function sourcePassageBody(passage: DesktopMemorySourcePassage): string {
-  return describeSourcePassageBody(passage);
+  return describeSourcePassageBody(passage, undefined, locale.value);
 }
 
 function sourcePassageShortened(passage: DesktopMemorySourcePassage): boolean {
@@ -1469,14 +1486,20 @@ function compactMemoryText(text: string): string {
 }
 
 function recallReasonLabel(reason: string): string {
-  return describeRecallReason(reason);
+  return describeRecallReason(reason, locale.value);
 }
 
 function recalledSourceLabel(count: number): string {
   if (count <= 0) {
-    return "No source passages attached to the last recall";
+    return locale.value === "zh-CN" ? "上次召回没有关联来源片段" : "No source passages attached to the last recall";
   }
-  return `${count} source ${count === 1 ? "passage" : "passages"} attached to the last recall`;
+  return locale.value === "zh-CN"
+    ? `上次召回关联 ${count} 个来源片段`
+    : `${count} source ${count === 1 ? "passage" : "passages"} attached to the last recall`;
+}
+
+function memoryToggleStateLabel(disabled: boolean): string {
+  return disabled ? t("memory.state.disabled") : t("memory.state.enabled");
 }
 
 function parseMemoryCues(text: string): string[] {

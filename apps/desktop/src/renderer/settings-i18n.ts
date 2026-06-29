@@ -104,6 +104,83 @@ export type SettingsI18nKey =
   | "memory.needsBaseUrl"
   | "memory.needsApiKey"
   | "memory.needsModel"
+  | "memory.controls.title"
+  | "memory.controls.detail"
+  | "memory.types.label"
+  | "memory.type.summary"
+  | "memory.type.facts"
+  | "memory.type.fact"
+  | "memory.type.preferences"
+  | "memory.type.preference"
+  | "memory.type.opinions"
+  | "memory.type.opinion"
+  | "memory.type.relationships"
+  | "memory.type.relationship"
+  | "memory.type.scenes"
+  | "memory.type.scene"
+  | "memory.type.promises"
+  | "memory.type.promise"
+  | "memory.type.memory"
+  | "memory.stored"
+  | "memory.stats.rawTurns"
+  | "memory.stats.enabled"
+  | "memory.stats.disabled"
+  | "memory.state.enabled"
+  | "memory.state.disabled"
+  | "memory.source.drilldown"
+  | "memory.source.kind.summary"
+  | "memory.source.kind.atom"
+  | "memory.source.close"
+  | "memory.source.passage"
+  | "memory.source.longShortened"
+  | "memory.source.noOriginal"
+  | "memory.source.none"
+  | "memory.source.saved.one"
+  | "memory.source.saved.many"
+  | "memory.source.ready.one"
+  | "memory.source.ready.many"
+  | "memory.source.someReady"
+  | "memory.source.unavailable.one"
+  | "memory.source.unavailable.many"
+  | "memory.source.heading.unavailable"
+  | "memory.source.heading.assistant"
+  | "memory.source.heading.user"
+  | "memory.source.heading.system"
+  | "memory.source.heading.event"
+  | "memory.source.heading.conversation"
+  | "memory.source.status.saved"
+  | "memory.source.status.missing"
+  | "memory.source.status.unavailable"
+  | "memory.source.meta.availableWithTime"
+  | "memory.source.meta.available"
+  | "memory.source.meta.missingWithTime"
+  | "memory.source.meta.missing"
+  | "memory.source.meta.unavailableWithTime"
+  | "memory.source.meta.unavailable"
+  | "memory.source.body.missing"
+  | "memory.source.body.empty"
+  | "memory.recall.matched"
+  | "memory.recall.cue"
+  | "memory.recall.cueFallback"
+  | "memory.recall.semantic"
+  | "memory.field.text"
+  | "memory.field.recallCues"
+  | "memory.action.save"
+  | "memory.action.enable"
+  | "memory.action.disable"
+  | "memory.action.delete"
+  | "memory.action.export"
+  | "memory.action.viewSource"
+  | "memory.summaryMemory"
+  | "memory.atomMemories"
+  | "memory.summaryMemories"
+  | "memory.meta.source"
+  | "memory.meta.lastUsed"
+  | "memory.meta.updated"
+  | "memory.meta.group"
+  | "memory.empty"
+  | "memory.lastRecalled"
+  | "memory.export.label"
   | "test.llm"
   | "test.llm.testing"
   | "test.voice"
@@ -225,6 +302,83 @@ const enUS: Record<SettingsI18nKey, string> = {
   "memory.needsBaseUrl": "Better extraction needs a chat provider Base URL. Standard local memory stays on until the provider is ready.",
   "memory.needsApiKey": "Better extraction needs a saved API key. Standard local memory stays on until the provider is ready.",
   "memory.needsModel": "Better extraction needs a chat model name. Standard local memory stays on until the provider is ready.",
+  "memory.controls.title": "Local memory controls",
+  "memory.controls.detail": "Exports include memory text and source turns. Delete and clear remove library memories, not raw chat history; provider credentials stay out.",
+  "memory.types.label": "Memory types",
+  "memory.type.summary": "Summary",
+  "memory.type.facts": "Facts",
+  "memory.type.fact": "Fact",
+  "memory.type.preferences": "Preferences",
+  "memory.type.preference": "Preference",
+  "memory.type.opinions": "Opinions",
+  "memory.type.opinion": "Opinion",
+  "memory.type.relationships": "Relationships",
+  "memory.type.relationship": "Relationship",
+  "memory.type.scenes": "Scenes",
+  "memory.type.scene": "Scene",
+  "memory.type.promises": "Promises",
+  "memory.type.promise": "Promise",
+  "memory.type.memory": "Memory",
+  "memory.stored": "{count} stored",
+  "memory.stats.rawTurns": "Raw turns {count}",
+  "memory.stats.enabled": "Enabled {count}",
+  "memory.stats.disabled": "Disabled {count}",
+  "memory.state.enabled": "Enabled",
+  "memory.state.disabled": "Disabled",
+  "memory.source.drilldown": "Memory source drilldown",
+  "memory.source.kind.summary": "Summary memory source",
+  "memory.source.kind.atom": "{type} memory source",
+  "memory.source.close": "Close",
+  "memory.source.passage": "Source passage {index}",
+  "memory.source.longShortened": "Long source shortened for display.",
+  "memory.source.noOriginal": "No original message is linked to this memory.",
+  "memory.source.none": "No saved source",
+  "memory.source.saved.one": "1 saved source",
+  "memory.source.saved.many": "{count} saved sources",
+  "memory.source.ready.one": "1 source passage ready",
+  "memory.source.ready.many": "{count} source passages ready",
+  "memory.source.someReady": "{available} of {total} source passages ready",
+  "memory.source.unavailable.one": "1 saved source unavailable here",
+  "memory.source.unavailable.many": "{count} saved sources unavailable here",
+  "memory.source.heading.unavailable": "Original message unavailable",
+  "memory.source.heading.assistant": "From Greyfield",
+  "memory.source.heading.user": "From you",
+  "memory.source.heading.system": "From a local system note",
+  "memory.source.heading.event": "From an app event",
+  "memory.source.heading.conversation": "From the conversation",
+  "memory.source.status.saved": "Saved locally",
+  "memory.source.status.missing": "Original message not found",
+  "memory.source.status.unavailable": "Not available in this session",
+  "memory.source.meta.availableWithTime": "Saved from conversation on {timestamp}",
+  "memory.source.meta.available": "Saved from the local conversation",
+  "memory.source.meta.missingWithTime": "Greyfield remembers the source from {timestamp}",
+  "memory.source.meta.missing": "Greyfield saved a source link for this memory",
+  "memory.source.meta.unavailableWithTime": "Greyfield remembers a source from another local session on {timestamp}",
+  "memory.source.meta.unavailable": "Greyfield saved a source link from another local session",
+  "memory.source.body.missing": "The original message is not available in this local session store.",
+  "memory.source.body.empty": "No message text is saved for this source.",
+  "memory.recall.matched": "Matched this memory",
+  "memory.recall.cue": "Matched recall cue \"{cue}\"",
+  "memory.recall.cueFallback": "Matched a recall cue",
+  "memory.recall.semantic": "Semantic match",
+  "memory.field.text": "Memory text",
+  "memory.field.recallCues": "Recall cues",
+  "memory.action.save": "Save",
+  "memory.action.enable": "Enable",
+  "memory.action.disable": "Disable",
+  "memory.action.delete": "Delete",
+  "memory.action.export": "Export",
+  "memory.action.viewSource": "View source",
+  "memory.summaryMemory": "Summary memory",
+  "memory.atomMemories": "Atom memories",
+  "memory.summaryMemories": "Summary memories",
+  "memory.meta.source": "Source",
+  "memory.meta.lastUsed": "Last used",
+  "memory.meta.updated": "Updated",
+  "memory.meta.group": "Group",
+  "memory.empty": "No memories yet.",
+  "memory.lastRecalled": "Last recalled memory",
+  "memory.export.label": "Memory library export",
   "test.llm": "Test LLM",
   "test.llm.testing": "Testing...",
   "test.voice": "Test Voice",
@@ -347,6 +501,83 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "memory.needsBaseUrl": "增强提取需要聊天服务 Base URL。在服务就绪前，标准本地记忆会继续开启。",
   "memory.needsApiKey": "增强提取需要已保存的 API key。在服务就绪前，标准本地记忆会继续开启。",
   "memory.needsModel": "增强提取需要聊天模型名称。在服务就绪前，标准本地记忆会继续开启。",
+  "memory.controls.title": "本地记忆控制",
+  "memory.controls.detail": "导出只包含记忆文本和来源轮次。删除和清空只移除记忆库内容，不删除原始聊天历史；服务凭据不会导出。",
+  "memory.types.label": "记忆类型",
+  "memory.type.summary": "摘要",
+  "memory.type.facts": "事实",
+  "memory.type.fact": "事实",
+  "memory.type.preferences": "偏好",
+  "memory.type.preference": "偏好",
+  "memory.type.opinions": "观点",
+  "memory.type.opinion": "观点",
+  "memory.type.relationships": "关系",
+  "memory.type.relationship": "关系",
+  "memory.type.scenes": "场景",
+  "memory.type.scene": "场景",
+  "memory.type.promises": "承诺",
+  "memory.type.promise": "承诺",
+  "memory.type.memory": "记忆",
+  "memory.stored": "已保存 {count} 条",
+  "memory.stats.rawTurns": "原始轮次 {count}",
+  "memory.stats.enabled": "已启用 {count}",
+  "memory.stats.disabled": "已禁用 {count}",
+  "memory.state.enabled": "已启用",
+  "memory.state.disabled": "已禁用",
+  "memory.source.drilldown": "记忆来源详情",
+  "memory.source.kind.summary": "摘要记忆来源",
+  "memory.source.kind.atom": "{type}记忆来源",
+  "memory.source.close": "关闭",
+  "memory.source.passage": "来源片段 {index}",
+  "memory.source.longShortened": "来源内容较长，已缩短显示。",
+  "memory.source.noOriginal": "这条记忆没有关联原始消息。",
+  "memory.source.none": "没有已保存来源",
+  "memory.source.saved.one": "已保存 1 个来源",
+  "memory.source.saved.many": "已保存 {count} 个来源",
+  "memory.source.ready.one": "1 个来源片段可查看",
+  "memory.source.ready.many": "{count} 个来源片段可查看",
+  "memory.source.someReady": "{available}/{total} 个来源片段可查看",
+  "memory.source.unavailable.one": "1 个已保存来源当前不可查看",
+  "memory.source.unavailable.many": "{count} 个已保存来源当前不可查看",
+  "memory.source.heading.unavailable": "原始消息不可用",
+  "memory.source.heading.assistant": "来自 Greyfield",
+  "memory.source.heading.user": "来自你",
+  "memory.source.heading.system": "来自本地系统记录",
+  "memory.source.heading.event": "来自应用事件",
+  "memory.source.heading.conversation": "来自对话",
+  "memory.source.status.saved": "已本地保存",
+  "memory.source.status.missing": "找不到原始消息",
+  "memory.source.status.unavailable": "当前会话不可查看",
+  "memory.source.meta.availableWithTime": "保存自 {timestamp} 的对话",
+  "memory.source.meta.available": "保存自本地对话",
+  "memory.source.meta.missingWithTime": "Greyfield 记得 {timestamp} 的来源",
+  "memory.source.meta.missing": "Greyfield 为这条记忆保存了来源链接",
+  "memory.source.meta.unavailableWithTime": "Greyfield 记得另一个本地会话在 {timestamp} 的来源",
+  "memory.source.meta.unavailable": "Greyfield 保存了另一个本地会话的来源链接",
+  "memory.source.body.missing": "原始消息不在当前本地会话存储中。",
+  "memory.source.body.empty": "这个来源没有保存消息文本。",
+  "memory.recall.matched": "命中这条记忆",
+  "memory.recall.cue": "命中召回线索「{cue}」",
+  "memory.recall.cueFallback": "命中召回线索",
+  "memory.recall.semantic": "语义匹配",
+  "memory.field.text": "记忆文本",
+  "memory.field.recallCues": "召回线索",
+  "memory.action.save": "保存",
+  "memory.action.enable": "启用",
+  "memory.action.disable": "禁用",
+  "memory.action.delete": "删除",
+  "memory.action.export": "导出",
+  "memory.action.viewSource": "查看来源",
+  "memory.summaryMemory": "摘要记忆",
+  "memory.atomMemories": "原子记忆",
+  "memory.summaryMemories": "摘要记忆",
+  "memory.meta.source": "来源",
+  "memory.meta.lastUsed": "上次使用",
+  "memory.meta.updated": "更新时间",
+  "memory.meta.group": "分组",
+  "memory.empty": "暂无记忆。",
+  "memory.lastRecalled": "上次召回的记忆",
+  "memory.export.label": "记忆库导出",
   "test.llm": "测试 LLM",
   "test.llm.testing": "测试中...",
   "test.voice": "测试语音",
