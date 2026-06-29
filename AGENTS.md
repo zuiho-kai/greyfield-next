@@ -40,7 +40,8 @@ Greyfield Next is a TypeScript monorepo for a Live2D desktop companion. This fil
 - While an implementation sub-agent is still working, the coordinator must not pre-review that worker's business diff. Wait for handoff or a blocker before inspecting implementation details. Use coordinator time for non-overlapping issue delegation, project coordination, or rule/docs work.
 - Do not over-serialize atomic issues merely because they may touch nearby harness or runtime files. Real multi-agent work can create merge conflicts; use dedicated branches, explicit ownership, PR review, rebase, and conflict resolution instead of blocking all adjacent work.
 - After spawning implementation sub-agents, the coordinator must keep an active wait/review loop or set an explicit follow-up wakeup before ending the turn. Sub-agent notifications are not a substitute for coordinator ownership; do not assume a completed worker will automatically resume the main agent after a final response.
-- A reviewed, validated implementation branch must not sit as a local-only "ready" branch. After coordinator review finds no blocker, either the coordinator pushes and opens the PR immediately, or the worker prompt must have explicitly authorized the worker to push/open the PR after validation. PR bodies are written in Chinese unless the user asks otherwise.
+- Implementation worker prompts should delegate push/open-PR authority by default: after local validation passes, the worker may push its assigned branch and open a Chinese PR unless the coordinator explicitly keeps that step. The coordinator still owns review, merge, issue closeout, and worker shutdown.
+- A reviewed, validated implementation branch must not sit as a local-only "ready" branch. After coordinator review finds no blocker, either the authorized worker already pushed/opened the PR, or the coordinator must do it immediately. PR bodies are written in Chinese unless the user asks otherwise.
 
 ## Required Reading Index
 
