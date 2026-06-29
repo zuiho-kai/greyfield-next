@@ -198,7 +198,9 @@ try {
   await assertOtherRoleSummaryHidden(memoryLibrary);
 
   await settings.getByRole("button", { name: "Delete memory summary-1" }).click();
-  await memoryLibrary.getByText("Memory summary-1 deleted. Raw chat history was kept.").waitFor();
+  await memoryLibrary
+    .getByText("Memory summary-1 deleted. Remembered source evidence was hidden from recall, source views, and exports.")
+    .waitFor();
   const summaryAfterDelete = await waitForFileNotContaining(summaryPath, '"id":"summary-1"');
   const sessionAfterDelete = await waitForFileContaining(sessionPath, ["第一轮：我喜欢 Hiyori。"]);
   await resetMemoryEvents(chat);
@@ -213,18 +215,18 @@ try {
     return (
       !value.includes("Edited memory: User prefers Hiyori and Sakura.") &&
       !value.includes(otherRoleSummaryText) &&
-      value.includes("第一轮：我喜欢 Hiyori。")
+      !value.includes("第一轮：我喜欢 Hiyori。")
     );
   });
-  if (!exportAfterDelete.includes("第一轮：我喜欢 Hiyori。")) {
-    throw new Error(`Memory export after delete did not make retained raw turns visible: ${exportAfterDelete}`);
+  if (exportAfterDelete.includes("第一轮：我喜欢 Hiyori。")) {
+    throw new Error(`Memory export after delete still included erased raw source turns: ${exportAfterDelete}`);
   }
 
   await waitForFileContaining(summaryPath, [`"threadId":"${currentThreadId}"`]);
   await settings.getByRole("button", { name: "Refresh memory" }).click();
   await memoryLibrary.locator(".memory-library__segment").first().waitFor();
   await settings.getByRole("button", { name: "Clear summary memory" }).click();
-  await memoryLibrary.locator(".provider-test-result", { hasText: "Raw chat history was kept." }).waitFor();
+  await memoryLibrary.locator(".provider-test-result", { hasText: "Remembered source evidence was hidden" }).waitFor();
   const summaryAfterClear = await waitForNoCurrentRoleSummaries(summaryPath);
   await settings.screenshot({ path: settingsScreenshotPath, fullPage: true });
 
@@ -245,7 +247,7 @@ try {
         disabledMemorySkipped: true,
         enabledMemoryRecalled: true,
         deletedMemoryNotRecalled: true,
-        deletedMemoryKeptRawTurns: true,
+        deletedMemoryErasedRawSourceEvidence: true,
         clearedSummaryMemory: true,
         roleBMemoryIsolated: true,
         reloadPersistence: true,

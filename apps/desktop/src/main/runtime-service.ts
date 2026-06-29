@@ -12,6 +12,8 @@ import {
   type MemoryAtomExtractionMode,
   type MemoryAtomExtractionStatusReason,
   type MemoryAtomStore,
+  type DeletedMemoryEvidence,
+  type DeletedMemoryEvidenceStore,
   type MemoryStore,
   type RecallContext,
   type SessionStore,
@@ -32,6 +34,11 @@ import {
   type TTSProvider,
   type ChatMessage
 } from "@greyfield/core-runtime";
+import {
+  filterDeletedSessionTurns,
+  hasDeletedMemoryEvidenceSource,
+  sourceTurnIdsContainDeletedEvidence
+} from "@greyfield/core-runtime";
 import { createDefaultInteractionProfile, FakeStageDriver } from "@greyfield/stage-live2d";
 import type { GreyfieldConfig } from "@greyfield/persistence/config-schema";
 
@@ -42,6 +49,7 @@ export interface RuntimeServiceOptions {
   sessionStore?: SessionStore;
   summarySegmentStore?: SummarySegmentStore;
   memoryAtomStore?: MemoryAtomStore;
+  deletedMemoryEvidenceStore?: DeletedMemoryEvidenceStore;
   threadId?: string;
   recentTurnLimit?: number;
   recallMaxItems?: number;
@@ -125,6 +133,7 @@ export class RuntimeService {
   private readonly sessionStore: SessionStore;
   private readonly summarySegmentStore: SummarySegmentStore | undefined;
   private readonly memoryAtomStore: MemoryAtomStore | undefined;
+  private readonly deletedMemoryEvidenceStore: DeletedMemoryEvidenceStore | undefined;
   private readonly interactionProfile = createDefaultInteractionProfile();
   private lastRecallContext: RecallContext | undefined;
   private proactiveTriggerState: ProactiveMemoryTriggerState = {};
@@ -138,6 +147,7 @@ export class RuntimeService {
     this.sessionStore = options.sessionStore ?? new InMemorySessionStore("desktop-main-session");
     this.summarySegmentStore = options.summarySegmentStore;
     this.memoryAtomStore = options.memoryAtomStore;
+    this.deletedMemoryEvidenceStore = options.deletedMemoryEvidenceStore;
   }
 
   private get threadId(): string {
@@ -200,9 +210,9 @@ export class RuntimeService {
   }
 
   async getRecentTurns(limit: number): Promise<Array<{ role: "user" | "assistant"; content: string }>> {
-    const turns = await this.sessionStore.getRecent(limit);
+    const turns = this.filterMemoryLibraryRecentTurns(await this.sessionStore.getRecent(limit), await this.loadDeletedMemoryEvidence());
     return turns.flatMap((turn) =>
-      turn.role === "user" || turn.role === "assistant" ? [{ role: turn.role, content: turn.content }] : []
+      turn.role === "user" || turn.role === "assistant" ? [{ role: turn.role, content: this.redactSecretText(turn.content) }] : []
     );
   }
 
@@ -211,10 +221,16 @@ export class RuntimeService {
   }
 
   async getMemoryLibrarySnapshot(limit = 20): Promise<MemoryLibrarySnapshot> {
-    const recentTurns = await this.sessionStore.getRecent(limit);
+    const deletedEvidence = await this.loadDeletedMemoryEvidence();
+    const recentTurns = this.filterMemoryLibraryRecentTurns(await this.sessionStore.getRecent(limit), deletedEvidence);
+    const visibleSummarySegments = this.filterSummarySegmentsForDeletedEvidence(
+      (await this.summarySegmentStore?.list(this.threadId)) ?? [],
+      deletedEvidence
+    );
+    const visibleMemoryAtoms = this.filterMemoryAtomsForDeletedEvidence((await this.memoryAtomStore?.list(this.threadId)) ?? [], deletedEvidence);
     const [summarySegments, memoryAtoms] = await Promise.all([
-      this.resolveSummarySegmentSources((await this.summarySegmentStore?.list(this.threadId)) ?? [], recentTurns),
-      this.resolveMemoryAtomSources((await this.memoryAtomStore?.list(this.threadId)) ?? [], recentTurns)
+      this.resolveSummarySegmentSources(visibleSummarySegments, recentTurns, deletedEvidence),
+      this.resolveMemoryAtomSources(visibleMemoryAtoms, recentTurns, deletedEvidence)
     ]);
     return this.redactMemoryLibrarySnapshot({
       threadId: this.threadId,
@@ -267,14 +283,19 @@ export class RuntimeService {
     if (!existing) {
       return { ok: false, message: `Memory summary ${id} was not found in the current role.` };
     }
+    await this.recordDeletedSummaryEvidence(existing);
     const deleted = await this.summarySegmentStore.delete(id);
-    if (!deleted) {
-      return { ok: false, message: `Memory summary ${id} was not found in the current role.` };
-    }
     this.lastRecallContext = undefined;
+    if (!deleted) {
+      return {
+        ok: false,
+        message: `Memory summary ${id} could not be deleted after remembered source evidence was hidden.`,
+        snapshot: await this.getMemoryLibrarySnapshot()
+      };
+    }
     return {
       ok: true,
-      message: `Memory ${id} deleted. Raw chat history was kept.`,
+      message: `Memory ${id} deleted. Remembered source evidence was hidden from recall, source views, and exports.`,
       snapshot: await this.getMemoryLibrarySnapshot()
     };
   }
@@ -293,12 +314,25 @@ export class RuntimeService {
     }
 
     for (const segment of summaries) {
-      await this.summarySegmentStore.delete(segment.id);
+      await this.recordDeletedSummaryEvidence(segment);
+    }
+    let deletedCount = 0;
+    for (const segment of summaries) {
+      if (await this.summarySegmentStore.delete(segment.id)) {
+        deletedCount += 1;
+      }
     }
     this.lastRecallContext = undefined;
+    if (deletedCount !== summaries.length) {
+      return {
+        ok: false,
+        message: `Cleared ${deletedCount} of ${summaries.length} summary ${summaries.length === 1 ? "memory" : "memories"} after remembered source evidence was hidden.`,
+        snapshot: await this.getMemoryLibrarySnapshot()
+      };
+    }
     return {
       ok: true,
-      message: `Cleared ${summaries.length} summary ${summaries.length === 1 ? "memory" : "memories"}. Raw chat history was kept.`,
+      message: `Cleared ${summaries.length} summary ${summaries.length === 1 ? "memory" : "memories"}. Remembered source evidence was hidden from recall, source views, and exports.`,
       snapshot: await this.getMemoryLibrarySnapshot()
     };
   }
@@ -327,7 +361,10 @@ export class RuntimeService {
       return { displayed: false, reason: "missing_atom_store" };
     }
 
-    const atoms = await this.memoryAtomStore.list(this.threadId);
+    const atoms = this.filterMemoryAtomsForDeletedEvidence(
+      await this.memoryAtomStore.list(this.threadId),
+      await this.loadDeletedMemoryEvidence()
+    );
     const result = buildProactiveMemoryDisplayMessage({
       atoms,
       sceneContext,
@@ -375,14 +412,19 @@ export class RuntimeService {
     if (!existing) {
       return { ok: false, message: `Atom memory ${id} was not found in the current role.` };
     }
+    await this.recordDeletedAtomEvidence(existing);
     const deleted = await this.memoryAtomStore.delete(id);
-    if (!deleted) {
-      return { ok: false, message: `Atom memory ${id} was not found in the current role.` };
-    }
     this.lastRecallContext = undefined;
+    if (!deleted) {
+      return {
+        ok: false,
+        message: `Atom memory ${id} could not be deleted after remembered source evidence was hidden.`,
+        snapshot: await this.getMemoryLibrarySnapshot()
+      };
+    }
     return {
       ok: true,
-      message: `Atom memory ${id} deleted. Raw chat history and summaries were kept.`,
+      message: `Atom memory ${id} deleted. Remembered source evidence was hidden from recall, source views, and exports.`,
       snapshot: await this.getMemoryLibrarySnapshot()
     };
   }
@@ -400,12 +442,25 @@ export class RuntimeService {
       };
     }
     for (const atom of atoms) {
-      await this.memoryAtomStore.delete(atom.id);
+      await this.recordDeletedAtomEvidence(atom);
+    }
+    let deletedCount = 0;
+    for (const atom of atoms) {
+      if (await this.memoryAtomStore.delete(atom.id)) {
+        deletedCount += 1;
+      }
     }
     this.lastRecallContext = undefined;
+    if (deletedCount !== atoms.length) {
+      return {
+        ok: false,
+        message: `Cleared ${deletedCount} of ${atoms.length} current role atom ${atoms.length === 1 ? "memory" : "memories"} after remembered source evidence was hidden.`,
+        snapshot: await this.getMemoryLibrarySnapshot()
+      };
+    }
     return {
       ok: true,
-      message: `Cleared ${atoms.length} current role atom ${atoms.length === 1 ? "memory" : "memories"}. Raw chat history and summaries were kept.`,
+      message: `Cleared ${atoms.length} current role atom ${atoms.length === 1 ? "memory" : "memories"}. Remembered source evidence was hidden from recall, source views, and exports.`,
       snapshot: await this.getMemoryLibrarySnapshot()
     };
   }
@@ -523,6 +578,7 @@ export class RuntimeService {
       memoryStore: this.memoryStore,
       summarySegmentStore: this.summarySegmentStore,
       memoryAtomStore: this.memoryAtomStore,
+      deletedMemoryEvidenceStore: this.deletedMemoryEvidenceStore,
       memoryAtomExtractionMode: atomExtractionPolicy.mode,
       ...(atomExtractionPolicy.unavailableReason
         ? { memoryAtomExtractionUnavailableReason: atomExtractionPolicy.unavailableReason }
@@ -537,7 +593,8 @@ export class RuntimeService {
       recallMaxCharacters: this.options.recallMaxCharacters,
       summaryBatchTurnLimit: this.options.summaryBatchTurnLimit,
       summaryMinTurns: this.options.summaryMinTurns,
-      ttsEnabled: this.config.voice.speechEnabled
+      ttsEnabled: this.config.voice.speechEnabled,
+      promptRedactionSecrets: [this.config.provider.apiKey]
     });
   }
 
@@ -579,33 +636,101 @@ export class RuntimeService {
     return segments.find((segment) => segment.id === id) ?? null;
   }
 
+  private async loadDeletedMemoryEvidence(): Promise<DeletedMemoryEvidence[]> {
+    if (!this.deletedMemoryEvidenceStore) {
+      return [];
+    }
+    return this.deletedMemoryEvidenceStore.list(this.threadId);
+  }
+
+  private filterMemoryLibraryRecentTurns(turns: SessionTurn[], deletedEvidence: DeletedMemoryEvidence[]): SessionTurn[] {
+    return filterDeletedSessionTurns(turns, deletedEvidence, this.sessionStore.sessionId).filter(
+      (turn) => turn.role === "user" || turn.role === "assistant"
+    );
+  }
+
+  private filterSummarySegmentsForDeletedEvidence(
+    segments: SummarySegment[],
+    deletedEvidence: DeletedMemoryEvidence[]
+  ): SummarySegment[] {
+    return segments.filter((segment) => !sourceTurnIdsContainDeletedEvidence(getSummarySourceRefs(segment, this.sessionStore.sessionId).map((ref) => ref.turnId), deletedEvidence, segment.sessionId));
+  }
+
+  private filterMemoryAtomsForDeletedEvidence(atoms: MemoryAtom[], deletedEvidence: DeletedMemoryEvidence[]): MemoryAtom[] {
+    return atoms.filter(
+      (atom) =>
+        !sourceTurnIdsContainDeletedEvidence(atom.sourceTurnIds, deletedEvidence, atom.sourceSessionId ?? this.sessionStore.sessionId)
+    );
+  }
+
+  private async recordDeletedSummaryEvidence(segment: SummarySegment): Promise<void> {
+    if (!this.deletedMemoryEvidenceStore) {
+      return;
+    }
+    const refs = getSummarySourceRefs(segment, this.sessionStore.sessionId);
+    await this.recordDeletedEvidence("summary-segment", segment.id, refs);
+  }
+
+  private async recordDeletedAtomEvidence(atom: MemoryAtom): Promise<void> {
+    if (!this.deletedMemoryEvidenceStore) {
+      return;
+    }
+    await this.recordDeletedEvidence("memory-atom", atom.id, getAtomSourceRefs(atom, this.sessionStore.sessionId));
+  }
+
+  private async recordDeletedEvidence(
+    kind: "summary-segment" | "memory-atom",
+    memoryId: string,
+    refs: SourceTurnRef[]
+  ): Promise<void> {
+    const refsBySession = new Map<string, string[]>();
+    for (const ref of refs) {
+      refsBySession.set(ref.sessionId, [...(refsBySession.get(ref.sessionId) ?? []), ref.turnId]);
+    }
+    for (const [sourceSessionId, sourceTurnIds] of refsBySession) {
+      if (sourceTurnIds.length === 0) {
+        continue;
+      }
+      await this.deletedMemoryEvidenceStore?.append({
+        threadId: this.threadId,
+        kind,
+        memoryId,
+        sourceTurnIds,
+        sourceSessionId
+      });
+    }
+  }
+
   private async resolveSummarySegmentSources(
     segments: SummarySegment[],
-    recentTurns: SessionTurn[]
+    recentTurns: SessionTurn[],
+    deletedEvidence: DeletedMemoryEvidence[]
   ): Promise<MemoryLibrarySummarySegment[]> {
     return Promise.all(
       segments.map(async (segment) => ({
         ...segment,
-        sourcePassages: await this.resolveSourcePassages(getSummarySourceRefs(segment, this.sessionStore.sessionId), recentTurns)
+        sourcePassages: await this.resolveSourcePassages(getSummarySourceRefs(segment, this.sessionStore.sessionId), recentTurns, deletedEvidence)
       }))
     );
   }
 
   private async resolveMemoryAtomSources(
     atoms: MemoryAtom[],
-    recentTurns: SessionTurn[]
+    recentTurns: SessionTurn[],
+    deletedEvidence: DeletedMemoryEvidence[]
   ): Promise<MemoryLibraryAtom[]> {
     return Promise.all(
       atoms.map(async (atom) => ({
         ...atom,
-        sourcePassages: await this.resolveSourcePassages(getAtomSourceRefs(atom, this.sessionStore.sessionId), recentTurns)
+        sourcePassages: await this.resolveSourcePassages(getAtomSourceRefs(atom, this.sessionStore.sessionId), recentTurns, deletedEvidence)
       }))
     );
   }
 
   private async resolveSourcePassages(
     refs: SourceTurnRef[],
-    recentTurns: SessionTurn[]
+    recentTurns: SessionTurn[],
+    deletedEvidence: DeletedMemoryEvidence[]
   ): Promise<MemorySourcePassage[]> {
     if (refs.length === 0) {
       return [];
@@ -625,6 +750,16 @@ export class RuntimeService {
     }
 
     return refs.map((ref) => {
+      if (hasDeletedMemoryEvidenceSource(deletedEvidence, ref.turnId, ref.sessionId)) {
+        return {
+          sessionId: ref.sessionId,
+          turnId: ref.turnId,
+          status: "unavailable",
+          ...(ref.role ? { role: ref.role } : {}),
+          ...(ref.createdAt ? { createdAt: ref.createdAt } : {}),
+          message: "Source turn was erased with a deleted memory."
+        };
+      }
       if (ref.sessionId !== currentSessionId) {
         return {
           sessionId: ref.sessionId,
@@ -636,6 +771,16 @@ export class RuntimeService {
         };
       }
       const turn = currentTurns.get(ref.turnId);
+      if (turn && turn.role !== "user" && turn.role !== "assistant") {
+        return {
+          sessionId: ref.sessionId,
+          turnId: ref.turnId,
+          status: "unavailable",
+          role: turn.role,
+          createdAt: turn.createdAt,
+          message: "Private runtime event is not a memory source."
+        };
+      }
       if (!turn) {
         if (currentLookupUnavailable) {
           return {

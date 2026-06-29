@@ -17,6 +17,13 @@ import {
   type MemoryAtomWritePolicyOptions
 } from "./memory-atoms";
 import { buildRecallContext, createSummarySegmentDraft, getSummarySegmentSourceTurnIds, type SummarySegmentStore } from "./memory-context";
+import {
+  filterDeletedSessionTurns,
+  hasDeletedMemoryEvidenceSource,
+  sourceTurnIdsContainDeletedEvidence,
+  type DeletedMemoryEvidence,
+  type DeletedMemoryEvidenceStore
+} from "./memory-erasure";
 import { assemblePrompt } from "./prompt-assembler";
 import type { ASRProvider, LLMProvider, MemoryStore, TTSProvider } from "./providers";
 import type { CharacterPersona } from "./persona";
@@ -30,6 +37,7 @@ export interface GreyfieldRuntimeOptions {
   memoryStore: MemoryStore;
   summarySegmentStore?: SummarySegmentStore;
   memoryAtomStore?: MemoryAtomStore;
+  deletedMemoryEvidenceStore?: DeletedMemoryEvidenceStore;
   memoryAtomExtractor?: MemoryAtomExtractor;
   memoryAtomExtractionMode?: MemoryAtomExtractionMode;
   memoryAtomExtractionUnavailableReason?: Extract<MemoryAtomExtractionStatusReason, "disabled" | "provider-unavailable">;
@@ -48,6 +56,7 @@ export interface GreyfieldRuntimeOptions {
   summaryMinTurns?: number;
   ttsEnabled?: boolean;
   ttsMaxCharactersPerTurn?: number;
+  promptRedactionSecrets?: string[];
 }
 
 const defaultTtsMaxCharactersPerTurn = 600;
@@ -159,16 +168,33 @@ export class GreyfieldRuntime {
     this.activeAbortController = new AbortController();
     await emit({ type: "runtime.status", status: "thinking" });
 
-    const [memory, recent, handoff, memoryAtoms] = await Promise.all([
+    const [memory, rawRecent, rawHandoff, rawMemoryAtoms, deletedEvidence] = await Promise.all([
       this.options.memoryStore.load(),
       this.options.sessionStore.getRecent(this.recentTurnLimit),
       this.options.sessionStore.createHandoff(this.recentTurnLimit),
-      this.loadMemoryAtoms()
+      this.loadMemoryAtoms(),
+      this.loadDeletedMemoryEvidence()
     ]);
-    const summarySegments = await this.loadSummarySegments();
+    const recent = sanitizePromptTurns(
+      filterDeletedSessionTurns(rawRecent, deletedEvidence, this.options.sessionStore.sessionId),
+      this.options.promptRedactionSecrets
+    );
+    const handoffSummary = buildPromptHandoffSummary({
+      summary: rawHandoff.summary,
+      turns: rawHandoff.turns,
+      deletedEvidence,
+      sessionId: this.options.sessionStore.sessionId,
+      secrets: this.options.promptRedactionSecrets
+    });
+    const memoryAtoms = rawMemoryAtoms.filter(
+      (atom) => !sourceTurnIdsContainDeletedEvidence(atom.sourceTurnIds, deletedEvidence, atom.sourceSessionId ?? this.options.sessionStore.sessionId)
+    );
+    const summarySegments = (await this.loadSummarySegments()).filter(
+      (segment) => !sourceTurnIdsContainDeletedEvidence(getSummarySegmentSourceTurnIds(segment), deletedEvidence, segment.sessionId)
+    );
     const recallContext = this.options.summarySegmentStore
       ? buildRecallContext({
-          input: text,
+          input: redactPromptPrivateText(text, this.options.promptRedactionSecrets),
           summarySegments,
           maxItems: this.options.recallMaxItems,
           maxCharacters: this.options.recallMaxCharacters
@@ -180,7 +206,7 @@ export class GreyfieldRuntime {
     let atomRecallContext =
       memoryAtoms.length > 0
         ? buildMemoryAtomRecallContext({
-            input: text,
+            input: redactPromptPrivateText(text, this.options.promptRedactionSecrets),
             atoms: memoryAtoms,
             maxItems: this.options.atomRecallMaxItems,
             maxCharacters: this.options.atomRecallMaxCharacters
@@ -189,7 +215,7 @@ export class GreyfieldRuntime {
     const atomSourceTurns = atomRecallContext ? await this.loadSourceTurnsForAtomRecall(atomRecallContext) : undefined;
     if (atomSourceTurns) {
       atomRecallContext = buildMemoryAtomRecallContext({
-        input: text,
+        input: redactPromptPrivateText(text, this.options.promptRedactionSecrets),
         atoms: memoryAtoms,
         maxItems: this.options.atomRecallMaxItems,
         maxCharacters: this.options.atomRecallMaxCharacters,
@@ -199,10 +225,10 @@ export class GreyfieldRuntime {
 
     const messages = assemblePrompt({
       persona: this.options.persona,
-      memory,
-      handoff: handoff.summary,
+      memory: redactPromptPrivateText(memory, this.options.promptRedactionSecrets),
+      handoff: handoffSummary,
       recent,
-      input: text,
+      input: redactPromptPrivateText(text, this.options.promptRedactionSecrets),
       sessionId: this.options.sessionStore.sessionId,
       threadId: this.threadId,
       recallContext,
@@ -325,11 +351,22 @@ export class GreyfieldRuntime {
     }
   }
 
+  private async loadDeletedMemoryEvidence(): Promise<DeletedMemoryEvidence[]> {
+    const store = this.options.deletedMemoryEvidenceStore;
+    if (!store) {
+      return [];
+    }
+    return store.list(this.threadId);
+  }
+
   private async loadSourceTurnsForAtomRecall(context: ReturnType<typeof buildMemoryAtomRecallContext>): Promise<SessionTurn[] | undefined> {
     if (context.items.length === 0 || !hasSessionTurnLookup(this.options.sessionStore)) {
       return;
     }
-    const sourceTurnIds = [...new Set(context.items.flatMap((item) => item.sourceTurnIds))];
+    const deletedEvidence = await this.loadDeletedMemoryEvidence();
+    const sourceTurnIds = [...new Set(context.items.flatMap((item) => item.sourceTurnIds))].filter(
+      (turnId) => !hasDeletedMemoryEvidenceSource(deletedEvidence, turnId, this.options.sessionStore.sessionId)
+    );
     if (sourceTurnIds.length === 0) {
       return;
     }
@@ -459,7 +496,12 @@ export class GreyfieldRuntime {
       return;
     }
     const summaryBatchTurnLimit = this.options.summaryBatchTurnLimit ?? defaultSummaryBatchTurnLimit;
-    const turns = await this.options.sessionStore.getRecent(this.recentTurnLimit + summaryBatchTurnLimit);
+    const deletedEvidence = await this.loadDeletedMemoryEvidence();
+    const turns = filterDeletedSessionTurns(
+      await this.options.sessionStore.getRecent(this.recentTurnLimit + summaryBatchTurnLimit),
+      deletedEvidence,
+      this.options.sessionStore.sessionId
+    );
     const oldTurns = turns.slice(0, Math.max(0, turns.length - this.recentTurnLimit));
     const existing = await summarySegmentStore.list(this.threadId);
     const summarizedTurnIds = new Set(existing.flatMap((segment) => getSummarySegmentSourceTurnIds(segment)));
@@ -514,3 +556,68 @@ function formatError(error: unknown): string {
 function hasSessionTurnLookup(store: SessionStore): store is SessionStore & SessionTurnLookup {
   return typeof (store as { getByIds?: unknown }).getByIds === "function";
 }
+
+function sanitizePromptTurns(turns: SessionTurn[], secrets: string[] | undefined): SessionTurn[] {
+  return turns
+    .filter((turn) => turn.role === "user" || turn.role === "assistant")
+    .map((turn) => ({
+      ...turn,
+      content: redactPromptPrivateText(turn.content, secrets)
+    }));
+}
+
+function buildPromptHandoffSummary(options: {
+  summary: string;
+  turns: SessionTurn[];
+  deletedEvidence: DeletedMemoryEvidence[];
+  sessionId: string;
+  secrets: string[] | undefined;
+}): string {
+  const redactedSummary = redactPromptPrivateText(options.summary, options.secrets);
+  if (!handoffSummaryContainsFilteredTurnContent(options)) {
+    return redactedSummary;
+  }
+  return formatPromptTurnFallback(
+    sanitizePromptTurns(filterDeletedSessionTurns(options.turns, options.deletedEvidence, options.sessionId), options.secrets)
+  );
+}
+
+function handoffSummaryContainsFilteredTurnContent(options: {
+  summary: string;
+  turns: SessionTurn[];
+  deletedEvidence: DeletedMemoryEvidence[];
+  sessionId: string;
+  secrets: string[] | undefined;
+}): boolean {
+  const summary = redactPromptPrivateText(options.summary, options.secrets);
+  return options.turns.some((turn) => {
+    if (turn.content.trim().length === 0) {
+      return false;
+    }
+    const filtered =
+      hasDeletedMemoryEvidenceSource(options.deletedEvidence, turn.id, options.sessionId) ||
+      (turn.role !== "user" && turn.role !== "assistant");
+    return filtered && summary.includes(redactPromptPrivateText(turn.content, options.secrets));
+  });
+}
+
+function formatPromptTurnFallback(turns: SessionTurn[]): string {
+  return turns.map((turn) => `${turn.role}: ${turn.content}`).join("\n");
+}
+
+function redactPromptPrivateText(value: string, configuredSecrets: string[] = []): string {
+  const secrets = [...new Set(configuredSecrets.map((secret) => secret.trim()).filter(Boolean))].sort(
+    (left, right) => right.length - left.length
+  );
+  let redacted = value;
+  for (const secret of secrets) {
+    redacted = redacted.split(secret).join(redactedSecretPlaceholder);
+  }
+  return redacted
+    .replace(providerStyleSecretPattern, redactedSecretPlaceholder)
+    .replace(secretAssignmentPattern, `$1${redactedSecretPlaceholder}`);
+}
+
+const redactedSecretPlaceholder = "[redacted-secret]";
+const providerStyleSecretPattern = /\bsk-[A-Za-z0-9_-]{8,}\b/gu;
+const secretAssignmentPattern = /\b(api[_\s-]?key|secret|token|password|authorization|cookie|credential)\s*[:=]\s*([^\s,;]+)/giu;

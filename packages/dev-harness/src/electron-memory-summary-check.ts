@@ -121,18 +121,17 @@ try {
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Relationships" }).waitFor();
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Scenes" }).waitFor();
   await memoryLibrary.locator(".memory-library__stats", { hasText: "Enabled" }).waitFor();
-  await memoryLibrary.locator(".memory-library__meta", { hasText: "desktop-main-session-1" }).waitFor();
-  const summarySource = await openSourcePassage(memoryLibrary, "Source passage for summary summary-1");
+  const summarySource = await openSourcePassage(memoryLibrary, '[aria-label="Summary memory summary-1"]');
   await summarySource.getByText("Source passage").first().waitFor();
-  await summarySource.getByText("desktop-main-session-1").waitFor();
-  await summarySource.getByText("User").first().waitFor();
-  await summarySource.getByText("第一轮：我喜欢 Hiyori。").waitFor();
+  await summarySource.getByText("From you").first().waitFor();
+  await summarySource.getByText("Saved locally").first().waitFor();
+  await summarySource.locator(".memory-library__source-row p", { hasText: "第一轮：我喜欢 Hiyori。" }).waitFor();
   await assertSourceStateText(summarySource, {
-    includes: ["User", "desktop-main-session-1", "第一轮：我喜欢 Hiyori。"],
-    excludes: ["Unknown role", summaryBoundedTail]
+    includes: ["From you", "Saved from conversation", "第一轮：我喜欢 Hiyori。"],
+    excludes: ["Unknown role", "desktop-main-session-1", "Turn", summaryBoundedTail]
   });
   await memoryLibrary.locator(".memory-library__block--recall", { hasText: "Last recalled memory" }).waitFor();
-  await memoryLibrary.locator(".memory-library__block--recall", { hasText: "cue:hiyori" }).waitFor();
+  await memoryLibrary.locator(".memory-library__block--recall", { hasText: 'Matched recall cue "hiyori"' }).waitFor();
   const memoryLibraryText = ((await memoryLibrary.textContent()) ?? "").toLowerCase();
   for (const forbidden of ["pending", "candidate", "approval"]) {
     if (memoryLibraryText.includes(forbidden)) {
@@ -181,7 +180,9 @@ try {
   }
 
   await settings.getByRole("button", { name: "Delete memory summary-1" }).click();
-  await memoryLibrary.getByText("Memory summary-1 deleted. Raw chat history was kept.").waitFor();
+  await memoryLibrary
+    .getByText("Memory summary-1 deleted. Remembered source evidence was hidden from recall, source views, and exports.")
+    .waitFor();
   const summaryAfterDelete = await waitForFileNotContaining(summaryPath, '"id":"summary-1"');
   const sessionAfterDelete = await waitForFileContaining(sessionPath, ["第一轮：我喜欢 Hiyori。"]);
 
@@ -191,7 +192,9 @@ try {
   await settings.getByRole("button", { name: "Refresh memory" }).click();
   await settings.locator('[aria-label="Summary memory summary-2"]').waitFor();
   await settings.getByRole("button", { name: "Clear summary memory" }).click();
-  await memoryLibrary.getByText("Cleared 1 summary memory. Raw chat history was kept.").waitFor();
+  await memoryLibrary
+    .getByText("Cleared 1 summary memory. Remembered source evidence was hidden from recall, source views, and exports.")
+    .waitFor();
   await waitForFileNotContaining(summaryPath, '"id":"summary-2"');
   await settings.screenshot({ path: settingsScreenshotPath, fullPage: true });
 
@@ -209,7 +212,7 @@ try {
         memoryEditVisible: true,
         memoryExportVisible: true,
         disabledMemorySkipped: true,
-        deletedMemoryKeptRawTurns: true,
+        deletedMemoryErasedRawSourceEvidence: true,
         clearedSummaryMemory: true,
         noPendingCandidateApprovalUi: true,
         memoryExportExcludedProviderSecret: true,
@@ -241,9 +244,11 @@ async function waitForRoleWindow(app: ElectronApplication, roleName: "chat" | "s
   throw new Error(`Timed out waiting for ${roleName} window`);
 }
 
-async function openSourcePassage(memoryLibrary: Locator, label: string): Promise<Locator> {
-  const source = memoryLibrary.locator(`[aria-label="${label}"]`);
-  await source.locator("summary").click();
+async function openSourcePassage(memoryLibrary: Locator, cardSelector: string): Promise<Locator> {
+  const card = memoryLibrary.locator(cardSelector);
+  await card.getByRole("button", { name: /View source/iu }).click();
+  const source = memoryLibrary.locator('[aria-label="Memory source drilldown"]');
+  await source.waitFor();
   return source;
 }
 
