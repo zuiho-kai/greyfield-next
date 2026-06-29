@@ -1,11 +1,21 @@
 <template>
   <main class="greyfield-shell">
-    <nav class="settings-nav" aria-label="Settings sections">
+    <nav class="settings-nav" :aria-label="t('nav.label')">
       <strong>Greyfield</strong>
-      <button type="button">Model</button>
-      <button type="button">Voice</button>
-      <button type="button">Window</button>
-      <button type="button" @click="$emit('open-chat')">Chat</button>
+      <button
+        v-for="item in settingsNavItems"
+        :key="item.id"
+        type="button"
+        class="settings-nav__button"
+        :class="{ 'settings-nav__button--active': activeSectionId === item.id }"
+        :aria-current="activeSectionId === item.id ? 'true' : undefined"
+        @click="scrollToSection(item.id)"
+      >
+        {{ item.label }}
+      </button>
+      <button type="button" class="settings-nav__button settings-nav__button--chat" @click="$emit('open-chat')">
+        {{ t("nav.chat") }}
+      </button>
     </nav>
     <section class="stage-surface" :class="{ speaking: state.status === 'speaking' }">
       <Live2DStageView
@@ -20,21 +30,41 @@
       />
     </section>
 
-    <aside class="control-surface">
+    <aside ref="controlSurfaceRef" class="control-surface" @scroll.passive="updateActiveSection">
       <header>
         <h1>Greyfield Next</h1>
-        <span class="status-pill">{{ state.status }}</span>
+        <span class="status-pill" :aria-label="t('app.status')">{{ localizedStageStatus }}</span>
       </header>
 
-      <section class="settings-panel" aria-label="Settings">
-        <div class="settings-section persona-editor" aria-label="Persona editor">
+      <section class="settings-panel" :aria-label="t('settings.label')">
+        <label class="settings-language-select">
+          <span>{{ t("settings.language") }}</span>
+          <select
+            :value="state.settings.settingsLocale"
+            autocomplete="off"
+            @change="$emit('update-setting', 'settingsLocale', valueFrom($event))"
+          >
+            <option v-for="locale in settingsLocales" :key="locale.value" :value="locale.value">
+              {{ locale.label }}
+            </option>
+          </select>
+        </label>
+
+        <div
+          id="settings-section-persona"
+          :ref="setSectionRef('persona')"
+          class="settings-section persona-editor"
+          :aria-label="sectionAriaLabel('persona')"
+          data-settings-section="persona"
+          tabindex="-1"
+        >
           <header class="settings-section__header">
-            <h2>Persona</h2>
+            <h2>{{ t("section.persona") }}</h2>
             <span>{{ personaStatusLabel }}</span>
           </header>
           <div class="settings-fields">
             <label>
-              <span>Name</span>
+              <span>{{ t("field.name") }}</span>
               <input
                 aria-label="Greyfield name"
                 :value="personaDraft.name"
@@ -45,7 +75,7 @@
               />
             </label>
             <label>
-              <span>User</span>
+              <span>{{ t("field.user") }}</span>
               <input
                 aria-label="User address"
                 :value="personaDraft.userAddress"
@@ -58,7 +88,7 @@
           </div>
           <div class="settings-fields settings-fields--stacked">
             <label>
-              <span>Personality</span>
+              <span>{{ t("field.personality") }}</span>
               <textarea
                 aria-label="Personality"
                 :value="personaDraft.personality"
@@ -69,7 +99,7 @@
               />
             </label>
             <label>
-              <span>Speaking style</span>
+              <span>{{ t("field.speakingStyle") }}</span>
               <textarea
                 aria-label="Speaking style"
                 :value="personaDraft.speakingStyle"
@@ -80,7 +110,7 @@
               />
             </label>
             <label>
-              <span>Boundaries</span>
+              <span>{{ t("field.boundaries") }}</span>
               <textarea
                 aria-label="Boundaries"
                 :value="personaDraft.boundariesText"
@@ -91,7 +121,7 @@
               />
             </label>
             <label>
-              <span>Greeting</span>
+              <span>{{ t("field.greeting") }}</span>
               <textarea
                 aria-label="Greeting"
                 :value="personaDraft.greeting"
@@ -109,7 +139,7 @@
               :disabled="personaSaveDisabled"
               @click="$emit('save-persona', personaDraft)"
             >
-              {{ state.persona.status === "saving" ? "Saving..." : "Save persona" }}
+              {{ state.persona.status === "saving" ? t("button.saving") : t("button.savePersona") }}
             </button>
           </div>
           <p
@@ -122,25 +152,32 @@
           </p>
         </div>
 
-        <div class="settings-section">
+        <div
+          id="settings-section-provider"
+          :ref="setSectionRef('provider')"
+          class="settings-section"
+          :aria-label="sectionAriaLabel('provider')"
+          data-settings-section="provider"
+          tabindex="-1"
+        >
           <header class="settings-section__header">
-            <h2>Provider</h2>
+            <h2>{{ t("section.provider") }}</h2>
             <span>{{ providerStatus.label }}</span>
           </header>
           <div class="settings-fields">
             <label>
-              <span>Provider</span>
+              <span>{{ t("field.provider") }}</span>
               <select
                 :value="state.settings.providerLLM"
                 autocomplete="off"
                 @change="$emit('update-setting', 'providerLLM', valueFrom($event))"
               >
-                <option value="fake">Fake preview</option>
-                <option value="openai-compatible">OpenAI-compatible</option>
+                <option value="fake">{{ t("provider.fakePreview") }}</option>
+                <option value="openai-compatible">{{ t("provider.openaiCompatible") }}</option>
               </select>
             </label>
             <label>
-              <span>Base URL</span>
+              <span>{{ t("field.baseUrl") }}</span>
               <input
                 :value="state.settings.providerBaseUrl"
                 autocomplete="off"
@@ -149,18 +186,18 @@
               />
             </label>
             <label>
-              <span>API Key</span>
+              <span>{{ t("field.apiKey") }}</span>
               <input
                 :value="state.settings.providerApiKey"
                 autocomplete="off"
                 spellcheck="false"
-                :placeholder="state.settings.providerHasApiKey ? 'Saved API key' : ''"
+                :placeholder="state.settings.providerHasApiKey ? t('provider.savedApiKey') : ''"
                 type="password"
                 @input="$emit('update-setting', 'providerApiKey', valueFrom($event))"
               />
             </label>
             <label>
-              <span>Model</span>
+              <span>{{ t("field.model") }}</span>
               <input
                 :value="state.settings.providerModel"
                 autocomplete="off"
@@ -202,25 +239,32 @@
           </p>
         </div>
 
-        <div class="settings-section">
+        <div
+          id="settings-section-voice"
+          :ref="setSectionRef('voice')"
+          class="settings-section"
+          :aria-label="sectionAriaLabel('voice')"
+          data-settings-section="voice"
+          tabindex="-1"
+        >
           <header class="settings-section__header">
-            <h2>Voice</h2>
-            <span>{{ state.settings.voiceSpeechEnabled ? "On" : "Off" }}</span>
+            <h2>{{ t("section.voice") }}</h2>
+            <span>{{ state.settings.voiceSpeechEnabled ? t("status.on") : t("status.off") }}</span>
           </header>
           <div class="settings-fields">
             <label>
-              <span>ASR</span>
+              <span>{{ t("field.asr") }}</span>
               <select
                 :value="state.settings.providerASR"
                 autocomplete="off"
                 @change="$emit('update-setting', 'providerASR', valueFrom($event))"
               >
                 <option value="fake">Fake microphone</option>
-                <option value="openai-compatible">OpenAI-compatible</option>
+                <option value="openai-compatible">{{ t("provider.openaiCompatible") }}</option>
               </select>
             </label>
             <label>
-              <span>ASR Model</span>
+              <span>{{ t("field.asrModel") }}</span>
               <input
                 :value="state.settings.providerASRModel"
                 autocomplete="off"
@@ -229,18 +273,18 @@
               />
             </label>
             <label>
-              <span>TTS</span>
+              <span>{{ t("field.tts") }}</span>
               <select
                 :value="state.settings.providerTTS"
                 autocomplete="off"
                 @change="$emit('update-setting', 'providerTTS', valueFrom($event))"
               >
-                <option value="fake">Local fallback</option>
-                <option value="openai-compatible">OpenAI-compatible</option>
+                <option value="fake">{{ t("provider.localFallback") }}</option>
+                <option value="openai-compatible">{{ t("provider.openaiCompatible") }}</option>
               </select>
             </label>
             <label>
-              <span>TTS Model</span>
+              <span>{{ t("field.ttsModel") }}</span>
               <input
                 :value="state.settings.providerTTSModel"
                 autocomplete="off"
@@ -249,7 +293,7 @@
               />
             </label>
             <label>
-              <span>Voice</span>
+              <span>{{ t("field.voice") }}</span>
               <input
                 :value="state.settings.voiceId"
                 autocomplete="off"
@@ -258,7 +302,7 @@
               />
             </label>
             <label>
-              <span>Speak</span>
+              <span>{{ t("field.speak") }}</span>
               <input
                 :checked="state.settings.voiceSpeechEnabled"
                 aria-label="Speak replies"
@@ -267,7 +311,7 @@
               />
             </label>
             <label>
-              <span>Volume</span>
+              <span>{{ t("field.volume") }}</span>
               <input
                 :value="state.settings.voiceVolume"
                 aria-label="Voice volume"
@@ -279,7 +323,7 @@
               />
             </label>
             <label>
-              <span>Mic</span>
+              <span>{{ t("field.mic") }}</span>
               <input
                 :value="state.settings.microphoneId"
                 autocomplete="off"
@@ -317,14 +361,21 @@
           </p>
         </div>
 
-        <div class="settings-section">
+        <div
+          id="settings-section-model"
+          :ref="setSectionRef('model')"
+          class="settings-section"
+          :aria-label="sectionAriaLabel('model')"
+          data-settings-section="model"
+          tabindex="-1"
+        >
           <header class="settings-section__header">
-            <h2>Live2D</h2>
-            <span>{{ currentBundledLive2DModel?.label ?? "Custom" }}</span>
+            <h2>{{ t("section.model") }}</h2>
+            <span>{{ currentBundledLive2DModel?.label ?? t("status.custom") }}</span>
           </header>
           <div class="settings-fields">
             <label>
-              <span>Character</span>
+              <span>{{ t("field.character") }}</span>
               <input
                 :value="state.settings.characterFile"
                 autocomplete="off"
@@ -333,7 +384,7 @@
               />
             </label>
             <label>
-              <span>Model</span>
+              <span>{{ t("field.model") }}</span>
               <select
                 aria-label="Live2D model"
                 :value="selectedLive2DModel"
@@ -348,7 +399,7 @@
                 >
                   {{ model.label }}
                 </option>
-                <option v-if="isCustomLive2DModel" :value="customLive2DModelValue">Custom model</option>
+                <option v-if="isCustomLive2DModel" :value="customLive2DModelValue">{{ t("live2d.customModel") }}</option>
               </select>
             </label>
           </div>
@@ -356,19 +407,26 @@
             {{ live2DModelNote }}
           </p>
           <div class="settings-actions">
-            <button type="button" @click="$emit('choose-model')">Import local model</button>
-            <button type="button" @click="$emit('reset-transform')">Reset transform</button>
+            <button type="button" @click="$emit('choose-model')">{{ t("button.importModel") }}</button>
+            <button type="button" @click="$emit('reset-transform')">{{ t("button.resetTransform") }}</button>
           </div>
         </div>
 
-        <div class="settings-section">
+        <div
+          id="settings-section-window"
+          :ref="setSectionRef('window')"
+          class="settings-section"
+          :aria-label="sectionAriaLabel('window')"
+          data-settings-section="window"
+          tabindex="-1"
+        >
           <header class="settings-section__header">
-            <h2>Window</h2>
-            <span>{{ state.settings.speechBubbleEnabled ? "Bubble on" : "Bubble off" }}</span>
+            <h2>{{ t("section.window") }}</h2>
+            <span>{{ state.settings.speechBubbleEnabled ? t("status.bubbleOn") : t("status.bubbleOff") }}</span>
           </header>
           <div class="settings-fields settings-fields--compact">
             <label>
-              <span>Scale</span>
+              <span>{{ t("field.scale") }}</span>
               <input
                 :value="state.settings.modelScale"
                 aria-label="Scale"
@@ -400,7 +458,7 @@
               />
             </label>
             <label>
-              <span>Bubble</span>
+              <span>{{ t("field.bubble") }}</span>
               <input
                 :checked="state.settings.speechBubbleEnabled"
                 aria-label="Speech Bubble"
@@ -409,7 +467,7 @@
               />
             </label>
             <label>
-              <span>Remembered moments</span>
+              <span>{{ t("field.rememberedMoments") }}</span>
               <input
                 :checked="state.settings.proactiveMemoryEnabled"
                 aria-label="Remembered moments"
@@ -420,13 +478,20 @@
           </div>
         </div>
 
-        <div class="settings-section" aria-label="Memory extraction">
+        <div
+          id="settings-section-memory"
+          :ref="setSectionRef('memory')"
+          class="settings-section"
+          :aria-label="t('section.memoryExtraction')"
+          data-settings-section="memory"
+          tabindex="-1"
+        >
           <header class="settings-section__header">
-            <h2>Memory extraction</h2>
+            <h2>{{ t("section.memoryExtraction") }}</h2>
             <span>{{ memoryExtractionStatus.label }}</span>
           </header>
           <label class="memory-extraction-toggle">
-            <span>Better memory</span>
+            <span>{{ t("field.betterMemory") }}</span>
             <input
               :checked="state.settings.llmAtomExtractionEnabled"
               aria-label="Better memory extraction"
@@ -444,9 +509,9 @@
           </div>
         </div>
 
-        <div class="settings-section memory-library" aria-label="Memory Library">
+        <div class="settings-section memory-library" :aria-label="t('section.memoryLibrary')">
           <header class="settings-section__header">
-            <h2>Memory Library</h2>
+            <h2>{{ t("section.memoryLibrary") }}</h2>
             <span>{{ memoryLibraryStatusLabel }}</span>
           </header>
 
@@ -788,14 +853,14 @@
           />
           <div class="settings-actions">
             <button type="button" @click="$emit('refresh-memory-debug')">
-              {{ state.memoryDebug.status === "loading" ? "Refreshing..." : "Refresh memory" }}
+              {{ state.memoryDebug.status === "loading" ? t("button.refreshing") : t("button.refreshMemory") }}
             </button>
-            <button type="button" @click="$emit('memory-export')">Export library</button>
+            <button type="button" @click="$emit('memory-export')">{{ t("button.exportLibrary") }}</button>
             <button type="button" class="memory-library__danger-action" @click="$emit('memory-summary-clear')">
-              Clear summary memory
+              {{ t("button.clearSummary") }}
             </button>
             <button type="button" class="memory-library__danger-action" @click="$emit('memory-atom-clear-current-role')">
-              Clear current role atoms
+              {{ t("button.clearAtoms") }}
             </button>
           </div>
         </div>
@@ -807,7 +872,7 @@
 
       <section v-if="modelInfo" class="model-inspector" aria-label="Live2D model info">
         <header>
-          <h2>Live2D</h2>
+          <h2>{{ t("section.modelInfo") }}</h2>
           <span>{{ modelInfo.expressions.length }} exp / {{ motionCount }} mot</span>
         </header>
         <div v-if="modelInfo.expressions.length > 0" class="chip-group" aria-label="Expressions">
@@ -835,11 +900,11 @@
       <div class="toggles">
         <label>
           <input :checked="modelPassThrough" type="checkbox" @change="$emit('update:model-pass-through', checkedFrom($event))" />
-          Model Pass Through
+          {{ t("toggle.modelPassThrough") }}
         </label>
         <label>
           <input :checked="locked" type="checkbox" @change="$emit('update:locked', checkedFrom($event))" />
-          Lock
+          {{ t("toggle.lock") }}
         </label>
       </div>
 
@@ -851,7 +916,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { DesktopMemoryAtom, DesktopMemorySourcePassage, DesktopMemorySummarySegment } from "../shared/ipc";
 import type { DesktopPersonaFormState, DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
 import {
@@ -873,6 +938,8 @@ import {
 import { describeProviderStatus } from "./settings-provider-status";
 import { describeMemoryExtractionStatus } from "./settings-memory-extraction-status";
 import { describeProviderTestStatus, describeTestLlmAction, describeTestVoiceAction } from "./settings-test-llm";
+import { normalizeSettingsLocale, settingsLocales, settingsT, type SettingsI18nKey } from "./settings-i18n";
+import { resolveActiveSettingsSection, settingsNavSectionIds, type SettingsSectionId } from "./settings-nav";
 
 type PersonaTextField = Exclude<keyof DesktopPersonaFormState, "expressionMap">;
 
@@ -917,33 +984,49 @@ const emit = defineEmits<{
 const motionCount = computed(() =>
   Object.values(props.modelInfo?.motions ?? {}).reduce((total, count) => total + count, 0)
 );
-const providerStatus = computed(() => describeProviderStatus(props.state));
+const locale = computed(() => normalizeSettingsLocale(props.state.settings.settingsLocale));
+const t = (key: SettingsI18nKey, values?: Record<string, string | number>): string =>
+  settingsT(locale.value, key, values);
+const localizedStageStatus = computed(() => {
+  const key = `status.${props.state.status}` as SettingsI18nKey;
+  return settingsT(locale.value, key) === key ? props.state.status : settingsT(locale.value, key);
+});
+const settingsNavItems = computed<Array<{ id: SettingsSectionId; label: string }>>(() =>
+  settingsNavSectionIds.map((id) => ({ id, label: t(`nav.${id}` as SettingsI18nKey) }))
+);
+const providerStatus = computed(() => describeProviderStatus(props.state, locale.value));
 const testLlmAction = computed(() =>
   describeTestLlmAction(
     props.stageStatus,
     props.state.providerTest.status,
-    providerStatus.value.tone === "blocked" ? providerStatus.value.detail : ""
+    providerStatus.value.tone === "blocked" ? providerStatus.value.detail : "",
+    locale.value
   )
 );
-const providerTestStatus = computed(() => describeProviderTestStatus(props.state.providerTest));
+const providerTestStatus = computed(() => describeProviderTestStatus(props.state.providerTest, locale.value));
 const testVoiceAction = computed(() =>
-  describeTestVoiceAction(props.stageStatus, props.state.voiceTest.status, describeVoiceBlockedReason(props.state))
+  describeTestVoiceAction(
+    props.stageStatus,
+    props.state.voiceTest.status,
+    describeVoiceBlockedReason(props.state),
+    locale.value
+  )
 );
 const voiceTestStatus = computed(() => describeVoiceTestStatus(props.state.voiceTest));
 const personaStatusLabel = computed(() => {
   if (props.state.persona.status === "loading") {
-    return "Loading";
+    return t("status.loading");
   }
   if (props.state.persona.status === "saving") {
-    return "Saving";
+    return t("status.saving");
   }
   if (props.state.persona.status === "saved") {
-    return "Saved";
+    return t("status.saved");
   }
   if (props.state.persona.status === "error") {
-    return "Needs fix";
+    return t("status.needsFix");
   }
-  return "Ready";
+  return t("status.ready");
 });
 const personaStatusTone = computed(() => (props.state.persona.status === "error" ? "error" : "success"));
 const personaSaveDisabled = computed(
@@ -951,7 +1034,7 @@ const personaSaveDisabled = computed(
 );
 const personaFieldsDisabled = computed(() => props.state.persona.status === "loading" || props.state.persona.status === "saving");
 const memorySnapshot = computed(() => props.state.memoryDebug.snapshot);
-const memoryExtractionStatus = computed(() => describeMemoryExtractionStatus(props.state));
+const memoryExtractionStatus = computed(() => describeMemoryExtractionStatus(props.state, locale.value));
 const memoryRawCount = computed(() => memorySnapshot.value?.recentTurns.length ?? 0);
 const memorySummaryCount = computed(() => memorySnapshot.value?.summarySegments.length ?? 0);
 const memorySegments = computed(() => memorySnapshot.value?.summarySegments ?? []);
@@ -969,12 +1052,12 @@ const memoryDisabledCount = computed(
 const memoryStoredCount = computed(() => memorySummaryCount.value + memoryAtoms.value.length);
 const memoryLibraryStatusLabel = computed(() => {
   if (props.state.memoryDebug.status === "loading") {
-    return "Refreshing";
+    return t("status.refreshing");
   }
   if (!memorySnapshot.value) {
-    return "Not loaded";
+    return t("status.notLoaded");
   }
-  return `${memoryEnabledCount.value}/${memoryStoredCount.value} enabled`;
+  return `${memoryEnabledCount.value}/${memoryStoredCount.value} ${t("status.enabled")}`;
 });
 const latestRecallItem = computed(() => memorySnapshot.value?.lastRecallContext?.items[0] ?? null);
 const latestRecallById = computed(() => {
@@ -1023,6 +1106,9 @@ const memoryCueDrafts = ref<Record<string, string>>({});
 const memoryAtomDrafts = ref<Record<string, string>>({});
 type MemorySourceSelection = { kind: "summary"; id: string } | { kind: "atom"; id: string };
 const selectedSource = ref<MemorySourceSelection | null>(null);
+const controlSurfaceRef = ref<HTMLElement | null>(null);
+const activeSectionId = ref<SettingsSectionId>("model");
+const sectionRefs = new Map<SettingsSectionId | "provider", HTMLElement>();
 const selectedSourceDrilldown = computed(() => {
   if (!selectedSource.value) {
     return null;
@@ -1083,14 +1169,22 @@ const live2DModelNote = computed(() => {
     return currentBundledLive2DModel.value.note;
   }
   if (currentBundledLive2DModel.value) {
-    return `Using bundled model: ${currentBundledLive2DModel.value.label}.`;
+    return t("live2d.usingBundled", { label: currentBundledLive2DModel.value.label });
   }
-  return `Using custom model: ${props.state.settings.modelPath}`;
+  return t("live2d.usingCustom", { path: props.state.settings.modelPath });
 });
 
 onMounted(() => {
   emit("request-persona");
   emit("refresh-memory-debug");
+  window.addEventListener("resize", updateActiveSection);
+  window.addEventListener("scroll", updateActiveSection, { passive: true });
+  void nextTick(updateActiveSection);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("resize", updateActiveSection);
+  window.removeEventListener("scroll", updateActiveSection);
 });
 
 watch(
@@ -1161,6 +1255,46 @@ function valueFrom(event: Event): string {
 
 function checkedFrom(event: Event): boolean {
   return event.target instanceof HTMLInputElement ? event.target.checked : false;
+}
+
+function sectionAriaLabel(id: SettingsSectionId | "provider"): string {
+  void id;
+  return locale.value === "zh-CN" ? "设置分区" : "Settings section";
+}
+
+function setSectionRef(id: SettingsSectionId | "provider"): (element: Element | null) => void {
+  return (element) => {
+    if (element instanceof HTMLElement) {
+      sectionRefs.set(id, element);
+      return;
+    }
+    sectionRefs.delete(id);
+  };
+}
+
+function scrollToSection(id: SettingsSectionId): void {
+  activeSectionId.value = id;
+  const section = sectionRefs.get(id);
+  if (!section) {
+    return;
+  }
+  section.scrollIntoView({ behavior: "smooth", block: "start" });
+  section.focus({ preventScroll: true });
+}
+
+function updateActiveSection(): void {
+  const sections = settingsNavItems.value.flatMap((item) => {
+    const element = sectionRefs.get(item.id);
+    return element ? [{ id: item.id, top: element.getBoundingClientRect().top }] : [];
+  });
+  const nextActiveSection = resolveActiveSettingsSection(
+    sections,
+    Math.max(controlSurfaceRef.value?.getBoundingClientRect().top ?? 0, 0) + 8
+  );
+  if (!nextActiveSection) {
+    return;
+  }
+  activeSectionId.value = nextActiveSection;
 }
 
 function selectLive2DModel(modelPath: string): void {
@@ -1354,16 +1488,16 @@ function describeVoiceBlockedReason(state: DesktopRendererState): string {
     return "";
   }
   if (state.settings.providerBaseUrl.trim().length === 0) {
-    return "OpenAI-compatible voice needs a Base URL before testing.";
+    return t("voice.blocked.baseUrl");
   }
   if (!state.settings.providerHasApiKey && state.settings.providerApiKey.trim().length === 0) {
-    return "Voice test needs an API key.";
+    return t("voice.blocked.apiKey");
   }
   if (state.settings.providerTTSModel.trim().length === 0) {
-    return "Choose the TTS model name before testing voice.";
+    return t("voice.blocked.ttsModel");
   }
   if (state.settings.voiceId.trim().length === 0) {
-    return "Choose the voice before testing.";
+    return t("voice.blocked.voice");
   }
   return "";
 }
@@ -1377,11 +1511,11 @@ function describeVoiceTestStatus(voiceTest: DesktopRendererState["voiceTest"]): 
     return null;
   }
   if (voiceTest.status === "testing") {
-    return { tone: "testing", label: "Testing voice", detail: voiceTest.message };
+    return { tone: "testing", label: t("voice.status.testing"), detail: t("voice.status.testingDetail") };
   }
   if (voiceTest.status === "success") {
-    return { tone: "success", label: "Voice test succeeded", detail: voiceTest.message };
+    return { tone: "success", label: t("test.voice.succeeded"), detail: voiceTest.message };
   }
-  return { tone: "error", label: "Voice test failed", detail: voiceTest.message };
+  return { tone: "error", label: t("test.voice.failed"), detail: voiceTest.message };
 }
 </script>

@@ -1,7 +1,7 @@
 import { _electron as electron, type Locator, type Page } from "playwright";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
 import { getElectronExecutablePath } from "./electron-install";
@@ -27,6 +27,10 @@ const quickMode = process.argv.includes("--quick");
 const runningInGitHubActions = process.env.GITHUB_ACTIONS === "true";
 const tempDir = await mkdtemp(join(tmpdir(), "greyfield-electron-"));
 const configPath = join(tempDir, "greyfield.config.json");
+const settingsArtifactDir = join(workspaceRoot, ".cache", "greyfield-settings-nav-i18n", "latest");
+const settingsNarrowScreenshotPath = join(settingsArtifactDir, "settings-narrow-zh.png");
+await rm(settingsArtifactDir, { recursive: true, force: true });
+await mkdir(settingsArtifactDir, { recursive: true });
 await writeFile(
   configPath,
   `${JSON.stringify(
@@ -341,6 +345,7 @@ try {
   const savedFakeProviderConfig = await waitForProviderLLM(configPath, "fake");
   await settingsWindow.getByLabel("Speech Bubble").uncheck();
   const savedBubbleConfig = await waitForSpeechBubble(configPath, false);
+  const settingsNavAndI18n = await verifySettingsNavAndI18n(settingsWindow, configPath);
 
   const chatWindow = await waitForRoleWindow("chat");
   await chatWindow.waitForSelector(".chat-shell");
@@ -369,6 +374,7 @@ try {
         savedModel: savedConfig.provider.model,
         savedProviderLLM: savedFakeProviderConfig.provider.llm,
         savedSpeechBubble: savedBubbleConfig.ui.speechBubbleEnabled,
+        settingsNavAndI18n,
         memoryExtractionSettings,
         auxiliaryWindowCloseRecovery,
         hitTestWorked: true,
@@ -663,6 +669,192 @@ async function waitForVoiceSpeech(path: string, enabled: boolean): Promise<typeo
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Voice speech setting did not become ${enabled}: ${JSON.stringify(config?.voice ?? null)}`);
+}
+
+async function verifySettingsNavAndI18n(
+  settingsWindow: Page,
+  path: string
+): Promise<{
+  modelNavWorked: boolean;
+  voiceNavWorked: boolean;
+  windowNavWorked: boolean;
+  chatNavOpened: boolean;
+  narrowNavNoOverflow: boolean;
+  localePersisted: string;
+  localeReloaded: string;
+  screenshot: string;
+  zhLabelsVisible: boolean;
+}> {
+  await resizeElectronWindow("settings", 520, 620);
+  await settingsWindow.waitForTimeout(120);
+  const narrowNavNoOverflow = await readSettingsNavLayout(settingsWindow);
+  if (!narrowNavNoOverflow) {
+    throw new Error("Settings nav overflowed or overlapped in a narrow settings window");
+  }
+
+  const modelNavWorked = await clickSettingsNavAndVerify(settingsWindow, "Model", "model");
+  const voiceNavWorked = await clickSettingsNavAndVerify(settingsWindow, "Voice", "voice");
+  const windowNavWorked = await clickSettingsNavAndVerify(settingsWindow, "Window", "window");
+
+  await settingsWindow.getByLabel("Language").selectOption("zh-CN");
+  const localeConfig = await waitForSettingsLocale(path, "zh-CN");
+  await waitForSettingsText(settingsWindow, "窗口");
+  await settingsWindow.getByRole("button", { name: "窗口", exact: true }).waitFor();
+  await settingsWindow.getByRole("heading", { name: "窗口" }).waitFor();
+  await settingsWindow.screenshot({ path: settingsNarrowScreenshotPath, fullPage: true });
+  await closeAndReopenWindow("settings");
+  await settingsWindow.waitForSelector(".greyfield-shell");
+  await waitForSettingsText(settingsWindow, "窗口");
+  await settingsWindow.getByRole("button", { name: "窗口", exact: true }).waitFor();
+  await settingsWindow.getByRole("heading", { name: "窗口" }).waitFor();
+  await settingsWindow.getByRole("button", { name: "聊天", exact: true }).click();
+  const chatWindow = await waitForRoleWindow("chat");
+  await chatWindow.waitForSelector(".chat-shell");
+
+  return {
+    modelNavWorked,
+    voiceNavWorked,
+    windowNavWorked,
+    chatNavOpened: true,
+    narrowNavNoOverflow,
+    localePersisted: localeConfig.ui.locale,
+    localeReloaded: "zh-CN",
+    screenshot: settingsNarrowScreenshotPath,
+    zhLabelsVisible: true
+  };
+}
+
+async function waitForSettingsText(settingsWindow: Page, text: string): Promise<void> {
+  try {
+    await settingsWindow.waitForFunction(
+      (expected) => document.body.textContent?.includes(expected) ?? false,
+      text,
+      { timeout: 5_000 }
+    );
+  } catch (error) {
+    const snapshot = await settingsWindow.evaluate(() => ({
+      localeSelectValue: document.querySelector<HTMLSelectElement>("select")?.value ?? null,
+      bodyText: document.body.textContent?.replace(/\s+/gu, " ").trim().slice(0, 1200) ?? ""
+    }));
+    throw new Error(`Settings text ${text} did not appear: ${JSON.stringify(snapshot)}; cause=${String(error)}`);
+  }
+}
+
+async function closeAndReopenWindow(roleName: "settings" | "chat"): Promise<void> {
+  await app.evaluate(({ BrowserWindow }, role) => {
+    const target = BrowserWindow.getAllWindows().find((browserWindow) =>
+      browserWindow.webContents.getURL().includes(`window=${role}`)
+    );
+    if (!target) {
+      throw new Error(`Missing ${role} window before close/reopen check`);
+    }
+    target.close();
+  }, roleName);
+  await waitForAuxiliaryWindowVisibility(roleName, false);
+  await app.evaluate(({ BrowserWindow }, role) => {
+    const target = BrowserWindow.getAllWindows().find((browserWindow) =>
+      browserWindow.webContents.getURL().includes(`window=${role}`)
+    );
+    if (!target) {
+      throw new Error(`Missing ${role} window after close`);
+    }
+    target.show();
+    target.webContents.reloadIgnoringCache();
+  }, roleName);
+  await waitForAuxiliaryWindowVisibility(roleName, true);
+}
+
+async function waitForAuxiliaryWindowVisibility(roleName: "settings" | "chat", visible: boolean): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < 5_000) {
+    const matches = await app.evaluate(({ BrowserWindow }, payload) => {
+      const target = BrowserWindow.getAllWindows().find((browserWindow) =>
+        browserWindow.webContents.getURL().includes(`window=${payload.roleName}`)
+      );
+      return target?.isVisible() === payload.visible;
+    }, { roleName, visible });
+    if (matches) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Timed out waiting for ${roleName} visibility to become ${visible}`);
+}
+
+async function clickSettingsNavAndVerify(
+  settingsWindow: Page,
+  buttonName: string,
+  sectionId: "model" | "voice" | "window"
+): Promise<boolean> {
+  await settingsWindow.getByRole("button", { name: buttonName, exact: true }).click();
+  const section = settingsWindow.locator(`[data-settings-section="${sectionId}"]`);
+  await section.waitFor();
+  await settingsWindow
+    .locator(".settings-nav__button--active", { hasText: buttonName })
+    .waitFor();
+  await settingsWindow.waitForFunction(
+    (id) => {
+      const element = document.querySelector<HTMLElement>(`[data-settings-section="${id}"]`);
+      if (!element) {
+        return false;
+      }
+      const rect = element.getBoundingClientRect();
+      return rect.bottom > 24 && rect.top < window.innerHeight - 24;
+    },
+    sectionId,
+    { timeout: 5_000 }
+  );
+  return true;
+}
+
+async function readSettingsNavLayout(settingsWindow: Page): Promise<boolean> {
+  return settingsWindow.evaluate(() => {
+    const scrollWidth = document.scrollingElement?.scrollWidth ?? document.documentElement.scrollWidth;
+    if (scrollWidth > window.innerWidth) {
+      return false;
+    }
+    const nav = document.querySelector<HTMLElement>(".settings-nav");
+    if (!nav) {
+      return false;
+    }
+    const navRect = nav.getBoundingClientRect();
+    const buttons = Array.from(nav.querySelectorAll<HTMLButtonElement>("button"));
+    return buttons.every((button) => {
+      const rect = button.getBoundingClientRect();
+      return (
+        rect.width >= 44 &&
+        rect.height >= 30 &&
+        rect.left >= navRect.left - 1 &&
+        rect.right <= navRect.right + 1 &&
+        rect.bottom <= document.documentElement.scrollHeight + 1
+      );
+    });
+  });
+}
+
+async function resizeElectronWindow(roleName: "pet" | "settings" | "chat" | "controls", width: number, height: number): Promise<void> {
+  await app.evaluate(
+    ({ BrowserWindow }, payload) => {
+      const target = BrowserWindow.getAllWindows().find((browserWindow) =>
+        browserWindow.webContents.getURL().includes(`window=${payload.roleName}`)
+      );
+      target?.setSize(payload.width, payload.height);
+    },
+    { roleName, width, height }
+  );
+}
+
+async function waitForSettingsLocale(path: string, locale: typeof defaultGreyfieldConfig.ui.locale): Promise<typeof defaultGreyfieldConfig> {
+  const started = Date.now();
+  let config: typeof defaultGreyfieldConfig | null = null;
+  while (Date.now() - started < 5_000) {
+    config = await readConfig(path).catch(() => null);
+    if (config?.ui.locale === locale) {
+      return config;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Settings locale did not become ${locale}: ${JSON.stringify(config?.ui ?? null)}`);
 }
 
 async function verifyMemoryExtractionSettings(

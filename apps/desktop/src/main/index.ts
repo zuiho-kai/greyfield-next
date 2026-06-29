@@ -74,14 +74,18 @@ async function createWindows(): Promise<void> {
   });
   const preload = resolvePreloadPath(currentDir);
   petWindow = new BrowserWindow(createPetWindowOptions(config, preload));
+  attachSettingsReplayOnLoad(petWindow);
   petWindowController = new PetWindowController({
     getWindow: () => getUsableWindow(petWindow),
     nativeShapeEnabled: canUseWindowShape()
   });
   petWindowController.setModelPassThrough(config.window.modelPassThrough);
   settingsWindow = new BrowserWindow(createSettingsWindowOptions(preload));
+  attachSettingsReplayOnLoad(settingsWindow);
   chatWindow = new BrowserWindow(createChatWindowOptions(preload));
+  attachSettingsReplayOnLoad(chatWindow);
   controlsWindow = new BrowserWindow(createControlsWindowOptions(config, preload));
+  attachSettingsReplayOnLoad(controlsWindow);
   attachWindowLifecycle();
 
   registerIpc();
@@ -595,6 +599,16 @@ function broadcastSettings(config: GreyfieldConfig): void {
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send("settings:changed", rendererConfig);
   }
+}
+
+function attachSettingsReplayOnLoad(window: BrowserWindow): void {
+  window.webContents.on("did-finish-load", () => {
+    const config = settingsController?.getCurrent();
+    if (!config || window.isDestroyed()) {
+      return;
+    }
+    window.webContents.send("settings:changed", redactConfigForRenderer(config));
+  });
 }
 
 async function sendCurrentPersona(sender: Electron.WebContents): Promise<void> {

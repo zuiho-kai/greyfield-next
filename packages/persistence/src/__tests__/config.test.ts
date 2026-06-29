@@ -17,6 +17,7 @@ describe("Greyfield config", () => {
     expect(defaultGreyfieldConfig.window.modelPassThrough).toBe(false);
     expect(defaultGreyfieldConfig.ui.speechBubbleEnabled).toBe(true);
     expect(defaultGreyfieldConfig.ui.proactiveMemoryEnabled).toBe(true);
+    expect(defaultGreyfieldConfig.ui.locale).toBe("en-US");
     expect(defaultGreyfieldConfig.memory.llmAtomExtractionEnabled).toBe(false);
   });
 
@@ -52,7 +53,16 @@ describe("Greyfield config", () => {
     });
     expect(config.ui.speechBubbleEnabled).toBe(false);
     expect(config.ui.proactiveMemoryEnabled).toBe(false);
+    expect(config.ui.locale).toBe("en-US");
     expect(config.memory.llmAtomExtractionEnabled).toBe(true);
+  });
+
+  it("normalizes unsupported UI locales to the default Settings language", () => {
+    const config = mergeConfig({
+      ui: { locale: "fr-FR" } as unknown as Partial<typeof defaultGreyfieldConfig.ui>
+    });
+
+    expect(config.ui.locale).toBe("en-US");
   });
 
   it("loads user config files written with a UTF-8 BOM", async () => {

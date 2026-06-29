@@ -58,7 +58,7 @@ describe("SettingsController", () => {
     const controller = new SettingsController(
       {
         ...defaultGreyfieldConfig,
-        ui: { speechBubbleEnabled: false, proactiveMemoryEnabled: true }
+        ui: { ...defaultGreyfieldConfig.ui, speechBubbleEnabled: false, proactiveMemoryEnabled: true }
       },
       save,
       emit
@@ -68,7 +68,12 @@ describe("SettingsController", () => {
 
     expect(next.ui.speechBubbleEnabled).toBe(false);
     expect(next.ui.proactiveMemoryEnabled).toBe(true);
-    expect(save).toHaveBeenCalledWith(expect.objectContaining({ ui: { speechBubbleEnabled: false, proactiveMemoryEnabled: true } }));
+    expect(next.ui.locale).toBe("en-US");
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ui: { ...defaultGreyfieldConfig.ui, speechBubbleEnabled: false, proactiveMemoryEnabled: true }
+      })
+    );
   });
 
   it("preserves existing memory settings when unrelated patches are applied", async () => {

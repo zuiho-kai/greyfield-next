@@ -61,10 +61,7 @@ try {
     await providerSelect.selectOption("fake");
     await settingsWindow.locator(".provider-status--preview", { hasText: "Preview" }).waitFor();
     await settingsWindow.getByLabel("Base URL").fill(`http://127.0.0.1:${port}/v1`);
-    await settingsWindow.waitForFunction(() => {
-      const select = document.querySelector<HTMLSelectElement>('select[autocomplete="off"]');
-      return select?.value === "openai-compatible";
-    });
+    await waitForSelectValue(providerSelect, "openai-compatible");
     await settingsWindow.locator(".provider-status--blocked", { hasText: "Needs API key" }).waitFor();
     await expectTestLlmBlocked(settingsWindow, "Add an API key before testing");
     assertProviderRequestCount(0, "missing API key");
@@ -183,4 +180,15 @@ function assertProviderRequestCount(expected: number, label: string): void {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForSelectValue(select: ReturnType<Page["getByLabel"]>, value: string): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < 5_000) {
+    if ((await select.inputValue()) === value) {
+      return;
+    }
+    await delay(100);
+  }
+  throw new Error(`Timed out waiting for provider select to become ${value}`);
 }

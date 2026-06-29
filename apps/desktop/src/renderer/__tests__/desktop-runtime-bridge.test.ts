@@ -141,6 +141,19 @@ describe("createDesktopRuntimeBridge", () => {
     ]);
   });
 
+  it("persists the Settings language through the existing settings IPC path", () => {
+    const sent: Array<[string, unknown]> = [];
+    const bridge = createDesktopRuntimeBridge({
+      send: (channel, payload) => sent.push([channel, payload]),
+      on: () => () => undefined
+    });
+
+    const state = bridge.updateSettings({ settingsLocale: "zh-CN" });
+
+    expect(state.settings.settingsLocale).toBe("zh-CN");
+    expect(sent).toContainEqual(["settings:update", { ui: { locale: "zh-CN" } }]);
+  });
+
   it("does not persist a masked API key placeholder back to Electron main", () => {
     const sent: Array<[string, unknown]> = [];
     const bridge = createDesktopRuntimeBridge({
