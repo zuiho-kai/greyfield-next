@@ -509,7 +509,7 @@
           </div>
         </div>
 
-        <div class="settings-section memory-library" :aria-label="t('section.memoryLibrary')">
+        <div class="settings-section memory-library" :aria-label="t('section.memoryLibrary')" data-harness="settings-memory-library">
           <header class="settings-section__header">
             <h2>{{ t("section.memoryLibrary") }}</h2>
             <span>{{ memoryLibraryStatusLabel }}</span>
@@ -541,13 +541,14 @@
             v-if="selectedSourceDrilldown"
             class="memory-library__drilldown"
             :aria-label="t('memory.source.drilldown')"
+            data-harness="memory-source-drilldown"
           >
             <header class="memory-library__drilldown-header">
               <div>
                 <small>{{ selectedSourceKindLabel }}</small>
                 <h3>{{ selectedSourceTitle }}</h3>
               </div>
-              <button type="button" :aria-label="t('memory.source.close')" @click="closeSourceDrilldown">
+              <button type="button" :aria-label="t('memory.source.close')" data-harness="memory-source-close" @click="closeSourceDrilldown">
                 {{ t("memory.source.close") }}
               </button>
             </header>
@@ -578,6 +579,8 @@
                 <textarea
                   :aria-label="t('memory.field.text')"
                   :value="memorySummaryDrafts[selectedSummarySource.id] ?? selectedSummarySource.summary"
+                  data-harness="memory-summary-text"
+                  :data-memory-id="selectedSummarySource.id"
                   rows="3"
                   spellcheck="false"
                   @input="setMemorySummaryDraft(selectedSummarySource.id, $event)"
@@ -588,18 +591,28 @@
                 <input
                   :aria-label="t('memory.field.recallCues')"
                   :value="memoryCueDrafts[selectedSummarySource.id] ?? selectedSummarySource.recallCues.join(', ')"
+                  data-harness="memory-summary-cues"
+                  :data-memory-id="selectedSummarySource.id"
                   autocomplete="off"
                   spellcheck="false"
                   @input="setMemoryCueDraft(selectedSummarySource.id, $event)"
                 />
               </label>
               <div class="memory-library__actions memory-library__actions--drilldown">
-                <button type="button" :aria-label="t('memory.action.save')" @click="saveMemorySummary(selectedSummarySource)">
+                <button
+                  type="button"
+                  :aria-label="t('memory.action.save')"
+                  data-harness="memory-summary-save"
+                  :data-memory-id="selectedSummarySource.id"
+                  @click="saveMemorySummary(selectedSummarySource)"
+                >
                   {{ t("memory.action.save") }}
                 </button>
                 <button
                   type="button"
                   :aria-label="memoryToggleActionLabel(selectedSummarySource.disabled)"
+                  data-harness="memory-summary-toggle"
+                  :data-memory-id="selectedSummarySource.id"
                   @click="toggleMemorySummary(selectedSummarySource)"
                 >
                   {{ memoryToggleActionLabel(selectedSummarySource.disabled) }}
@@ -608,11 +621,13 @@
                   type="button"
                   class="memory-library__danger"
                   :aria-label="t('memory.action.delete')"
+                  data-harness="memory-summary-delete"
+                  :data-memory-id="selectedSummarySource.id"
                   @click="$emit('memory-summary-delete', { id: selectedSummarySource.id })"
                 >
                   {{ t("memory.action.delete") }}
                 </button>
-                <button type="button" :aria-label="t('button.exportLibrary')" @click="$emit('memory-export')">
+                <button type="button" :aria-label="t('button.exportLibrary')" data-harness="memory-library-export" @click="$emit('memory-export')">
                   {{ t("button.exportLibrary") }}
                 </button>
               </div>
@@ -662,6 +677,8 @@
               class="memory-library__segment"
               :class="{ 'memory-library__segment--disabled': segment.disabled }"
               :aria-label="`${t('memory.summaryMemory')} ${segment.id}`"
+              data-harness="memory-summary-card"
+              :data-memory-id="segment.id"
             >
               <header class="memory-library__segment-header">
                 <div>
@@ -690,6 +707,7 @@
                 type="button"
                 class="memory-library__source-link"
                 :aria-label="t('memory.action.viewSource')"
+                data-harness="memory-source-open"
                 @click="openSummarySourceDrilldown(segment)"
               >
                 <span>{{ memorySourceLabel(segment) }}</span>
@@ -701,6 +719,8 @@
                 <textarea
                   :aria-label="`${t('memory.field.text')} ${segment.id}`"
                   :value="memorySummaryDrafts[segment.id] ?? segment.summary"
+                  data-harness="memory-summary-text"
+                  :data-memory-id="segment.id"
                   rows="3"
                   spellcheck="false"
                   @input="setMemorySummaryDraft(segment.id, $event)"
@@ -711,6 +731,8 @@
                 <input
                   :aria-label="`${t('memory.field.recallCues')} ${segment.id}`"
                   :value="memoryCueDrafts[segment.id] ?? segment.recallCues.join(', ')"
+                  data-harness="memory-summary-cues"
+                  :data-memory-id="segment.id"
                   autocomplete="off"
                   spellcheck="false"
                   @input="setMemoryCueDraft(segment.id, $event)"
@@ -720,6 +742,8 @@
                 <button
                   type="button"
                   :aria-label="`${t('memory.action.save')} ${segment.id}`"
+                  data-harness="memory-summary-save"
+                  :data-memory-id="segment.id"
                   @click="saveMemorySummary(segment)"
                 >
                   {{ t("memory.action.save") }}
@@ -727,6 +751,8 @@
                 <button
                   type="button"
                   :aria-label="`${memoryToggleActionLabel(segment.disabled)} ${segment.id}`"
+                  data-harness="memory-summary-toggle"
+                  :data-memory-id="segment.id"
                   @click="toggleMemorySummary(segment)"
                 >
                   {{ memoryToggleActionLabel(segment.disabled) }}
@@ -735,6 +761,8 @@
                   type="button"
                   class="memory-library__danger"
                   :aria-label="`${t('memory.action.delete')} ${segment.id}`"
+                  data-harness="memory-summary-delete"
+                  :data-memory-id="segment.id"
                   @click="$emit('memory-summary-delete', { id: segment.id })"
                 >
                   {{ t("memory.action.delete") }}
@@ -849,6 +877,7 @@
             v-if="state.memoryDebug.exportText"
             class="memory-library__export"
             :aria-label="t('memory.export.label')"
+            data-harness="memory-library-export-text"
             :value="state.memoryDebug.exportText"
             readonly
             rows="5"
@@ -857,7 +886,7 @@
             <button type="button" @click="$emit('refresh-memory-debug')">
               {{ state.memoryDebug.status === "loading" ? t("button.refreshing") : t("button.refreshMemory") }}
             </button>
-            <button type="button" @click="$emit('memory-export')">{{ t("button.exportLibrary") }}</button>
+            <button type="button" data-harness="memory-library-export" @click="$emit('memory-export')">{{ t("button.exportLibrary") }}</button>
             <button type="button" class="memory-library__danger-action" @click="$emit('memory-summary-clear')">
               {{ t("button.clearSummary") }}
             </button>
