@@ -396,7 +396,12 @@ export function extractDeterministicMemoryAtoms(input: MemoryAtomExtractionInput
     push(episodicScene);
   }
 
-  if (atoms.length === 0 && hasExplicitSaveIntent(normalizedText) && !shouldRejectPromiseMemoryText(normalizedText)) {
+  if (
+    atoms.length === 0 &&
+    hasExplicitSaveIntent(normalizedText) &&
+    !shouldRejectPromiseMemoryText(normalizedText) &&
+    !shouldRejectSceneMemoryText(normalizedText)
+  ) {
     push({
       type: "fact",
       text: stripExplicitSavePrefix(normalizedText),
@@ -498,6 +503,9 @@ export function buildMemoryAtomRecallContext(options: BuildMemoryAtomRecallConte
     .filter((atom) => !atom.disabled)
     .map((atom) => {
       if (shouldSuppressCompanionRelationshipRecall(options.input, atom)) {
+        return { atom, matches: [], score: 0 };
+      }
+      if (shouldSuppressSceneRecall(options.input, atom)) {
         return { atom, matches: [], score: 0 };
       }
       if (shouldSuppressPromiseRecall(options.input, atom)) {
@@ -718,6 +726,7 @@ function buildLLMAtomExtractionMessages(input: MemoryAtomExtractionInput): ChatM
         "Extract durable facts, preferences, opinions with reasons, relationship events, important dates, scenes, taboos, and user/Greyfield promise commitments when the schema can represent them.",
         "Use type promise only for commitments between the user and Greyfield. Preserve subject, object, action concepts, sourceTurnIds, and semantic triggers. Reject unrelated work, project, customer, PR, or team promises.",
         "For recurring relationship rituals, extract only rituals between the user and Greyfield. Preserve recurrence, ritualAction, event/date, relationship subject, sourceTurnIds, and reject generic holidays, coworker events, or unrelated gift planning.",
+        "For shared episodic scenes, preserve weather, place, window, activity, relationshipMeaning, sharedExperience, sourceTurnIds, and reject telemetry-only, generic weather, coworker, or non-shared scenes as user/Greyfield relationship memories.",
         "Reject UI telemetry, event logs, transient window/settings/mouse/weather-probe noise, provider secrets, API keys, passwords, tokens, cookies, and unrelated debugging text.",
         "Keep text concise, source-linked, and user-facing. Do not include provider names, credentials, hidden prompts, or UI implementation details.",
         "For each draft, use fields: type, text, sourceTurnIds, importance, triggers, eventDate, recurrence, ritualAction, subject, object, sentiment, metadata.",
@@ -852,6 +861,9 @@ function normalizeLLMAtomDraft(
   };
   atom.triggerKeys = flattenTriggerKeys(atom.triggers);
   if (memoryAtomContainsUnsafeText(atom)) {
+    return;
+  }
+  if (shouldRejectLLMSceneAtom(input.text, atom)) {
     return;
   }
   atom.id = buildMemoryAtomId(atom);
@@ -1611,8 +1623,9 @@ type ScenePlace = "virtual_home" | "home" | "window";
 type SceneWindowState = "open" | "closed";
 type SceneActivity = "hotpot" | "tea" | "movie" | "lego" | "shared_meal";
 type SceneAction = "close_window";
-type SceneRelationshipMeaning = "shared_activity" | "quiet_companionship" | "care_ritual";
+type SceneRelationshipMeaning = "shared_activity" | "quiet_companionship" | "care_ritual" | "safe_harbor";
 type SceneTimeOfDay = "morning" | "afternoon" | "evening" | "night";
+type SceneSensoryDetail = "rain_sound";
 
 interface SceneAttributes {
   weather?: SceneWeather;
@@ -1625,6 +1638,7 @@ interface SceneAttributes {
   timeOfDay?: SceneTimeOfDay;
   longAbsence?: boolean;
   longAbsenceDays?: number;
+  sensoryDetails?: SceneSensoryDetail[];
 }
 
 function extractEpisodicSceneAtom(
@@ -1635,6 +1649,9 @@ function extractEpisodicSceneAtom(
     return;
   }
   const attributes = extractSceneAttributes(text);
+  if (!attributes.sharedExperience && !attributes.action && !attributes.longAbsence) {
+    return;
+  }
   if (countSceneSignals(attributes) < 2) {
     return;
   }
@@ -1648,7 +1665,7 @@ function extractEpisodicSceneAtom(
     type: "episodic_scene",
     text: formatSceneMemoryText(attributes),
     importance: attributes.action || attributes.longAbsence ? 0.82 : 0.76,
-    subject: "user_and_greyfield",
+    subject: attributes.sharedExperience ? "user_and_greyfield" : "user",
     object: buildSceneObject(attributes),
     eventDate,
     triggers: {
@@ -1658,7 +1675,7 @@ function extractEpisodicSceneAtom(
       ...(dateKey ? { calendar: [dateKey] } : {}),
       environment: triggerParts.environment,
       semantic: triggerParts.semantic,
-      relationship: ["user_and_greyfield"]
+      ...(attributes.sharedExperience ? { relationship: ["user_and_greyfield", "shared_scene"] } : {})
     },
     metadata: buildSceneMetadata(attributes)
   };
@@ -1677,6 +1694,7 @@ function extractSceneAttributes(text: string): SceneAttributes {
   const longAbsence = /长期没上线|很久没上线|好久没来|很久不在|long absence/iu.test(text);
   const relationshipMeaning = extractSceneRelationshipMeaning(text, action, longAbsence);
   const sharedExperience = hasSharedSceneSignal(text);
+  const sensoryDetails = extractSceneSensoryDetails(text);
   return {
     weather,
     place,
@@ -1687,8 +1705,35 @@ function extractSceneAttributes(text: string): SceneAttributes {
     sharedExperience,
     timeOfDay: extractSceneTimeOfDay(text),
     longAbsence,
-    longAbsenceDays: longAbsence ? 30 : undefined
+    longAbsenceDays: longAbsence ? 30 : undefined,
+    sensoryDetails
   };
+}
+
+function shouldRejectSceneMemoryText(text: string): boolean {
+  const attributes = extractSceneAttributes(text);
+  return isSceneLikeMemoryText(text, attributes) && !attributes.sharedExperience;
+}
+
+function shouldRejectLLMSceneAtom(sourceText: string, atom: MemoryAtom): boolean {
+  if (atom.type !== "episodic_scene") {
+    return false;
+  }
+  if (!isSharedSceneMemoryAtom(atom)) {
+    return true;
+  }
+  return shouldRejectSceneMemoryText(sourceText);
+}
+
+function isSceneLikeMemoryText(text: string, attributes: SceneAttributes): boolean {
+  const concreteSignals = countConcreteSceneSignals(attributes);
+  if (concreteSignals >= 2) {
+    return true;
+  }
+  if (concreteSignals < 1) {
+    return false;
+  }
+  return /(场景|场面|画面|时刻|一幕|那天|那次|当时|之前|回忆|原文|scene|moment|memory)/iu.test(text);
 }
 
 function extractSceneWeather(text: string): SceneWeather | undefined {
@@ -1731,6 +1776,9 @@ function extractSceneRelationshipMeaning(
   action?: SceneAction,
   longAbsence?: boolean
 ): SceneRelationshipMeaning | undefined {
+  if (/(避风港|安全感|安全的地方|safe harbor|shelter)/iu.test(text)) {
+    return "safe_harbor";
+  }
   if (action || longAbsence || /(提醒|照顾|别让我忘)/u.test(text)) {
     return "care_ritual";
   }
@@ -1759,6 +1807,13 @@ function extractSceneTimeOfDay(text: string): SceneTimeOfDay | undefined {
   return;
 }
 
+function extractSceneSensoryDetails(text: string): SceneSensoryDetail[] | undefined {
+  const details = [/雨声|雨的声音|rain sound|sound of rain/iu.test(text) ? "rain_sound" : undefined].filter(
+    (detail): detail is SceneSensoryDetail => detail !== undefined
+  );
+  return details.length > 0 ? details : undefined;
+}
+
 function countSceneSignals(attributes: SceneAttributes): number {
   return [
     attributes.weather,
@@ -1769,7 +1824,8 @@ function countSceneSignals(attributes: SceneAttributes): number {
     attributes.relationshipMeaning,
     attributes.sharedExperience ? "shared_experience" : undefined,
     attributes.timeOfDay,
-    attributes.longAbsence ? "long_absence" : undefined
+    attributes.longAbsence ? "long_absence" : undefined,
+    ...(attributes.sensoryDetails ?? [])
   ].filter(Boolean).length;
 }
 
@@ -1781,7 +1837,8 @@ function countConcreteSceneSignals(attributes: SceneAttributes): number {
     attributes.activity,
     attributes.action,
     attributes.timeOfDay,
-    attributes.longAbsence ? "long_absence" : undefined
+    attributes.longAbsence ? "long_absence" : undefined,
+    ...(attributes.sensoryDetails ?? [])
   ].filter(Boolean).length;
 }
 
@@ -1800,21 +1857,25 @@ function buildSceneTriggerParts(
     ...(attributes.weather === "rain" && attributes.activity === "hotpot" ? ["下雨天吃火锅"] : []),
     ...(attributes.windowState === "open" ? ["虚拟家的窗户开着"] : []),
     ...(attributes.longAbsence ? ["长期没上线"] : []),
-    ...(attributes.action === "close_window" ? ["关窗"] : [])
+    ...(attributes.action === "close_window" ? ["关窗"] : []),
+    ...(attributes.sensoryDetails?.includes("rain_sound") ? ["雨声"] : [])
   ];
   const aliases = [
     ...sceneWeatherAliasKeys(attributes.weather),
     ...(attributes.timeOfDay ? [sceneTimeLabel(attributes.timeOfDay)] : []),
     ...(attributes.place === "virtual_home" ? ["虚拟家"] : []),
+    ...(attributes.place === "home" ? ["家里"] : []),
     ...(attributes.relationshipMeaning ? [sceneRelationshipLabel(attributes.relationshipMeaning)] : [])
   ];
   const secondary = [
-    ...(attributes.activity === "hotpot" ? ["一起吃饭", "热乎乎"] : []),
+    ...(attributes.activity === "hotpot" ? ["一起吃饭", "一起吃东西", "热乎乎"] : []),
     ...(attributes.activity === "tea" ? ["一起喝茶", "安静陪伴"] : []),
     ...(attributes.activity === "lego" ? ["一起拼乐高", "窗边陪伴"] : []),
+    ...(attributes.activity === "shared_meal" ? ["一起吃饭", "一起吃东西", "吃东西"] : []),
     ...(attributes.action === "close_window" ? ["提醒关窗"] : []),
     ...(attributes.longAbsence ? ["长期未上线", "久别提醒"] : []),
-    ...(attributes.windowState === "open" ? ["窗户开着"] : [])
+    ...(attributes.windowState === "open" ? ["窗户开着", "开着窗"] : []),
+    ...(attributes.sensoryDetails?.includes("rain_sound") ? ["下雨的声音"] : [])
   ];
   const environment = [
     ...sceneWeatherEnvironmentKeys(attributes.weather),
@@ -1825,7 +1886,14 @@ function buildSceneTriggerParts(
     ...(attributes.timeOfDay ? [attributes.timeOfDay] : [])
   ];
   const semantic = [
+    "scene memory",
     ...(attributes.weather && attributes.activity ? [`${attributes.weather} ${attributes.activity} memory`] : []),
+    ...(attributes.weather ? [`${sceneWeatherEnglishAdjective(attributes.weather)} scene`] : []),
+    ...(attributes.place === "virtual_home" ? ["virtual home scene"] : []),
+    ...(attributes.place === "home" ? ["home scene"] : []),
+    ...(attributes.windowState === "open" ? ["open window scene"] : []),
+    ...(attributes.activity === "hotpot" || attributes.activity === "shared_meal" ? ["shared meal scene"] : []),
+    ...(attributes.sensoryDetails?.includes("rain_sound") ? ["rain sound scene"] : []),
     ...(attributes.relationshipMeaning ? [attributes.relationshipMeaning.replace(/_/g, " ")] : []),
     ...(attributes.action === "close_window" ? ["low disturbance care reminder"] : []),
     ...(attributes.sharedExperience ? ["shared scene memory"] : [])
@@ -1893,6 +1961,7 @@ function formatSceneMemoryText(attributes: SceneAttributes): string {
   ].filter(Boolean);
   const details = [
     attributes.windowState === "open" ? "with an open window" : "",
+    attributes.sensoryDetails?.includes("rain_sound") ? "with rain sounds" : "",
     attributes.longAbsence ? "after a long absence" : "",
     attributes.action === "close_window" ? "where the user wanted Greyfield to remind them to 关窗" : "",
     attributes.activity
@@ -1920,7 +1989,7 @@ function buildSceneObject(attributes: SceneAttributes): string {
     .join("_");
 }
 
-function buildSceneMetadata(attributes: SceneAttributes): Record<string, string | number | boolean | null> {
+function buildSceneMetadata(attributes: SceneAttributes): Record<string, string | string[] | number | boolean | null> {
   return {
     sceneType: attributes.activity === "hotpot" || attributes.activity === "shared_meal" ? "shared_meal" : "episodic_scene",
     ...(attributes.weather ? { weather: attributes.weather } : {}),
@@ -1931,12 +2000,20 @@ function buildSceneMetadata(attributes: SceneAttributes): Record<string, string 
     ...(attributes.relationshipMeaning ? { relationshipMeaning: attributes.relationshipMeaning } : {}),
     ...(attributes.sharedExperience !== undefined ? { sharedExperience: attributes.sharedExperience } : {}),
     ...(attributes.timeOfDay ? { timeOfDay: attributes.timeOfDay } : {}),
-    ...(attributes.longAbsence ? { longAbsence: true, longAbsenceDays: attributes.longAbsenceDays ?? 30 } : {})
+    ...(attributes.longAbsence ? { longAbsence: true, longAbsenceDays: attributes.longAbsenceDays ?? 30 } : {}),
+    ...(attributes.sensoryDetails && attributes.sensoryDetails.length > 0 ? { sensoryDetails: attributes.sensoryDetails } : {})
   };
 }
 
 function hasSharedSceneSignal(text: string): boolean {
-  return /(我们|一起|共同|陪伴|和你|和我|shared|together)/iu.test(text);
+  if (hasExternalRelationshipTarget(text) && !hasSceneCompanionTarget(text)) {
+    return false;
+  }
+  return hasSceneCompanionTarget(text) || /(我们|咱们|一起|共同|陪伴|shared|together|\bwe\b|\bus\b|\bour\b)/iu.test(text);
+}
+
+function hasSceneCompanionTarget(text: string): boolean {
+  return /(greyfield|小灰|你和我|我和你|我们之间|我们的|user\s+and\s+greyfield)/iu.test(text);
 }
 
 function sceneWeatherEnglishAdjective(weather: SceneWeather): string {
@@ -1967,6 +2044,9 @@ function sceneRelationshipLabel(meaning: SceneRelationshipMeaning): string {
   if (meaning === "care_ritual") {
     return "照顾提醒";
   }
+  if (meaning === "safe_harbor") {
+    return "避风港";
+  }
   if (meaning === "quiet_companionship") {
     return "安静陪伴";
   }
@@ -1976,6 +2056,9 @@ function sceneRelationshipLabel(meaning: SceneRelationshipMeaning): string {
 function sceneRelationshipEnglishLabel(meaning: SceneRelationshipMeaning): string {
   if (meaning === "care_ritual") {
     return "a care ritual";
+  }
+  if (meaning === "safe_harbor") {
+    return "a safe harbor";
   }
   if (meaning === "quiet_companionship") {
     return "quiet companionship";
@@ -2259,6 +2342,33 @@ function shouldSuppressCompanionRelationshipRecall(input: string, atom: MemoryAt
   return true;
 }
 
+function shouldSuppressSceneRecall(input: string, atom: MemoryAtom): boolean {
+  if (atom.type !== "episodic_scene") {
+    return false;
+  }
+  const text = normalizeText(input);
+  if (isUiEventNoise(text) || isGenericWeatherSceneQuery(text)) {
+    return true;
+  }
+  if (hasExternalRelationshipTarget(text) && !hasSceneCompanionTarget(text)) {
+    return true;
+  }
+  const sceneQuery = extractSceneRecallConcepts(text);
+  return sceneQuery.hasIntent && !isSharedSceneMemoryAtom(atom);
+}
+
+function isSharedSceneMemoryAtom(atom: MemoryAtom): boolean {
+  if (atom.metadata?.sharedExperience === false) {
+    return false;
+  }
+  return (
+    atom.type === "episodic_scene" &&
+    (atom.subject === "user_and_greyfield" ||
+      atom.metadata?.sharedExperience === true ||
+      atom.triggers.semantic?.some((key) => normalizeSemanticConcept(key) === "shared scene memory") === true)
+  );
+}
+
 function shouldSuppressPromiseRecall(input: string, atom: MemoryAtom): boolean {
   if (atom.type !== "promise") {
     return false;
@@ -2267,7 +2377,7 @@ function shouldSuppressPromiseRecall(input: string, atom: MemoryAtom): boolean {
 }
 
 function hasExternalRelationshipTarget(text: string): boolean {
-  return /(同事|客户|公司|团队|项目|会议|婚礼|朋友|别人的|colleague|client|company|meeting|wedding|friend)/iu.test(text);
+  return /(同事|客户|公司|团队|项目|会议|婚礼|朋友|别人的|他和我|她和我|它和我|我和他|我和她|我和它|他和你|她和你|你和他|你和她|colleague|client|company|meeting|wedding|friend)/iu.test(text);
 }
 
 function isGenericHolidayOrGiftPlanningQuery(input: string): boolean {
@@ -2294,6 +2404,12 @@ function extractSemanticRecallConcepts(input: string): Set<string> {
     concepts.add("game complaint source");
     concepts.add("disliked old game");
   }
+  const sceneQuery = extractSceneRecallConcepts(input);
+  if (sceneQuery.hasIntent) {
+    for (const concept of sceneQuery.concepts) {
+      concepts.add(concept);
+    }
+  }
   const relationshipQuery = extractRelationshipRecallConcepts(input);
   if (relationshipQuery.hasIntent) {
     for (const concept of relationshipQuery.concepts) {
@@ -2310,6 +2426,81 @@ function extractSemanticRecallConcepts(input: string): Set<string> {
     }
   }
   return concepts;
+}
+
+function extractSceneRecallConcepts(input: string): { hasIntent: boolean; concepts: Set<string> } {
+  const concepts = new Set<string>();
+  const text = normalizeText(input).toLowerCase();
+  if (isUiEventNoise(text) || isGenericWeatherSceneQuery(text)) {
+    return { hasIntent: false, concepts };
+  }
+  if (hasExternalRelationshipTarget(text) && !hasSceneCompanionTarget(text)) {
+    return { hasIntent: false, concepts };
+  }
+
+  const hasSceneCue =
+    /(场景|场面|画面|时刻|片段|一幕|moment|scene|memory)/iu.test(text) ||
+    /(下雨|雨声|雨天|开窗|窗户|窗边|虚拟家|家里|火锅|吃东西|吃饭|避风港|rainy|rain|window|home|hotpot|\beat\b|\bate\b|together)/iu.test(text);
+  const hasRecallCue =
+    /(那个|那次|那天|当天|当时|之前|以前|回忆|想起|记得|原文|原话|来源|证据|片段|moment|scene|day|time|remember|recall|source|quote|verbatim)/iu.test(
+      text
+    );
+  if (!hasSceneCue || !hasRecallCue) {
+    return { hasIntent: false, concepts };
+  }
+
+  concepts.add("scene memory");
+  if (/(我们|一起|共同|你和我|我和你|shared|together|\bwe\b|\bour\b)/iu.test(text)) {
+    concepts.add("shared scene memory");
+  }
+  if (/(下雨|雨天|rainy|rain|raining)/iu.test(text)) {
+    concepts.add("rainy scene");
+  }
+  if (/(下雪|雪天|snowy|snow)/iu.test(text)) {
+    concepts.add("snowy scene");
+  }
+  if (/(大风|刮风|\bwindy\b|\bwind\b)/iu.test(text)) {
+    concepts.add("windy scene");
+  }
+  if (/(很热|高温|hot weather)/iu.test(text)) {
+    concepts.add("hot-weather scene");
+  }
+  if (/(虚拟家|virtual home)/iu.test(text)) {
+    concepts.add("virtual home scene");
+  }
+  if (/(家里|家中|\bhome\b)/iu.test(text)) {
+    concepts.add("home scene");
+  }
+  if (/(开窗|开着窗|窗户开|opened? the window|open window)/iu.test(text)) {
+    concepts.add("open window scene");
+  }
+  if (/(火锅|hotpot)/iu.test(text)) {
+    concepts.add("rain hotpot memory");
+    concepts.add("shared meal scene");
+  }
+  if (/(吃东西|吃饭|\bate\b|\beat\b|\bmeal\b)/iu.test(text)) {
+    concepts.add("shared meal scene");
+  }
+  if (/(雨声|rain sound|sound of rain)/iu.test(text)) {
+    concepts.add("rain sound scene");
+  }
+  if (/(避风港|安全感|safe harbor|shelter)/iu.test(text)) {
+    concepts.add("safe harbor");
+  }
+  return { hasIntent: true, concepts };
+}
+
+function isGenericWeatherSceneQuery(input: string): boolean {
+  const text = normalizeText(input);
+  const hasWeatherCue = /(天气|下雨|降雨|气温|温度|台风|weather|forecast|rain|raining|snow|\bwind\b|temperature|weather probe)/iu.test(text);
+  if (!hasWeatherCue) {
+    return false;
+  }
+  const hasSceneReference = /(场景|场面|画面|时刻|一幕|当时|之前|那个|那天|回忆|原文|moment|scene|remember|recall|source)/iu.test(text);
+  if (hasSceneReference) {
+    return false;
+  }
+  return /(会不会|预报|现在|今天|明天|后天|香港|开始|started|weather probe|weather|forecast)/iu.test(text);
 }
 
 function extractPromiseRecallConcepts(input: string): { hasIntent: boolean; concepts: Set<string> } {

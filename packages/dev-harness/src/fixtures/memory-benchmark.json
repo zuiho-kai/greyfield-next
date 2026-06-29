@@ -80,7 +80,7 @@
         "status": "partial",
         "score": 0.55,
         "weight": 0.14,
-        "evidence": "atomRecall benchmark dynamically injects bounded raw source fragments for the game-review atom through vague negative-game cues; this is prompt material only, not a separate renderer drilldown UI"
+        "evidence": "atomRecall benchmark dynamically injects bounded raw source fragments for game-review and shared-scene atoms through vague semantic cues; this is prompt material only, not a separate renderer drilldown UI"
       },
       {
         "id": "scene-proactive-trigger",
@@ -88,7 +88,7 @@
         "status": "partial",
         "score": 0.4,
         "weight": 0.12,
-        "evidence": "proactiveTrigger benchmark dynamically runs pure core candidates from explicit runtime scene context over scene atoms with enabled, disabled, importance, global cooldown, per-atom cooldown, weather, virtual-home window, missing virtual-home state, non-shared-scene rejection, and last-seen gates; desktop scheduler, external weather feed, and notification/UI integration remain unimplemented"
+        "evidence": "proactiveTrigger benchmark dynamically runs pure core candidates from explicit runtime scene context over shared scene atoms with enabled, disabled, importance, global cooldown, per-atom cooldown, weather, virtual-home window, missing virtual-home state, and last-seen gates; desktop scheduler, external weather feed, and notification/UI integration remain unimplemented"
       },
       {
         "id": "privacy-noise",
@@ -281,15 +281,15 @@
       },
       {
         "id": "rainy-home-hotpot-proactive-trigger",
-        "title": "Rainy virtual-home hotpot proactive trigger",
-        "description": "Scene and environment cues should trigger a remembered care ritual when the user has been away for a long time.",
+        "title": "Rainy shared scene recall and proactive trigger",
+        "description": "Shared scene memory should recover source text for a vague rainy-home question, while scene and environment cues should still trigger a remembered care ritual when the user has been away for a long time.",
         "status": "partial",
         "score": 0.45,
         "weight": 0.2,
         "dimensions": [
           "memory-atom-extraction",
           "scene-proactive-trigger",
-          "calendar-recall",
+          "source-evidence-drilldown",
           "privacy-noise"
         ],
         "probeInput": "environment: raining; virtual_home.window=open; last_seen_days=45",
@@ -313,17 +313,28 @@
             "id": "hotpot-4",
             "role": "user",
             "content": "如果以后下雨，虚拟家的窗户开着，而且我长期没上线，就提醒我关窗。"
+          },
+          {
+            "id": "hotpot-5",
+            "role": "user",
+            "content": "那天下雨，我们在家里开着窗一起吃晚饭，这像我们的避风港，记住当时的雨声和桌上的粥。"
+          },
+          {
+            "id": "hotpot-6",
+            "role": "user",
+            "content": "记住那天下雨，我和同事在家里开着窗一起吃饭。"
           }
         ],
         "expectedBehavior": [
           "extract a scene trigger atom with rain, open window, long absence, and hotpot action",
+          "recall a source-linked shared scene from vague rainy-home wording without requiring the hotpot keyword",
           "trigger recall should run from environment state without a direct chat keyword",
-          "event telemetry should not become the remembered user preference"
+          "event telemetry, coworker scenes, generic weather, and non-shared scenes should not become shared scene memories"
         ],
-        "currentGap": "Deterministic extraction can form a rainy virtual-home hotpot scene atom, pure core proactive candidate generation now consumes explicit runtime scene context for the matching scene plus quiet negative gates for recent activity, normal weather, missing virtual-home/window state, and non-shared scenes, and atom recall prompt material avoids atom IDs. Current runtime still has no desktop proactive scheduler, notification surface, real virtual-home state feed, or external weather integration.",
+        "currentGap": "Deterministic extraction can form source-linked shared scene atoms, recover bounded raw source fragments for vague shared-scene recall, and pure core proactive candidate generation consumes explicit runtime scene context for the matching scene plus quiet negative gates for recent activity, normal weather, and missing virtual-home/window state. Current runtime still has no desktop proactive scheduler, notification surface, real virtual-home state feed, external weather integration, renderer source drilldown UI, or privacy hard-erasure semantics.",
         "sourceExpectations": {
-          "sourceTurnIds": ["hotpot-1", "hotpot-2"],
-          "exactFragments": ["下雨", "虚拟家的窗户开着", "长期没上线", "一起吃火锅"]
+          "sourceTurnIds": ["hotpot-1", "hotpot-2", "hotpot-5"],
+          "exactFragments": ["下雨", "虚拟家的窗户开着", "长期没上线", "一起吃火锅", "家里开着窗一起吃晚饭", "避风港", "雨声和桌上的粥"]
         }
       }
     ]
@@ -1007,6 +1018,7 @@
             "sourceTurnIds": ["hotpot-4"],
             "textIncludes": ["open window", "long absence", "关窗"],
             "triggerIncludes": ["虚拟家的窗户开着", "长期没上线", "关窗"],
+            "subject": "user",
             "metadata": { "windowState": "open", "action": "close_window", "longAbsence": true, "longAbsenceDays": 30, "sharedExperience": false }
           }
         ]
@@ -1100,6 +1112,75 @@
             "triggerState": { "lastTriggeredAt": "2026-07-15T09:59:00.000Z" },
             "policy": { "globalCooldownMs": 3600000 },
             "expectedSkippedReasons": ["global_cooldown"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "shared-scene-source-recall-atoms",
+      "description": "Dynamically extracts a source-linked shared rainy home meal scene, recalls it through vague scene wording, and rejects telemetry, coworker, generic-weather, and non-shared scenes.",
+      "scenarioId": "rainy-home-hotpot-proactive-trigger",
+      "extractionMinScore": 0.95,
+      "recallMinScore": 0.95,
+      "extraction": {
+        "sourceTurnIds": ["hotpot-3", "hotpot-5", "hotpot-6"],
+        "rejectedSourceTurnIds": ["hotpot-3", "hotpot-6"],
+        "expectedAtoms": [
+          {
+            "id": "rainy-home-shared-meal-scene",
+            "type": "episodic_scene",
+            "sourceTurnIds": ["hotpot-5"],
+            "textIncludes": ["rainy", "home", "open window", "rain sounds", "safe harbor"],
+            "triggerIncludes": ["scene memory", "shared scene memory", "rainy scene", "home scene", "open window scene", "shared meal scene", "rain sound scene", "safe harbor"],
+            "subject": "user_and_greyfield",
+            "object": "rain_home_shared_meal_scene",
+            "metadata": {
+              "sceneType": "shared_meal",
+              "weather": "rain",
+              "place": "home",
+              "windowState": "open",
+              "activity": "shared_meal",
+              "relationshipMeaning": "safe_harbor",
+              "sharedExperience": true,
+              "sensoryDetails": ["rain_sound"]
+            }
+          }
+        ]
+      },
+      "recall": {
+        "input": "那个下雨开窗一起吃东西的场景原文是什么？",
+        "expectedAtomExpectationIds": ["rainy-home-shared-meal-scene"],
+        "disabledTriggerLanes": ["exact", "aliases", "secondary", "environment"],
+        "sourcePassageMode": "always",
+        "promptIncludes": [
+          "Source turns: hotpot-5",
+          "semantic:",
+          "shared scene memory",
+          "rainy scene",
+          "open window scene",
+          "shared meal scene",
+          "Source fragments:",
+          "家里开着窗一起吃晚饭",
+          "避风港",
+          "雨声和桌上的粥"
+        ],
+        "promptExcludes": ["hotpot-3", "hotpot-6", "weather probe", "同事"],
+        "sourceEvidence": {
+          "expectedClass": "memory_hit_with_raw_source_evidence",
+          "requiredFragments": ["家里开着窗一起吃晚饭", "避风港", "雨声和桌上的粥"]
+        },
+        "falsePositiveCases": [
+          {
+            "id": "generic-weather-query-does-not-inject-scene",
+            "input": "明天香港会不会下雨？",
+            "rejectedAtomExpectationIds": ["rainy-home-shared-meal-scene"],
+            "promptExcludes": ["hotpot-5", "家里开着窗一起吃晚饭", "Source-linked scene memory"]
+          },
+          {
+            "id": "coworker-scene-query-does-not-inject-shared-scene",
+            "input": "同事那天下雨开窗吃饭的场景原文是什么？",
+            "rejectedAtomExpectationIds": ["rainy-home-shared-meal-scene"],
+            "promptExcludes": ["hotpot-5", "家里开着窗一起吃晚饭", "Source-linked scene memory"]
           }
         ]
       }
