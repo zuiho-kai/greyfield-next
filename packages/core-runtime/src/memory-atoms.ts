@@ -636,6 +636,7 @@ export function formatMemoryAtomRecallContextForPrompt(
       ].filter(Boolean);
       return [
         `- Source-linked ${formatMemoryAtomTypeLabel(item.type)}`,
+        `  Recall reason: ${formatNaturalAtomRecallReason(item)}`,
         `  Reason: ${item.reason}`,
         `  Source turns: ${item.sourceTurnIds.join(", ")}`,
         item.matchedKeys.length > 0 ? `  Matched keys: ${item.matchedKeys.join(", ")}` : "",
@@ -683,6 +684,33 @@ function formatMemoryAtomTypeLabel(type: MemoryAtomType): string {
     return "promise memory";
   }
   return `${type} memory`;
+}
+
+function formatNaturalAtomRecallReason(item: Pick<MemoryAtomRecallContextItem, "type" | "matchedKeys" | "reason">): string {
+  const keys = new Set(item.matchedKeys.map(normalizeSemanticConcept));
+  const reason = item.reason.toLowerCase();
+  if (item.type === "opinion" && (keys.has("negative game analogy") || keys.has("game complaint source"))) {
+    return "The user is asking about a similar earlier game complaint and why it mattered.";
+  }
+  if (item.type === "promise") {
+    return "The user is asking about a prior commitment between the user and Greyfield.";
+  }
+  if (item.type === "relationship_event") {
+    if (keys.has("annual_ritual") || keys.has("recurring_relationship_ritual")) {
+      return "The user is asking about a remembered shared ritual or important date.";
+    }
+    return "The user is asking about a remembered relationship moment or ritual.";
+  }
+  if (item.type === "episodic_scene") {
+    return "The user is asking about a shared scene with matching place, weather, or activity details.";
+  }
+  if (reason.includes("calendar:")) {
+    return "The user is asking about a remembered date.";
+  }
+  if (reason.includes("semantic:") || reason.includes("relationship:")) {
+    return "The user is asking through meaning rather than the exact saved wording.";
+  }
+  return "The user message matches saved recall cues for this memory.";
 }
 
 export function normalizeTriggers(triggers: MemoryAtomTriggers): MemoryAtomTriggers {

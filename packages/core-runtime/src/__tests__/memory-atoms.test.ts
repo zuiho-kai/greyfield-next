@@ -408,7 +408,9 @@ describe("memory atoms", () => {
       reason: expect.stringContaining("semantic:")
     });
     expect(context.items[0]?.matchedKeys).toEqual(expect.arrayContaining(["promise memory", "help commitment", "organization promise"]));
-    expect(formatMemoryAtomRecallContextForPrompt(context)).toContain("Source-linked promise memory");
+    const prompt = formatMemoryAtomRecallContextForPrompt(context);
+    expect(prompt).toContain("Source-linked promise memory");
+    expect(prompt).toContain("Recall reason: The user is asking about a prior commitment between the user and Greyfield.");
 
     const projectPromise = buildMemoryAtomRecallContext({
       input: "这个项目里客户承诺的整理事项是什么？",
@@ -584,6 +586,9 @@ describe("memory atoms", () => {
     });
     expect(chineseContext.items[0]?.matchedKeys).toEqual(
       expect.arrayContaining(["shared scene memory", "rainy scene", "open window scene", "shared meal scene"])
+    );
+    expect(chinesePrompt).toContain(
+      "Recall reason: The user is asking about a shared scene with matching place, weather, or activity details."
     );
     expect(chinesePrompt).toContain("Source fragments:");
     expect(chinesePrompt).toContain("虚拟家里开着窗一起吃火锅");
