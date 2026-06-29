@@ -65,7 +65,8 @@ git worktree add ../greyfield-next-main-runtime-persistence -b feature/main-runt
 - One agent owns one worktree and one branch.
 - One branch targets one cohesive user-facing goal.
 - One implementation sub-agent targets one atomic issue and one expected PR.
-- A sub-agent prompt must name the assigned issue, worktree, branch, owned files/modules, non-goals, and verification commands before coding starts.
+- A sub-agent prompt must name the assigned issue, worktree, branch, owned files/modules, non-goals, verification commands, and whether the worker is authorized to push/open the PR after validation before coding starts.
+- Default to delegating push/open-PR authority to implementation workers. If the coordinator wants to keep that authority, say so explicitly in the worker prompt and record who will push/open the PR after validation.
 - For feature implementation after an approved product/issue split, the coordinating agent's start sequence is: confirm issue -> create or select worktree/branch -> spawn the implementation sub-agent -> only then wait/review/merge. The coordinator must not begin business-code edits in the assigned worktree while the sub-agent has not been spawned.
 - Worktree creation is not proof that delegation happened. If the user asks why no sub-agent was opened, the answer should be treated as a process miss and landed in these rules or the retro before continuing implementation.
 - Before a sub-agent hands off or reports a blocker, the coordinator should not inspect that worker's business diff for early review. Readiness review starts after handoff. If the coordinator has budget while a worker runs, use it on non-overlapping issue delegation, PR/issue coordination, or documentation/rule work.
@@ -86,7 +87,9 @@ git worktree add ../greyfield-next-main-runtime-persistence -b feature/main-runt
 ## Pull Request Rules
 
 - New feature work should end as a pull request to the repository, not an untracked local patch.
-- Once an implementation sub-agent hands off a validated branch and coordinator review finds no blocker, open the PR immediately instead of leaving the branch local-only. If workers are expected to open PRs themselves, the assignment prompt must say so explicitly and must require a Chinese PR body plus exact verification results.
+- Implementation worker prompts should normally authorize the worker to push its assigned branch and open the PR after its local verification passes. The worker-owned PR must use a Chinese body, link the assigned issue, and include exact verification commands/results plus unresolved risks.
+- Once an implementation sub-agent hands off a validated branch and coordinator review finds no blocker, the branch must already have a PR or the coordinator must open one immediately. Do not leave a branch local-only because ownership of the final push was ambiguous.
+- The coordinator keeps merge authority even when push/open-PR authority is delegated. Before merge, the coordinator still checks current PR state, CI, unresolved review threads, and whether the issue closeout condition is satisfied.
 - Do not push directly to `main`.
 - Keep PRs small enough to review: one atomic feature point, one checkpoint phase with explicit scenario acceptance, or one bug class per PR.
 - PR description must include purpose, changed packages, linked V1 feature IDs if any, and exact verification commands/results.
