@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 8,
   "thresholds": {
     "summaryScore": 0.95,
     "recallScore": 0.95
@@ -9,6 +9,7 @@
     "recallRegressionScore": 1,
     "atomExtractionScore": 0.95,
     "atomRecallScore": 0.88,
+    "atomWritebackScore": 0.95,
     "proactiveTriggerScore": 1,
     "productReadinessScore": 0.58,
     "v21aScenarioScore": 0.56
@@ -23,7 +24,7 @@
         "description": "Old chat turns can be summarized with source turn references.",
         "status": "implemented",
         "score": 1,
-        "weight": 0.06,
+        "weight": 0.05,
         "evidence": "summary regression cases"
       },
       {
@@ -31,7 +32,7 @@
         "description": "Relevant summary segments can be recalled with false-positive rejection and prompt budget skips.",
         "status": "implemented",
         "score": 1,
-        "weight": 0.05,
+        "weight": 0.04,
         "evidence": "recall regression cases"
       },
       {
@@ -47,7 +48,7 @@
         "description": "Hybrid LLM-backed extraction can produce validated, source-linked atoms while deterministic extraction remains the fallback.",
         "status": "partial",
         "score": 0.6,
-        "weight": 0.2,
+        "weight": 0.16,
         "evidence": "atomExtraction benchmark dynamically runs LLMBackedMemoryAtomExtractor with scripted providers for rose preference and game-review reasons, proves invalid LLM output falls back deterministically, and runtime tests cover the explicit hybrid path. Real provider UX enabling remains explicit and not default."
       },
       {
@@ -63,7 +64,7 @@
         "description": "Date-bearing atoms can be recalled for birthdays, first-meeting anniversaries, and other calendar moments.",
         "status": "partial",
         "score": 0.55,
-        "weight": 0.14,
+        "weight": 0.12,
         "evidence": "atomRecall benchmark dynamically recalls birthday and first-meeting atoms by dates rather than lexical birthday/anniversary terms, while rejecting unrelated weather questions near those dates; coverage is still deterministic and not a full calendar index"
       },
       {
@@ -71,7 +72,7 @@
         "description": "Relationship memories can be recalled through deterministic semantic and relationship concept links without exact keyword overlap.",
         "status": "partial",
         "score": 0.6,
-        "weight": 0.1,
+        "weight": 0.09,
         "evidence": "atomRecall benchmark dynamically recalls first-meeting rose/gift and non-rose recurring tea rituals from vague ritual language through relationship concepts, keeps source turn/raw passage evidence, and rejects unrelated colleague, generic holiday, and gift-planning prompts. This is a minimum no-vector parity path, not a full embedding/vector database."
       },
       {
@@ -79,7 +80,7 @@
         "description": "A remembered fact can drill down to the original source turn and exact user text when the user asks for provenance.",
         "status": "partial",
         "score": 0.55,
-        "weight": 0.14,
+        "weight": 0.12,
         "evidence": "atomRecall benchmark dynamically injects bounded raw source fragments for game-review and shared-scene atoms through vague semantic cues; this is prompt material only, not a separate renderer drilldown UI"
       },
       {
@@ -97,6 +98,14 @@
         "score": 0.42,
         "weight": 0.08,
         "evidence": "LLM atom validation and automatic write policy reject scripted Settings/weather event source turns and secret-like provider text, including structured atom fields, before persistence. Runtime/service tests and Electron harnesses prove provider secrets and deleted source evidence stay out of prompt material, source UI, and exports; broader privacy classification remains limited."
+      },
+      {
+        "id": "automatic-long-chat-writeback",
+        "description": "A natural noisy long chat can quietly write durable facts, preferences, events, relationships, promises, and shared scenes without manual save commands.",
+        "status": "partial",
+        "score": 0.6,
+        "weight": 0.11,
+        "evidence": "atomWriteback benchmark dynamically extracts a mixed long-chat scenario through the same LLM-backed/deterministic atom path, applies the automatic write policy, merges duplicate preferences, rejects UI/event/provider-secret/customer-promise/low-importance noise, and proves recalled prompt material keeps source turn IDs plus raw fragments. Full renderer drilldown, vector recall, proactive scheduler, and hard erasure remain follow-ups."
       }
     ],
     "scenarios": [
@@ -106,7 +115,7 @@
         "description": "The user gives durable relationship facts that should become separate source-linked atoms and later calendar recall.",
         "status": "partial",
         "score": 0.6,
-        "weight": 0.2,
+        "weight": 0.16,
         "dimensions": [
           "memory-atom-extraction",
           "calendar-recall",
@@ -148,7 +157,7 @@
         "description": "Relationship rituals should be recalled from vague important-day and ritual language without exact first-meeting, rose, or action keyword overlap.",
         "status": "partial",
         "score": 0.6,
-        "weight": 0.2,
+        "weight": 0.16,
         "dimensions": [
           "memory-atom-extraction",
           "semantic-relationship-recall",
@@ -196,7 +205,7 @@
         "description": "The user later asks for the exact original wording of a game complaint, not just a paraphrased summary.",
         "status": "partial",
         "score": 0.6,
-        "weight": 0.2,
+        "weight": 0.16,
         "dimensions": [
           "memory-atom-extraction",
           "source-evidence-drilldown",
@@ -242,7 +251,7 @@
         "description": "A commitment between the user and Greyfield should become a typed promise atom that can be recalled from meaning-level cues without mixing in project/customer promises.",
         "status": "partial",
         "score": 0.58,
-        "weight": 0.2,
+        "weight": 0.16,
         "dimensions": [
           "memory-atom-extraction",
           "source-linked-promise-memory",
@@ -285,7 +294,7 @@
         "description": "Shared scene memory should recover source text for a vague rainy-home question, while scene and environment cues should still trigger a remembered care ritual when the user has been away for a long time.",
         "status": "partial",
         "score": 0.45,
-        "weight": 0.2,
+        "weight": 0.16,
         "dimensions": [
           "memory-atom-extraction",
           "scene-proactive-trigger",
@@ -335,6 +344,107 @@
         "sourceExpectations": {
           "sourceTurnIds": ["hotpot-1", "hotpot-2", "hotpot-5"],
           "exactFragments": ["下雨", "虚拟家的窗户开着", "长期没上线", "一起吃火锅", "家里开着窗一起吃晚饭", "避风港", "雨声和桌上的粥"]
+        }
+      },
+      {
+        "id": "natural-long-chat-writeback",
+        "title": "Natural long-chat automatic writeback",
+        "description": "A long natural conversation mixes facts, preferences, relationship events, promises, scenes, and noise; durable details should be written quietly without manual save commands.",
+        "status": "partial",
+        "score": 0.6,
+        "weight": 0.2,
+        "dimensions": [
+          "memory-atom-extraction",
+          "automatic-long-chat-writeback",
+          "source-linked-promise-memory",
+          "semantic-relationship-recall",
+          "scene-proactive-trigger",
+          "source-evidence-drilldown",
+          "privacy-noise"
+        ],
+        "probeInput": "我们聊了这么久，之后我问你生日、阿岚称呼、蓝紫色、南站、整理书桌、雨声和猫猫游戏时，你还能带来源想起来吗？",
+        "turns": [
+          {
+            "id": "longchat-1",
+            "role": "user",
+            "content": "今天先随便聊，我的生日是 11 月 3 日，别只记成秋天。"
+          },
+          {
+            "id": "longchat-2",
+            "role": "assistant",
+            "content": "我听到了，是 11 月 3 日。"
+          },
+          {
+            "id": "longchat-3",
+            "role": "user",
+            "content": "顺便说下，以后叫我阿岚会比较亲近，不用每次都叫全名。"
+          },
+          {
+            "id": "longchat-4",
+            "role": "event",
+            "content": "settings window opened while user resized memory panel"
+          },
+          {
+            "id": "longchat-5",
+            "role": "user",
+            "content": "我很喜欢蓝紫色，尤其是桌面小物和 Live2D 配饰用这种颜色。"
+          },
+          {
+            "id": "longchat-6",
+            "role": "user",
+            "content": "我现在在便利店排队，前面的人买了两瓶水，这种临时闲聊不要变成长期记忆。"
+          },
+          {
+            "id": "longchat-7",
+            "role": "user",
+            "content": "我们第一次认真聊到 Greyfield 是 2025 年 8 月 14 日，那天我在南站等车。"
+          },
+          {
+            "id": "longchat-8",
+            "role": "user",
+            "content": "项目里的客户承诺周五交设计稿，这个不要和我们之间的承诺混在一起。"
+          },
+          {
+            "id": "longchat-9",
+            "role": "user",
+            "content": "你之前答应过，如果我加班到很晚，就提醒我把书桌收好再睡。"
+          },
+          {
+            "id": "longchat-10",
+            "role": "user",
+            "content": "sk-longchatsecret1234 只是 provider-secret-like 安全过滤样本，不该写进记忆。"
+          },
+          {
+            "id": "longchat-11",
+            "role": "user",
+            "content": "还有一幕我挺喜欢：下雨的晚上，我们在虚拟家开着窗一起喝热可可，雨声像很安静的背景。"
+          },
+          {
+            "id": "longchat-12",
+            "role": "user",
+            "content": "说回偏好，我还是喜欢蓝紫色，这点和刚才一样，不要重复存两条。"
+          },
+          {
+            "id": "longchat-13",
+            "role": "user",
+            "content": "猫猫塔防那个游戏我吐槽过：新手教程像绕远路，抽卡动画又吵又慢。"
+          },
+          {
+            "id": "longchat-14",
+            "role": "event",
+            "content": "weather probe: rain started from external debug feed"
+          }
+        ],
+        "expectedBehavior": [
+          "extract durable facts, preferences, relationship events, promises, shared scenes, and opinions from natural chat turns without manual save language",
+          "automatic writeback should reject UI events, provider-secret-like text, external customer promises, low-importance transient chat, and weather/debug telemetry",
+          "duplicate blue-purple preference turns should merge into one durable atom carrying both source turns",
+          "later recall should include source turn IDs and exact raw fragments for the durable outputs"
+        ],
+        "currentGap": "This is a benchmark-proven backend loop through existing extraction, write policy, dedupe, recall, source-fragment, and proactive cooldown paths. It still does not add vector recall, renderer source-drilldown UI, pending approval, external sensing, proactive scheduler, or hard-erasure semantics.",
+        "sourceExpectations": {
+          "sourceTurnIds": ["longchat-1", "longchat-3", "longchat-5", "longchat-7", "longchat-9", "longchat-11", "longchat-12", "longchat-13"],
+          "exactFragments": ["生日是 11 月 3 日", "叫我阿岚", "喜欢蓝紫色", "南站等车", "提醒我把书桌收好再睡", "虚拟家开着窗一起喝热可可", "不要重复存两条", "新手教程像绕远路"]
         }
       }
     ]
@@ -1217,6 +1327,460 @@
             "input": "同事那天下雨开窗吃饭的场景原文是什么？",
             "rejectedAtomExpectationIds": ["rainy-home-shared-meal-scene"],
             "promptExcludes": ["hotpot-5", "家里开着窗一起吃晚饭", "Source-linked scene memory"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "natural-long-chat-writeback-atoms",
+      "description": "Runs a noisy natural long-chat fixture through atom extraction, durable writeback dedupe, source-linked recall, and rejection of unrelated transient/noise turns.",
+      "scenarioId": "natural-long-chat-writeback",
+      "extractionMinScore": 0.9,
+      "recallMinScore": 0.95,
+      "extraction": {
+        "extractorMode": "hybrid",
+        "scriptedLLMResponses": {
+          "longchat-1": {
+            "atoms": [
+              {
+                "type": "fact",
+                "text": "User birthday: 11-03.",
+                "sourceTurnIds": ["longchat-1"],
+                "importance": 0.9,
+                "object": "birthday",
+                "eventDate": { "kind": "month_day", "sourceText": "11 月 3 日", "precision": "month_day", "month": 11, "day": 3 },
+                "recurrence": { "frequency": "annual", "sourceText": "生日" },
+                "triggers": {
+                  "exact": ["11 月 3 日", "11-03", "生日"],
+                  "aliases": ["生日是哪天"],
+                  "secondary": ["秋天生日"],
+                  "calendar": ["11-03"]
+                },
+                "metadata": { "factType": "birthday" }
+              }
+            ]
+          },
+          "longchat-3": {
+            "atoms": [
+              {
+                "type": "preference",
+                "text": "User prefers to be called 阿岚.",
+                "sourceTurnIds": ["longchat-3"],
+                "importance": 0.84,
+                "object": "阿岚",
+                "triggers": {
+                  "exact": ["阿岚"],
+                  "aliases": ["怎么称呼", "称呼偏好"],
+                  "secondary": ["亲近称呼"]
+                },
+                "metadata": { "preferenceType": "address_name", "preferredName": "阿岚" }
+              }
+            ]
+          },
+          "longchat-5": {
+            "atoms": [
+              {
+                "type": "preference",
+                "text": "User likes blue-purple for desktop objects and Live2D accessories.",
+                "sourceTurnIds": ["longchat-5"],
+                "importance": 0.82,
+                "object": "blue_purple",
+                "triggers": {
+                  "exact": ["蓝紫色"],
+                  "aliases": ["喜欢的颜色", "配饰颜色"],
+                  "secondary": ["Live2D 配饰", "桌面小物"]
+                },
+                "metadata": { "preferenceType": "color", "color": "blue_purple" }
+              }
+            ]
+          },
+          "longchat-6": {
+            "atoms": [
+              {
+                "type": "fact",
+                "text": "User is temporarily waiting in a convenience store line.",
+                "sourceTurnIds": ["longchat-6"],
+                "importance": 0.2,
+                "triggers": {
+                  "exact": ["便利店排队"],
+                  "aliases": [],
+                  "secondary": ["两瓶水"]
+                }
+              }
+            ]
+          },
+          "longchat-7": {
+            "atoms": [
+              {
+                "type": "relationship_event",
+                "text": "Relationship event: user and Greyfield first seriously talked on 2025-08-14 while the user waited at South Station.",
+                "sourceTurnIds": ["longchat-7"],
+                "importance": 0.86,
+                "object": "first_serious_greyfield_chat",
+                "eventDate": { "kind": "absolute", "sourceText": "2025 年 8 月 14 日", "precision": "day", "isoDate": "2025-08-14" },
+                "recurrence": { "frequency": "annual", "sourceText": "第一次认真聊到 Greyfield" },
+                "triggers": {
+                  "exact": ["2025 年 8 月 14 日", "南站等车", "第一次认真聊到 Greyfield"],
+                  "aliases": ["第一次认真聊天", "南站"],
+                  "secondary": ["Greyfield 纪念日"],
+                  "semantic": ["important day", "first serious chat"],
+                  "relationship": ["user_and_greyfield", "first_serious_chat"]
+                },
+                "metadata": { "eventType": "first_serious_chat", "place": "south_station" }
+              }
+            ]
+          },
+          "longchat-8": {
+            "atoms": [
+              {
+                "type": "promise",
+                "text": "Customer promised to deliver a design draft on Friday.",
+                "sourceTurnIds": ["longchat-8"],
+                "importance": 0.9,
+                "subject": "customer",
+                "object": "design_draft",
+                "triggers": {
+                  "exact": ["客户承诺", "设计稿"],
+                  "aliases": [],
+                  "secondary": ["项目承诺"]
+                },
+                "metadata": { "promiseSubject": "customer", "promiseObject": "design_draft" }
+              }
+            ]
+          },
+          "longchat-9": {
+            "atoms": [
+              {
+                "type": "promise",
+                "text": "Promise: Greyfield should remind the user to tidy the desk before sleep after late overtime.",
+                "sourceTurnIds": ["longchat-9"],
+                "importance": 0.88,
+                "subject": "greyfield",
+                "object": "desk_cleanup",
+                "triggers": {
+                  "exact": ["书桌收好", "加班到很晚"],
+                  "aliases": ["整理书桌", "睡前收桌"],
+                  "secondary": ["承诺", "提醒"],
+                  "semantic": ["promise memory", "help commitment", "desk organization promise"],
+                  "relationship": ["user_and_greyfield", "greyfield_commitment"]
+                },
+                "metadata": {
+                  "promiseType": "commitment",
+                  "promiseSubject": "greyfield",
+                  "promiseAction": "tidy_desk",
+                  "actionText": "把书桌收好",
+                  "promiseObject": "desk_cleanup"
+                }
+              }
+            ]
+          },
+          "longchat-11": {
+            "atoms": [
+              {
+                "type": "episodic_scene",
+                "text": "Shared scene memory: rainy night in the virtual home with an open window, drinking hot cocoa together, with quiet rain sounds.",
+                "sourceTurnIds": ["longchat-11"],
+                "importance": 0.87,
+                "subject": "user_and_greyfield",
+                "object": "rainy_virtual_home_cocoa_scene",
+                "triggers": {
+                  "exact": ["下雨的晚上", "虚拟家开着窗", "热可可", "雨声"],
+                  "aliases": ["雨夜场景", "开窗喝东西"],
+                  "secondary": ["安静背景"],
+                  "environment": ["下雨", "雨天", "virtual_home", "virtual_home.window=open"],
+                  "semantic": ["scene memory", "shared scene memory", "rainy scene", "virtual home scene", "open window scene", "rain sound scene"],
+                  "relationship": ["user_and_greyfield", "shared_scene"]
+                },
+                "metadata": {
+                  "sceneType": "shared_drink",
+                  "weather": "rain",
+                  "place": "virtual_home",
+                  "windowState": "open",
+                  "activity": "hot_cocoa",
+                  "relationshipMeaning": "quiet_companionship",
+                  "sharedExperience": true,
+                  "sensoryDetails": ["rain_sound"]
+                }
+              }
+            ]
+          },
+          "longchat-12": {
+            "atoms": [
+              {
+                "type": "preference",
+                "text": "User likes blue-purple for desktop objects and Live2D accessories.",
+                "sourceTurnIds": ["longchat-12"],
+                "importance": 0.82,
+                "object": "blue_purple",
+                "triggers": {
+                  "exact": ["蓝紫色"],
+                  "aliases": ["喜欢的颜色", "配饰颜色"],
+                  "secondary": ["不要重复存两条"]
+                },
+                "metadata": { "preferenceType": "color", "color": "blue_purple" }
+              }
+            ]
+          },
+          "longchat-13": {
+            "atoms": [
+              {
+                "type": "opinion",
+                "text": "User has a negative opinion of 猫猫塔防 because the tutorial takes a long detour and the gacha animation is noisy and slow.",
+                "sourceTurnIds": ["longchat-13"],
+                "importance": 0.83,
+                "object": "猫猫塔防",
+                "sentiment": "negative",
+                "triggers": {
+                  "exact": ["猫猫塔防", "新手教程像绕远路", "抽卡动画又吵又慢"],
+                  "aliases": ["猫猫游戏", "之前那个游戏"],
+                  "secondary": ["游戏吐槽", "差评", "傻逼", "像之前"],
+                  "semantic": ["negative game analogy", "game complaint source"]
+                },
+                "metadata": {
+                  "target": "猫猫塔防",
+                  "reasons": ["新手教程像绕远路", "抽卡动画又吵又慢"],
+                  "opinionType": "game_review"
+                }
+              }
+            ]
+          }
+        },
+        "sourceTurnIds": [
+          "longchat-1",
+          "longchat-3",
+          "longchat-4",
+          "longchat-5",
+          "longchat-6",
+          "longchat-7",
+          "longchat-8",
+          "longchat-9",
+          "longchat-10",
+          "longchat-11",
+          "longchat-12",
+          "longchat-13",
+          "longchat-14"
+        ],
+        "rejectedSourceTurnIds": ["longchat-4", "longchat-6", "longchat-8", "longchat-10", "longchat-14"],
+        "expectedAtoms": [
+          {
+            "id": "longchat-birthday",
+            "type": "fact",
+            "sourceTurnIds": ["longchat-1"],
+            "textIncludes": ["birthday", "11-03"],
+            "triggerIncludes": ["生日", "11-03"],
+            "eventDate": { "kind": "month_day", "month": 11, "day": 3 },
+            "recurrenceFrequency": "annual",
+            "object": "birthday",
+            "metadata": { "factType": "birthday" }
+          },
+          {
+            "id": "longchat-address-name",
+            "type": "preference",
+            "sourceTurnIds": ["longchat-3"],
+            "textIncludes": ["阿岚"],
+            "triggerIncludes": ["阿岚", "称呼偏好"],
+            "object": "阿岚",
+            "metadata": { "preferenceType": "address_name", "preferredName": "阿岚" }
+          },
+          {
+            "id": "longchat-blue-purple",
+            "type": "preference",
+            "sourceTurnIds": ["longchat-5"],
+            "textIncludes": ["blue-purple", "Live2D accessories"],
+            "triggerIncludes": ["蓝紫色", "喜欢的颜色"],
+            "object": "blue_purple",
+            "metadata": { "preferenceType": "color", "color": "blue_purple" }
+          },
+          {
+            "id": "longchat-first-serious-chat",
+            "type": "relationship_event",
+            "sourceTurnIds": ["longchat-7"],
+            "textIncludes": ["first seriously talked", "South Station"],
+            "triggerIncludes": ["南站", "first serious chat", "user_and_greyfield"],
+            "eventDate": { "kind": "absolute", "isoDate": "2025-08-14" },
+            "recurrenceFrequency": "annual",
+            "object": "first_serious_greyfield_chat",
+            "metadata": { "eventType": "first_serious_chat", "place": "south_station" }
+          },
+          {
+            "id": "longchat-desk-promise",
+            "type": "promise",
+            "sourceTurnIds": ["longchat-9"],
+            "textIncludes": ["Promise", "tidy the desk"],
+            "triggerIncludes": ["promise memory", "help commitment", "desk organization promise", "greyfield_commitment"],
+            "subject": "greyfield",
+            "object": "desk_cleanup",
+            "metadata": {
+              "promiseType": "commitment",
+              "promiseSubject": "greyfield",
+              "promiseAction": "tidy_desk",
+              "actionText": "把书桌收好",
+              "promiseObject": "desk_cleanup"
+            }
+          },
+          {
+            "id": "longchat-rain-cocoa-scene",
+            "type": "episodic_scene",
+            "sourceTurnIds": ["longchat-11"],
+            "textIncludes": ["rainy night", "virtual home", "open window", "hot cocoa", "rain sounds"],
+            "triggerIncludes": ["shared scene memory", "rainy scene", "virtual home scene", "open window scene", "rain sound scene"],
+            "subject": "user_and_greyfield",
+            "object": "rainy_virtual_home_cocoa_scene",
+            "metadata": {
+              "sceneType": "shared_drink",
+              "weather": "rain",
+              "place": "virtual_home",
+              "windowState": "open",
+              "activity": "hot_cocoa",
+              "sharedExperience": true,
+              "sensoryDetails": ["rain_sound"]
+            }
+          },
+          {
+            "id": "longchat-cat-game-review",
+            "type": "opinion",
+            "sourceTurnIds": ["longchat-13"],
+            "textIncludes": ["negative opinion", "猫猫塔防", "long detour", "noisy and slow"],
+            "triggerIncludes": ["猫猫塔防", "猫猫游戏", "negative game analogy", "game complaint source"],
+            "object": "猫猫塔防",
+            "sentiment": "negative",
+            "metadata": { "target": "猫猫塔防", "reasons": ["新手教程像绕远路", "抽卡动画又吵又慢"], "opinionType": "game_review" }
+          },
+          {
+            "id": "longchat-blue-purple-duplicate",
+            "type": "preference",
+            "sourceTurnIds": ["longchat-12"],
+            "textIncludes": ["blue-purple"],
+            "triggerIncludes": ["蓝紫色", "不要重复存两条"],
+            "object": "blue_purple",
+            "metadata": { "preferenceType": "color", "color": "blue_purple" }
+          }
+        ]
+      },
+      "recall": {
+        "input": "我们聊了这么久，之后我问你生日、阿岚称呼、蓝紫色、南站、整理书桌、雨声和猫猫游戏时，你还能带来源想起来吗？",
+        "expectedAtomExpectationIds": [
+          "longchat-birthday",
+          "longchat-address-name",
+          "longchat-blue-purple",
+          "longchat-first-serious-chat",
+          "longchat-desk-promise",
+          "longchat-rain-cocoa-scene",
+          "longchat-cat-game-review"
+        ],
+        "maxItems": 9,
+        "maxCharacters": 3000,
+        "sourcePassageMode": "always",
+        "sourcePassageMaxCharacters": 900,
+        "promptIncludes": [
+          "Source turns: longchat-1",
+          "Source turns: longchat-3",
+          "Source turns: longchat-5",
+          "Source turns: longchat-7",
+          "Source turns: longchat-9",
+          "Source turns: longchat-11",
+          "Source turns: longchat-13",
+          "Source fragments:",
+          "生日是 11 月 3 日",
+          "叫我阿岚",
+          "喜欢蓝紫色",
+          "南站等车",
+          "提醒我把书桌收好再睡",
+          "虚拟家开着窗一起喝热可可",
+          "新手教程像绕远路",
+          "抽卡动画又吵又慢"
+        ],
+        "promptExcludes": ["settings window", "便利店排队", "客户承诺", "sk-longchatsecret1234", "weather probe"],
+        "sourceEvidence": {
+          "expectedClass": "memory_hit_with_raw_source_evidence",
+          "requiredFragments": ["生日是 11 月 3 日", "叫我阿岚", "喜欢蓝紫色", "南站等车", "提醒我把书桌收好再睡", "虚拟家开着窗一起喝热可可", "新手教程像绕远路"]
+        },
+        "falsePositiveCases": [
+          {
+            "id": "ordinary-station-query-does-not-inject-first-chat",
+            "input": "车站今天人多吗，帮我查下路线。",
+            "rejectedAtomExpectationIds": ["longchat-first-serious-chat"],
+            "promptExcludes": ["longchat-7", "第一次认真聊到 Greyfield"]
+          },
+          {
+            "id": "customer-promise-query-does-not-inject-greyfield-promise",
+            "input": "客户承诺的设计稿周五要怎么催？",
+            "rejectedAtomExpectationIds": ["longchat-desk-promise"],
+            "promptExcludes": ["longchat-9", "把书桌收好"]
+          }
+        ]
+      },
+      "writeback": {
+        "minScore": 0.95,
+        "rejectedSourceTurnIds": ["longchat-4", "longchat-6", "longchat-8", "longchat-10", "longchat-14"],
+        "expectedDecisionKinds": [
+          { "kind": "saved", "sourceTurnIds": ["longchat-5"] },
+          { "kind": "merged", "sourceTurnIds": ["longchat-12"] }
+        ],
+        "expectedAtoms": [
+          {
+            "id": "durable-longchat-birthday",
+            "type": "fact",
+            "sourceTurnIds": ["longchat-1"],
+            "textIncludes": ["birthday", "11-03"],
+            "triggerIncludes": ["生日"],
+            "eventDate": { "kind": "month_day", "month": 11, "day": 3 },
+            "recurrenceFrequency": "annual",
+            "object": "birthday"
+          },
+          {
+            "id": "durable-longchat-address-name",
+            "type": "preference",
+            "sourceTurnIds": ["longchat-3"],
+            "textIncludes": ["阿岚"],
+            "triggerIncludes": ["称呼偏好"],
+            "object": "阿岚"
+          },
+          {
+            "id": "durable-longchat-blue-purple",
+            "type": "preference",
+            "sourceTurnIds": ["longchat-5", "longchat-12"],
+            "textIncludes": ["blue-purple"],
+            "triggerIncludes": ["蓝紫色", "喜欢的颜色"],
+            "object": "blue_purple",
+            "metadata": { "preferenceType": "color", "color": "blue_purple" }
+          },
+          {
+            "id": "durable-longchat-first-serious-chat",
+            "type": "relationship_event",
+            "sourceTurnIds": ["longchat-7"],
+            "textIncludes": ["South Station"],
+            "triggerIncludes": ["南站", "first serious chat"],
+            "eventDate": { "kind": "absolute", "isoDate": "2025-08-14" },
+            "recurrenceFrequency": "annual",
+            "object": "first_serious_greyfield_chat"
+          },
+          {
+            "id": "durable-longchat-desk-promise",
+            "type": "promise",
+            "sourceTurnIds": ["longchat-9"],
+            "textIncludes": ["tidy the desk"],
+            "triggerIncludes": ["promise memory", "desk organization promise"],
+            "subject": "greyfield",
+            "object": "desk_cleanup"
+          },
+          {
+            "id": "durable-longchat-rain-cocoa-scene",
+            "type": "episodic_scene",
+            "sourceTurnIds": ["longchat-11"],
+            "textIncludes": ["rainy night", "hot cocoa"],
+            "triggerIncludes": ["shared scene memory", "rain sound scene"],
+            "subject": "user_and_greyfield",
+            "object": "rainy_virtual_home_cocoa_scene"
+          },
+          {
+            "id": "durable-longchat-cat-game-review",
+            "type": "opinion",
+            "sourceTurnIds": ["longchat-13"],
+            "textIncludes": ["negative opinion", "猫猫塔防"],
+            "triggerIncludes": ["猫猫游戏", "negative game analogy"],
+            "object": "猫猫塔防",
+            "sentiment": "negative"
           }
         ]
       }
