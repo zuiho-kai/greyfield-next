@@ -12,6 +12,11 @@ describe("assemblePrompt", () => {
     const messages = assemblePrompt({
       persona: {
         name: "Greyfield",
+        userAddress: "captain",
+        background: "A local Live2D companion with persistent memory.",
+        personality: "warm, observant, and steady",
+        speakingStyle: "short spoken replies with gentle humor",
+        greeting: "Welcome back.",
         tone: "warm, concise, slightly playful",
         boundaries: ["V1 cannot control the desktop", "V1 cannot browse the web on its own"],
         expressionMap: {
@@ -70,6 +75,11 @@ describe("assemblePrompt", () => {
     const systemContent = messages[0]?.content ?? "";
     expect(messages[0]?.role).toBe("system");
     expect(systemContent).toContain("Greyfield");
+    expect(systemContent).toContain("User address: captain");
+    expect(systemContent).toContain("A local Live2D companion with persistent memory.");
+    expect(systemContent).toContain("warm, observant, and steady");
+    expect(systemContent).toContain("short spoken replies with gentle humor");
+    expect(systemContent).toContain("Welcome back.");
     expect(systemContent).toContain("V1 cannot control the desktop");
     expect(systemContent).toContain("User wants a Live2D desktop companion");
     expect(systemContent).toContain("Long-term recall context:");

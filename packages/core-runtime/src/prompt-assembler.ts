@@ -18,9 +18,14 @@ export interface PromptAssemblyInput {
 
 export function assemblePrompt(input: PromptAssemblyInput): ChatMessage[] {
   const persona = input.persona;
+  const speakingStyle = readPersonaText(persona.speakingStyle, persona.tone);
   const systemSections = [
     `Character: ${persona.name}`,
-    `Tone: ${persona.tone}`,
+    `User address: ${readPersonaText(persona.userAddress, "the user")}`,
+    `Background:\n${readPersonaText(persona.background, "A Live2D desktop companion focused on presence, conversation, and continuity.")}`,
+    `Personality:\n${readPersonaText(persona.personality, persona.tone)}`,
+    `Speaking style:\n${speakingStyle}`,
+    `Greeting:\n${readPersonaText(persona.greeting, "你好，我在。")}`,
     `Runtime boundary: Greyfield Next V1 is a visible Live2D desktop companion, not a desktop-control or multi-agent system.`,
     persona.boundaries.length > 0 ? `Boundaries:\n${persona.boundaries.map((boundary) => `- ${boundary}`).join("\n")}` : "",
     `Expression map:\n${Object.entries(persona.expressionMap)
@@ -51,4 +56,9 @@ function formatAtomRecallContextSection(context: MemoryAtomRecallContext): strin
   return formatted.length > 0
     ? `Long-term recall context:\n${formatted}`
     : "Long-term recall context: no relevant source-linked long-term memories.";
+}
+
+function readPersonaText(value: string | undefined, fallback: string): string {
+  const normalized = value?.trim();
+  return normalized && normalized.length > 0 ? normalized : fallback;
 }

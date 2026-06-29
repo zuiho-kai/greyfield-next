@@ -3,8 +3,8 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import type { GreyfieldConfig, GreyfieldConfigPatch } from "@greyfield/persistence/config-schema";
-import { loadGreyfieldConfig, saveGreyfieldConfig } from "@greyfield/persistence";
-import { createDesktopRuntimeStoreOptions } from "./desktop-runtime-stores";
+import { loadCharacterPersona, loadGreyfieldConfig, saveCharacterPersona, saveGreyfieldConfig } from "@greyfield/persistence";
+import { createDesktopRuntimeStoreOptions, resolveCharacterPath } from "./desktop-runtime-stores";
 import { createChatWindowOptions, createControlsWindowOptions, createPetWindowOptions, createSettingsWindowOptions, resolvePreloadPath, resolveRendererHtmlPath } from "./electron-window-options";
 import { Live2DModelController, type Live2DModelInfo } from "./live2d-model-controller";
 import { resolveLive2DModelSelection } from "./live2d-model-selection";
@@ -15,7 +15,7 @@ import { RuntimeService } from "./runtime-service";
 import { redactConfigForRenderer } from "./settings-redaction";
 import { SettingsController } from "./settings-controller";
 import { getUsableWindow, hideWindowIfUsable, showWindowIfUsable } from "./window-lifecycle";
-import type { DesktopProactiveCheckRequest } from "../shared/ipc";
+import type { DesktopPersonaSaveRequest, DesktopProactiveCheckRequest } from "../shared/ipc";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 let petWindow: BrowserWindow | undefined;
@@ -189,6 +189,14 @@ function registerIpc(): void {
 
   ipcMain.on("proactive:check", (_event, payload) => {
     void checkProactiveMemory(payload);
+  });
+
+  ipcMain.on("persona:load", (event) => {
+    void sendCurrentPersona(event.sender);
+  });
+
+  ipcMain.on("persona:save", (event, payload: DesktopPersonaSaveRequest) => {
+    void saveCurrentPersona(event.sender, payload.persona);
   });
 
   ipcMain.on("window:set-click-through", (_event, payload: { enabled: boolean }) => {
@@ -587,6 +595,73 @@ function broadcastSettings(config: GreyfieldConfig): void {
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send("settings:changed", rendererConfig);
   }
+}
+
+async function sendCurrentPersona(sender: Electron.WebContents): Promise<void> {
+  const config = settingsController?.getCurrent();
+  if (!config) {
+    sendPersonaError(sender, "", "Settings are not ready yet.");
+    return;
+  }
+  const path = resolveCurrentCharacterPath(config);
+  try {
+    const persona = await loadCharacterPersona(path);
+    if (!sender.isDestroyed()) {
+      sender.send("persona:state", {
+        status: "ready",
+        path,
+        message: `Loaded persona from ${path}`,
+        persona
+      });
+    }
+  } catch (error) {
+    sendPersonaError(sender, path, `Could not load persona: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+async function saveCurrentPersona(sender: Electron.WebContents, persona: DesktopPersonaSaveRequest["persona"]): Promise<void> {
+  const config = settingsController?.getCurrent();
+  if (!config) {
+    sendPersonaError(sender, "", "Settings are not ready yet.");
+    return;
+  }
+  const path = resolveCurrentCharacterPath(config);
+  try {
+    const saved = await saveCharacterPersona(path, persona);
+    broadcastPersonaState({
+      status: "saved",
+      path,
+      message: `Saved persona to ${path}`,
+      persona: saved
+    });
+  } catch (error) {
+    sendPersonaError(sender, path, `Could not save persona: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function sendPersonaError(sender: Electron.WebContents, path: string, message: string): void {
+  if (!sender.isDestroyed()) {
+    sender.send("persona:state", {
+      status: "error",
+      path,
+      message
+    });
+  }
+}
+
+function broadcastPersonaState(payload: {
+  status: "ready" | "saved" | "error";
+  path: string;
+  message: string;
+  persona?: DesktopPersonaSaveRequest["persona"];
+}): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send("persona:state", payload);
+  }
+}
+
+function resolveCurrentCharacterPath(config: GreyfieldConfig): string {
+  return resolveCharacterPath(config, resolveRuntimeStorePaths().projectRoot);
 }
 
 function resolveConfigPath(): string {

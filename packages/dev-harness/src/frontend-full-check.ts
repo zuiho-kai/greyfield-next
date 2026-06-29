@@ -22,6 +22,7 @@ const checks: Check[] = [
   { name: "speech bubble edge click-through harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-bubble-edge-clickthrough-check.ts"] },
   { name: "Settings provider test harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-settings-provider-test-check.ts"] },
   { name: "Settings active-chat rejection harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-settings-active-chat-test-check.ts"] },
+  { name: "single persona editor harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-single-persona-editor-check.ts"] },
   { name: "Chat provider failure harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-provider-failure-check.ts"] },
   { name: "Chat provider abort harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-provider-abort-check.ts"] },
   { name: "Stop audio harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-stop-audio-check.ts"] },

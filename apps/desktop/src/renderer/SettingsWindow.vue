@@ -27,6 +27,101 @@
       </header>
 
       <section class="settings-panel" aria-label="Settings">
+        <div class="settings-section persona-editor" aria-label="Persona editor">
+          <header class="settings-section__header">
+            <h2>Persona</h2>
+            <span>{{ personaStatusLabel }}</span>
+          </header>
+          <div class="settings-fields">
+            <label>
+              <span>Name</span>
+              <input
+                aria-label="Greyfield name"
+                :value="personaDraft.name"
+                :disabled="personaFieldsDisabled"
+                autocomplete="off"
+                spellcheck="false"
+                @input="setPersonaDraft('name', valueFrom($event))"
+              />
+            </label>
+            <label>
+              <span>User</span>
+              <input
+                aria-label="User address"
+                :value="personaDraft.userAddress"
+                :disabled="personaFieldsDisabled"
+                autocomplete="off"
+                spellcheck="false"
+                @input="setPersonaDraft('userAddress', valueFrom($event))"
+              />
+            </label>
+          </div>
+          <div class="settings-fields settings-fields--stacked">
+            <label>
+              <span>Personality</span>
+              <textarea
+                aria-label="Personality"
+                :value="personaDraft.personality"
+                :disabled="personaFieldsDisabled"
+                rows="3"
+                spellcheck="false"
+                @input="setPersonaDraft('personality', valueFrom($event))"
+              />
+            </label>
+            <label>
+              <span>Speaking style</span>
+              <textarea
+                aria-label="Speaking style"
+                :value="personaDraft.speakingStyle"
+                :disabled="personaFieldsDisabled"
+                rows="3"
+                spellcheck="false"
+                @input="setPersonaDraft('speakingStyle', valueFrom($event))"
+              />
+            </label>
+            <label>
+              <span>Boundaries</span>
+              <textarea
+                aria-label="Boundaries"
+                :value="personaDraft.boundariesText"
+                :disabled="personaFieldsDisabled"
+                rows="4"
+                spellcheck="false"
+                @input="setPersonaDraft('boundariesText', valueFrom($event))"
+              />
+            </label>
+            <label>
+              <span>Greeting</span>
+              <textarea
+                aria-label="Greeting"
+                :value="personaDraft.greeting"
+                :disabled="personaFieldsDisabled"
+                rows="2"
+                spellcheck="false"
+                @input="setPersonaDraft('greeting', valueFrom($event))"
+              />
+            </label>
+          </div>
+          <div class="settings-actions settings-actions--single">
+            <button
+              type="button"
+              class="persona-save-button"
+              :disabled="personaSaveDisabled"
+              @click="$emit('save-persona', personaDraft)"
+            >
+              {{ state.persona.status === "saving" ? "Saving..." : "Save persona" }}
+            </button>
+          </div>
+          <p
+            v-if="state.persona.message"
+            class="provider-test-result"
+            :class="`provider-test-result--${personaStatusTone}`"
+            role="status"
+          >
+            {{ state.persona.message }}
+          </p>
+        </div>
+
         <div class="settings-section">
           <header class="settings-section__header">
             <h2>Provider</h2>
@@ -758,7 +853,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import type { DesktopMemoryAtom, DesktopMemorySourcePassage, DesktopMemorySummarySegment } from "../shared/ipc";
-import type { DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
+import type { DesktopPersonaFormState, DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
 import {
   bundledLive2DModels,
   customLive2DModelValue,
@@ -778,6 +873,8 @@ import {
 import { describeProviderStatus } from "./settings-provider-status";
 import { describeMemoryExtractionStatus } from "./settings-memory-extraction-status";
 import { describeProviderTestStatus, describeTestLlmAction, describeTestVoiceAction } from "./settings-test-llm";
+
+type PersonaTextField = Exclude<keyof DesktopPersonaFormState, "expressionMap">;
 
 const props = defineProps<{
   state: DesktopRendererState;
@@ -800,6 +897,9 @@ const emit = defineEmits<{
   "reset-transform": [];
   "test-llm": [];
   "test-voice": [];
+  "request-persona": [];
+  "update-persona-field": [key: PersonaTextField, value: string];
+  "save-persona": [form: DesktopPersonaFormState];
   "preview-expression": [expression: string];
   "preview-motion": [group: string];
   "refresh-memory-debug": [];
@@ -830,6 +930,26 @@ const testVoiceAction = computed(() =>
   describeTestVoiceAction(props.stageStatus, props.state.voiceTest.status, describeVoiceBlockedReason(props.state))
 );
 const voiceTestStatus = computed(() => describeVoiceTestStatus(props.state.voiceTest));
+const personaStatusLabel = computed(() => {
+  if (props.state.persona.status === "loading") {
+    return "Loading";
+  }
+  if (props.state.persona.status === "saving") {
+    return "Saving";
+  }
+  if (props.state.persona.status === "saved") {
+    return "Saved";
+  }
+  if (props.state.persona.status === "error") {
+    return "Needs fix";
+  }
+  return "Ready";
+});
+const personaStatusTone = computed(() => (props.state.persona.status === "error" ? "error" : "success"));
+const personaSaveDisabled = computed(
+  () => props.state.persona.status === "loading" || props.state.persona.status === "saving"
+);
+const personaFieldsDisabled = computed(() => props.state.persona.status === "loading" || props.state.persona.status === "saving");
 const memorySnapshot = computed(() => props.state.memoryDebug.snapshot);
 const memoryExtractionStatus = computed(() => describeMemoryExtractionStatus(props.state));
 const memoryRawCount = computed(() => memorySnapshot.value?.recentTurns.length ?? 0);
@@ -896,6 +1016,8 @@ const memoryActionTone = computed(() => {
   }
   return "success";
 });
+const personaDraft = ref<DesktopPersonaFormState>({ ...props.state.persona.form });
+const personaDraftDirty = ref(false);
 const memorySummaryDrafts = ref<Record<string, string>>({});
 const memoryCueDrafts = ref<Record<string, string>>({});
 const memoryAtomDrafts = ref<Record<string, string>>({});
@@ -967,8 +1089,22 @@ const live2DModelNote = computed(() => {
 });
 
 onMounted(() => {
+  emit("request-persona");
   emit("refresh-memory-debug");
 });
+
+watch(
+  () => props.state.persona.form,
+  (form) => {
+    if (props.state.persona.status === "saved") {
+      personaDraftDirty.value = false;
+    }
+    if (props.state.persona.status !== "saving" && (!personaDraftDirty.value || props.state.persona.status === "saved")) {
+      personaDraft.value = { ...form, expressionMap: { ...form.expressionMap } };
+    }
+  },
+  { immediate: true }
+);
 
 watch(
   memorySegments,
@@ -1028,6 +1164,15 @@ function selectLive2DModel(modelPath: string): void {
     return;
   }
   emit("update-setting", "modelPath", model.modelPath);
+}
+
+function setPersonaDraft(key: PersonaTextField, value: string): void {
+  personaDraftDirty.value = true;
+  personaDraft.value = {
+    ...personaDraft.value,
+    [key]: value
+  };
+  emit("update-persona-field", key, value);
 }
 
 function setMemorySummaryDraft(id: string, event: Event): void {

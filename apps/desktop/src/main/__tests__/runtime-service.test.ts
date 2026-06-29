@@ -1075,7 +1075,8 @@ describe("RuntimeService", () => {
       const messages = JSON.parse(requestBody).messages as Array<{ role: string; content: string }>;
       const system = messages[0]?.content ?? "";
       expect(system).toContain("Character: File Greyfield");
-      expect(system).toContain("Tone: exact test tone");
+      expect(system).toContain("Personality:\nexact test tone");
+      expect(system).toContain("Speaking style:\nexact test tone");
       expect(system).toContain("- File persona boundary.");
       expect(system).toContain("- File memory fact.");
       expect(messages).toContainEqual({ role: "user", content: "第一轮持久化" });

@@ -29,6 +29,6 @@ export function createDesktopRuntimeStoreOptions(options: DesktopRuntimeStoreOpt
   };
 }
 
-function resolveCharacterPath(config: GreyfieldConfig, projectRoot: string): string {
+export function resolveCharacterPath(config: GreyfieldConfig, projectRoot: string): string {
   return isAbsolute(config.characterFile) ? config.characterFile : join(projectRoot, config.characterFile);
 }

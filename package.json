@@ -34,6 +34,7 @@
     "harness:electron:memory-control": "pnpm build:desktop && tsx packages/dev-harness/src/electron-memory-control-check.ts",
     "harness:electron:memory-atom-library": "pnpm build:desktop && tsx packages/dev-harness/src/electron-memory-atom-library-check.ts",
     "harness:electron:proactive-desktop-message": "pnpm build:desktop && tsx packages/dev-harness/src/electron-proactive-desktop-message-check.ts",
+    "harness:electron:single-persona-editor": "pnpm build:desktop && tsx packages/dev-harness/src/electron-single-persona-editor-check.ts",
     "harness:memory-benchmark": "tsx packages/dev-harness/src/memory-benchmark.ts",
     "harness:frontend-full": "tsx packages/dev-harness/src/frontend-full-check.ts",
     "harness:pet:quick": "tsx packages/dev-harness/src/electron-check.ts --quick",
