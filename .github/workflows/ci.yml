@@ -173,6 +173,10 @@ jobs:
             '^\.github/workflows/ci\.yml$'
           )
           $frontendAllLayerPatterns = @(
+            '^apps/desktop/package\.json$',
+            '^apps/desktop/vite\.config\.ts$',
+            '^apps/desktop/tsconfig\.json$',
+            '^apps/desktop/scripts/',
             '^packages/dev-harness/',
             '^package\.json$',
             '^pnpm-lock\.yaml$',
@@ -181,6 +185,7 @@ jobs:
           )
           $frontendSmokePatterns = @(
             '^apps/desktop/src/renderer/',
+            '^apps/desktop/public/assets/',
             '^packages/stage-live2d/',
             '^packages/dev-harness/',
             '^package\.json$',
@@ -190,6 +195,7 @@ jobs:
           )
           $frontendVisualPatterns = @(
             '^apps/desktop/src/renderer/',
+            '^apps/desktop/public/assets/',
             '^packages/stage-live2d/',
             '^packages/dev-harness/',
             '^package\.json$',
@@ -199,6 +205,7 @@ jobs:
           )
           $frontendUserPathPatterns = @(
             '^apps/desktop/src/',
+            '^apps/desktop/public/assets/',
             '^packages/stage-live2d/',
             '^packages/audio-runtime/',
             '^packages/core-runtime/',
