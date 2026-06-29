@@ -8,16 +8,31 @@ type Check = {
   optional?: "real-tts";
 };
 
+type Profile = "smoke" | "visual" | "user-path" | "heavy" | "full";
+
 const workspaceRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const pnpmCommand = "pnpm";
 
-const checks: Check[] = [
+const smokeChecks: Check[] = [
   { name: "frontend unit tests", command: pnpmCommand, args: ["test:frontend"] },
   { name: "Playwright Chromium install", command: pnpmCommand, args: ["exec", "playwright", "install", "chromium"] },
-  { name: "desktop production build", command: pnpmCommand, args: ["build:desktop"] },
-  { name: "real Live2D browser harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/live2d-check.ts"] },
+  { name: "real Live2D browser harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/live2d-check.ts"] }
+];
+
+const desktopBuildCheck: Check = { name: "desktop production build", command: pnpmCommand, args: ["build:desktop"] };
+
+const visualChecks: Check[] = [
+  desktopBuildCheck,
   { name: "V1 visual acceptance", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/v1-visual-acceptance-check.ts"] },
-  { name: "full Electron Settings/Chat/Pet harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-check.ts"] },
+];
+
+const userPathChecks: Check[] = [
+  desktopBuildCheck,
+  { name: "full Electron Settings/Chat/Pet harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-check.ts"] }
+];
+
+const heavyChecks: Check[] = [
+  desktopBuildCheck,
   { name: "speech bubble long reply harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-bubble-long-reply-check.ts"] },
   { name: "speech bubble edge click-through harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-bubble-edge-clickthrough-check.ts"] },
   { name: "Settings provider test harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-settings-provider-test-check.ts"] },
@@ -38,20 +53,56 @@ const checks: Check[] = [
   { name: "restart context harness", command: pnpmCommand, args: ["exec", "tsx", "packages/dev-harness/src/electron-restart-context-check.ts"] }
 ];
 
+const profile = parseProfile(process.argv);
+const checks = checksForProfile(profile);
 const startedAt = Date.now();
 
 for (const check of checks) {
   if (check.optional === "real-tts" && !hasRealTTSCredentials(process.env)) {
-    console.log(`\n[frontend-full] SKIP ${check.name} (missing GREYFIELD_REAL_TTS_* or GREYFIELD_REAL_LLM_* env)`);
+    console.log(`\n[frontend-${profile}] SKIP ${check.name} (missing GREYFIELD_REAL_TTS_* or GREYFIELD_REAL_LLM_* env)`);
     continue;
   }
   const checkStartedAt = Date.now();
-  console.log(`\n[frontend-full] START ${check.name}`);
+  console.log(`\n[frontend-${profile}] START ${check.name}`);
   await run(check);
-  console.log(`[frontend-full] PASS ${check.name} (${formatDuration(Date.now() - checkStartedAt)})`);
+  console.log(`[frontend-${profile}] PASS ${check.name} (${formatDuration(Date.now() - checkStartedAt)})`);
 }
 
-console.log(`\n[frontend-full] OK ${checks.length} checks passed in ${formatDuration(Date.now() - startedAt)}`);
+console.log(`\n[frontend-${profile}] OK ${checks.length} checks passed in ${formatDuration(Date.now() - startedAt)}`);
+
+function checksForProfile(profile: Profile): Check[] {
+  if (profile === "smoke") {
+    return smokeChecks;
+  }
+  if (profile === "visual") {
+    return visualChecks;
+  }
+  if (profile === "user-path") {
+    return userPathChecks;
+  }
+  if (profile === "heavy") {
+    return heavyChecks;
+  }
+  return [
+    smokeChecks[0],
+    smokeChecks[1],
+    desktopBuildCheck,
+    smokeChecks[2],
+    ...visualChecks.slice(1),
+    ...userPathChecks.slice(1),
+    ...heavyChecks.slice(1)
+  ];
+}
+
+function parseProfile(argv: string[]): Profile {
+  const profileArg = argv.find((arg) => arg.startsWith("--profile="));
+  const profileFlagIndex = argv.indexOf("--profile");
+  const profile = profileArg?.slice("--profile=".length) ?? (profileFlagIndex >= 0 ? argv[profileFlagIndex + 1] : undefined) ?? "full";
+  if (profile === "smoke" || profile === "visual" || profile === "user-path" || profile === "heavy" || profile === "full") {
+    return profile;
+  }
+  throw new Error(`Unknown frontend profile "${profile}". Expected smoke, visual, user-path, heavy, or full.`);
+}
 
 async function run(check: Check): Promise<void> {
   await new Promise<void>((resolve, reject) => {

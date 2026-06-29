@@ -126,7 +126,11 @@ jobs:
     outputs:
       code_checks: ${{ steps.filter.outputs.code_checks }}
       desktop_pet: ${{ steps.filter.outputs.desktop_pet }}
-      frontend_full: ${{ steps.filter.outputs.frontend_full }}
+      frontend_required: ${{ steps.filter.outputs.frontend_required }}
+      frontend_smoke: ${{ steps.filter.outputs.frontend_smoke }}
+      frontend_visual: ${{ steps.filter.outputs.frontend_visual }}
+      frontend_user_path: ${{ steps.filter.outputs.frontend_user_path }}
+      frontend_full_heavy: ${{ steps.filter.outputs.frontend_full_heavy }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -138,7 +142,11 @@ jobs:
           if ("${{ github.event_name }}" -ne "pull_request") {
             "code_checks=true" >> $env:GITHUB_OUTPUT
             "desktop_pet=true" >> $env:GITHUB_OUTPUT
-            "frontend_full=true" >> $env:GITHUB_OUTPUT
+            "frontend_required=true" >> $env:GITHUB_OUTPUT
+            "frontend_smoke=true" >> $env:GITHUB_OUTPUT
+            "frontend_visual=true" >> $env:GITHUB_OUTPUT
+            "frontend_user_path=true" >> $env:GITHUB_OUTPUT
+            "frontend_full_heavy=true" >> $env:GITHUB_OUTPUT
             exit 0
           }
 
@@ -164,73 +172,286 @@ jobs:
             '^tsconfig',
             '^\.github/workflows/ci\.yml$'
           )
-          $frontendPatterns = @(
-            '^apps/desktop/',
-            '^packages/stage-live2d/',
-            '^packages/audio-runtime/',
+          $frontendAllLayerPatterns = @(
+            '^apps/desktop/package\.json$',
+            '^apps/desktop/vite\.config\.ts$',
+            '^apps/desktop/tsconfig\.json$',
+            '^apps/desktop/scripts/',
             '^packages/dev-harness/',
             '^package\.json$',
             '^pnpm-lock\.yaml$',
             '^tsconfig',
             '^\.github/workflows/ci\.yml$'
           )
-          $codeMatched = $false
-          $desktopMatched = $false
-          $frontendMatched = $false
-          foreach ($file in $files) {
-            foreach ($pattern in $codePatterns) {
-              if ($file -match $pattern) {
-                $codeMatched = $true
-                break
+          $frontendSmokePatterns = @(
+            '^apps/desktop/src/renderer/',
+            '^apps/desktop/public/assets/',
+            '^packages/stage-live2d/',
+            '^packages/dev-harness/',
+            '^package\.json$',
+            '^pnpm-lock\.yaml$',
+            '^tsconfig',
+            '^\.github/workflows/ci\.yml$'
+          )
+          $frontendVisualPatterns = @(
+            '^apps/desktop/src/renderer/',
+            '^apps/desktop/public/assets/',
+            '^packages/stage-live2d/',
+            '^packages/dev-harness/',
+            '^package\.json$',
+            '^pnpm-lock\.yaml$',
+            '^tsconfig',
+            '^\.github/workflows/ci\.yml$'
+          )
+          $frontendUserPathPatterns = @(
+            '^apps/desktop/src/',
+            '^apps/desktop/public/assets/',
+            '^packages/stage-live2d/',
+            '^packages/audio-runtime/',
+            '^packages/core-runtime/',
+            '^packages/persistence/',
+            '^packages/dev-harness/',
+            '^package\.json$',
+            '^pnpm-lock\.yaml$',
+            '^tsconfig',
+            '^\.github/workflows/ci\.yml$'
+          )
+          $frontendHeavyPatterns = @(
+            '^apps/desktop/src/main/',
+            '^apps/desktop/src/preload/',
+            '^apps/desktop/src/shared/',
+            '^apps/desktop/src/renderer/App\.vue$',
+            '^apps/desktop/src/renderer/ChatWindow\.vue$',
+            '^apps/desktop/src/renderer/ControlsWindow\.vue$',
+            '^apps/desktop/src/renderer/PetWindow\.vue$',
+            '^apps/desktop/src/renderer/SettingsWindow\.vue$',
+            '^apps/desktop/src/renderer/chat-status\.ts$',
+            '^apps/desktop/src/renderer/desktop-runtime-bridge\.ts$',
+            '^apps/desktop/src/renderer/memory-source-display\.ts$',
+            '^apps/desktop/src/renderer/pet-window-shape\.ts$',
+            '^apps/desktop/src/renderer/preview-runtime-events\.ts$',
+            '^apps/desktop/src/renderer/runtime-event-reducer\.ts$',
+            '^apps/desktop/src/renderer/settings-',
+            '^apps/desktop/src/renderer/speech-bubble-',
+            '^packages/audio-runtime/',
+            '^packages/core-runtime/',
+            '^packages/persistence/',
+            '^packages/dev-harness/',
+            '^package\.json$',
+            '^pnpm-lock\.yaml$',
+            '^tsconfig',
+            '^\.github/workflows/ci\.yml$'
+          )
+          function Test-AnyPathMatches($paths, $patterns) {
+            foreach ($file in $paths) {
+              foreach ($pattern in $patterns) {
+                if ($file -match $pattern) {
+                  return $true
+                }
               }
             }
-            foreach ($pattern in $desktopPatterns) {
-              if ($file -match $pattern) {
-                $desktopMatched = $true
-                break
-              }
-            }
-            foreach ($pattern in $frontendPatterns) {
-              if ($file -match $pattern) {
-                $frontendMatched = $true
-                break
-              }
-            }
+            return $false
           }
+
+          $codeMatched = Test-AnyPathMatches $files $codePatterns
+          $desktopMatched = Test-AnyPathMatches $files $desktopPatterns
+          $frontendAllLayerMatched = Test-AnyPathMatches $files $frontendAllLayerPatterns
+          $frontendSmokeMatched = $frontendAllLayerMatched -or (Test-AnyPathMatches $files $frontendSmokePatterns)
+          $frontendVisualMatched = $frontendAllLayerMatched -or (Test-AnyPathMatches $files $frontendVisualPatterns)
+          $frontendUserPathMatched = $frontendAllLayerMatched -or (Test-AnyPathMatches $files $frontendUserPathPatterns)
+          $frontendHeavyMatched = $frontendAllLayerMatched -or (Test-AnyPathMatches $files $frontendHeavyPatterns)
+          $frontendRequired = $frontendSmokeMatched -or $frontendVisualMatched -or $frontendUserPathMatched -or $frontendHeavyMatched
+
           "code_checks=$($codeMatched.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
           "desktop_pet=$($desktopMatched.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
-          "frontend_full=$($frontendMatched.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "frontend_required=$($frontendRequired.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "frontend_smoke=$($frontendSmokeMatched.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "frontend_visual=$($frontendVisualMatched.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "frontend_user_path=$($frontendUserPathMatched.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "frontend_full_heavy=$($frontendHeavyMatched.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
 
-  frontend-full:
-    name: frontend-full
+  frontend-smoke:
+    name: frontend-smoke
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 15
     needs:
       - fast
       - changes
     steps:
-      - name: Skip frontend-full for non-frontend changes
-        if: needs.changes.outputs.frontend_full != 'true'
-        run: echo "frontend-full skipped because this change did not touch frontend-visible paths."
+      - name: Skip frontend-smoke for non-frontend changes
+        if: needs.changes.outputs.frontend_smoke != 'true'
+        run: echo "frontend-smoke skipped because this change did not touch frontend-visible paths."
       - uses: actions/checkout@v4
-        if: needs.changes.outputs.frontend_full == 'true'
+        if: needs.changes.outputs.frontend_smoke == 'true'
         with:
           persist-credentials: false
       - uses: pnpm/action-setup@v4
-        if: needs.changes.outputs.frontend_full == 'true'
+        if: needs.changes.outputs.frontend_smoke == 'true'
         with:
           version: 9.15.9
       - uses: actions/setup-node@v4
-        if: needs.changes.outputs.frontend_full == 'true'
+        if: needs.changes.outputs.frontend_smoke == 'true'
         with:
           node-version: 24
           cache: pnpm
       - name: Install
-        if: needs.changes.outputs.frontend_full == 'true'
+        if: needs.changes.outputs.frontend_smoke == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Frontend smoke harness
+        if: needs.changes.outputs.frontend_smoke == 'true'
+        run: pnpm harness:frontend-smoke
+
+  frontend-visual:
+    name: frontend-visual-artifacts
+    runs-on: windows-latest
+    timeout-minutes: 20
+    needs:
+      - fast
+      - changes
+    steps:
+      - name: Skip frontend visual artifacts for non-frontend changes
+        if: needs.changes.outputs.frontend_visual != 'true'
+        run: echo "frontend visual artifacts skipped because this change did not touch frontend-visible paths."
+      - uses: actions/checkout@v4
+        if: needs.changes.outputs.frontend_visual == 'true'
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        if: needs.changes.outputs.frontend_visual == 'true'
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        if: needs.changes.outputs.frontend_visual == 'true'
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install
+        if: needs.changes.outputs.frontend_visual == 'true'
         run: pnpm install --frozen-lockfile
       - name: Install Electron binary
-        if: needs.changes.outputs.frontend_full == 'true'
+        if: needs.changes.outputs.frontend_visual == 'true'
         run: pnpm --dir apps/desktop ensure:electron
-      - name: Run frontend-full guard
-        if: needs.changes.outputs.frontend_full == 'true'
-        run: pnpm harness:frontend-full
+      - name: Frontend visual artifacts harness
+        if: needs.changes.outputs.frontend_visual == 'true'
+        run: pnpm harness:frontend-visual
+      - name: Upload frontend visual artifacts
+        if: always() && needs.changes.outputs.frontend_visual == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-visual-artifacts
+          path: .cache/greyfield-v1-visual-acceptance/latest/
+          if-no-files-found: error
+
+  frontend-user-path:
+    name: frontend-user-path
+    runs-on: windows-latest
+    timeout-minutes: 20
+    needs:
+      - fast
+      - changes
+    steps:
+      - name: Skip frontend user path for non-frontend changes
+        if: needs.changes.outputs.frontend_user_path != 'true'
+        run: echo "frontend-user-path skipped because this change did not touch frontend-visible paths."
+      - uses: actions/checkout@v4
+        if: needs.changes.outputs.frontend_user_path == 'true'
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        if: needs.changes.outputs.frontend_user_path == 'true'
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        if: needs.changes.outputs.frontend_user_path == 'true'
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install
+        if: needs.changes.outputs.frontend_user_path == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Install Electron binary
+        if: needs.changes.outputs.frontend_user_path == 'true'
+        run: pnpm --dir apps/desktop ensure:electron
+      - name: Frontend user path harness
+        if: needs.changes.outputs.frontend_user_path == 'true'
+        run: pnpm harness:frontend-user-path
+
+  frontend-full-heavy:
+    name: frontend-full-heavy
+    runs-on: windows-latest
+    timeout-minutes: 35
+    needs:
+      - fast
+      - changes
+    steps:
+      - name: Skip frontend-full-heavy for non-frontend changes
+        if: needs.changes.outputs.frontend_full_heavy != 'true'
+        run: echo "frontend-full-heavy skipped because this change did not touch frontend-visible paths."
+      - uses: actions/checkout@v4
+        if: needs.changes.outputs.frontend_full_heavy == 'true'
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        if: needs.changes.outputs.frontend_full_heavy == 'true'
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        if: needs.changes.outputs.frontend_full_heavy == 'true'
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install
+        if: needs.changes.outputs.frontend_full_heavy == 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Install Electron binary
+        if: needs.changes.outputs.frontend_full_heavy == 'true'
+        run: pnpm --dir apps/desktop ensure:electron
+      - name: Frontend heavy harness
+        if: needs.changes.outputs.frontend_full_heavy == 'true'
+        run: pnpm harness:frontend-heavy
+
+  frontend-full:
+    name: frontend-full
+    runs-on: windows-latest
+    timeout-minutes: 5
+    needs:
+      - changes
+      - frontend-smoke
+      - frontend-visual
+      - frontend-user-path
+      - frontend-full-heavy
+    if: always()
+    steps:
+      - name: frontend-full compatibility summary
+        shell: pwsh
+        run: |
+          if ("${{ needs.changes.result }}" -ne "success") {
+            Write-Error "frontend-full compatibility check cannot run because change classification result is ${{ needs.changes.result }}."
+            exit 1
+          }
+
+          if ("${{ needs.changes.outputs.frontend_required }}" -ne "true") {
+            Write-Host "frontend-full compatibility check skipped because this change did not touch frontend-visible paths."
+            exit 0
+          }
+
+          $layers = @(
+            @{ Name = "frontend-smoke"; Required = "${{ needs.changes.outputs.frontend_smoke }}"; Result = "${{ needs['frontend-smoke'].result }}" },
+            @{ Name = "frontend-visual-artifacts"; Required = "${{ needs.changes.outputs.frontend_visual }}"; Result = "${{ needs['frontend-visual'].result }}" },
+            @{ Name = "frontend-user-path"; Required = "${{ needs.changes.outputs.frontend_user_path }}"; Result = "${{ needs['frontend-user-path'].result }}" },
+            @{ Name = "frontend-full-heavy"; Required = "${{ needs.changes.outputs.frontend_full_heavy }}"; Result = "${{ needs['frontend-full-heavy'].result }}" }
+          )
+          $failed = @()
+          foreach ($layer in $layers) {
+            Write-Host "$($layer.Name): required=$($layer.Required), result=$($layer.Result)"
+            if ($layer.Required -eq "true" -and $layer.Result -ne "success") {
+              $failed += "$($layer.Name)=$($layer.Result)"
+            }
+          }
+
+          if ($failed.Count -gt 0) {
+            Write-Error "frontend-full compatibility check failed because split frontend layer(s) failed: $($failed -join ', ')"
+            exit 1
+          }
+
+          Write-Host "frontend-full compatibility check passed after split frontend layers completed."
