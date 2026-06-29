@@ -56,6 +56,9 @@
     @reset-transform="resetTransform"
     @test-llm="testLLM"
     @test-voice="testVoice"
+    @request-persona="requestPersona"
+    @update-persona-field="updatePersonaField"
+    @save-persona="savePersona"
     @preview-expression="previewExpression"
     @preview-motion="previewMotion"
     @refresh-memory-debug="refreshMemoryDebug"
@@ -77,7 +80,7 @@ import { BrowserMicrophoneRecorder, BrowserSpeechSynthesisOutput } from "@greyfi
 import ChatWindow from "./ChatWindow.vue";
 import ControlsWindow from "./ControlsWindow.vue";
 import { createDesktopRuntimeBridgeWithSpeech } from "./desktop-runtime-bridge";
-import type { DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
+import type { DesktopPersonaFormState, DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
 import PetWindow from "./PetWindow.vue";
 import SettingsWindow from "./SettingsWindow.vue";
 import { beginPetDrag, continuePetDrag, endPetDrag, reducePetWheelScale, resolvePetHitTest, type PetDragState } from "./pet-interaction";
@@ -312,6 +315,24 @@ function testLLM(): void {
 
 function testVoice(): void {
   syncState(bridge.testVoiceProvider());
+}
+
+function requestPersona(): void {
+  syncState(bridge.requestPersona());
+}
+
+function updatePersonaField(key: Exclude<keyof DesktopPersonaFormState, "expressionMap">, value: string): void {
+  const currentForm = bridge.getState().persona.form;
+  syncState(
+    bridge.updatePersonaDraft({
+      ...currentForm,
+      [key]: value
+    })
+  );
+}
+
+function savePersona(form: DesktopPersonaFormState): void {
+  syncState(bridge.savePersona(form));
 }
 
 function refreshMemoryDebug(): void {

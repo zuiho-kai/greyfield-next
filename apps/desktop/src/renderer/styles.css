@@ -929,6 +929,10 @@ h1 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.settings-fields--stacked {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .settings-fields--compact label:last-child {
   grid-column: 1 / -1;
 }
@@ -957,6 +961,15 @@ h1 {
 }
 
 .settings-panel .settings-fields--compact label > span {
+  padding-top: 0;
+}
+
+.settings-panel .settings-fields--stacked label {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 5px;
+}
+
+.settings-panel .settings-fields--stacked label > span {
   padding-top: 0;
 }
 
@@ -990,6 +1003,10 @@ h1 {
   resize: vertical;
   min-height: 72px;
   line-height: 1.45;
+}
+
+.persona-editor textarea {
+  min-height: 82px;
 }
 
 .live2d-model-note {

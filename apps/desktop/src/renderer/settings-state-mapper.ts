@@ -1,7 +1,8 @@
+import type { CharacterPersona } from "@greyfield/core-runtime";
 import { defaultGreyfieldConfig, type GreyfieldConfig, type GreyfieldConfigPatch } from "@greyfield/persistence/config-schema";
 import type { RendererGreyfieldConfig } from "../shared/renderer-config";
 import { isMaskedApiKey } from "../shared/secrets";
-import type { DesktopSettingsPatch, DesktopSettingsState } from "./desktop-runtime-bridge";
+import type { DesktopPersonaFormState, DesktopSettingsPatch, DesktopSettingsState } from "./desktop-runtime-bridge";
 
 export function settingsFromConfig(config: RendererGreyfieldConfig | GreyfieldConfig): DesktopSettingsState {
   const hasApiKey = "hasApiKey" in config.provider ? config.provider.hasApiKey : config.provider.apiKey.length > 0;
@@ -138,4 +139,37 @@ export function settingsPatchToConfigPatch(patch: DesktopSettingsPatch): Greyfie
     configPatch.memory = { ...configPatch.memory, llmAtomExtractionEnabled: patch.llmAtomExtractionEnabled };
   }
   return configPatch;
+}
+
+export function personaFormFromPersona(persona: CharacterPersona): DesktopPersonaFormState {
+  return {
+    name: persona.name,
+    userAddress: persona.userAddress?.trim() ?? "",
+    background: persona.background?.trim() ?? "",
+    personality: persona.personality?.trim() ?? "",
+    speakingStyle: persona.speakingStyle?.trim() ?? "",
+    boundariesText: persona.boundaries.join("\n"),
+    greeting: persona.greeting?.trim() ?? "",
+    tone: persona.tone.trim(),
+    expressionMap: { ...persona.expressionMap }
+  };
+}
+
+export function personaFromForm(form: DesktopPersonaFormState): CharacterPersona {
+  const speakingStyle = form.speakingStyle.trim();
+  return {
+    name: form.name.trim(),
+    userAddress: form.userAddress.trim(),
+    background: form.background.trim(),
+    personality: form.personality.trim(),
+    speakingStyle,
+    tone: form.tone.trim() || speakingStyle,
+    boundaries: parsePersonaBoundaries(form.boundariesText),
+    greeting: form.greeting.trim(),
+    expressionMap: { ...form.expressionMap }
+  };
+}
+
+function parsePersonaBoundaries(text: string): string[] {
+  return [...new Set(text.split(/\r?\n/u).map((item) => item.trim()).filter(Boolean))];
 }

@@ -15,7 +15,13 @@ import { isMaskedApiKey } from "../shared/secrets";
 import { createDefaultInteractionProfile } from "@greyfield/stage-live2d";
 import { createRendererPreviewRuntimeEvents } from "./preview-runtime-events";
 import { reduceRuntimeEvent } from "./runtime-event-reducer";
-import { configFromSettings, settingsFromConfig, settingsPatchToConfigPatch } from "./settings-state-mapper";
+import {
+  configFromSettings,
+  personaFormFromPersona,
+  personaFromForm,
+  settingsFromConfig,
+  settingsPatchToConfigPatch
+} from "./settings-state-mapper";
 
 export interface DesktopMessage {
   role: "user" | "assistant";
@@ -50,6 +56,7 @@ export interface DesktopRendererState {
     text: string;
     createdAt: string;
   } | null;
+  persona: DesktopPersonaSettingsState;
   audioQueue: string[];
   settings: DesktopSettingsState;
   voiceInput: {
@@ -95,6 +102,26 @@ export interface DesktopSettingsState {
 }
 
 export type DesktopSettingsPatch = Partial<DesktopSettingsState>;
+
+export interface DesktopPersonaFormState {
+  name: string;
+  userAddress: string;
+  background: string;
+  personality: string;
+  speakingStyle: string;
+  boundariesText: string;
+  greeting: string;
+  tone: string;
+  expressionMap: Record<string, string>;
+}
+
+export interface DesktopPersonaSettingsState {
+  status: "idle" | "loading" | "ready" | "saving" | "saved" | "error";
+  path: string;
+  message: string;
+  form: DesktopPersonaFormState;
+}
+
 export type DesktopStateChangeHandler = (state: DesktopRendererState) => void;
 
 export interface DesktopHostApi {
@@ -114,6 +141,7 @@ export class DesktopRuntimeBridge {
   private state: DesktopRendererState = createInitialDesktopRendererState();
   private readonly stateChangeHandlers = new Set<DesktopStateChangeHandler>();
   private readonly interactionProfile = createDefaultInteractionProfile();
+  private personaCharacterFile = defaultGreyfieldConfig.characterFile;
   private speechPlaybackEpoch = 0;
   private speechPlaybackChain: Promise<void> = Promise.resolve();
 
@@ -134,6 +162,12 @@ export class DesktopRuntimeBridge {
           modelPassThrough: config.window.modelPassThrough
         }
       };
+      if (
+        settings.characterFile !== this.personaCharacterFile &&
+        this.state.persona.status !== "idle"
+      ) {
+        this.requestPersona();
+      }
       this.emitStateChange();
     });
     this.host?.on("window:state", (windowState) => {
@@ -246,6 +280,23 @@ export class DesktopRuntimeBridge {
           actionStatus: result.ok ? "success" : "error",
           actionMessage: result.message,
           exportText: result.export ? JSON.stringify(result.export, null, 2) : this.state.memoryDebug.exportText
+        }
+      };
+      this.emitStateChange();
+    });
+    this.host?.on("persona:state", (result) => {
+      const previousPersonaPath = this.state.persona.path;
+      this.state = {
+        ...this.state,
+        persona: {
+          status: result.status,
+          path: result.path,
+          message: result.message,
+          form: result.persona
+            ? personaFormFromPersona(result.persona)
+            : result.path === previousPersonaPath
+              ? this.state.persona.form
+              : createDefaultPersonaForm()
         }
       };
       this.emitStateChange();
@@ -405,6 +456,69 @@ export class DesktopRuntimeBridge {
       proactiveMessage: patch.proactiveMemoryEnabled === false ? null : this.state.proactiveMessage
     };
     this.host?.send("settings:update", settingsPatchToConfigPatch(patch));
+    return this.getState();
+  }
+
+  requestPersona(): DesktopRendererState {
+    this.personaCharacterFile = this.state.settings.characterFile;
+    this.state = {
+      ...this.state,
+      persona: {
+        path: this.state.settings.characterFile,
+        status: "loading",
+        message: "Loading persona...",
+        form: createDefaultPersonaForm()
+      }
+    };
+    this.host?.send("persona:load", {});
+    if (!this.host) {
+      this.state = {
+        ...this.state,
+        persona: {
+          status: "ready",
+          path: this.state.settings.characterFile,
+          message: "Persona loaded in preview.",
+          form: createDefaultPersonaForm()
+        }
+      };
+    }
+    return this.getState();
+  }
+
+  savePersona(form: DesktopPersonaFormState): DesktopRendererState {
+    this.state = {
+      ...this.state,
+      persona: {
+        ...this.state.persona,
+        status: "saving",
+        message: "Saving persona...",
+        form
+      }
+    };
+    this.host?.send("persona:save", { persona: personaFromForm(form) });
+    if (!this.host) {
+      this.state = {
+        ...this.state,
+        persona: {
+          ...this.state.persona,
+          status: "saved",
+          message: "Persona saved in preview."
+        }
+      };
+    }
+    return this.getState();
+  }
+
+  updatePersonaDraft(form: DesktopPersonaFormState): DesktopRendererState {
+    this.state = {
+      ...this.state,
+      persona: {
+        ...this.state.persona,
+        form,
+        message: this.state.persona.status === "error" ? "" : this.state.persona.message,
+        status: this.state.persona.status === "saved" ? "ready" : this.state.persona.status
+      }
+    };
     return this.getState();
   }
 
@@ -897,6 +1011,12 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
     messages: [],
     assistantDraft: "",
     proactiveMessage: null,
+    persona: {
+      status: "idle",
+      path: defaultGreyfieldConfig.characterFile,
+      message: "",
+      form: createDefaultPersonaForm()
+    },
     audioQueue: [],
     settings: {
       providerLLM: defaultGreyfieldConfig.provider.llm,
@@ -927,6 +1047,27 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
     },
     stage: {
       mouthOpen: 0
+    }
+  };
+}
+
+function createDefaultPersonaForm(): DesktopPersonaFormState {
+  return {
+    name: "Greyfield",
+    userAddress: "you",
+    background: "A Live2D desktop companion focused on presence, conversation, and continuity.",
+    personality: "Warm, steady, observant, and lightly playful without pretending to control the desktop.",
+    speakingStyle: "Keep replies short enough to speak naturally and prefer concrete progress over vague planning.",
+    boundariesText: [
+      "V1 cannot control the desktop.",
+      "V1 cannot browse the web or operate external applications by itself."
+    ].join("\n"),
+    greeting: "你好，我在。",
+    tone: "warm, concise, slightly playful",
+    expressionMap: {
+      neutral: "default",
+      thinking: "thinking",
+      speaking: "smile"
     }
   };
 }

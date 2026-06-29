@@ -1,4 +1,5 @@
 import type {
+  CharacterPersona,
   MemoryAtom,
   RecallContext,
   RuntimeInputEvent,
@@ -88,6 +89,17 @@ export interface DesktopProactiveMessage {
   createdAt: string;
 }
 
+export interface DesktopPersonaSaveRequest {
+  persona: CharacterPersona;
+}
+
+export interface DesktopPersonaState {
+  status: "ready" | "saved" | "error";
+  path: string;
+  message: string;
+  persona?: CharacterPersona;
+}
+
 export interface DesktopIpcRequestMap {
   "runtime:input": RuntimeInputEvent;
   "runtime:speech-playback": DesktopSpeechPlaybackEvent;
@@ -103,6 +115,8 @@ export interface DesktopIpcRequestMap {
   "memory:atom-export": { id: string };
   "memory:export-request": {};
   "proactive:check": DesktopProactiveCheckRequest;
+  "persona:load": {};
+  "persona:save": DesktopPersonaSaveRequest;
   "settings:update": GreyfieldConfigPatch;
   "window:set-click-through": { enabled: boolean };
   "window:set-hit-test": { passthrough: boolean; reason: "transparent-area" | "model-pass-through" | "model-hit" };
@@ -139,6 +153,7 @@ export interface DesktopIpcEventMap {
   "memory:action-result": DesktopMemoryActionResult;
   "memory:export-result": DesktopMemoryActionResult & { export?: DesktopMemoryExport };
   "proactive:message": DesktopProactiveMessage;
+  "persona:state": DesktopPersonaState;
   "settings:changed": RendererGreyfieldConfig;
   "window:state": {
     modelPassThrough: boolean;
