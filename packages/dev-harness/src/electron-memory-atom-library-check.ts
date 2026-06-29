@@ -40,6 +40,8 @@ const otherRoleCharacterFile = "characters/other-role.yaml";
 const currentThreadId = "desktop:characters-greyfield-yaml";
 const otherThreadId = "desktop:characters-other-role-yaml";
 const boundedTail = "SOURCE_PASSAGE_BOUNDARY_TAIL_SHOULD_NOT_RENDER";
+const memoryLibrarySelector = '[data-harness="settings-memory-library"]';
+const memorySourceDrilldownSelector = '[data-harness="memory-source-drilldown"]';
 const requestBodies: string[] = [];
 const server = createServer(async (request: IncomingMessage, response: ServerResponse) => {
   const requestBody = await readRequestBody(request);
@@ -273,29 +275,27 @@ try {
   let chat = await waitForRoleWindow(app, "chat");
   let settings = await waitForRoleWindow(app, "settings");
   await settings.waitForSelector(".greyfield-shell");
-  await settings.getByRole("button", { name: "Refresh memory" }).click();
+  await refreshMemory(settings);
 
-  let memoryLibrary = settings.locator('[aria-label="Memory Library"]');
+  let memoryLibrary = settings.locator(memoryLibrarySelector);
   await memoryLibrary.waitFor();
-  await memoryLibrary.locator(".memory-library__lane", { hasText: "Summary" }).waitFor();
-  await memoryLibrary.locator(".memory-library__lane", { hasText: "Facts" }).waitFor();
-  await memoryLibrary.locator(".memory-library__lane", { hasText: "Preferences" }).waitFor();
-  await memoryLibrary.locator(".memory-library__lane", { hasText: "Opinions" }).waitFor();
-  await memoryLibrary.locator(".memory-library__lane", { hasText: "Relationships" }).waitFor();
-  await memoryLibrary.locator(".memory-library__lane", { hasText: "Scenes" }).waitFor();
-  await memoryLibrary.locator(".memory-library__lane", { hasText: "Promises" }).waitFor();
-  await memoryLibrary.locator(".memory-library__stats", { hasText: "Enabled 9" }).waitFor();
-  await memoryLibrary.locator('[aria-label="Fact memory atom-fact"]', { hasText: "User birthday is June 12." }).waitFor();
-  await memoryLibrary.locator('[aria-label="Preference memory atom-preference"]', { hasText: "1 source passage ready" }).waitFor();
-  await memoryLibrary.locator('[aria-label="Opinion memory atom-opinion"]', { hasText: "User dislikes pay-to-win game loops." }).waitFor();
-  await memoryLibrary.locator('[aria-label="Opinion memory atom-missing-opinion"]', { hasText: "Missing-source opinion memory" }).waitFor();
-  await memoryLibrary.locator('[aria-label="Relationship memory atom-relationship"]', { hasText: "First meeting anniversary ritual is giving roses." }).waitFor();
-  await memoryLibrary.locator('[aria-label="Relationship memory atom-vague-ritual"]', { hasText: "osmanthus tea" }).waitFor();
-  await memoryLibrary.locator('[aria-label="Scene memory atom-scene"]', { hasText: "Shared rainy hotpot evening memory." }).waitFor();
-  await memoryLibrary.locator('[aria-label="Scene memory atom-vague-scene"]', { hasText: "safe harbor" }).waitFor();
-  await memoryLibrary.locator('[aria-label="Promise memory atom-promise"]', { hasText: atomPromiseText }).waitFor();
-  await memoryLibrary.locator('[aria-label="Promises memories"]', { hasText: "1 stored" }).waitFor();
-  const availableSource = await openSourceDrilldown(memoryLibrary, '[aria-label="Fact memory atom-fact"]');
+  await assertMemoryAtomGroupCount(memoryLibrary, "fact", 1);
+  await assertMemoryAtomGroupCount(memoryLibrary, "preference", 1);
+  await assertMemoryAtomGroupCount(memoryLibrary, "opinion", 2);
+  await assertMemoryAtomGroupCount(memoryLibrary, "relationship_event", 2);
+  await assertMemoryAtomGroupCount(memoryLibrary, "episodic_scene", 2);
+  await assertMemoryAtomGroupCount(memoryLibrary, "promise", 1);
+  await assertMemoryAtomCardCount(memoryLibrary, 9);
+  await memoryAtomCard(memoryLibrary, "atom-fact").filter({ hasText: "User birthday is June 12." }).waitFor();
+  await memoryAtomCard(memoryLibrary, "atom-preference").filter({ hasText: "1 source passage ready" }).waitFor();
+  await memoryAtomCard(memoryLibrary, "atom-opinion").filter({ hasText: "User dislikes pay-to-win game loops." }).waitFor();
+  await memoryAtomCard(memoryLibrary, "atom-missing-opinion").filter({ hasText: "Missing-source opinion memory" }).waitFor();
+  await memoryAtomCard(memoryLibrary, "atom-relationship").filter({ hasText: "First meeting anniversary ritual is giving roses." }).waitFor();
+  await memoryAtomCard(memoryLibrary, "atom-vague-ritual").filter({ hasText: "osmanthus tea" }).waitFor();
+  await memoryAtomCard(memoryLibrary, "atom-scene").filter({ hasText: "Shared rainy hotpot evening memory." }).waitFor();
+  await memoryAtomCard(memoryLibrary, "atom-vague-scene").filter({ hasText: "safe harbor" }).waitFor();
+  await memoryAtomCard(memoryLibrary, "atom-promise").filter({ hasText: atomPromiseText }).waitFor();
+  const availableSource = await openSourceDrilldown(memoryLibrary, "atom-fact");
   await availableSource.getByText("User birthday source says June 12.").waitFor();
   await availableSource.getByText("From you").first().waitFor();
   await availableSource.getByText("Saved locally").first().waitFor();
@@ -303,16 +303,16 @@ try {
     includes: ["From you", "Saved from conversation", "User birthday source says June 12."],
     excludes: ["Unknown role", "desktop-main-session-fact", "Turn"]
   });
-  await assertNoHorizontalOverflow(settings, '[aria-label="Memory source drilldown"]');
+  await assertNoHorizontalOverflow(settings, memorySourceDrilldownSelector);
   await captureSourceState(settings, availableSource, availableSourceScreenshotPath);
-  const availableEmptySource = await openSourceDrilldown(memoryLibrary, '[aria-label="Preference memory atom-preference"]');
+  const availableEmptySource = await openSourceDrilldown(memoryLibrary, "atom-preference");
   await availableEmptySource.getByText("From Greyfield").first().waitFor();
   await availableEmptySource.getByText("No message text is saved for this source.").waitFor();
   await assertSourceStateText(availableEmptySource, {
     includes: ["Saved locally", "From Greyfield", "No message text is saved for this source."],
     excludes: ["Source unavailable in this local session store", "Unknown role", "desktop-main-session-preference"]
   });
-  const missingSource = await openSourceDrilldown(memoryLibrary, '[aria-label="Opinion memory atom-missing-opinion"]');
+  const missingSource = await openSourceDrilldown(memoryLibrary, "atom-missing-opinion");
   await missingSource.getByText("Original message not found").first().waitFor();
   await assertSourceStateText(missingSource, {
     includes: [
@@ -324,7 +324,7 @@ try {
     excludes: ["Unknown role", "desktop-main-session-missing-opinion"]
   });
   await captureSourceState(settings, missingSource, missingSourceScreenshotPath);
-  const unavailableSource = await openSourceDrilldown(memoryLibrary, '[aria-label="Relationship memory atom-relationship"]');
+  const unavailableSource = await openSourceDrilldown(memoryLibrary, "atom-relationship");
   await unavailableSource.getByText("Not available in this session").first().waitFor();
   await assertSourceStateText(unavailableSource, {
     includes: [
@@ -336,19 +336,19 @@ try {
     excludes: ["Unknown role", "desktop-main-session-relationship"]
   });
   await captureSourceState(settings, unavailableSource, unavailableSourceScreenshotPath);
-  const recalledSceneSource = await openSourceDrilldown(memoryLibrary, '[aria-label="Scene memory atom-vague-scene"]');
+  const recalledSceneSource = await openSourceDrilldown(memoryLibrary, "atom-vague-scene");
   await recalledSceneSource.getByText("家里开着窗一起吃晚饭").waitFor();
   await assertSourceStateText(recalledSceneSource, {
     includes: ["From you", "Saved from conversation", "家里开着窗一起吃晚饭", "避风港", "雨声和桌上的粥"],
     excludes: ["Unknown role", "desktop-main-session-scene"]
   });
-  const noSource = await openSourceDrilldown(memoryLibrary, '[aria-label="Scene memory atom-scene"]');
+  const noSource = await openSourceDrilldown(memoryLibrary, "atom-scene");
   await noSource.getByText("No original message is linked to this memory.").first().waitFor();
   await assertSourceStateText(noSource, {
     includes: ["No saved source", "No original message is linked to this memory."],
     excludes: ["Unknown role"]
   });
-  await assertNoHorizontalOverflow(settings, '[aria-label="Memory source drilldown"]');
+  await assertNoHorizontalOverflow(settings, memorySourceDrilldownSelector);
   await captureSourceState(settings, noSource, noSourceScreenshotPath);
   await closeSourceDrilldown(memoryLibrary);
 
@@ -422,28 +422,28 @@ try {
   });
 
   await switchCharacter(settings, otherRoleCharacterFile);
-  await memoryLibrary.locator('[aria-label="Preference memory atom-other-role"]', { hasText: "Other role memory must stay isolated." }).waitFor();
+  await memoryAtomCard(memoryLibrary, "atom-other-role").filter({ hasText: "Other role memory must stay isolated." }).waitFor();
   const roleBText = (await memoryLibrary.textContent()) ?? "";
   if (roleBText.includes("User birthday is June 12.") || roleBText.includes(atomOpinionText) || roleBText.includes(atomPromiseText)) {
     throw new Error(`Role-B Memory Library rendered role-A atom memory: ${roleBText}`);
   }
   await switchCharacter(settings, currentRoleCharacterFile);
-  await memoryLibrary.locator('[aria-label="Fact memory atom-fact"]', { hasText: "User birthday is June 12." }).waitFor();
+  await memoryAtomCard(memoryLibrary, "atom-fact").filter({ hasText: "User birthday is June 12." }).waitFor();
   await assertCurrentRoleOnly(memoryLibrary);
 
-  await settings.getByLabel("Memory text atom-preference").fill(editedAtomText);
-  await settings.getByRole("button", { name: "Save memory atom-preference" }).click();
+  await memoryAtomText(memoryLibrary, "atom-preference").fill(editedAtomText);
+  await memoryAtomSave(memoryLibrary, "atom-preference").click();
   await memoryLibrary.getByText("Atom memory atom-preference saved.").waitFor();
   await waitForAtom("atom-preference", (atom) => atom.text === editedAtomText);
-  await settings.getByRole("textbox", { name: "Memory text atom-promise", exact: true }).fill(editedPromiseText);
-  await settings.getByRole("button", { name: "Save memory atom-promise", exact: true }).click();
+  await memoryAtomText(memoryLibrary, "atom-promise").fill(editedPromiseText);
+  await memoryAtomSave(memoryLibrary, "atom-promise").click();
   await memoryLibrary.getByText("Atom memory atom-promise saved.").waitFor();
   await waitForAtom("atom-promise", (atom) => atom.text === editedPromiseText);
 
-  await settings.getByRole("button", { name: "Export memory atom-preference" }).click();
+  await memoryAtomExport(memoryLibrary, "atom-preference").click();
   await memoryLibrary.getByText("Atom memory atom-preference export is ready.").waitFor();
-  await settings.getByLabel("Memory library export").waitFor();
-  const singleAtomExport = await settings.getByLabel("Memory library export").inputValue();
+  await memoryExportText(settings).waitFor();
+  const singleAtomExport = await memoryExportText(settings).inputValue();
   if (!singleAtomExport.includes(editedAtomText)) {
     throw new Error(`Single-atom export missed edited atom text: ${singleAtomExport}`);
   }
@@ -453,9 +453,9 @@ try {
   if (singleAtomExport.includes("Other role memory must stay isolated.")) {
     throw new Error("Single-atom export included another role's atom.");
   }
-  await settings.getByRole("button", { name: "Export memory atom-promise", exact: true }).click();
+  await memoryAtomExport(memoryLibrary, "atom-promise").click();
   await memoryLibrary.getByText("Atom memory atom-promise export is ready.").waitFor();
-  const promiseAtomExport = await settings.getByLabel("Memory library export").inputValue();
+  const promiseAtomExport = await memoryExportText(settings).inputValue();
   if (!promiseAtomExport.includes(editedPromiseText)) {
     throw new Error(`Promise atom export missed edited atom text: ${promiseAtomExport}`);
   }
@@ -464,14 +464,14 @@ try {
   }
   await assertSettingsPageDoesNotExposeProviderSecret(settings);
 
-  await settings.getByRole("button", { name: "Disable memory atom-preference" }).click();
+  await memoryAtomToggle(memoryLibrary, "atom-preference").click();
   await memoryLibrary.getByText("Atom memory atom-preference disabled.").waitFor();
   await waitForAtom("atom-preference", (atom) => atom.disabled === true);
   clearCapturedRequests();
   await sendMessageAndWaitForNextAssistant(chat, "Hiyori 模型偏好还在吗？");
   assertLatestSystemPromptExcludes(editedAtomText, "disabled atom-preference should stay out of prompt recall");
 
-  await settings.getByRole("button", { name: "Enable memory atom-preference" }).click();
+  await memoryAtomToggle(memoryLibrary, "atom-preference").click();
   await waitForAtom("atom-preference", (atom) => atom.disabled === false);
   clearCapturedRequests();
   await sendMessageAndWaitForNextAssistant(chat, "Hiyori 模型偏好重新启用了吗？");
@@ -481,13 +481,13 @@ try {
   app = await launchApp();
   chat = await waitForRoleWindow(app, "chat");
   settings = await waitForRoleWindow(app, "settings");
-  await settings.getByRole("button", { name: "Refresh memory" }).click();
-  memoryLibrary = settings.locator('[aria-label="Memory Library"]');
-  await memoryLibrary.locator('[aria-label="Preference memory atom-preference"]', { hasText: editedAtomText }).waitFor();
-  await memoryLibrary.locator('[aria-label="Opinion memory atom-opinion"]', { hasText: atomOpinionText }).waitFor();
-  await memoryLibrary.locator('[aria-label="Promise memory atom-promise"]', { hasText: editedPromiseText }).waitFor();
-  await memoryLibrary.locator('[aria-label="Relationship memory atom-vague-ritual"]', { hasText: "osmanthus tea" }).waitFor();
-  await memoryLibrary.locator('[aria-label="Scene memory atom-vague-scene"]', { hasText: "safe harbor" }).waitFor();
+  await refreshMemory(settings);
+  memoryLibrary = settings.locator(memoryLibrarySelector);
+  await memoryAtomCard(memoryLibrary, "atom-preference").filter({ hasText: editedAtomText }).waitFor();
+  await memoryAtomCard(memoryLibrary, "atom-opinion").filter({ hasText: atomOpinionText }).waitFor();
+  await memoryAtomCard(memoryLibrary, "atom-promise").filter({ hasText: editedPromiseText }).waitFor();
+  await memoryAtomCard(memoryLibrary, "atom-vague-ritual").filter({ hasText: "osmanthus tea" }).waitFor();
+  await memoryAtomCard(memoryLibrary, "atom-vague-scene").filter({ hasText: "safe harbor" }).waitFor();
   await assertCurrentRoleOnly(memoryLibrary);
   await waitForAtom("atom-preference", (atom) => atom.text === editedAtomText && atom.disabled === false);
   await waitForAtom("atom-promise", (atom) => atom.text === editedPromiseText);
@@ -496,7 +496,7 @@ try {
   await sendMessageAndWaitForNextAssistant(chat, "pay-to-win game loops 这条记忆还在吗？");
   assertLatestSystemPromptIncludes(atomOpinionText, "atom-opinion should be recalled before deletion");
 
-  await settings.getByRole("button", { name: "Delete memory atom-opinion", exact: true }).click();
+  await memoryAtomDelete(memoryLibrary, "atom-opinion").click();
   await memoryLibrary
     .getByText("Atom memory atom-opinion deleted. Remembered source evidence was hidden from recall, source views, and exports.")
     .waitFor();
@@ -505,9 +505,9 @@ try {
   await sendMessageAndWaitForNextAssistant(chat, "pay-to-win game loops 删除后不应该再召回。");
   assertLatestSystemPromptExcludes(atomOpinionText, "deleted atom-opinion should stay out of prompt recall");
 
-  await settings.getByRole("button", { name: "Export library" }).click();
+  await memoryLibrary.locator('[data-harness="memory-library-export"]').click();
   await memoryLibrary.getByText("Memory export is ready.").waitFor();
-  const libraryExport = await settings.getByLabel("Memory library export").inputValue();
+  const libraryExport = await memoryExportText(settings).inputValue();
   if (libraryExport.includes(atomOpinionText)) {
     throw new Error(`Library export still included deleted atom-opinion: ${libraryExport}`);
   }
@@ -516,7 +516,7 @@ try {
   }
   await assertSettingsPageDoesNotExposeProviderSecret(settings);
 
-  await settings.getByRole("button", { name: "Clear current role atoms" }).click();
+  await memoryLibrary.locator('[data-harness="memory-atom-clear-current-role"]').click();
   await memoryLibrary
     .getByText(
       /Cleared \d+ current role atom memories\. Remembered source evidence was hidden from recall, source views, and exports\./u
@@ -666,7 +666,7 @@ function buildScriptedAssistantResponse(requestBody: string): string {
 async function switchCharacter(settings: Page, characterFile: string): Promise<void> {
   await settings.getByLabel("Character").fill(characterFile);
   await settings.waitForTimeout(250);
-  await settings.getByRole("button", { name: "Refresh memory" }).click();
+  await refreshMemory(settings);
 }
 
 async function assertCurrentRoleOnly(memoryLibrary: Locator): Promise<void> {
@@ -834,17 +834,69 @@ async function waitForMissingAtom(id: string): Promise<void> {
   throw new Error(`Timed out waiting for atom ${id} to be removed; atoms=${JSON.stringify(lastAtoms)}`);
 }
 
-async function openSourceDrilldown(memoryLibrary: Locator, cardSelector: string): Promise<Locator> {
-  const card = memoryLibrary.locator(cardSelector);
-  await card.getByRole("button", { name: /View source/iu }).click();
-  const source = memoryLibrary.locator('[aria-label="Memory source drilldown"]');
+async function refreshMemory(settings: Page): Promise<void> {
+  await settings.locator('[data-harness="memory-refresh"]').click();
+}
+
+function memoryAtomGroup(memoryLibrary: Locator, type: string): Locator {
+  return memoryLibrary.locator(`[data-harness="memory-atom-group"][data-memory-type="${type}"]`);
+}
+
+function memoryAtomCard(memoryLibrary: Locator, id: string): Locator {
+  return memoryLibrary.locator(`[data-harness="memory-atom-card"][data-memory-id="${id}"]`);
+}
+
+function memoryAtomText(memoryLibrary: Locator, id: string): Locator {
+  return memoryLibrary.locator(`[data-harness="memory-atom-text"][data-memory-id="${id}"]`);
+}
+
+function memoryAtomSave(memoryLibrary: Locator, id: string): Locator {
+  return memoryLibrary.locator(`[data-harness="memory-atom-save"][data-memory-id="${id}"]`);
+}
+
+function memoryAtomExport(memoryLibrary: Locator, id: string): Locator {
+  return memoryLibrary.locator(`[data-harness="memory-atom-export"][data-memory-id="${id}"]`);
+}
+
+function memoryAtomToggle(memoryLibrary: Locator, id: string): Locator {
+  return memoryLibrary.locator(`[data-harness="memory-atom-toggle"][data-memory-id="${id}"]`);
+}
+
+function memoryAtomDelete(memoryLibrary: Locator, id: string): Locator {
+  return memoryLibrary.locator(`[data-harness="memory-atom-delete"][data-memory-id="${id}"]`);
+}
+
+function memoryExportText(settings: Page): Locator {
+  return settings.locator('[data-harness="memory-library-export-text"]');
+}
+
+async function assertMemoryAtomGroupCount(memoryLibrary: Locator, type: string, expectedCount: number): Promise<void> {
+  const group = memoryAtomGroup(memoryLibrary, type);
+  await group.waitFor();
+  const count = await group.getAttribute("data-memory-count");
+  if (count !== String(expectedCount)) {
+    throw new Error(`Memory atom group ${type} count mismatch: expected ${expectedCount}, got ${count}`);
+  }
+}
+
+async function assertMemoryAtomCardCount(memoryLibrary: Locator, expectedCount: number): Promise<void> {
+  const count = await memoryLibrary.locator('[data-harness="memory-atom-card"]').count();
+  if (count !== expectedCount) {
+    throw new Error(`Memory atom card count mismatch: expected ${expectedCount}, got ${count}`);
+  }
+}
+
+async function openSourceDrilldown(memoryLibrary: Locator, id: string): Promise<Locator> {
+  const card = memoryAtomCard(memoryLibrary, id);
+  await card.locator('[data-harness="memory-source-open"]').click();
+  const source = memoryLibrary.locator(memorySourceDrilldownSelector);
   await source.waitFor();
   return source;
 }
 
 async function closeSourceDrilldown(memoryLibrary: Locator): Promise<void> {
-  const source = memoryLibrary.locator('[aria-label="Memory source drilldown"]');
-  await source.getByRole("button", { name: "Close source drilldown" }).click();
+  const source = memoryLibrary.locator(memorySourceDrilldownSelector);
+  await source.locator('[data-harness="memory-source-close"]').click();
   await source.waitFor({ state: "detached" });
 }
 

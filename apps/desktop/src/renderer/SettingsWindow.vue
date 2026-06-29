@@ -639,21 +639,37 @@
                 <textarea
                   :aria-label="t('memory.field.text')"
                   :value="memoryAtomDrafts[selectedAtomSource.id] ?? selectedAtomSource.text"
+                  data-harness="memory-atom-text"
+                  :data-memory-id="selectedAtomSource.id"
                   rows="3"
                   spellcheck="false"
                   @input="setMemoryAtomDraft(selectedAtomSource.id, $event)"
                 />
               </label>
               <div class="memory-library__actions memory-library__actions--drilldown">
-                <button type="button" :aria-label="t('memory.action.save')" @click="saveMemoryAtom(selectedAtomSource)">
+                <button
+                  type="button"
+                  :aria-label="t('memory.action.save')"
+                  data-harness="memory-atom-save"
+                  :data-memory-id="selectedAtomSource.id"
+                  @click="saveMemoryAtom(selectedAtomSource)"
+                >
                   {{ t("memory.action.save") }}
                 </button>
-                <button type="button" :aria-label="t('memory.action.export')" @click="exportMemoryAtom(selectedAtomSource)">
+                <button
+                  type="button"
+                  :aria-label="t('memory.action.export')"
+                  data-harness="memory-atom-export"
+                  :data-memory-id="selectedAtomSource.id"
+                  @click="exportMemoryAtom(selectedAtomSource)"
+                >
                   {{ t("memory.action.export") }}
                 </button>
                 <button
                   type="button"
                   :aria-label="memoryToggleActionLabel(selectedAtomSource.disabled)"
+                  data-harness="memory-atom-toggle"
+                  :data-memory-id="selectedAtomSource.id"
                   @click="toggleMemoryAtom(selectedAtomSource)"
                 >
                   {{ memoryToggleActionLabel(selectedAtomSource.disabled) }}
@@ -662,6 +678,8 @@
                   type="button"
                   class="memory-library__danger"
                   :aria-label="t('memory.action.delete')"
+                  data-harness="memory-atom-delete"
+                  :data-memory-id="selectedAtomSource.id"
                   @click="$emit('memory-atom-delete', { id: selectedAtomSource.id })"
                 >
                   {{ t("memory.action.delete") }}
@@ -776,6 +794,9 @@
               :key="group.type"
               class="memory-library__group"
               :aria-label="`${group.label} ${t('nav.memory')}`"
+              data-harness="memory-atom-group"
+              :data-memory-type="group.type"
+              :data-memory-count="group.atoms.length"
             >
               <header class="memory-library__group-header">
                 <h3>{{ group.label }}</h3>
@@ -787,6 +808,9 @@
                 class="memory-library__segment"
                 :class="{ 'memory-library__segment--disabled': atom.disabled }"
                 :aria-label="`${memoryAtomTypeLabel(atom)} memory ${atom.id}`"
+                data-harness="memory-atom-card"
+                :data-memory-id="atom.id"
+                :data-memory-type="atom.type"
               >
                 <header class="memory-library__segment-header">
                   <div>
@@ -815,6 +839,7 @@
                   type="button"
                   class="memory-library__source-link"
                   :aria-label="t('memory.action.viewSource')"
+                  data-harness="memory-source-open"
                   @click="openAtomSourceDrilldown(atom)"
                 >
                   <span>{{ memoryAtomSourceLabel(atom) }}</span>
@@ -826,21 +851,37 @@
                   <textarea
                     :aria-label="`${t('memory.field.text')} ${atom.id}`"
                     :value="memoryAtomDrafts[atom.id] ?? atom.text"
+                    data-harness="memory-atom-text"
+                    :data-memory-id="atom.id"
                     rows="3"
                     spellcheck="false"
                     @input="setMemoryAtomDraft(atom.id, $event)"
                   />
                 </label>
                 <div class="memory-library__actions memory-library__actions--atom">
-                  <button type="button" :aria-label="`${t('memory.action.save')} ${atom.id}`" @click="saveMemoryAtom(atom)">
+                  <button
+                    type="button"
+                    :aria-label="`${t('memory.action.save')} ${atom.id}`"
+                    data-harness="memory-atom-save"
+                    :data-memory-id="atom.id"
+                    @click="saveMemoryAtom(atom)"
+                  >
                     {{ t("memory.action.save") }}
                   </button>
-                  <button type="button" :aria-label="`${t('memory.action.export')} ${atom.id}`" @click="exportMemoryAtom(atom)">
+                  <button
+                    type="button"
+                    :aria-label="`${t('memory.action.export')} ${atom.id}`"
+                    data-harness="memory-atom-export"
+                    :data-memory-id="atom.id"
+                    @click="exportMemoryAtom(atom)"
+                  >
                     {{ t("memory.action.export") }}
                   </button>
                   <button
                     type="button"
                     :aria-label="`${memoryToggleActionLabel(atom.disabled)} ${atom.id}`"
+                    data-harness="memory-atom-toggle"
+                    :data-memory-id="atom.id"
                     @click="toggleMemoryAtom(atom)"
                   >
                     {{ memoryToggleActionLabel(atom.disabled) }}
@@ -849,6 +890,8 @@
                     type="button"
                     class="memory-library__danger"
                     :aria-label="`${t('memory.action.delete')} ${atom.id}`"
+                    data-harness="memory-atom-delete"
+                    :data-memory-id="atom.id"
                     @click="$emit('memory-atom-delete', { id: atom.id })"
                   >
                     {{ t("memory.action.delete") }}
@@ -883,14 +926,19 @@
             rows="5"
           />
           <div class="settings-actions">
-            <button type="button" @click="$emit('refresh-memory-debug')">
+            <button type="button" data-harness="memory-refresh" @click="$emit('refresh-memory-debug')">
               {{ state.memoryDebug.status === "loading" ? t("button.refreshing") : t("button.refreshMemory") }}
             </button>
             <button type="button" data-harness="memory-library-export" @click="$emit('memory-export')">{{ t("button.exportLibrary") }}</button>
             <button type="button" class="memory-library__danger-action" @click="$emit('memory-summary-clear')">
               {{ t("button.clearSummary") }}
             </button>
-            <button type="button" class="memory-library__danger-action" @click="$emit('memory-atom-clear-current-role')">
+            <button
+              type="button"
+              class="memory-library__danger-action"
+              data-harness="memory-atom-clear-current-role"
+              @click="$emit('memory-atom-clear-current-role')"
+            >
               {{ t("button.clearAtoms") }}
             </button>
           </div>
