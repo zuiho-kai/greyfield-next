@@ -36,7 +36,7 @@ packages/stage-live2d
 ## Product Roadmap
 
 - [V1 product plan](docs/plans/v1-product-plan.md)
-- [Version product book](docs/plans/version-product-book.md): V1.0, V1.1, V2.0, V2.1, V2.2, V2.3, and V3.0 product scope.
+- [Version product book](docs/plans/version-product-book.md): V1.0, V1.1, V2.1 memory, V2.2 single-persona stabilization, V2.3 interaction model plus user-triggered screenshots, V2.4 voice identity, V2.5 controlled desktop operation, and V3.0 platform scope.
 
 ## Architecture
 
