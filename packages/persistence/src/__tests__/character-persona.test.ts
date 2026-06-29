@@ -191,6 +191,50 @@ describe("loadCharacterPersona", () => {
     }
   });
 
+  it("treats cleared optional persona fields as unset when saving", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "greyfield-persona-cleared-"));
+    try {
+      const path = join(dir, "cleared.yaml");
+      await writeFile(
+        path,
+        [
+          "name: Existing Greyfield",
+          "tone: existing tone",
+          "boundaries:",
+          "  - Existing boundary.",
+          "expressionMap:",
+          "  neutral: default"
+        ].join("\n"),
+        "utf8"
+      );
+
+      await saveCharacterPersona(path, {
+        name: "Mira",
+        userAddress: "",
+        background: "",
+        personality: "",
+        speakingStyle: "",
+        tone: "calm",
+        boundaries: ["Stay honest."],
+        greeting: "",
+        expressionMap: {
+          neutral: "default"
+        }
+      });
+
+      await expect(loadCharacterPersona(path)).resolves.toMatchObject({
+        name: "Mira",
+        userAddress: "you",
+        background: "A Live2D desktop companion focused on presence, conversation, and continuity.",
+        personality: "calm",
+        speakingStyle: "calm",
+        greeting: "你好，我在。"
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("reports readable schema errors for broken persona files", async () => {
     const dir = await mkdtemp(join(tmpdir(), "greyfield-persona-bad-"));
     try {

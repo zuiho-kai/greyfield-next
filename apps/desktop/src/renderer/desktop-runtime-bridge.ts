@@ -285,13 +285,18 @@ export class DesktopRuntimeBridge {
       this.emitStateChange();
     });
     this.host?.on("persona:state", (result) => {
+      const previousPersonaPath = this.state.persona.path;
       this.state = {
         ...this.state,
         persona: {
           status: result.status,
           path: result.path,
           message: result.message,
-          form: result.persona ? personaFormFromPersona(result.persona) : this.state.persona.form
+          form: result.persona
+            ? personaFormFromPersona(result.persona)
+            : result.path === previousPersonaPath
+              ? this.state.persona.form
+              : createDefaultPersonaForm()
         }
       };
       this.emitStateChange();

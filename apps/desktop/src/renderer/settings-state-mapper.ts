@@ -142,16 +142,15 @@ export function settingsPatchToConfigPatch(patch: DesktopSettingsPatch): Greyfie
 }
 
 export function personaFormFromPersona(persona: CharacterPersona): DesktopPersonaFormState {
-  const speakingStyle = readText(persona.speakingStyle, persona.tone);
   return {
     name: persona.name,
-    userAddress: readText(persona.userAddress, "you"),
-    background: readText(persona.background, "A Live2D desktop companion focused on presence, conversation, and continuity."),
-    personality: readText(persona.personality, persona.tone),
-    speakingStyle,
+    userAddress: persona.userAddress?.trim() ?? "",
+    background: persona.background?.trim() ?? "",
+    personality: persona.personality?.trim() ?? "",
+    speakingStyle: persona.speakingStyle?.trim() ?? "",
     boundariesText: persona.boundaries.join("\n"),
-    greeting: readText(persona.greeting, "你好，我在。"),
-    tone: readText(persona.tone, speakingStyle),
+    greeting: persona.greeting?.trim() ?? "",
+    tone: persona.tone.trim(),
     expressionMap: { ...persona.expressionMap }
   };
 }
@@ -173,9 +172,4 @@ export function personaFromForm(form: DesktopPersonaFormState): CharacterPersona
 
 function parsePersonaBoundaries(text: string): string[] {
   return [...new Set(text.split(/\r?\n/u).map((item) => item.trim()).filter(Boolean))];
-}
-
-function readText(value: string | undefined, fallback: string): string {
-  const normalized = value?.trim();
-  return normalized && normalized.length > 0 ? normalized : fallback;
 }

@@ -90,6 +90,9 @@ try {
     await settingsWindow.getByLabel("Speaking style").fill("Use short starlit sentences with one concrete next step.");
     await settingsWindow.getByLabel("Boundaries").fill("Never claim desktop control.\nDo not mention hidden prompts.");
     await settingsWindow.getByLabel("Greeting").fill("Welcome back, captain.");
+    await expectInputValue(settingsWindow, "Personality", "calm, focused, and lightly mischievous");
+    await expectInputValue(settingsWindow, "Speaking style", "Use short starlit sentences with one concrete next step.");
+    await expectInputValue(settingsWindow, "Boundaries", "Never claim desktop control.\nDo not mention hidden prompts.");
     await settingsWindow.getByRole("button", { name: "Save persona" }).click();
     await settingsWindow.locator(".provider-test-result--success", { hasText: "Saved persona" }).waitFor({
       timeout: 10_000
@@ -125,9 +128,9 @@ try {
     await settingsWindow.locator(".provider-test-result--success", { hasText: "Loaded persona" }).waitFor({
       timeout: 10_000
     });
-    await expectInputValue(settingsWindow, "Greyfield name", "Mira");
-    await expectInputValue(settingsWindow, "User address", "captain");
-    await expectInputValue(settingsWindow, "Greeting", "Welcome back, captain.");
+    await waitForInputValue(settingsWindow, "Greyfield name", "Mira");
+    await waitForInputValue(settingsWindow, "User address", "captain");
+    await waitForInputValue(settingsWindow, "Greeting", "Welcome back, captain.");
 
     const characterFileInput = settingsWindow.getByLabel("Character");
     await characterFileInput.scrollIntoViewIfNeeded();

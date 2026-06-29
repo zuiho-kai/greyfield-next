@@ -1,4 +1,5 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, rename, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { isMap, parse, parseDocument } from "yaml";
 import type { CharacterPersona } from "@greyfield/core-runtime";
 
@@ -20,7 +21,9 @@ export async function saveCharacterPersona(path: string, persona: CharacterPerso
   for (const [field, value] of managedPersonaFields(normalized)) {
     document.set(field, value);
   }
-  await writeFile(path, document.toString({ lineWidth: 0 }), "utf8");
+  const tempPath = join(dirname(path), `.persona-${process.pid}-${Date.now()}.tmp`);
+  await writeFile(tempPath, document.toString({ lineWidth: 0 }), "utf8");
+  await rename(tempPath, path);
   return normalized;
 }
 
@@ -98,14 +101,18 @@ function parseCharacterPersona(value: unknown, path: string): CharacterPersona {
 }
 
 function normalizeCharacterPersona(persona: CharacterPersona, path: string): CharacterPersona {
+  const optional = (value: string | undefined): string | undefined => {
+    const normalized = value?.trim();
+    return normalized && normalized.length > 0 ? normalized : undefined;
+  };
   const name = readString(persona.name, "name", path);
   const tone = readOptionalString(persona.tone, "tone", path) ?? defaultPersonaTone;
-  const userAddress = readOptionalString(persona.userAddress, "userAddress", path) ?? defaultUserAddress;
-  const background = readOptionalString(persona.background, "background", path) ?? defaultBackground;
-  const personality = readOptionalString(persona.personality, "personality", path) ?? tone;
-  const speakingStyle = readOptionalString(persona.speakingStyle, "speakingStyle", path) ?? tone;
+  const userAddress = readOptionalString(optional(persona.userAddress), "userAddress", path) ?? defaultUserAddress;
+  const background = readOptionalString(optional(persona.background), "background", path) ?? defaultBackground;
+  const personality = readOptionalString(optional(persona.personality), "personality", path) ?? tone;
+  const speakingStyle = readOptionalString(optional(persona.speakingStyle), "speakingStyle", path) ?? tone;
   const boundaries = readStringArray(persona.boundaries, "boundaries", path);
-  const greeting = readOptionalString(persona.greeting, "greeting", path) ?? defaultGreeting;
+  const greeting = readOptionalString(optional(persona.greeting), "greeting", path) ?? defaultGreeting;
   const expressionMap = readStringRecord(persona.expressionMap, "expressionMap", path);
   return { name, userAddress, background, personality, speakingStyle, greeting, tone, boundaries, expressionMap };
 }

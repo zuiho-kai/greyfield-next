@@ -322,9 +322,10 @@ function requestPersona(): void {
 }
 
 function updatePersonaField(key: Exclude<keyof DesktopPersonaFormState, "expressionMap">, value: string): void {
+  const currentForm = bridge.getState().persona.form;
   syncState(
     bridge.updatePersonaDraft({
-      ...state.persona.form,
+      ...currentForm,
       [key]: value
     })
   );
