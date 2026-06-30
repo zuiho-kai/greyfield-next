@@ -1,9 +1,36 @@
 import { describe, expect, it } from "vitest";
+import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
 import type { DesktopIpcEventChannel, DesktopIpcEventMap, DesktopIpcRequestChannel, DesktopIpcRequestMap } from "../../shared/ipc";
 import { createDesktopRuntimeBridge, type DesktopHostApi } from "../desktop-runtime-bridge";
-import { personaFormFromPersona, personaFromForm } from "../settings-state-mapper";
+import {
+  configFromSettings,
+  personaFormFromPersona,
+  personaFromForm,
+  settingsFromConfig,
+  settingsPatchToConfigPatch
+} from "../settings-state-mapper";
 
 describe("Settings persona state", () => {
+  it("maps proactivity level between persisted config, renderer state, and patches", () => {
+    const settings = settingsFromConfig({
+      ...defaultGreyfieldConfig,
+      ui: {
+        ...defaultGreyfieldConfig.ui,
+        proactiveMemoryEnabled: true,
+        proactivityLevel: 80
+      }
+    });
+
+    expect(settings.proactivityLevel).toBe(80);
+    expect(configFromSettings({ ...settings, proactivityLevel: 20 }).ui).toMatchObject({
+      proactiveMemoryEnabled: true,
+      proactivityLevel: 20
+    });
+    expect(settingsPatchToConfigPatch({ proactivityLevel: 0 })).toEqual({
+      ui: { proactivityLevel: 0 }
+    });
+  });
+
   it("maps persona files into the Settings form and save payload", () => {
     const form = personaFormFromPersona({
       name: "Mira",

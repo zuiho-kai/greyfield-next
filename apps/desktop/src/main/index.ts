@@ -435,6 +435,9 @@ async function exportMemoryAtom(sender: Electron.WebContents, id: string): Promi
 }
 
 async function checkProactiveMemory(payload: DesktopProactiveCheckRequest): Promise<void> {
+  if (getUsableWindow(settingsWindow)?.isVisible()) {
+    return;
+  }
   const result = await runtimeService?.checkProactiveMemory(payload.sceneContext);
   const window = getUsableWindow(petWindow);
   if (!result?.message || !window) {

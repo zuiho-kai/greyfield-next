@@ -48,6 +48,7 @@ export type SettingsI18nKey =
   | "field.scale"
   | "field.bubble"
   | "field.rememberedMoments"
+  | "field.proactivity"
   | "field.betterMemory"
   | "button.savePersona"
   | "button.saving"
@@ -63,6 +64,7 @@ export type SettingsI18nKey =
   | "status.off"
   | "status.bubbleOn"
   | "status.bubbleOff"
+  | "status.proactivity"
   | "status.custom"
   | "status.loading"
   | "status.saving"
@@ -246,6 +248,7 @@ const enUS: Record<SettingsI18nKey, string> = {
   "field.scale": "Scale",
   "field.bubble": "Bubble",
   "field.rememberedMoments": "Remembered moments",
+  "field.proactivity": "Proactivity",
   "field.betterMemory": "Better memory",
   "button.savePersona": "Save persona",
   "button.saving": "Saving...",
@@ -261,6 +264,7 @@ const enUS: Record<SettingsI18nKey, string> = {
   "status.off": "Off",
   "status.bubbleOn": "Bubble on",
   "status.bubbleOff": "Bubble off",
+  "status.proactivity": "Proactivity {level}/100",
   "status.custom": "Custom",
   "status.loading": "Loading",
   "status.saving": "Saving",
@@ -445,6 +449,7 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "field.scale": "缩放",
   "field.bubble": "气泡",
   "field.rememberedMoments": "主动记忆提醒",
+  "field.proactivity": "主动程度",
   "field.betterMemory": "增强记忆",
   "button.savePersona": "保存人格",
   "button.saving": "保存中...",
@@ -460,6 +465,7 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "status.off": "关闭",
   "status.bubbleOn": "气泡开启",
   "status.bubbleOff": "气泡关闭",
+  "status.proactivity": "主动 {level}/100",
   "status.custom": "自定义",
   "status.loading": "加载中",
   "status.saving": "保存中",

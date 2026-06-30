@@ -5,6 +5,7 @@ import {
   OpenAICompatibleLLMProvider,
   OpenAICompatibleTTSProvider,
   buildProactiveMemoryDisplayMessage,
+  buildProactiveMemoryPolicyForLevel,
   type ASRProvider,
   type CharacterPersona,
   type LLMProvider,
@@ -123,8 +124,10 @@ export type ProactiveDesktopMessage = ProactiveMemoryDisplayMessage;
 export interface ProactiveDesktopCheckResult {
   displayed: boolean;
   message?: ProactiveDesktopMessage;
-  reason?: "disabled" | "missing_atom_store" | "active_runtime" | ProactiveMemoryDisplayResult["reason"];
+  reason?: "disabled" | "missing_atom_store" | "active_runtime" | "recent_interrupt" | ProactiveMemoryDisplayResult["reason"];
 }
+
+const proactiveInterruptCooldownMs = 60 * 1000;
 
 export class RuntimeService {
   private config: GreyfieldConfig;
@@ -140,6 +143,7 @@ export class RuntimeService {
   private activeRuntime: GreyfieldRuntime | undefined;
   private testingLLM = false;
   private testingVoice = false;
+  private lastInterruptedAtMs: number | undefined;
 
   constructor(config: GreyfieldConfig, private readonly options: RuntimeServiceOptions = {}) {
     this.config = config;
@@ -163,6 +167,9 @@ export class RuntimeService {
   }
 
   async handle(input: RuntimeInputEvent, emit: RuntimeEventHandler): Promise<void> {
+    if (input.type === "runtime.interrupt") {
+      this.lastInterruptedAtMs = Date.now();
+    }
     if (input.type === "runtime.interrupt" && this.activeRuntime) {
       const runtime = this.activeRuntime;
       try {
@@ -351,11 +358,14 @@ export class RuntimeService {
   }
 
   async checkProactiveMemory(sceneContext: RuntimeSceneContext): Promise<ProactiveDesktopCheckResult> {
-    if (!this.config.ui.proactiveMemoryEnabled) {
+    if (!this.config.ui.proactiveMemoryEnabled || this.config.ui.proactivityLevel <= 0) {
       return { displayed: false, reason: "disabled" };
     }
     if (this.activeRuntime) {
       return { displayed: false, reason: "active_runtime" };
+    }
+    if (this.lastInterruptedAtMs !== undefined && Date.now() - this.lastInterruptedAtMs < proactiveInterruptCooldownMs) {
+      return { displayed: false, reason: "recent_interrupt" };
     }
     if (!this.memoryAtomStore) {
       return { displayed: false, reason: "missing_atom_store" };
@@ -368,6 +378,9 @@ export class RuntimeService {
     const result = buildProactiveMemoryDisplayMessage({
       atoms,
       sceneContext,
+      policy: buildProactiveMemoryPolicyForLevel(this.config.ui.proactivityLevel, {
+        enabled: this.config.ui.proactiveMemoryEnabled
+      }),
       triggerState: this.proactiveTriggerState
     });
     if (result.response.displayed) {

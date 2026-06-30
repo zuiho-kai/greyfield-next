@@ -99,6 +99,7 @@ export interface DesktopSettingsState {
   speechBubbleEnabled: boolean;
   proactiveMemoryEnabled: boolean;
   settingsLocale: GreyfieldConfig["ui"]["locale"];
+  proactivityLevel: number;
   llmAtomExtractionEnabled: boolean;
 }
 
@@ -157,7 +158,7 @@ export class DesktopRuntimeBridge {
       this.state = {
         ...this.state,
         settings,
-        proactiveMessage: settings.proactiveMemoryEnabled ? this.state.proactiveMessage : null,
+        proactiveMessage: settings.proactiveMemoryEnabled && settings.proactivityLevel > 0 ? this.state.proactiveMessage : null,
         window: {
           ...this.state.window,
           modelPassThrough: config.window.modelPassThrough
@@ -454,7 +455,8 @@ export class DesktopRuntimeBridge {
             }
           : {})
       },
-      proactiveMessage: patch.proactiveMemoryEnabled === false ? null : this.state.proactiveMessage
+      proactiveMessage:
+        patch.proactiveMemoryEnabled === false || patch.proactivityLevel === 0 ? null : this.state.proactiveMessage
     };
     this.host?.send("settings:update", settingsPatchToConfigPatch(patch));
     return this.getState();
@@ -525,7 +527,7 @@ export class DesktopRuntimeBridge {
 
   showProactiveMessage(message: DesktopProactiveMessage): DesktopRendererState {
     const text = message.text.trim();
-    if (text.length === 0 || !this.state.settings.proactiveMemoryEnabled) {
+    if (text.length === 0 || !this.state.settings.proactiveMemoryEnabled || this.state.settings.proactivityLevel <= 0) {
       return this.getState();
     }
     this.state = {
@@ -1041,6 +1043,7 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       speechBubbleEnabled: defaultGreyfieldConfig.ui.speechBubbleEnabled,
       proactiveMemoryEnabled: defaultGreyfieldConfig.ui.proactiveMemoryEnabled,
       settingsLocale: defaultGreyfieldConfig.ui.locale,
+      proactivityLevel: defaultGreyfieldConfig.ui.proactivityLevel,
       llmAtomExtractionEnabled: defaultGreyfieldConfig.memory.llmAtomExtractionEnabled
     },
     window: {

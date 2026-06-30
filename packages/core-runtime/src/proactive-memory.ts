@@ -44,6 +44,7 @@ export interface ProactiveMemoryPolicy {
   maxCandidates?: number;
   defaultLongAbsenceDays?: number;
   requireSharedScene?: boolean;
+  proactivityScoreBoost?: number;
 }
 
 export interface ProactiveMemoryTriggerState {
@@ -146,8 +147,13 @@ const defaultPolicy: Required<ProactiveMemoryPolicy> = {
   perAtomCooldownMs: 7 * 24 * 60 * 60 * 1000,
   maxCandidates: 1,
   defaultLongAbsenceDays: 30,
-  requireSharedScene: true
+  requireSharedScene: true,
+  proactivityScoreBoost: 0
 };
+
+export interface BuildProactiveMemoryPolicyForLevelOptions {
+  enabled?: boolean;
+}
 
 export function buildProactiveMemoryCandidatesFromSceneContext(
   options: BuildProactiveMemorySceneCandidatesOptions
@@ -198,6 +204,43 @@ export function buildProactiveMemoryDisplayMessage(
     },
     nextTriggerState: result.nextTriggerState
   };
+}
+
+export function buildProactiveMemoryPolicyForLevel(
+  level: number,
+  options: BuildProactiveMemoryPolicyForLevelOptions = {}
+): ProactiveMemoryPolicy {
+  const normalized = normalizeProactivityLevel(level);
+  if (options.enabled === false || normalized <= 0) {
+    return { enabled: false };
+  }
+  if (normalized <= 50) {
+    const ratio = normalized / 50;
+    return {
+      enabled: true,
+      minImportance: roundScore(lerp(0.9, 0.7, ratio)),
+      globalCooldownMs: Math.round(lerp(12 * 60 * 60 * 1000, 6 * 60 * 60 * 1000, ratio)),
+      perAtomCooldownMs: Math.round(lerp(14 * 24 * 60 * 60 * 1000, 7 * 24 * 60 * 60 * 1000, ratio)),
+      defaultLongAbsenceDays: Math.round(lerp(60, 30, ratio)),
+      proactivityScoreBoost: Math.round(lerp(-12, 0, ratio))
+    };
+  }
+  const ratio = (normalized - 50) / 50;
+  return {
+    enabled: true,
+    minImportance: roundScore(lerp(0.7, 0.5, ratio)),
+    globalCooldownMs: Math.round(lerp(6 * 60 * 60 * 1000, 60 * 60 * 1000, ratio)),
+    perAtomCooldownMs: Math.round(lerp(7 * 24 * 60 * 60 * 1000, 24 * 60 * 60 * 1000, ratio)),
+    defaultLongAbsenceDays: Math.round(lerp(30, 7, ratio)),
+    proactivityScoreBoost: Math.round(lerp(0, 12, ratio))
+  };
+}
+
+export function normalizeProactivityLevel(level: number): number {
+  if (!Number.isFinite(level)) {
+    return 50;
+  }
+  return Math.min(100, Math.max(0, Math.round(level)));
 }
 
 export function sceneContextToEnvironmentTriggerState(sceneContext: RuntimeSceneContext): EnvironmentTriggerState {
@@ -271,7 +314,7 @@ export function buildProactiveMemoryCandidates(
           atomId: atom.id,
           sourceTurnIds: atom.sourceTurnIds,
           text: formatProactiveCandidateText(atom, options.environment, match.matchedKeys),
-          score: roundScore(atom.importance * 100 + match.matchedKeys.length * 8 + match.priorityBoost),
+          score: roundScore(atom.importance * 100 + match.matchedKeys.length * 8 + match.priorityBoost + policy.proactivityScoreBoost),
           importance: atom.importance,
           matchedEnvironmentKeys: match.matchedKeys,
           reason: `environment:${match.matchedKeys.join(",")}`,
@@ -728,4 +771,8 @@ function toIsoDateTime(value: string | Date): string {
 
 function roundScore(value: number): number {
   return Math.round(value * 1_000) / 1_000;
+}
+
+function lerp(start: number, end: number, ratio: number): number {
+  return start + (end - start) * ratio;
 }

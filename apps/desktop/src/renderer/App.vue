@@ -170,13 +170,13 @@ if (typeof window !== "undefined") {
   });
   const detachSettings = window.greyfield?.on("settings:changed", (config) => {
     Object.assign(state.settings, {
-          providerModel: config.provider.model,
-          providerLLM: config.provider.llm,
-          providerASR: config.provider.asr,
-          providerASRModel: config.provider.asrModel,
-          providerTTS: config.provider.tts,
-          providerTTSModel: config.provider.ttsModel,
-          providerBaseUrl: config.provider.baseUrl,
+      providerModel: config.provider.model,
+      providerLLM: config.provider.llm,
+      providerASR: config.provider.asr,
+      providerASRModel: config.provider.asrModel,
+      providerTTS: config.provider.tts,
+      providerTTSModel: config.provider.ttsModel,
+      providerBaseUrl: config.provider.baseUrl,
       providerApiKey: isMaskedApiKey(config.provider.apiKey) ? state.settings.providerApiKey : config.provider.apiKey,
       providerHasApiKey: config.provider.hasApiKey,
       voiceId: config.voice.id,
@@ -191,6 +191,7 @@ if (typeof window !== "undefined") {
       speechBubbleEnabled: config.ui.speechBubbleEnabled,
       proactiveMemoryEnabled: config.ui.proactiveMemoryEnabled,
       settingsLocale: config.ui.locale,
+      proactivityLevel: config.ui.proactivityLevel,
       llmAtomExtractionEnabled: config.memory.llmAtomExtractionEnabled
     });
     state.window.modelPassThrough = config.window.modelPassThrough;
@@ -278,7 +279,7 @@ function updateSetting(key: keyof DesktopSettingsState, value: string): void {
   syncState(bridge.updateSettings(patch));
 }
 
-function updateNumericSetting(key: "modelScale" | "modelX" | "modelY" | "voiceVolume", value: string): void {
+function updateNumericSetting(key: "modelScale" | "modelX" | "modelY" | "voiceVolume" | "proactivityLevel", value: string): void {
   const parsed = Number(value);
   if (Number.isFinite(parsed)) {
     syncState(bridge.updateSettings({ [key]: parsed }));

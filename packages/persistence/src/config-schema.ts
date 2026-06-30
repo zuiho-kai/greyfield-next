@@ -46,6 +46,7 @@ export interface GreyfieldConfig {
     speechBubbleEnabled: boolean;
     proactiveMemoryEnabled: boolean;
     locale: GreyfieldLocale;
+    proactivityLevel: number;
   };
   memory: {
     llmAtomExtractionEnabled: boolean;
@@ -98,7 +99,8 @@ export const defaultGreyfieldConfig: GreyfieldConfig = {
   ui: {
     speechBubbleEnabled: true,
     proactiveMemoryEnabled: true,
-    locale: "en-US"
+    locale: "en-US",
+    proactivityLevel: 50
   },
   memory: {
     llmAtomExtractionEnabled: false
@@ -117,7 +119,18 @@ export function mergeConfig(partial: GreyfieldConfigPatch): GreyfieldConfig {
     window: { ...defaultGreyfieldConfig.window, ...partial.window },
     live2d: { ...defaultGreyfieldConfig.live2d, ...partial.live2d },
     hotkeys: { ...defaultGreyfieldConfig.hotkeys, ...partial.hotkeys },
-    ui: { ...ui, locale: normalizeGreyfieldLocale(ui.locale) },
+    ui: {
+      ...ui,
+      locale: normalizeGreyfieldLocale(ui.locale),
+      proactivityLevel: normalizeProactivityLevel(ui.proactivityLevel)
+    },
     memory: { ...defaultGreyfieldConfig.memory, ...partial.memory }
   };
+}
+
+function normalizeProactivityLevel(value: number): number {
+  if (!Number.isFinite(value)) {
+    return defaultGreyfieldConfig.ui.proactivityLevel;
+  }
+  return Math.min(100, Math.max(0, Math.round(value)));
 }
