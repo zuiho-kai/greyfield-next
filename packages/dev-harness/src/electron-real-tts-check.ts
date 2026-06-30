@@ -83,7 +83,7 @@ try {
 
     await finishAllAudio(petWindow);
     await waitForAudioStripCount(settingsWindow, 0, "real TTS natural playback completion");
-    const stopDisabledAfterPlayback = await chatWindow.getByRole("button", { name: "Stop" }).isDisabled();
+    const stopDisabledAfterPlayback = await chatWindow.getByTestId("chat-stop-button").isDisabled();
     if (!stopDisabledAfterPlayback) {
       throw new Error("Stop remained enabled after real audio playback finished and the queue was cleared");
     }
@@ -91,7 +91,7 @@ try {
     await sendMessage(chatWindow, "请再用真实语音说一句话，我会停止。");
     await waitForAudioProbePlayCount(petWindow, 4, () => captureDebugSnapshot(petWindow, settingsWindow, chatWindow));
     await waitForAudioStripCount(settingsWindow, 2, "real TTS interrupted playback queue");
-    await chatWindow.getByRole("button", { name: "Stop" }).click();
+    await chatWindow.getByTestId("chat-stop-button").click();
     await waitForAudioProbeEvent(petWindow, "pause", () => captureDebugSnapshot(petWindow, settingsWindow, chatWindow));
     await waitForAudioStripCount(settingsWindow, 0, "real TTS interrupted playback");
     await petWindow.waitForFunction(() => {
@@ -233,8 +233,8 @@ async function rebroadcastSettings(page: Page): Promise<void> {
 }
 
 async function sendMessage(page: Page, text: string): Promise<void> {
-  await page.getByLabel("Message").fill(text);
-  await page.getByRole("button", { name: "Send" }).click();
+  await page.getByTestId("chat-message-input").fill(text);
+  await page.getByTestId("chat-send-button").click();
 }
 
 async function waitForAudioProbeEvent(

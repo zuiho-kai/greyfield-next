@@ -56,12 +56,12 @@ try {
     const chatWindow = await waitForRoleWindow(app, "chat");
     await sendMessage(chatWindow, "请开始一段长回复，我会马上停止。");
     await chatWindow.locator(".message-list .assistant.draft", { hasText: "开始长回复。" }).waitFor({ timeout: 10_000 });
-    const stopButton = chatWindow.getByRole("button", { name: "Stop" });
+    const stopButton = chatWindow.getByTestId("chat-stop-button");
     if (!(await stopButton.isEnabled())) {
       throw new Error("Stop button was not clickable while provider response was streaming");
     }
     await stopButton.click();
-    await chatWindow.locator(".status-badge, .status-pill", { hasText: /idle|interrupted|Stopped/ }).waitFor({ timeout: 10_000 });
+    await chatWindow.locator('[data-testid="chat-status"][data-status-tone="stopped"], [data-testid="chat-status"][data-status-tone="waiting"]').waitFor({ timeout: 10_000 });
     await waitForRequestClose();
     const stopState = await chatWindow.evaluate(() => ({
       status: document.querySelector(".status-badge, .status-pill")?.textContent?.trim() ?? "",
@@ -142,8 +142,8 @@ async function waitForRoleWindow(app: ElectronApplication, roleName: "chat"): Pr
 }
 
 async function sendMessage(page: Page, text: string): Promise<void> {
-  await page.getByLabel("Message").fill(text);
-  await page.getByRole("button", { name: "Send" }).click();
+  await page.getByTestId("chat-message-input").fill(text);
+  await page.getByTestId("chat-send-button").click();
 }
 
 async function waitForRequestClose(): Promise<void> {

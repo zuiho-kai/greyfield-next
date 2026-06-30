@@ -1,4 +1,5 @@
 import type { DesktopRendererState } from "./desktop-runtime-bridge";
+import { settingsT, type SettingsLocale } from "./settings-i18n";
 
 export interface ChatStatusView {
   label: string;
@@ -11,27 +12,28 @@ export interface ChatStatusView {
 
 export function describeChatStatus(
   state: Pick<DesktopRendererState, "status" | "errorMessage" | "inputDraft" | "audioQueue" | "settings" | "stage">,
-  currentDraft = state.inputDraft
+  currentDraft = state.inputDraft,
+  locale?: SettingsLocale
 ): ChatStatusView {
   if (state.status === "thinking") {
     return {
-      label: "Generating",
-      detail: "Waiting for the reply to start.",
+      label: settingsT(locale, "chat.status.generating.label"),
+      detail: settingsT(locale, "chat.status.generating.waiting"),
       tone: "generating",
       canStop: true,
-      sendLabel: "Send",
-      stopLabel: "Stop"
+      sendLabel: settingsT(locale, "chat.action.send"),
+      stopLabel: settingsT(locale, "chat.action.stop")
     };
   }
 
   if (state.status === "speaking") {
     return {
-      label: "Generating",
-      detail: "Greyfield is replying. Stop stays available while this runs.",
+      label: settingsT(locale, "chat.status.generating.label"),
+      detail: settingsT(locale, "chat.status.generating.replying"),
       tone: "generating",
       canStop: true,
-      sendLabel: "Send",
-      stopLabel: "Stop"
+      sendLabel: settingsT(locale, "chat.action.send"),
+      stopLabel: settingsT(locale, "chat.action.stop")
     };
   }
 
@@ -39,57 +41,59 @@ export function describeChatStatus(
     state.settings.voiceSpeechEnabled && (state.audioQueue.length > 0 || state.stage.mouthOpen > 0);
   if (hasActiveSpeech) {
     return {
-      label: "Generating",
-      detail: "Greyfield is still speaking. Stop will interrupt the current voice playback.",
+      label: settingsT(locale, "chat.status.generating.label"),
+      detail: settingsT(locale, "chat.status.generating.speaking"),
       tone: "generating",
       canStop: true,
-      sendLabel: "Send",
-      stopLabel: "Stop"
+      sendLabel: settingsT(locale, "chat.action.send"),
+      stopLabel: settingsT(locale, "chat.action.stop")
     };
   }
 
   if (state.status === "interrupted") {
     return {
-      label: "Stopped",
-      detail: "The last reply was stopped. Send again when ready.",
+      label: settingsT(locale, "chat.status.stopped.label"),
+      detail: settingsT(locale, "chat.status.stopped.detail"),
       tone: "stopped",
       canStop: false,
-      sendLabel: "Send",
-      stopLabel: "Stopped"
+      sendLabel: settingsT(locale, "chat.action.send"),
+      stopLabel: settingsT(locale, "chat.action.stopped")
     };
   }
 
   if (state.status === "error") {
     const hasRetryDraft = currentDraft.trim().length > 0;
     return {
-      label: hasRetryDraft ? "Retry ready" : "Failed",
+      label: hasRetryDraft
+        ? settingsT(locale, "chat.status.failed.retryLabel")
+        : settingsT(locale, "chat.status.failed.label"),
       detail: hasRetryDraft
-        ? "The failed message is back in the message box."
-        : "Something went wrong. Check the message above, then try again.",
+        ? settingsT(locale, "chat.status.failed.retryDetail")
+        : settingsT(locale, "chat.status.failed.detail"),
       tone: hasRetryDraft ? "retry" : "failed",
       canStop: false,
-      sendLabel: hasRetryDraft ? "Retry" : "Send",
-      stopLabel: "Stop"
+      sendLabel: hasRetryDraft ? settingsT(locale, "chat.action.retry") : settingsT(locale, "chat.action.send"),
+      stopLabel: settingsT(locale, "chat.action.stop")
     };
   }
 
   if (state.status === "listening") {
     return {
-      label: "Waiting",
-      detail: "Listening for input.",
+      label: settingsT(locale, "chat.status.waiting.label"),
+      detail: settingsT(locale, "chat.status.listening.detail"),
       tone: "waiting",
       canStop: true,
-      sendLabel: "Send",
-      stopLabel: "Stop"
+      sendLabel: settingsT(locale, "chat.action.send"),
+      stopLabel: settingsT(locale, "chat.action.stop")
     };
   }
 
   return {
-    label: "Waiting",
-    detail: "Ready for your next message.",
+    label: settingsT(locale, "chat.status.waiting.label"),
+    detail: settingsT(locale, "chat.status.waiting.detail"),
     tone: "waiting",
     canStop: false,
-    sendLabel: "Send",
-    stopLabel: "Stop"
+    sendLabel: settingsT(locale, "chat.action.send"),
+    stopLabel: settingsT(locale, "chat.action.stop")
   };
 }

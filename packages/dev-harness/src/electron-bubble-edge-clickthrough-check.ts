@@ -52,8 +52,8 @@ try {
     await petWindow.waitForFunction((expectedX) => Math.abs(window.screenX - expectedX) <= 2, edgePlacement.bounds.x);
     await installShapeRecorder(app);
 
-    await chatWindow.getByLabel("Message").fill("请用一句话确认桌宠气泡。");
-    await chatWindow.getByRole("button", { name: "Send" }).click();
+    await chatWindow.getByTestId("chat-message-input").fill("请用一句话确认桌宠气泡。");
+    await chatWindow.getByTestId("chat-send-button").click();
     await waitForSettledSpeechBubble(petWindow, 10_000);
 
     const bubble = await readBubbleState(petWindow);

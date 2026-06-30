@@ -37,6 +37,10 @@ try {
       {
         ...defaultGreyfieldConfig,
         characterFile: currentRoleCharacterFile,
+        ui: {
+          ...defaultGreyfieldConfig.ui,
+          locale: "en-US"
+        },
         provider: {
           ...defaultGreyfieldConfig.provider,
           apiKey: providerSecret
@@ -421,8 +425,8 @@ async function assertSourceStateText(
 
 async function sendMessageAndWaitForNextAssistant(page: Page, text: string): Promise<void> {
   const previousCount = await page.locator(".message-list .assistant:not(.draft)").count();
-  await page.getByLabel("Message").fill(text);
-  await page.getByRole("button", { name: "Send" }).click();
+  await page.getByTestId("chat-message-input").fill(text);
+  await page.getByTestId("chat-send-button").click();
   await page.waitForFunction(
     (count) => document.querySelectorAll(".message-list .assistant:not(.draft)").length > count,
     previousCount,

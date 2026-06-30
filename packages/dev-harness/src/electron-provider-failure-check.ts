@@ -122,9 +122,9 @@ for (const scenario of scenarios) {
       const chatWindow = await waitForRoleWindow(app, "chat");
       await sendMessage(chatWindow, scenario.userText);
       await waitForChatError(chatWindow, scenario.expectedError, scenario.name, () => requestCount);
-      await chatWindow.locator(".status-pill", { hasText: "Retry ready" }).waitFor({ timeout: 10_000 });
-      await chatWindow.getByRole("button", { name: "Retry" }).waitFor({ timeout: 10_000 });
-      const draft = await chatWindow.getByLabel("Message").inputValue();
+      await chatWindow.locator('[data-testid="chat-status"][data-status-tone="retry"]').waitFor({ timeout: 10_000 });
+      await chatWindow.getByTestId("chat-send-button").waitFor({ timeout: 10_000 });
+      const draft = await chatWindow.getByTestId("chat-message-input").inputValue();
       const sessionJsonl = await readFile(join(tempDir, "sessions", "desktop-main-session.jsonl"), "utf8").catch(() => "");
       if (draft !== scenario.userText) {
         throw new Error(`${scenario.name} did not restore failed input draft; draft=${JSON.stringify(draft)}`);
@@ -203,7 +203,7 @@ async function waitForChatError(
     const probe = await page.evaluate(() => ({
       errorText: document.querySelector(".chat-error")?.textContent?.trim() ?? "",
       statusText: document.querySelector(".status-pill")?.textContent?.trim() ?? "",
-      draft: (document.querySelector('input[aria-label="Message"]') as HTMLInputElement | null)?.value ?? ""
+      draft: (document.querySelector('[data-testid="chat-message-input"]') as HTMLInputElement | null)?.value ?? ""
     }));
     throw new Error(
       `${scenarioName} did not show expected chat error ${JSON.stringify(expectedError)}; probe=${JSON.stringify({
@@ -215,6 +215,6 @@ async function waitForChatError(
 }
 
 async function sendMessage(page: Page, text: string): Promise<void> {
-  await page.getByLabel("Message").fill(text);
-  await page.getByRole("button", { name: "Send" }).click();
+  await page.getByTestId("chat-message-input").fill(text);
+  await page.getByTestId("chat-send-button").click();
 }

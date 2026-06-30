@@ -95,16 +95,16 @@ try {
     chatWindow = await reloadRoleWindow(chatWindow, ".chat-shell");
     await rebroadcastSettings(settingsWindow);
 
-    await chatWindow.getByRole("button", { name: "Voice" }).click();
-    await chatWindow.locator(".stop-button").click();
+    await chatWindow.getByTestId("chat-voice-input-button").click();
+    await chatWindow.getByTestId("chat-stop-button").click();
     await waitForMicrophoneProbeEvent(chatWindow, "cancel");
-    await chatWindow.locator(".status-pill", { hasText: "Stopped" }).waitFor({ timeout: 10_000 });
+    await chatWindow.locator('[data-testid="chat-status"][data-status-tone="stopped"]').waitFor({ timeout: 10_000 });
     if (asrRequests !== 0) {
       throw new Error(`Stop during listening still sent ASR requests: ${asrRequests}`);
     }
 
-    await chatWindow.getByRole("button", { name: "Voice" }).click();
-    await chatWindow.getByRole("button", { name: "Stop Mic" }).click();
+    await chatWindow.getByTestId("chat-voice-input-button").click();
+    await chatWindow.getByTestId("chat-voice-input-button").click();
     await chatWindow.locator(".message-list .message-item.user", { hasText: "麦克风测试" }).waitFor({ timeout: 15_000 });
     await chatWindow.locator(".message-list .message-item.assistant", { hasText: "收到语音。" }).waitFor({ timeout: 15_000 });
     await waitForAudioProbeEvent(petWindow, "play");
@@ -113,7 +113,7 @@ try {
     });
     await waitForAudioStripCount(settingsWindow, 1);
 
-    await chatWindow.locator(".stop-button").click();
+    await chatWindow.getByTestId("chat-stop-button").click();
     await waitForAudioProbeEvent(petWindow, "pause");
     await waitForAudioStripCount(settingsWindow, 0);
     await petWindow.waitForFunction(() => Number(document.querySelector<HTMLElement>(".live2d-stage-view")?.dataset.mouthOpen ?? "1") === 0, {

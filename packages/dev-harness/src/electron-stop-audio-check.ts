@@ -38,8 +38,8 @@ try {
     const settingsWindow = await waitForRoleWindow(app, "settings");
     await installSpeechProbe(petWindow);
 
-    await chatWindow.getByLabel("Message").fill("请说一句话，然后我会停止。");
-    await chatWindow.getByRole("button", { name: "Send" }).click();
+    await chatWindow.getByTestId("chat-message-input").fill("请说一句话，然后我会停止。");
+    await chatWindow.getByTestId("chat-send-button").click();
     await waitForAudioStripCount(settingsWindow, 2, "initial playback queue");
     await waitForSpeechSpeakCount(petWindow, 1);
     await finishOneSpeech(petWindow);
@@ -47,19 +47,19 @@ try {
     await assertNoOverlappingSpeech(petWindow);
     await finishOneSpeech(petWindow);
     await waitForAudioStripCount(settingsWindow, 0, "natural playback completion");
-    const stopDisabledAfterPlayback = await chatWindow.getByRole("button", { name: "Stop" }).isDisabled();
+    const stopDisabledAfterPlayback = await chatWindow.getByTestId("chat-stop-button").isDisabled();
     if (!stopDisabledAfterPlayback) {
       throw new Error("Stop remained enabled after speech playback finished and the shared queue was cleared");
     }
 
-    await chatWindow.getByLabel("Message").fill("请再说一句话，然后我会停止。");
-    await chatWindow.getByRole("button", { name: "Send" }).click();
+    await chatWindow.getByTestId("chat-message-input").fill("请再说一句话，然后我会停止。");
+    await chatWindow.getByTestId("chat-send-button").click();
     await waitForSpeechEvent(petWindow, "speak");
     await settingsWindow.locator(".audio-strip span", { hasText: "你好，我醒着。" }).waitFor({ timeout: 10_000 });
 
-    await chatWindow.getByRole("button", { name: "Stop" }).click();
+    await chatWindow.getByTestId("chat-stop-button").click();
     await waitForSpeechEvent(petWindow, "cancel");
-    await chatWindow.locator(".status-badge, .status-pill", { hasText: /idle|interrupted|Stopped/ }).waitFor({
+    await chatWindow.locator('[data-testid="chat-status"][data-status-tone="stopped"], [data-testid="chat-status"][data-status-tone="waiting"]').waitFor({
       timeout: 10_000
     });
     await waitForAudioStripCount(settingsWindow, 0, "interrupted playback");

@@ -1,5 +1,5 @@
 ﻿import type { DesktopMemorySourcePassage } from "../shared/ipc";
-import { settingsT, type SettingsLocale } from "./settings-i18n";
+import { normalizeSettingsLocale, settingsT, type SettingsLocale } from "./settings-i18n";
 
 const defaultSourcePassageDisplayLimit = 520;
 
@@ -83,9 +83,10 @@ export function describeSourcePassageStatus(passage: DesktopMemorySourcePassage,
 }
 
 export function describeSourcePassageMeta(passage: DesktopMemorySourcePassage, locale?: SettingsLocale): string {
+  const normalizedLocale = normalizeSettingsLocale(locale);
   const timestamp = passage.createdAt ? formatMemoryTimestamp(passage.createdAt) : "";
   const suffix = passage.observationSource
-    ? locale === "zh-CN"
+    ? normalizedLocale === "zh-CN"
       ? " · 来源：桌面视觉上下文 + 用户确认"
       : " · Source: desktop visual context + user confirmation"
     : "";

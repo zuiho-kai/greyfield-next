@@ -2,13 +2,19 @@
   <main class="chat-shell">
     <header class="chat-window-header">
       <div class="chat-header-title">
-        <h1>Chat</h1>
-        <span class="status-badge status-pill" :class="`status-badge--${chatStatus.tone}`" role="status">
+        <h1>{{ t("chat.title") }}</h1>
+        <span
+          class="status-badge status-pill"
+          :class="`status-badge--${chatStatus.tone}`"
+          role="status"
+          data-testid="chat-status"
+          :data-status-tone="chatStatus.tone"
+        >
           {{ chatStatus.label }}
         </span>
       </div>
       <button type="button" class="settings-btn" @click="$emit('open-settings')">
-        <span>⚙️</span> Settings
+        <span>⚙️</span> {{ t("chat.settings") }}
       </button>
     </header>
 
@@ -34,7 +40,7 @@
           <small v-if="message.observationSummary" class="message-attachment-note">
             {{ message.observationSummary }}
           </small>
-          <span class="message-time">just now</span>
+          <span class="message-time">{{ t("chat.justNow") }}</span>
         </div>
       </div>
 
@@ -50,17 +56,18 @@
       <div class="input-wrapper">
         <input
           :value="draft"
-          aria-label="Message"
-          placeholder="Type your message..."
+          :aria-label="t('chat.message')"
+          :placeholder="t('chat.placeholder')"
           autocomplete="off"
           spellcheck="false"
           class="message-input"
+          data-testid="chat-message-input"
           @input="$emit('update:draft', valueFrom($event))"
         />
         <span v-if="draft" class="input-char-count">{{ draft.length }}</span>
       </div>
       <div class="action-buttons">
-        <button type="submit" class="send-button" :disabled="!draft.trim()">
+        <button type="submit" class="send-button" :disabled="!draft.trim()" data-testid="chat-send-button">
           <span>📤</span> {{ chatStatus.sendLabel }}
         </button>
         <button
@@ -68,11 +75,12 @@
           class="voice-input-button"
           :class="{ 'voice-input-button--active': state.voiceInput.status === 'listening' }"
           :disabled="state.voiceInput.status === 'transcribing'"
+          data-testid="chat-voice-input-button"
           @click="$emit(state.voiceInput.status === 'listening' ? 'stop-voice-input' : 'start-voice-input')"
         >
           <span>🎙️</span> {{ voiceInputLabel }}
         </button>
-        <button type="button" class="stop-button" :disabled="!chatStatus.canStop" @click="$emit('interrupt')">
+        <button type="button" class="stop-button" :disabled="!chatStatus.canStop" data-testid="chat-stop-button" @click="$emit('interrupt')">
           <span>⏹️</span> {{ chatStatus.stopLabel }}
         </button>
       </div>
@@ -84,6 +92,7 @@
 import { computed } from "vue";
 import type { DesktopRendererState } from "./desktop-runtime-bridge";
 import { describeChatStatus } from "./chat-status";
+import { normalizeSettingsLocale, settingsT, type SettingsI18nKey } from "./settings-i18n";
 
 const props = defineProps<{
   state: DesktopRendererState;
@@ -103,14 +112,17 @@ function valueFrom(event: Event): string {
   return event.target instanceof HTMLInputElement ? event.target.value : "";
 }
 
-const chatStatus = computed(() => describeChatStatus(props.state, props.draft));
+const locale = computed(() => normalizeSettingsLocale(props.state.settings.settingsLocale));
+const t = (key: SettingsI18nKey, values?: Record<string, string | number>): string =>
+  settingsT(locale.value, key, values);
+const chatStatus = computed(() => describeChatStatus(props.state, props.draft, locale.value));
 const voiceInputLabel = computed(() => {
   if (props.state.voiceInput.status === "listening") {
-    return "Stop Mic";
+    return t("chat.voice.stopMic");
   }
   if (props.state.voiceInput.status === "transcribing") {
-    return "Transcribing";
+    return t("chat.voice.transcribing");
   }
-  return "Voice";
+  return t("chat.voice");
 });
 </script>

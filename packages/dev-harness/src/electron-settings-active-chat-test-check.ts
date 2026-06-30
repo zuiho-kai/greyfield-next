@@ -54,7 +54,7 @@ try {
     await sendMessage(chatWindow, "请保持一段长回复。");
     await chatWindow.locator(".message-list .assistant.draft", { hasText: "正在长回复" }).waitFor({ timeout: 10_000 });
 
-    const testLlmButton = settingsWindow.getByRole("button", { name: "Test LLM" });
+    const testLlmButton = settingsWindow.getByRole("button", { name: /^(Test LLM|测试 LLM)$/ });
     const expected =
       "LLM test is unavailable while a chat response is running. Stop the current reply or wait for it to finish, then retry.";
     await waitForDisabled(testLlmButton, 10_000);
@@ -63,8 +63,8 @@ try {
       throw new Error(`Provider test during active chat sent an extra request; requestCount=${requestCount}`);
     }
 
-    await chatWindow.getByRole("button", { name: "Stop" }).click();
-    await chatWindow.locator(".status-badge, .status-pill", { hasText: /idle|interrupted|Stopped/ }).waitFor({
+    await chatWindow.getByTestId("chat-stop-button").click();
+    await chatWindow.locator('[data-testid="chat-status"][data-status-tone="stopped"], [data-testid="chat-status"][data-status-tone="waiting"]').waitFor({
       timeout: 10_000
     });
 
@@ -133,8 +133,8 @@ async function waitForRoleWindow(app: ElectronApplication, roleName: "settings" 
 }
 
 async function sendMessage(page: Page, text: string): Promise<void> {
-  await page.getByLabel("Message").fill(text);
-  await page.getByRole("button", { name: "Send" }).click();
+  await page.getByTestId("chat-message-input").fill(text);
+  await page.getByTestId("chat-send-button").click();
 }
 
 async function waitForDisabled(button: ReturnType<Page["getByRole"]>, timeoutMs: number): Promise<void> {

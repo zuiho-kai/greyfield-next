@@ -1,9 +1,9 @@
 <template>
-  <main class="desktop-controls-shell" aria-label="Greyfield desktop controls">
+  <main class="desktop-controls-shell" :aria-label="t('controls.shell')">
     <form
       class="desktop-control-panel"
       :class="{ 'desktop-control-panel--collapsed': controlsCollapsed }"
-      aria-label="Desktop pet controls"
+      :aria-label="t('controls.panel')"
       data-testid="desktop-control-panel"
       @submit.prevent="submitInlineMessage"
     >
@@ -11,8 +11,8 @@
         <button
           type="button"
           class="desktop-control-handle"
-          title="Move controls"
-          aria-label="Move desktop controls"
+          :title="t('controls.move')"
+          :aria-label="t('controls.move')"
           @pointerdown.prevent="startDrag"
           @mousedown.prevent="startDrag"
         >
@@ -24,8 +24,8 @@
         <button
           type="button"
           class="desktop-control-button desktop-control-button--ghost"
-          :title="controlsCollapsed ? 'Expand controls' : 'Collapse controls'"
-          :aria-label="controlsCollapsed ? 'Expand controls' : 'Collapse controls'"
+          :title="controlsCollapsed ? t('controls.expand') : t('controls.collapse')"
+          :aria-label="controlsCollapsed ? t('controls.expand') : t('controls.collapse')"
           @click="controlsCollapsed = !controlsCollapsed"
         >
           <ChevronDown v-if="!controlsCollapsed" :size="16" stroke-width="2.35" />
@@ -37,8 +37,8 @@
         <input
           v-model="inlineDraft"
           class="desktop-control-input"
-          aria-label="Desktop message"
-          placeholder="Message Greyfield..."
+          :aria-label="t('controls.message')"
+          :placeholder="t('controls.placeholder')"
           autocomplete="off"
           spellcheck="false"
         />
@@ -46,14 +46,14 @@
           type="submit"
           class="desktop-control-button desktop-control-button--primary"
           :disabled="!inlineDraft.trim()"
-          title="Send message"
-          aria-label="Send message"
+          :title="t('controls.send')"
+          :aria-label="t('controls.send')"
         >
           <SendHorizontal :size="17" stroke-width="2.35" />
         </button>
       </div>
 
-      <div v-if="!controlsCollapsed" class="desktop-control-actions" aria-label="Desktop pet quick actions">
+      <div v-if="!controlsCollapsed" class="desktop-control-actions" :aria-label="t('controls.actions')">
         <button
           type="button"
           class="desktop-control-button"
@@ -86,7 +86,7 @@
         >
           <ScanEye :size="16" stroke-width="2.35" />
         </button>
-        <button type="button" class="desktop-control-button" title="Open Settings" aria-label="Open Settings" @click="$emit('open-settings')">
+        <button type="button" class="desktop-control-button" :title="t('controls.openSettings')" :aria-label="t('controls.openSettings')" @click="$emit('open-settings')">
           <Settings :size="16" stroke-width="2.35" />
         </button>
         <button
@@ -99,15 +99,15 @@
         >
           <MousePointer2 :size="16" stroke-width="2.35" />
         </button>
-        <button type="button" class="desktop-control-button" title="Hide controls" aria-label="Hide controls" @click="$emit('hide-controls')">
+        <button type="button" class="desktop-control-button" :title="t('controls.hide')" :aria-label="t('controls.hide')" @click="$emit('hide-controls')">
           <Minimize2 :size="16" stroke-width="2.35" />
         </button>
         <button
           type="button"
           class="desktop-control-button desktop-control-button--stop"
           :disabled="!canStop"
-          title="Stop reply or voice"
-          aria-label="Stop reply or voice"
+          :title="t('controls.stop')"
+          :aria-label="t('controls.stop')"
           @click="$emit('interrupt')"
         >
           <Square :size="15" stroke-width="2.45" />
@@ -135,6 +135,7 @@ import {
 } from "lucide-vue-next";
 import { describeChatStatus } from "./chat-status";
 import type { DesktopRendererState } from "./desktop-runtime-bridge";
+import { normalizeSettingsLocale, settingsT, type SettingsI18nKey } from "./settings-i18n";
 
 const props = defineProps<{
   state: DesktopRendererState;
@@ -158,23 +159,28 @@ const emit = defineEmits<{
 const inlineDraft = ref("");
 const controlsCollapsed = ref(false);
 const activeDragPointerId = ref<number | null>(null);
-const chatStatus = computed(() => describeChatStatus(props.state, inlineDraft.value));
+const locale = computed(() => normalizeSettingsLocale(props.state.settings.settingsLocale));
+const t = (key: SettingsI18nKey, values?: Record<string, string | number>): string =>
+  settingsT(locale.value, key, values);
+const chatStatus = computed(() => describeChatStatus(props.state, inlineDraft.value, locale.value));
 const canStop = computed(() => chatStatus.value.canStop || props.state.voiceInput.status === "listening" || props.state.voiceInput.status === "transcribing");
 const voiceInputTitle = computed(() => {
   if (props.state.voiceInput.status === "listening") {
-    return "Stop microphone input";
+    return t("controls.mic.stop");
   }
   if (props.state.voiceInput.status === "transcribing") {
-    return "Transcribing microphone input";
+    return t("controls.mic.transcribing");
   }
-  return "Start microphone input";
+  return t("controls.mic.start");
 });
-const speechOutputTitle = computed(() => (props.state.settings.voiceSpeechEnabled ? "Turn voice output off" : "Turn voice output on"));
+const speechOutputTitle = computed(() =>
+  props.state.settings.voiceSpeechEnabled ? t("controls.voice.off") : t("controls.voice.on")
+);
 const screenAwarenessTitle = computed(() =>
-  props.state.screenAwareness.enabled ? "Turn Screen awareness off" : "Turn Screen awareness on"
+  props.state.screenAwareness.enabled ? t("controls.screenAwareness.off") : t("controls.screenAwareness.on")
 );
 const modelPassThroughTitle = computed(() =>
-  props.state.window.modelPassThrough ? "Model is click-through; use tray or settings to restore if needed" : "Make model click-through"
+  props.state.window.modelPassThrough ? t("controls.passThrough.on") : t("controls.passThrough.off")
 );
 
 function submitInlineMessage(): void {

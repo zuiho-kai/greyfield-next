@@ -283,11 +283,11 @@ try {
   }
   const auxiliaryWindowCloseRecovery = await verifyAuxiliaryWindowCloseRecovery();
   await settingsWindow.waitForSelector(".greyfield-shell");
-  await settingsWindow.locator(".provider-status--preview", { hasText: "Fake provider is active" }).waitFor();
+  await settingsWindow.locator(".provider-status--preview", { hasText: /Fake provider is active|本地假服务/ }).waitFor();
   const memoryExtractionSettings = await verifyMemoryExtractionSettings(settingsWindow, configPath);
-  const live2DModelSelect = settingsWindow.getByLabel("Live2D model");
+  const live2DModelSelect = settingsWindow.getByLabel(/^(Live2D model|Live2D 模型)$/);
   await live2DModelSelect.waitFor();
-  const live2DOptions = await settingsWindow.getByLabel("Live2D model").evaluate((select) =>
+  const live2DOptions = await live2DModelSelect.evaluate((select) =>
     Array.from((select as HTMLSelectElement).options).map((option) => ({
       text: option.textContent?.trim(),
       value: option.value,
@@ -302,13 +302,13 @@ try {
     configPath,
     "assets/live2d/momose-hiyori/runtime/hiyori_free_t08.model3.json"
   );
-  await settingsWindow.getByRole("button", { name: "Import local model" }).waitFor();
-  await settingsWindow.getByLabel("Scale").fill("1.36");
+  await settingsWindow.getByRole("button", { name: /^(Import local model|导入本地模型)$/ }).waitFor();
+  await settingsWindow.getByLabel(/^(Scale|缩放)$/).fill("1.36");
   await settingsWindow.getByLabel("Model X").fill("42");
   await settingsWindow.getByLabel("Model Y").fill("-24");
   const transformedConfig = await waitForLive2DTransform(configPath, { scale: 1.36, x: 42, y: -24 });
   const controlsWindow = await waitForRoleWindow("controls");
-  await controlsWindow.getByRole("button", { name: "Turn voice output on" }).click();
+  await controlsWindow.getByRole("button", { name: /^(Turn voice output on|开启语音输出)$/ }).click();
   const voiceToggleConfig = await waitForVoiceSpeech(configPath, true);
   if (
     voiceToggleConfig.live2d.scale !== transformedConfig.live2d.scale ||
@@ -321,12 +321,12 @@ try {
       )}`
     );
   }
-  await controlsWindow.getByRole("button", { name: "Turn voice output off" }).click();
+  await controlsWindow.getByRole("button", { name: /^(Turn voice output off|关闭语音输出)$/ }).click();
   await waitForVoiceSpeech(configPath, false);
-  await settingsWindow.getByRole("button", { name: "Reset transform" }).click();
+  await settingsWindow.getByRole("button", { name: /^(Reset transform|重置位置)$/ }).click();
   const resetConfig = await waitForLive2DTransform(configPath, { scale: 1, x: 0, y: 0 });
-  await settingsWindow.getByRole("button", { name: "Test LLM" }).click();
-  await settingsWindow.locator(".provider-test-result--success", { hasText: "Test succeeded" }).waitFor();
+  await settingsWindow.getByRole("button", { name: /^(Test LLM|测试 LLM)$/ }).click();
+  await settingsWindow.locator(".provider-test-result--success", { hasText: /Test succeeded|测试成功/ }).waitFor();
   await settingsWindow.getByLabel("Speak replies").check();
   const savedVoiceConfig = await waitForVoiceSpeech(configPath, true);
   const apiKeyInput = settingsWindow.getByLabel("API Key");
@@ -337,24 +337,24 @@ try {
     throw new Error(`API key input lost the editable draft after masked settings echo: ${apiKeyDraft}`);
   }
   const savedApiKeyConfig = await waitForProviderApiKey(configPath, "greyfield-test-key");
-  await settingsWindow.getByRole("textbox", { name: "Model", exact: true }).fill("electron-harness-model");
+  await settingsWindow.getByRole("textbox", { name: /^(Model|模型)$/, exact: true }).fill("electron-harness-model");
   const savedConfig = await waitForSavedModel(configPath, "electron-harness-model");
-  const providerSelect = settingsWindow.getByLabel("Provider");
+  const providerSelect = settingsWindow.locator('[data-settings-section="provider"] select').first();
   await providerSelect.selectOption("fake");
-  await settingsWindow.locator(".provider-status--preview", { hasText: "Fake provider is active" }).waitFor();
+  await settingsWindow.locator(".provider-status--preview", { hasText: /Fake provider is active|本地假服务/ }).waitFor();
   const savedFakeProviderConfig = await waitForProviderLLM(configPath, "fake");
-  await settingsWindow.getByLabel("Speech Bubble").uncheck();
+  await settingsWindow.getByLabel(/^(Speech Bubble|气泡)$/).uncheck();
   const savedBubbleConfig = await waitForSpeechBubble(configPath, false);
   const settingsNavAndI18n = await verifySettingsNavAndI18n(settingsWindow, configPath);
 
   const chatWindow = await waitForRoleWindow("chat");
   await chatWindow.waitForSelector(".chat-shell");
-  await chatWindow.getByLabel("Message").fill("醒了吗？");
-  await chatWindow.getByRole("button", { name: "Send" }).click();
+  await chatWindow.getByTestId("chat-message-input").fill("醒了吗？");
+  await chatWindow.getByTestId("chat-send-button").click();
   await chatWindow.locator(".message-list .assistant", { hasText: "你好，我醒着。现在可以继续做桌宠了。" }).waitFor();
   await waitForSessionJsonl(["醒了吗？", "你好，我醒着。现在可以继续做桌宠了。"]);
-  await chatWindow.locator(".status-badge, .status-pill", { hasText: "Generating" }).waitFor();
-  const stopEnabledDuringVoice = await chatWindow.getByRole("button", { name: "Stop" }).isEnabled();
+  await chatWindow.locator('[data-testid="chat-status"][data-status-tone="generating"]').waitFor();
+  const stopEnabledDuringVoice = await chatWindow.getByTestId("chat-stop-button").isEnabled();
   if (!stopEnabledDuringVoice) {
     throw new Error("Stop was disabled while voice output was still queued");
   }
@@ -692,11 +692,13 @@ async function verifySettingsNavAndI18n(
     throw new Error("Settings nav overflowed or overlapped in a narrow settings window");
   }
 
-  const modelNavWorked = await clickSettingsNavAndVerify(settingsWindow, "Model", "model");
-  const voiceNavWorked = await clickSettingsNavAndVerify(settingsWindow, "Voice", "voice");
-  const windowNavWorked = await clickSettingsNavAndVerify(settingsWindow, "Window", "window");
+  const modelNavWorked = await clickSettingsNavAndVerify(settingsWindow, "模型", "model");
+  const voiceNavWorked = await clickSettingsNavAndVerify(settingsWindow, "语音", "voice");
+  const windowNavWorked = await clickSettingsNavAndVerify(settingsWindow, "窗口", "window");
 
-  await settingsWindow.getByLabel("Language").selectOption("zh-CN");
+  const languageSelect = settingsWindow.locator(".settings-language-select select");
+  await languageSelect.scrollIntoViewIfNeeded();
+  await languageSelect.selectOption("zh-CN");
   const localeConfig = await waitForSettingsLocale(path, "zh-CN");
   await waitForSettingsText(settingsWindow, "窗口");
   await settingsWindow.getByRole("button", { name: "窗口", exact: true }).waitFor();
@@ -902,15 +904,15 @@ async function verifyMemoryExtractionSettings(
   togglePersisted: boolean;
   manualCandidateControlsAbsent: boolean;
 }> {
-  const memorySection = settingsWindow.getByLabel("Memory extraction", { exact: true });
+  const memorySection = settingsWindow.getByLabel(/^(Memory extraction|记忆提取)$/, { exact: true });
   await memorySection.waitFor();
-  const toggle = memorySection.getByLabel("Better memory extraction");
+  const toggle = memorySection.getByLabel(/^(Better memory extraction|增强记忆)$/);
   await toggle.waitFor();
-  await memorySection.locator(".memory-extraction-status--standard", { hasText: "Better extraction is off" }).waitFor();
+  await memorySection.locator(".memory-extraction-status--standard", { hasText: /Better extraction is off|增强提取已关闭/ }).waitFor();
   await assertNoManualMemoryCandidateControls(memorySection);
   await toggle.check();
   const savedConfig = await waitForBetterMemory(path, true);
-  await memorySection.locator(".memory-extraction-status--fallback", { hasText: "OpenAI-compatible chat provider" }).waitFor();
+  await memorySection.locator(".memory-extraction-status--fallback", { hasText: /OpenAI-compatible chat provider|OpenAI 兼容聊天服务/ }).waitFor();
   await assertNoManualMemoryCandidateControls(memorySection);
   return {
     defaultStandardVisible: true,

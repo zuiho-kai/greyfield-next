@@ -4,7 +4,7 @@ import { createInitialDesktopRendererState } from "../desktop-runtime-bridge";
 
 describe("describeChatStatus", () => {
   it("renders idle as a waiting state", () => {
-    expect(describeChatStatus({ ...createInitialDesktopRendererState(), status: "idle" })).toMatchObject({
+    expect(describeChatStatus({ ...createInitialDesktopRendererState(), status: "idle" }, undefined, "en-US")).toMatchObject({
       label: "Waiting",
       tone: "waiting",
       canStop: false,
@@ -12,14 +12,25 @@ describe("describeChatStatus", () => {
     });
   });
 
+  it("renders idle as zh-CN when requested", () => {
+    expect(describeChatStatus({ ...createInitialDesktopRendererState(), status: "idle" }, "", "zh-CN")).toMatchObject({
+      label: "等待中",
+      detail: "可以继续发送下一条消息。",
+      tone: "waiting",
+      canStop: false,
+      sendLabel: "发送",
+      stopLabel: "停止"
+    });
+  });
+
   it("renders thinking and speaking as stoppable generation", () => {
-    expect(describeChatStatus({ ...createInitialDesktopRendererState(), status: "thinking" })).toMatchObject({
+    expect(describeChatStatus({ ...createInitialDesktopRendererState(), status: "thinking" }, undefined, "en-US")).toMatchObject({
       label: "Generating",
       tone: "generating",
       canStop: true,
       stopLabel: "Stop"
     });
-    expect(describeChatStatus({ ...createInitialDesktopRendererState(), status: "speaking" })).toMatchObject({
+    expect(describeChatStatus({ ...createInitialDesktopRendererState(), status: "speaking" }, undefined, "en-US")).toMatchObject({
       label: "Generating",
       tone: "generating",
       canStop: true,
@@ -37,7 +48,10 @@ describe("describeChatStatus", () => {
           ...createInitialDesktopRendererState().settings,
           voiceSpeechEnabled: true
         }
-      })
+      },
+        undefined,
+        "en-US"
+      )
     ).toMatchObject({
       label: "Generating",
       tone: "generating",
@@ -47,7 +61,7 @@ describe("describeChatStatus", () => {
   });
 
   it("keeps Stop available while listening for microphone input", () => {
-    expect(describeChatStatus({ ...createInitialDesktopRendererState(), status: "listening" })).toMatchObject({
+    expect(describeChatStatus({ ...createInitialDesktopRendererState(), status: "listening" }, undefined, "en-US")).toMatchObject({
       label: "Waiting",
       tone: "waiting",
       canStop: true,
@@ -56,7 +70,7 @@ describe("describeChatStatus", () => {
   });
 
   it("renders interrupted as a stable stopped state", () => {
-    expect(describeChatStatus({ ...createInitialDesktopRendererState(), status: "interrupted" })).toMatchObject({
+    expect(describeChatStatus({ ...createInitialDesktopRendererState(), status: "interrupted" }, undefined, "en-US")).toMatchObject({
       label: "Stopped",
       tone: "stopped",
       canStop: false,
@@ -71,7 +85,10 @@ describe("describeChatStatus", () => {
         status: "error",
         errorMessage: "provider timed out",
         inputDraft: "try again"
-      })
+      },
+        undefined,
+        "en-US"
+      )
     ).toMatchObject({
       label: "Retry ready",
       tone: "retry",
@@ -87,7 +104,10 @@ describe("describeChatStatus", () => {
         status: "error",
         errorMessage: "provider timed out",
         inputDraft: ""
-      })
+      },
+        undefined,
+        "en-US"
+      )
     ).toMatchObject({
       label: "Failed",
       tone: "failed",
@@ -104,12 +124,12 @@ describe("describeChatStatus", () => {
       inputDraft: "original failed message"
     };
 
-    expect(describeChatStatus(state, "")).toMatchObject({
+    expect(describeChatStatus(state, "", "en-US")).toMatchObject({
       label: "Failed",
       tone: "failed",
       sendLabel: "Send"
     });
-    expect(describeChatStatus(state, "edited retry")).toMatchObject({
+    expect(describeChatStatus(state, "edited retry", "en-US")).toMatchObject({
       label: "Retry ready",
       tone: "retry",
       sendLabel: "Retry"

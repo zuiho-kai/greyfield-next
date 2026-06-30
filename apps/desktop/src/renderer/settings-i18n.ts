@@ -205,7 +205,66 @@ export type SettingsI18nKey =
   | "live2d.usingCustom"
   | "live2d.customModel"
   | "toggle.modelPassThrough"
-  | "toggle.lock";
+  | "toggle.lock"
+  | "chat.title"
+  | "chat.settings"
+  | "chat.visualObservation"
+  | "chat.look"
+  | "chat.frame.one"
+  | "chat.frame.many"
+  | "chat.observationAlt"
+  | "chat.captureOnce"
+  | "chat.observeLow"
+  | "chat.observeNormal"
+  | "chat.observeHigh"
+  | "chat.startHigh"
+  | "chat.endObservation"
+  | "chat.clearObservation"
+  | "chat.justNow"
+  | "chat.message"
+  | "chat.placeholder"
+  | "chat.observationIdle"
+  | "chat.voice.stopMic"
+  | "chat.voice.transcribing"
+  | "chat.voice"
+  | "chat.status.generating.label"
+  | "chat.status.generating.waiting"
+  | "chat.status.generating.replying"
+  | "chat.status.generating.speaking"
+  | "chat.status.stopped.label"
+  | "chat.status.stopped.detail"
+  | "chat.status.failed.retryLabel"
+  | "chat.status.failed.label"
+  | "chat.status.failed.retryDetail"
+  | "chat.status.failed.detail"
+  | "chat.status.listening.detail"
+  | "chat.status.waiting.label"
+  | "chat.status.waiting.detail"
+  | "chat.action.send"
+  | "chat.action.retry"
+  | "chat.action.stop"
+  | "chat.action.stopped"
+  | "controls.shell"
+  | "controls.panel"
+  | "controls.move"
+  | "controls.expand"
+  | "controls.collapse"
+  | "controls.message"
+  | "controls.placeholder"
+  | "controls.send"
+  | "controls.actions"
+  | "controls.openSettings"
+  | "controls.hide"
+  | "controls.stop"
+  | "controls.mic.start"
+  | "controls.mic.stop"
+  | "controls.mic.transcribing"
+  | "controls.voice.on"
+  | "controls.voice.off"
+  | "controls.screenAwareness.on"
+  | "controls.screenAwareness.off"
+  | "controls.passThrough.on"
+  | "controls.passThrough.off";
 
 const enUS: Record<SettingsI18nKey, string> = {
   "nav.label": "Settings sections",
@@ -405,7 +464,66 @@ const enUS: Record<SettingsI18nKey, string> = {
   "live2d.usingCustom": "Using custom model: {path}",
   "live2d.customModel": "Custom model",
   "toggle.modelPassThrough": "Model Pass Through",
-  "toggle.lock": "Lock"
+  "toggle.lock": "Lock",
+  "chat.title": "Chat",
+  "chat.settings": "Settings",
+  "chat.visualObservation": "Visual observation",
+  "chat.look": "Look",
+  "chat.frame.one": "1 frame",
+  "chat.frame.many": "{count} frames",
+  "chat.observationAlt": "Temporary observation preview",
+  "chat.captureOnce": "Shot",
+  "chat.observeLow": "Low",
+  "chat.observeNormal": "Mid",
+  "chat.observeHigh": "High",
+  "chat.startHigh": "High",
+  "chat.endObservation": "End",
+  "chat.clearObservation": "Clear",
+  "chat.justNow": "just now",
+  "chat.message": "Message",
+  "chat.placeholder": "Type your message...",
+  "chat.observationIdle": "Screenshots are temporary and only sent after you confirm with a message.",
+  "chat.voice.stopMic": "Stop Mic",
+  "chat.voice.transcribing": "Transcribing",
+  "chat.voice": "Voice",
+  "chat.status.generating.label": "Generating",
+  "chat.status.generating.waiting": "Waiting for the reply to start.",
+  "chat.status.generating.replying": "Greyfield is replying. Stop stays available while this runs.",
+  "chat.status.generating.speaking": "Greyfield is still speaking. Stop will interrupt the current voice playback.",
+  "chat.status.stopped.label": "Stopped",
+  "chat.status.stopped.detail": "The last reply was stopped. Send again when ready.",
+  "chat.status.failed.retryLabel": "Retry ready",
+  "chat.status.failed.label": "Failed",
+  "chat.status.failed.retryDetail": "The failed message is back in the message box.",
+  "chat.status.failed.detail": "Something went wrong. Check the message above, then try again.",
+  "chat.status.listening.detail": "Listening for input.",
+  "chat.status.waiting.label": "Waiting",
+  "chat.status.waiting.detail": "Ready for your next message.",
+  "chat.action.send": "Send",
+  "chat.action.retry": "Retry",
+  "chat.action.stop": "Stop",
+  "chat.action.stopped": "Stopped",
+  "controls.shell": "Greyfield desktop controls",
+  "controls.panel": "Desktop pet controls",
+  "controls.move": "Move desktop controls",
+  "controls.expand": "Expand controls",
+  "controls.collapse": "Collapse controls",
+  "controls.message": "Desktop message",
+  "controls.placeholder": "Message Greyfield...",
+  "controls.send": "Send message",
+  "controls.actions": "Desktop pet quick actions",
+  "controls.openSettings": "Open Settings",
+  "controls.hide": "Hide controls",
+  "controls.stop": "Stop reply or voice",
+  "controls.mic.start": "Start microphone input",
+  "controls.mic.stop": "Stop microphone input",
+  "controls.mic.transcribing": "Transcribing microphone input",
+  "controls.voice.on": "Turn voice output on",
+  "controls.voice.off": "Turn voice output off",
+  "controls.screenAwareness.on": "Turn Screen awareness on",
+  "controls.screenAwareness.off": "Turn Screen awareness off",
+  "controls.passThrough.on": "Model is click-through; use tray or settings to restore if needed",
+  "controls.passThrough.off": "Make model click-through"
 };
 
 const zhCN: Partial<Record<SettingsI18nKey, string>> = {
@@ -606,7 +724,66 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "live2d.usingCustom": "正在使用自定义模型：{path}",
   "live2d.customModel": "自定义模型",
   "toggle.modelPassThrough": "模型穿透",
-  "toggle.lock": "锁定"
+  "toggle.lock": "锁定",
+  "chat.title": "聊天",
+  "chat.settings": "设置",
+  "chat.visualObservation": "视觉观察",
+  "chat.look": "观察",
+  "chat.frame.one": "1 帧",
+  "chat.frame.many": "{count} 帧",
+  "chat.observationAlt": "临时观察预览",
+  "chat.captureOnce": "截图",
+  "chat.observeLow": "低",
+  "chat.observeNormal": "中",
+  "chat.observeHigh": "高",
+  "chat.startHigh": "高",
+  "chat.endObservation": "结束",
+  "chat.clearObservation": "清除",
+  "chat.justNow": "刚刚",
+  "chat.message": "消息",
+  "chat.placeholder": "输入你想说的话...",
+  "chat.observationIdle": "截图是临时的，只会在你发送消息确认后一起发给模型。",
+  "chat.voice.stopMic": "停止麦克风",
+  "chat.voice.transcribing": "转写中",
+  "chat.voice": "语音",
+  "chat.status.generating.label": "生成中",
+  "chat.status.generating.waiting": "正在等待回复开始。",
+  "chat.status.generating.replying": "Greyfield 正在回复，期间可以随时停止。",
+  "chat.status.generating.speaking": "Greyfield 还在说话，停止会中断当前语音播放。",
+  "chat.status.stopped.label": "已停止",
+  "chat.status.stopped.detail": "上一条回复已停止，可以继续发送。",
+  "chat.status.failed.retryLabel": "可重试",
+  "chat.status.failed.label": "失败",
+  "chat.status.failed.retryDetail": "失败的消息已回到输入框。",
+  "chat.status.failed.detail": "发生错误。先查看上方信息，再重试。",
+  "chat.status.listening.detail": "正在听你说话。",
+  "chat.status.waiting.label": "等待中",
+  "chat.status.waiting.detail": "可以继续发送下一条消息。",
+  "chat.action.send": "发送",
+  "chat.action.retry": "重试",
+  "chat.action.stop": "停止",
+  "chat.action.stopped": "已停止",
+  "controls.shell": "Greyfield 桌面控制条",
+  "controls.panel": "桌宠控制条",
+  "controls.move": "移动控制条",
+  "controls.expand": "展开控制条",
+  "controls.collapse": "收起控制条",
+  "controls.message": "桌面消息",
+  "controls.placeholder": "和 Greyfield 说话...",
+  "controls.send": "发送消息",
+  "controls.actions": "桌宠快捷操作",
+  "controls.openSettings": "打开设置",
+  "controls.hide": "隐藏控制条",
+  "controls.stop": "停止回复或语音",
+  "controls.mic.start": "开始麦克风输入",
+  "controls.mic.stop": "停止麦克风输入",
+  "controls.mic.transcribing": "正在转写麦克风输入",
+  "controls.voice.on": "开启语音输出",
+  "controls.voice.off": "关闭语音输出",
+  "controls.screenAwareness.on": "开启屏幕感知",
+  "controls.screenAwareness.off": "关闭屏幕感知",
+  "controls.passThrough.on": "模型当前会穿透点击；必要时用托盘或设置恢复",
+  "controls.passThrough.off": "让模型穿透点击"
 };
 
 const dictionaries: Record<SettingsLocale, Partial<Record<SettingsI18nKey, string>>> = {

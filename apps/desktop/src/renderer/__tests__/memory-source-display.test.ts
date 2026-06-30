@@ -12,7 +12,7 @@ import type { DesktopMemorySourcePassage } from "../../shared/ipc";
 
 describe("memory source display helpers", () => {
   it("summarizes source availability without exposing raw turn ids", () => {
-    expect(describeMemorySourceCount({ sourceIds: ["desktop-main-session-1"] })).toBe("1 saved source");
+    expect(describeMemorySourceCount({ sourceIds: ["desktop-main-session-1"] }, "en-US")).toBe("1 saved source");
     expect(
       describeMemorySourceCount({
         sourcePassages: [
@@ -20,7 +20,7 @@ describe("memory source display helpers", () => {
           makePassage({ status: "missing", turnId: "desktop-main-session-2" })
         ],
         sourceIds: ["desktop-main-session-1", "desktop-main-session-2"]
-      })
+      }, "en-US")
     ).toBe("1 of 2 source passages ready");
   });
 
@@ -28,12 +28,12 @@ describe("memory source display helpers", () => {
     const userPassage = makePassage({ role: "user", createdAt: "2026-06-28T00:00:00.000Z" });
     const missingPassage = makePassage({ status: "missing", message: "Source turn is missing." });
 
-    expect(describeSourcePassageHeading(userPassage)).toBe("From you");
-    expect(describeSourcePassageStatus(userPassage)).toBe("Saved locally");
-    expect(describeSourcePassageMeta(userPassage)).toBe("Saved from conversation on 2026-06-28 00:00");
-    expect(describeSourcePassageHeading(missingPassage)).toBe("Original message unavailable");
-    expect(describeSourcePassageStatus(missingPassage)).toBe("Original message not found");
-    expect(describeSourcePassageBody(missingPassage)).toBe("Source turn is missing.");
+    expect(describeSourcePassageHeading(userPassage, "en-US")).toBe("From you");
+    expect(describeSourcePassageStatus(userPassage, "en-US")).toBe("Saved locally");
+    expect(describeSourcePassageMeta(userPassage, "en-US")).toBe("Saved from conversation on 2026-06-28 00:00");
+    expect(describeSourcePassageHeading(missingPassage, "en-US")).toBe("Original message unavailable");
+    expect(describeSourcePassageStatus(missingPassage, "en-US")).toBe("Original message not found");
+    expect(describeSourcePassageBody(missingPassage, undefined, "en-US")).toBe("Source turn is missing.");
   });
 
   it("bounds long source passages and labels empty available text", () => {
@@ -42,36 +42,34 @@ describe("memory source display helpers", () => {
 
     expect(describeSourcePassageBody(longPassage, 5)).toBe("aaaaa...");
     expect(isSourcePassageShortened(longPassage, 5)).toBe(true);
-    expect(describeSourcePassageBody(emptyPassage)).toBe("No message text is saved for this source.");
+    expect(describeSourcePassageBody(emptyPassage, undefined, "en-US")).toBe("No message text is saved for this source.");
   });
 
   it("turns recall reasons into product language", () => {
-    expect(describeRecallReason("cue:hiyori")).toBe('Matched recall cue "hiyori"');
-    expect(describeRecallReason("semantic_match")).toBe("Semantic match");
-    expect(describeRecallReason("")).toBe("Matched this memory");
+    expect(describeRecallReason("cue:hiyori", "en-US")).toBe('Matched recall cue "hiyori"');
+    expect(describeRecallReason("semantic_match", "en-US")).toBe("Semantic match");
+    expect(describeRecallReason("", "en-US")).toBe("Matched this memory");
   });
 
   it("labels screen-aware memory sources as desktop visual context plus user confirmation", () => {
     const passage = makePassage({ observationSource: true, createdAt: "2026-06-30T00:00:00.000Z" });
 
-    expect(describeSourcePassageMeta(passage)).toBe(
+    expect(describeSourcePassageMeta(passage, "en-US")).toBe(
       "Saved from conversation on 2026-06-30 00:00 · Source: desktop visual context + user confirmation"
     );
-    expect(describeSourcePassageMeta(passage, "zh-CN")).toBe("保存自 2026-06-30 00:00 的对话 · 来源：桌面视觉上下文 + 用户确认");
+    expect(describeSourcePassageMeta(passage)).toBe("保存自 2026-06-30 00:00 的对话 · 来源：桌面视觉上下文 + 用户确认");
   });
 
-  it("localizes Memory Library source labels for zh-CN", () => {
+  it("uses Chinese for the default locale", () => {
     const userPassage = makePassage({ role: "user", createdAt: "2026-06-28T00:00:00.000Z" });
 
-    expect(describeMemorySourceCount({ sourceIds: ["desktop-main-session-1", "desktop-main-session-2"] }, "zh-CN")).toBe(
-      "已保存 2 个来源"
-    );
-    expect(describeMemorySourceCount({ sourcePassages: [userPassage] }, "zh-CN")).toBe("1 个来源片段可查看");
-    expect(describeSourcePassageHeading(userPassage, "zh-CN")).toBe("来自你");
-    expect(describeSourcePassageStatus(userPassage, "zh-CN")).toBe("已本地保存");
-    expect(describeSourcePassageMeta(userPassage, "zh-CN")).toBe("保存自 2026-06-28 00:00 的对话");
-    expect(describeSourcePassageBody(makePassage({ text: "" }), undefined, "zh-CN")).toBe("这个来源没有保存消息文本。");
-    expect(describeRecallReason("cue:hiyori", "zh-CN")).toBe("命中召回线索「hiyori」");
+    expect(describeMemorySourceCount({ sourceIds: ["desktop-main-session-1", "desktop-main-session-2"] })).toBe("已保存 2 个来源");
+    expect(describeMemorySourceCount({ sourcePassages: [userPassage] })).toBe("1 个来源片段可查看");
+    expect(describeSourcePassageHeading(userPassage)).toBe("来自你");
+    expect(describeSourcePassageStatus(userPassage)).toBe("已本地保存");
+    expect(describeSourcePassageMeta(userPassage)).toBe("保存自 2026-06-28 00:00 的对话");
+    expect(describeSourcePassageBody(makePassage({ text: "" }))).toBe("这个来源没有保存消息文本。");
+    expect(describeRecallReason("cue:hiyori")).toBe("命中召回线索「hiyori」");
   });
 });
 

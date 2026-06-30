@@ -1,7 +1,7 @@
 export type GreyfieldLocale = "en-US" | "zh-CN";
 
 export function normalizeGreyfieldLocale(locale: unknown): GreyfieldLocale {
-  return locale === "zh-CN" ? "zh-CN" : "en-US";
+  return locale === "en-US" ? "en-US" : "zh-CN";
 }
 
 export interface GreyfieldConfig {
@@ -99,7 +99,7 @@ export const defaultGreyfieldConfig: GreyfieldConfig = {
   ui: {
     speechBubbleEnabled: true,
     proactiveMemoryEnabled: true,
-    locale: "en-US",
+    locale: "zh-CN",
     proactivityLevel: 50
   },
   memory: {

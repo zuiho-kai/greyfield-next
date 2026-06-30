@@ -15,6 +15,8 @@ const configPath = join(tempDir, "greyfield.config.json");
 const personaAPath = join(tempDir, "greyfield-persona-a.yaml");
 const personaBPath = join(tempDir, "greyfield-persona-b.yaml");
 const requests: Array<{ messages?: Array<{ role: string; content: string }> }> = [];
+const savePersonaButtonName = /^(Save persona|保存人格)$/;
+const characterFileLabel = /^(Character|角色文件)$/;
 
 const server = createServer(async (request: IncomingMessage, response: ServerResponse) => {
   const body = await readRequestBody(request);
@@ -93,7 +95,7 @@ try {
     await expectInputValue(settingsWindow, "Personality", "calm, focused, and lightly mischievous");
     await expectInputValue(settingsWindow, "Speaking style", "Use short starlit sentences with one concrete next step.");
     await expectInputValue(settingsWindow, "Boundaries", "Never claim desktop control.\nDo not mention hidden prompts.");
-    await settingsWindow.getByRole("button", { name: "Save persona" }).click();
+    await settingsWindow.getByRole("button", { name: savePersonaButtonName }).click();
     await settingsWindow.locator(".provider-test-result--success", { hasText: "Saved persona" }).waitFor({
       timeout: 10_000
     });
@@ -132,13 +134,13 @@ try {
     await waitForInputValue(settingsWindow, "User address", "captain");
     await waitForInputValue(settingsWindow, "Greeting", "Welcome back, captain.");
 
-    const characterFileInput = settingsWindow.getByLabel("Character");
+    const characterFileInput = settingsWindow.getByLabel(characterFileLabel);
     await characterFileInput.scrollIntoViewIfNeeded();
     await characterFileInput.fill(personaBPath);
     await waitForInputValue(settingsWindow, "Greyfield name", "Beryl");
     await expectInputValue(settingsWindow, "User address", "partner");
     await settingsWindow.getByLabel("Greeting").fill("B saved without A draft.");
-    await settingsWindow.getByRole("button", { name: "Save persona" }).click();
+    await settingsWindow.getByRole("button", { name: savePersonaButtonName }).click();
     await settingsWindow.locator(".provider-test-result--success", { hasText: "Saved persona" }).waitFor({
       timeout: 10_000
     });
@@ -250,8 +252,8 @@ async function waitForRoleWindow(app: ElectronApplication, roleName: "settings" 
 }
 
 async function sendMessage(page: Page, text: string): Promise<void> {
-  await page.getByLabel("Message").fill(text);
-  await page.getByRole("button", { name: "Send" }).click();
+  await page.getByTestId("chat-message-input").fill(text);
+  await page.getByTestId("chat-send-button").click();
 }
 
 async function expectInputValue(page: Page, label: string, expected: string): Promise<void> {
