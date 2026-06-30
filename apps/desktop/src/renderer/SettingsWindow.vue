@@ -481,7 +481,8 @@
             <div class="settings-slider-row__control">
               <input
                 :value="state.settings.proactivityLevel"
-                aria-label="主动程度"
+                :aria-label="t('field.proactivity')"
+                data-testid="proactivity-level-slider"
                 type="range"
                 min="0"
                 max="100"

@@ -22,6 +22,8 @@ const sceneContext: RuntimeSceneContext = {
 const expectedText = "It's raining again. I remembered our hotpot night at home.";
 const forbiddenFragments = ["atom", "score", "trace", "database", "candidate"];
 const summaryPath = join(artifactDir, "summary.json");
+const proactiveBubbleScreenshotPath = join(artifactDir, "proactive-memory-bubble.png");
+const settingsSliderScreenshotPath = join(artifactDir, "settings-proactivity-slider.png");
 
 await rm(artifactDir, { recursive: true, force: true });
 await mkdir(artifactDir, { recursive: true });
@@ -65,6 +67,7 @@ try {
     await showSettingsWindow(app);
     await setProactivityLevel(settingsWindow, 100);
     await waitForPersistedProactivityLevel(100);
+    await captureSettingsSliderScreenshot(settingsWindow);
     await triggerProactiveCheck(petWindow, sceneContext);
     await assertProactiveEventCountStays(petWindow, 0, "visible Settings window allowed proactive display");
     await hideSettingsWindow(app);
@@ -99,6 +102,7 @@ try {
     assertNaturalText(firstBubble, { exact: true });
     await assertBubbleTextFits(petWindow);
     await assertNoChatMessages(chatWindow);
+    await petWindow.screenshot({ path: proactiveBubbleScreenshotPath });
 
     await triggerProactiveCheck(petWindow, sceneContext);
     await assertProactiveEventCountStays(petWindow, 1, "cooldown allowed repeated proactive display");
@@ -138,7 +142,9 @@ try {
       zeroLevelBlockedDisplay: true,
       globalDisableBlockedDisplay: true,
       chatHistoryUnchanged: true,
-      artifact: summaryPath
+      artifact: summaryPath,
+      proactiveBubbleScreenshot: proactiveBubbleScreenshotPath,
+      settingsSliderScreenshot: settingsSliderScreenshotPath
     };
     await writeFile(summaryPath, `${JSON.stringify(summary, null, 2)}\n`, "utf8");
     console.log(JSON.stringify(summary, null, 2));
@@ -258,7 +264,7 @@ async function assertSettingsWindowVisibility(app: ElectronApplication, expected
 }
 
 async function setProactivityLevel(page: Page, value: number): Promise<void> {
-  const slider = page.getByLabel("主动程度");
+  const slider = proactivitySlider(page);
   await slider.waitFor({ state: "attached" });
   await slider.evaluate((input, value) => {
     const slider = input as HTMLInputElement;
@@ -266,9 +272,20 @@ async function setProactivityLevel(page: Page, value: number): Promise<void> {
     slider.dispatchEvent(new Event("input", { bubbles: true }));
   }, value);
   await page.waitForFunction(
-    (value) => (document.querySelector<HTMLInputElement>('input[aria-label="主动程度"]')?.value ?? "") === String(value),
+    (value) =>
+      (document.querySelector<HTMLInputElement>('[data-testid="proactivity-level-slider"]')?.value ?? "") === String(value),
     value
   );
+}
+
+function proactivitySlider(page: Page) {
+  return page.locator('[data-testid="proactivity-level-slider"]');
+}
+
+async function captureSettingsSliderScreenshot(page: Page): Promise<void> {
+  await page.locator('[data-settings-section="window"]').scrollIntoViewIfNeeded();
+  await proactivitySlider(page).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: settingsSliderScreenshotPath });
 }
 
 async function waitForPersistedProactivityLevel(value: number): Promise<void> {
