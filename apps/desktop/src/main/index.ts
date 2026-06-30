@@ -17,7 +17,7 @@ import { ElectronScreenCaptureSource } from "./screen-capture-source";
 import { redactConfigForRenderer } from "./settings-redaction";
 import { SettingsController } from "./settings-controller";
 import { getUsableWindow, hideWindowIfUsable, showWindowIfUsable } from "./window-lifecycle";
-import type { DesktopObservationState, DesktopPersonaSaveRequest, DesktopProactiveCheckRequest } from "../shared/ipc";
+import type { DesktopPersonaSaveRequest, DesktopProactiveCheckRequest, DesktopScreenAwarenessState } from "../shared/ipc";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 let petWindow: BrowserWindow | undefined;
@@ -60,7 +60,7 @@ async function createWindows(): Promise<void> {
   });
   observationController = new ObservationController({
     captureSource: new ElectronScreenCaptureSource(),
-    broadcast: broadcastObservationState
+    broadcast: broadcastScreenAwarenessState
   });
   settingsController = new SettingsController(
     config,
@@ -198,20 +198,8 @@ function registerIpc(): void {
     void exportMemory(event.sender);
   });
 
-  ipcMain.on("observation:capture", () => {
-    void observationController?.captureSingle();
-  });
-
-  ipcMain.on("observation:start", (_event, payload) => {
-    observationController?.startSequence(payload.mode);
-  });
-
-  ipcMain.on("observation:stop", () => {
-    observationController?.stop();
-  });
-
-  ipcMain.on("observation:delete", () => {
-    observationController?.delete();
+  ipcMain.on("screen-awareness:set-enabled", (_event, payload) => {
+    void observationController?.setEnabled(payload.enabled);
   });
 
   ipcMain.on("proactive:check", (_event, payload) => {
@@ -329,7 +317,16 @@ function attachHideOnClose(window: BrowserWindow | undefined, markDestroyed: () 
 }
 
 function handleRuntimeInput(payload: Parameters<NonNullable<typeof runtimeService>["handle"]>[0]): void {
-  void runtimeIpcController?.handleRuntimeInput(payload);
+  void (async () => {
+    const input =
+      payload.type === "text.input" && observationController?.isEnabled()
+        ? {
+            ...payload,
+            ...(await observationController.ensureFreshContext())
+          }
+        : payload;
+    await runtimeIpcController?.handleRuntimeInput(input);
+  })();
 }
 
 async function testLLMProvider(): Promise<void> {
@@ -460,6 +457,15 @@ async function exportMemoryAtom(sender: Electron.WebContents, id: string): Promi
 async function checkProactiveMemory(payload: DesktopProactiveCheckRequest): Promise<void> {
   if (getUsableWindow(settingsWindow)?.isVisible()) {
     return;
+  }
+  if (observationController?.isEnabled()) {
+    const visualContext = await observationController.ensureFreshContext();
+    const screenAwareResult = await runtimeService?.checkProactiveScreenAwareness(visualContext);
+    const window = getUsableWindow(petWindow);
+    if (screenAwareResult?.message && window) {
+      window.webContents.send("proactive:message", screenAwareResult.message);
+      return;
+    }
   }
   const result = await runtimeService?.checkProactiveMemory(payload.sceneContext);
   const window = getUsableWindow(petWindow);
@@ -620,9 +626,9 @@ function broadcastVoiceTestResult(sender: Electron.WebContents, result: Awaited<
   }
 }
 
-function broadcastObservationState(state: DesktopObservationState): void {
+function broadcastScreenAwarenessState(state: DesktopScreenAwarenessState): void {
   for (const window of BrowserWindow.getAllWindows()) {
-    window.webContents.send("observation:state", state);
+    window.webContents.send("screen-awareness:state", state);
   }
 }
 
@@ -640,9 +646,9 @@ function attachSettingsReplayOnLoad(window: BrowserWindow): void {
       return;
     }
     window.webContents.send("settings:changed", redactConfigForRenderer(config));
-    const observationState = observationController?.getState();
-    if (observationState) {
-      window.webContents.send("observation:state", observationState);
+    const screenAwarenessState = observationController?.getState();
+    if (screenAwarenessState) {
+      window.webContents.send("screen-awareness:state", screenAwarenessState);
     }
   });
 }

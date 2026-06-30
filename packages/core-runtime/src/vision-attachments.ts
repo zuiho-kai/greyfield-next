@@ -18,6 +18,7 @@ export interface RuntimeObservationInput {
   frameCount: number;
   dedupedFrameCount: number;
   durationMs?: number;
+  source?: RuntimeObservationMetadata["source"];
 }
 
 export interface RuntimeObservationMetadata {
@@ -25,7 +26,7 @@ export interface RuntimeObservationMetadata {
   mode: RuntimeObservationMode;
   frameCount: number;
   dedupedFrameCount: number;
-  source: "user-active-screenshot" | "user-active-observation";
+  source: "desktop-screen-awareness" | "user-active-screenshot" | "user-active-observation";
 }
 
 export interface FrameFilterFrame {
@@ -68,6 +69,9 @@ export function filterDistinctObservationFrames<Frame extends FrameFilterFrame>(
 }
 
 export function summarizeObservationForTranscript(metadata: RuntimeObservationMetadata): string {
+  if (metadata.source === "desktop-screen-awareness") {
+    return "Used recent desktop visual context for this reply.";
+  }
   if (metadata.mode === "single") {
     return "Used 1 temporary screenshot for this reply.";
   }

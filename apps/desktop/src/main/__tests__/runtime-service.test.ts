@@ -1944,6 +1944,66 @@ describe("RuntimeService", () => {
     });
   });
 
+  it("uses screen awareness for proactive speech only when proactivity and vision are available", async () => {
+    const visualContext = {
+      attachments: [
+        {
+          id: "screen-frame-1",
+          dataUrl: `data:image/png;base64,${Buffer.from("screen").toString("base64")}`,
+          mimeType: "image/png",
+          createdAt: "2026-06-30T00:00:00.000Z",
+          source: "observation-frame" as const
+        }
+      ],
+      observation: {
+        id: "screen-1",
+        mode: "normal" as const,
+        frameCount: 1,
+        dedupedFrameCount: 1,
+        source: "desktop-screen-awareness" as const
+      }
+    };
+    const activeService = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        ui: {
+          ...defaultGreyfieldConfig.ui,
+          proactivityLevel: 100
+        }
+      },
+      { threadId: "thread-screen-awareness" }
+    );
+    const quietService = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        ui: {
+          ...defaultGreyfieldConfig.ui,
+          proactivityLevel: 0
+        }
+      },
+      { threadId: "thread-screen-awareness" }
+    );
+
+    await expect(quietService.checkProactiveScreenAwareness(visualContext)).resolves.toEqual({
+      displayed: false,
+      reason: "disabled"
+    });
+    await expect(activeService.checkProactiveScreenAwareness({ attachments: [] })).resolves.toEqual({
+      displayed: false,
+      reason: "no_screen_context"
+    });
+    await expect(activeService.checkProactiveScreenAwareness(visualContext)).resolves.toMatchObject({
+      displayed: true,
+      message: {
+        text: "我看到桌面上有新的画面，可以陪你一起看。"
+      }
+    });
+    await expect(activeService.checkProactiveScreenAwareness(visualContext)).resolves.toEqual({
+      displayed: false,
+      reason: "screen_awareness_cooldown"
+    });
+  });
+
   it("uses the default low-disturbance policy for quiet windows and recent activity", async () => {
     const memoryAtomStore = new TestMemoryAtomStore([
       makeMemoryAtom({

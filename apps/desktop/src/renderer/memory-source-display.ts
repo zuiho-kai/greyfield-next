@@ -86,8 +86,8 @@ export function describeSourcePassageMeta(passage: DesktopMemorySourcePassage, l
   const timestamp = passage.createdAt ? formatMemoryTimestamp(passage.createdAt) : "";
   const suffix = passage.observationSource
     ? locale === "zh-CN"
-      ? " · 来源：用户主动截图/观察问答中确认的信息"
-      : " · Source: user-confirmed screenshot/observation Q&A"
+      ? " · 来源：桌面视觉上下文 + 用户确认"
+      : " · Source: desktop visual context + user confirmation"
     : "";
   if (passage.status === "available") {
     const base = timestamp

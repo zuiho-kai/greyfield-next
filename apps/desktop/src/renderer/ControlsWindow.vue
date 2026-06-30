@@ -76,6 +76,16 @@
           <Volume2 v-if="state.settings.voiceSpeechEnabled" :size="16" stroke-width="2.35" />
           <VolumeX v-else :size="16" stroke-width="2.35" />
         </button>
+        <button
+          type="button"
+          class="desktop-control-button"
+          :class="{ 'desktop-control-button--active': state.screenAwareness.enabled }"
+          :title="screenAwarenessTitle"
+          :aria-label="screenAwarenessTitle"
+          @click="$emit('toggle-screen-awareness')"
+        >
+          <ScanEye :size="16" stroke-width="2.35" />
+        </button>
         <button type="button" class="desktop-control-button" title="Open Settings" aria-label="Open Settings" @click="$emit('open-settings')">
           <Settings :size="16" stroke-width="2.35" />
         </button>
@@ -116,6 +126,7 @@ import {
   Mic,
   Minimize2,
   MousePointer2,
+  ScanEye,
   SendHorizontal,
   Settings,
   Square,
@@ -135,6 +146,7 @@ const emit = defineEmits<{
   "start-voice-input": [];
   "stop-voice-input": [];
   "toggle-speech-output": [];
+  "toggle-screen-awareness": [];
   "open-settings": [];
   "toggle-model-pass-through": [];
   "hide-controls": [];
@@ -158,6 +170,9 @@ const voiceInputTitle = computed(() => {
   return "Start microphone input";
 });
 const speechOutputTitle = computed(() => (props.state.settings.voiceSpeechEnabled ? "Turn voice output off" : "Turn voice output on"));
+const screenAwarenessTitle = computed(() =>
+  props.state.screenAwareness.enabled ? "Turn Screen awareness off" : "Turn Screen awareness on"
+);
 const modelPassThroughTitle = computed(() =>
   props.state.window.modelPassThrough ? "Model is click-through; use tray or settings to restore if needed" : "Make model click-through"
 );

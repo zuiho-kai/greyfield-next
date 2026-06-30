@@ -26,7 +26,9 @@ import {
   normalizeSummarySegmentUpdate,
   type UpdateSummarySegment,
   type RuntimeEventHandler,
+  type RuntimeImageAttachment,
   type RuntimeInputEvent,
+  type RuntimeObservationInput,
   type RuntimeOutputEvent,
   type RuntimeSceneContext,
   type ProactiveMemoryDisplayMessage,
@@ -125,10 +127,19 @@ export type ProactiveDesktopMessage = ProactiveMemoryDisplayMessage;
 export interface ProactiveDesktopCheckResult {
   displayed: boolean;
   message?: ProactiveDesktopMessage;
-  reason?: "disabled" | "missing_atom_store" | "active_runtime" | "recent_interrupt" | ProactiveMemoryDisplayResult["reason"];
+  reason?:
+    | "disabled"
+    | "missing_atom_store"
+    | "active_runtime"
+    | "recent_interrupt"
+    | "no_screen_context"
+    | "provider_no_vision"
+    | "screen_awareness_cooldown"
+    | ProactiveMemoryDisplayResult["reason"];
 }
 
 const proactiveInterruptCooldownMs = 60 * 1000;
+const screenAwarenessProactiveCooldownMs = 5 * 60 * 1000;
 
 export class RuntimeService {
   private config: GreyfieldConfig;
@@ -145,6 +156,7 @@ export class RuntimeService {
   private testingLLM = false;
   private testingVoice = false;
   private lastInterruptedAtMs: number | undefined;
+  private lastScreenAwarenessProactiveAtMs: number | undefined;
 
   constructor(config: GreyfieldConfig, private readonly options: RuntimeServiceOptions = {}) {
     this.config = config;
@@ -388,6 +400,77 @@ export class RuntimeService {
       this.proactiveTriggerState = result.nextTriggerState;
     }
     return result.response;
+  }
+
+  async checkProactiveScreenAwareness(input: {
+    attachments: RuntimeImageAttachment[];
+    observation?: RuntimeObservationInput;
+  }): Promise<ProactiveDesktopCheckResult> {
+    if (!this.config.ui.proactiveMemoryEnabled || this.config.ui.proactivityLevel <= 0) {
+      return { displayed: false, reason: "disabled" };
+    }
+    if (this.activeRuntime) {
+      return { displayed: false, reason: "active_runtime" };
+    }
+    if (this.lastInterruptedAtMs !== undefined && Date.now() - this.lastInterruptedAtMs < proactiveInterruptCooldownMs) {
+      return { displayed: false, reason: "recent_interrupt" };
+    }
+    if (this.lastScreenAwarenessProactiveAtMs !== undefined && Date.now() - this.lastScreenAwarenessProactiveAtMs < screenAwarenessProactiveCooldownMs) {
+      return { displayed: false, reason: "screen_awareness_cooldown" };
+    }
+    const attachments = input.attachments.filter((attachment) => attachment.dataUrl.startsWith(`data:${attachment.mimeType};base64,`));
+    if (attachments.length === 0) {
+      return { displayed: false, reason: "no_screen_context" };
+    }
+    const llm = this.createLLMProvider();
+    if (llm.supportsVision !== true) {
+      return { displayed: false, reason: "provider_no_vision" };
+    }
+
+    const messages: ChatMessage[] = [
+      {
+        role: "system",
+        content: [
+          "You are Greyfield, a visible Live2D desktop companion.",
+          "Screen awareness is enabled and the user has not spoken first.",
+          "If the recent desktop visual context gives a natural, low-disturbance reason to speak, say one short sentence.",
+          "Do not mention raw screenshots, frame counts, files, or hidden monitoring.",
+          "Do not claim control of the desktop."
+        ].join("\n")
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: "Use this temporary desktop visual context only if it naturally supports one proactive desktop-pet remark."
+          },
+          ...attachments.map((attachment) => ({
+            type: "image_url" as const,
+            image_url: { url: attachment.dataUrl, detail: "low" as const }
+          }))
+        ]
+      }
+    ];
+    let text = "";
+    for await (const chunk of llm.stream(messages)) {
+      text += chunk;
+      if (text.length > 240) {
+        break;
+      }
+    }
+    const normalized = text.replace(/\s+/g, " ").trim();
+    if (normalized.length === 0) {
+      return { displayed: false, reason: "no_screen_context" };
+    }
+    this.lastScreenAwarenessProactiveAtMs = Date.now();
+    return {
+      displayed: true,
+      message: {
+        text: normalized,
+        createdAt: new Date().toISOString()
+      }
+    };
   }
 
   async updateMemoryAtom(id: string, patch: UpdateMemoryAtom): Promise<MemoryControlResult> {
@@ -1036,12 +1119,17 @@ class MainFakeLLMProvider implements LLMProvider {
   readonly supportsVision = true;
 
   async *stream(messages: ChatMessage[]): AsyncIterable<string> {
+    const systemText = typeof messages[0]?.content === "string" ? messages[0].content : "";
     const last = messages.at(-1);
     const attachmentCount = Array.isArray(last?.content)
       ? last.content.filter((part) => part.type === "image_url").length
       : 0;
+    if (systemText.includes("Screen awareness is enabled") && attachmentCount > 0) {
+      yield "我看到桌面上有新的画面，可以陪你一起看。";
+      return;
+    }
     if (attachmentCount > 0) {
-      yield `我看到了这次临时观察里的 ${attachmentCount} 张画面。`;
+      yield "我看到了最近的桌面画面。";
       yield "可以继续问我画面里的细节。";
       return;
     }

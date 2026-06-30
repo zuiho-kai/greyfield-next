@@ -5,14 +5,13 @@ import type {
   DesktopIpcEventMap,
   DesktopIpcRequestChannel,
   DesktopIpcRequestMap,
-  DesktopObservationState,
+  DesktopScreenAwarenessState,
   DesktopMemoryAtomUpdate,
   DesktopMemoryDebugSnapshot,
   DesktopProactiveMessage,
   DesktopMemorySummaryUpdate
 } from "../shared/ipc";
 import type { MemoryAtomExtractionStatus } from "@greyfield/core-runtime";
-import { summarizeObservationForTranscript, type RuntimeObservationMetadata, type RuntimeObservationMode } from "@greyfield/core-runtime";
 import { isMaskedApiKey } from "../shared/secrets";
 import { createDefaultInteractionProfile } from "@greyfield/stage-live2d";
 import { createRendererPreviewRuntimeEvents } from "./preview-runtime-events";
@@ -54,7 +53,7 @@ export interface DesktopRendererState {
   memoryExtraction: MemoryAtomExtractionStatus | null;
   inputDraft: string;
   messages: DesktopMessage[];
-  observation: DesktopObservationState & { highFrequencyConfirmation: boolean };
+  screenAwareness: DesktopScreenAwarenessState;
   assistantDraft: string;
   proactiveMessage: {
     text: string;
@@ -146,7 +145,6 @@ export interface WindowStatePatch {
 export class DesktopRuntimeBridge {
   private state: DesktopRendererState = createInitialDesktopRendererState();
   private readonly stateChangeHandlers = new Set<DesktopStateChangeHandler>();
-  private readonly consumedObservationIds = new Set<string>();
   private readonly interactionProfile = createDefaultInteractionProfile();
   private personaCharacterFile = defaultGreyfieldConfig.characterFile;
   private speechPlaybackEpoch = 0;
@@ -291,19 +289,10 @@ export class DesktopRuntimeBridge {
       };
       this.emitStateChange();
     });
-    this.host?.on("observation:state", (observation) => {
-      if (observation.observationId.length > 0 && observation.frames.length > 0 && this.consumedObservationIds.has(observation.observationId)) {
-        return;
-      }
+    this.host?.on("screen-awareness:state", (screenAwareness) => {
       this.state = {
         ...this.state,
-        observation: {
-          ...observation,
-          highFrequencyConfirmation:
-            observation.status === "observing" || observation.mode !== "high"
-              ? false
-              : this.state.observation.highFrequencyConfirmation
-        }
+        screenAwareness
       };
       this.emitStateChange();
     });
@@ -337,7 +326,6 @@ export class DesktopRuntimeBridge {
       return this.getState();
     }
 
-    const observationPayload = createObservationRuntimePayload(this.state.observation);
     this.state = {
       ...this.state,
       status: "thinking",
@@ -351,23 +339,16 @@ export class DesktopRuntimeBridge {
         {
           role: "user",
           text: trimmed,
-          ...(observationPayload.metadata ? { observationSummary: summarizeObservationForTranscript(observationPayload.metadata) } : {})
+          ...(this.state.screenAwareness.enabled ? { observationSummary: "Screen awareness is on for this turn." } : {})
         }
       ],
-      observation: observationPayload.metadata ? createIdleObservationState() : this.state.observation
     };
 
     if (this.host) {
       this.host.send("runtime:input", {
         type: "text.input",
-        text: trimmed,
-        ...(observationPayload.attachments.length > 0 ? { attachments: observationPayload.attachments } : {}),
-        ...(observationPayload.observation ? { observation: observationPayload.observation } : {})
+        text: trimmed
       });
-      if (observationPayload.observation) {
-        this.consumedObservationIds.add(observationPayload.observation.id);
-        this.host.send("observation:delete", {});
-      }
       return this.getState();
     }
 
@@ -469,86 +450,18 @@ export class DesktopRuntimeBridge {
     return this.getState();
   }
 
-  captureScreenshot(): DesktopRendererState {
+  toggleScreenAwareness(): DesktopRendererState {
+    const enabled = !this.state.screenAwareness.enabled;
     this.state = {
       ...this.state,
-      observation: {
-        ...this.state.observation,
-        status: "capturing",
-        mode: "single",
-        message: "Capturing one temporary screenshot...",
-        highFrequencyConfirmation: false
+      screenAwareness: {
+        ...this.state.screenAwareness,
+        enabled,
+        status: enabled ? "warming" : "off",
+        message: enabled ? "Screen awareness is turning on." : ""
       }
     };
-    this.host?.send("observation:capture", { mode: "single" });
-    if (!this.host) {
-      this.state = {
-        ...this.state,
-        observation: {
-          ...createIdleObservationState(),
-          status: "ready",
-          mode: "single",
-          observationId: "preview-observation",
-          frames: [createPreviewObservationFrame()],
-          message: "Screenshot ready. Confirm to send it with this chat turn, or delete it."
-        }
-      };
-    }
-    return this.getState();
-  }
-
-  startObservation(mode: Exclude<RuntimeObservationMode, "single">): DesktopRendererState {
-    if (mode === "high" && !this.state.observation.highFrequencyConfirmation) {
-      this.state = {
-        ...this.state,
-        observation: {
-          ...this.state.observation,
-          mode,
-          highFrequencyConfirmation: true,
-          highFrequencyWarning: "High frequency observation is short-lived and stops automatically after 5 seconds or 8 frames.",
-          message: "High frequency captures more frames. Click High again to start."
-        }
-      };
-      return this.getState();
-    }
-    this.state = {
-      ...this.state,
-      observation: {
-        ...this.state.observation,
-        status: "observing",
-        mode,
-        frames: [],
-        highFrequencyConfirmation: false,
-        message: `${mode} observation is starting...`
-      }
-    };
-    this.host?.send("observation:start", { mode });
-    return this.getState();
-  }
-
-  stopObservation(): DesktopRendererState {
-    this.host?.send("observation:stop", {});
-    this.state = {
-      ...this.state,
-      observation: {
-        ...this.state.observation,
-        status: this.state.observation.frames.length > 0 ? "stopped" : "idle",
-        highFrequencyConfirmation: false,
-        message:
-          this.state.observation.frames.length > 0
-            ? "Observation stopped. Confirm to send the temporary frames, or delete them."
-            : "Observation stopped."
-      }
-    };
-    return this.getState();
-  }
-
-  deleteObservation(): DesktopRendererState {
-    this.host?.send("observation:delete", {});
-    this.state = {
-      ...this.state,
-      observation: createIdleObservationState()
-    };
+    this.host?.send("screen-awareness:set-enabled", { enabled });
     return this.getState();
   }
 
@@ -1128,7 +1041,7 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       snapshot: null
     },
     memoryExtraction: null,
-    observation: createIdleObservationState(),
+    screenAwareness: createInitialScreenAwarenessState(),
     voiceInput: {
       status: "idle",
       message: ""
@@ -1179,60 +1092,12 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
   };
 }
 
-function createIdleObservationState(): DesktopRendererState["observation"] {
+function createInitialScreenAwarenessState(): DesktopRendererState["screenAwareness"] {
   return {
-    status: "idle",
-    mode: "single",
+    enabled: false,
+    status: "off",
     observationId: "",
-    frames: [],
-    duplicateCount: 0,
-    maxFrames: 1,
-    timeoutMs: 0,
-    intervalMs: 0,
-    message: "",
-    highFrequencyConfirmation: false
-  };
-}
-
-function createObservationRuntimePayload(observation: DesktopRendererState["observation"]): {
-  attachments: DesktopRendererState["observation"]["frames"];
-  observation?: { id: string; mode: RuntimeObservationMode; frameCount: number; dedupedFrameCount: number; durationMs?: number };
-  metadata?: RuntimeObservationMetadata;
-} {
-  if ((observation.status !== "ready" && observation.status !== "stopped") || observation.frames.length === 0) {
-    return { attachments: [] };
-  }
-  const metadata: RuntimeObservationMetadata = {
-    kind: "visual-observation",
-    mode: observation.mode,
-    frameCount: observation.frames.length + observation.duplicateCount,
-    dedupedFrameCount: observation.frames.length,
-    source: observation.mode === "single" ? "user-active-screenshot" : "user-active-observation"
-  };
-  return {
-    attachments: observation.frames,
-    observation: {
-      id: observation.observationId || "renderer-observation",
-      mode: observation.mode,
-      frameCount: metadata.frameCount,
-      dedupedFrameCount: metadata.dedupedFrameCount,
-      ...(observation.timeoutMs > 0 ? { durationMs: observation.timeoutMs } : {})
-    },
-    metadata
-  };
-}
-
-function createPreviewObservationFrame(): DesktopRendererState["observation"]["frames"][number] {
-  const dataUrl =
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR42mP8z8AARLJgwiM3MDAAExABBCfR7P8AAAAASUVORK5CYII=";
-  return {
-    id: "preview-frame-1",
-    index: 0,
-    dataUrl,
-    mimeType: "image/png",
-    createdAt: new Date().toISOString(),
-    source: "screenshot",
-    hash: "preview"
+    message: ""
   };
 }
 

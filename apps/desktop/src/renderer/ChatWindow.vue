@@ -23,76 +23,6 @@
       <p>{{ state.voiceErrorMessage }}</p>
     </div>
 
-    <section class="observation-panel" aria-label="Visual observation">
-      <div class="observation-panel__header">
-        <div>
-          <strong>Look</strong>
-          <span>{{ observationStatusText }}</span>
-        </div>
-        <span v-if="state.observation.frames.length > 0" class="observation-panel__count">
-          {{ state.observation.frames.length }} frame{{ state.observation.frames.length === 1 ? "" : "s" }}
-        </span>
-      </div>
-      <p v-if="state.observation.highFrequencyWarning" class="observation-panel__warning">
-        {{ state.observation.highFrequencyWarning }}
-      </p>
-      <div v-if="state.observation.frames.length > 0" class="observation-preview-strip">
-        <img
-          v-for="frame in state.observation.frames.slice(0, 4)"
-          :key="frame.id"
-          :src="frame.dataUrl"
-          alt="Temporary observation preview"
-        />
-      </div>
-      <div class="observation-actions">
-        <button type="button" class="observation-action" title="Capture one screenshot" aria-label="Capture one screenshot" @click="$emit('capture-screenshot')">
-          <Camera :size="16" stroke-width="2.35" />
-          <span>Once</span>
-        </button>
-        <button type="button" class="observation-action" title="Observe slowly" aria-label="Observe slowly" @click="$emit('start-observation', 'low')">
-          <Gauge :size="16" stroke-width="2.35" />
-          <span>Low</span>
-        </button>
-        <button type="button" class="observation-action" title="Observe normally" aria-label="Observe normally" @click="$emit('start-observation', 'normal')">
-          <ScanEye :size="16" stroke-width="2.35" />
-          <span>Std</span>
-        </button>
-        <button
-          type="button"
-          class="observation-action"
-          :class="{ 'observation-action--warning': state.observation.highFrequencyConfirmation }"
-          title="High frequency observation"
-          aria-label="High frequency observation"
-          @click="$emit('start-observation', 'high')"
-        >
-          <Zap :size="16" stroke-width="2.35" />
-          <span>{{ state.observation.highFrequencyConfirmation ? "Start" : "High" }}</span>
-        </button>
-        <button
-          type="button"
-          class="observation-action observation-action--stop"
-          title="End observation"
-          aria-label="End observation"
-          :disabled="state.observation.status !== 'observing' && state.observation.status !== 'capturing'"
-          @click="$emit('stop-observation')"
-        >
-          <Square :size="15" stroke-width="2.35" />
-          <span>End</span>
-        </button>
-        <button
-          type="button"
-          class="observation-action"
-          title="Delete temporary observation"
-          aria-label="Delete temporary observation"
-          :disabled="state.observation.frames.length === 0 && state.observation.status === 'idle'"
-          @click="$emit('delete-observation')"
-        >
-          <Trash2 :size="16" stroke-width="2.35" />
-          <span>Clear</span>
-        </button>
-      </div>
-    </section>
-
     <div class="message-list-container message-list" aria-live="polite">
       <div
         v-for="(message, index) in state.messages"
@@ -152,10 +82,8 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { Camera, Gauge, ScanEye, Square, Trash2, Zap } from "lucide-vue-next";
 import type { DesktopRendererState } from "./desktop-runtime-bridge";
 import { describeChatStatus } from "./chat-status";
-import type { RuntimeObservationMode } from "@greyfield/core-runtime";
 
 const props = defineProps<{
   state: DesktopRendererState;
@@ -168,10 +96,6 @@ defineEmits<{
   interrupt: [];
   "start-voice-input": [];
   "stop-voice-input": [];
-  "capture-screenshot": [];
-  "start-observation": [mode: Exclude<RuntimeObservationMode, "single">];
-  "stop-observation": [];
-  "delete-observation": [];
   "open-settings": [];
 }>();
 
@@ -180,12 +104,6 @@ function valueFrom(event: Event): string {
 }
 
 const chatStatus = computed(() => describeChatStatus(props.state, props.draft));
-const observationStatusText = computed(() => {
-  if (props.state.observation.message) {
-    return props.state.observation.message;
-  }
-  return "Screenshots are temporary and only sent after you confirm with a message.";
-});
 const voiceInputLabel = computed(() => {
   if (props.state.voiceInput.status === "listening") {
     return "Stop Mic";
