@@ -23,10 +23,10 @@ export class PetWindowController {
   private lastShapeRects: ShapeRect[] = [];
   private activeDrag:
     | {
-        startScreenX: number;
-        startScreenY: number;
-        startWindowX: number;
-        startWindowY: number;
+        lastScreenX: number;
+        lastScreenY: number;
+        lastWindowX: number;
+        lastWindowY: number;
         startWindowWidth: number;
         startWindowHeight: number;
       }
@@ -108,10 +108,10 @@ export class PetWindowController {
     }
     const bounds = window.getBounds();
     this.activeDrag = {
-      startScreenX: payload.screenX,
-      startScreenY: payload.screenY,
-      startWindowX: bounds.x,
-      startWindowY: bounds.y,
+      lastScreenX: payload.screenX,
+      lastScreenY: payload.screenY,
+      lastWindowX: bounds.x,
+      lastWindowY: bounds.y,
       startWindowWidth: bounds.width,
       startWindowHeight: bounds.height
     };
@@ -121,12 +121,21 @@ export class PetWindowController {
     if (!this.activeDrag) {
       return;
     }
+    const stepX = toWholePixelDelta(payload.screenX - this.activeDrag.lastScreenX);
+    const stepY = toWholePixelDelta(payload.screenY - this.activeDrag.lastScreenY);
+    if (stepX === 0 && stepY === 0) {
+      return;
+    }
     this.movePetWindowWithoutResizing({
-      x: Math.round(this.activeDrag.startWindowX + payload.screenX - this.activeDrag.startScreenX),
-      y: Math.round(this.activeDrag.startWindowY + payload.screenY - this.activeDrag.startScreenY),
+      x: this.activeDrag.lastWindowX + stepX,
+      y: this.activeDrag.lastWindowY + stepY,
       width: this.activeDrag.startWindowWidth,
       height: this.activeDrag.startWindowHeight
     });
+    this.activeDrag.lastWindowX += stepX;
+    this.activeDrag.lastWindowY += stepY;
+    this.activeDrag.lastScreenX += stepX;
+    this.activeDrag.lastScreenY += stepY;
   }
 
   endDrag(): void {
@@ -158,4 +167,8 @@ export class PetWindowController {
   private canUseWindowShape(): boolean {
     return this.options.nativeShapeEnabled === true;
   }
+}
+
+function toWholePixelDelta(value: number): number {
+  return value > 0 ? Math.floor(value) : Math.ceil(value);
 }
