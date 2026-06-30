@@ -1820,6 +1820,20 @@ describe("RuntimeService", () => {
         memoryAtomStore
       }
     ).checkProactiveMemory(sceneContext);
+    const quietLevel = await new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        ui: {
+          ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
+          proactivityLevel: 0
+        }
+      },
+      {
+        threadId: "thread-a",
+        memoryAtomStore
+      }
+    ).checkProactiveMemory(sceneContext);
 
     expect(first).toMatchObject({
       displayed: true,
@@ -1831,6 +1845,103 @@ describe("RuntimeService", () => {
     expect(first.message?.text).not.toMatch(/atom|score|trace|database|candidate/iu);
     expect(second).toEqual({ displayed: false, reason: "cooldown" });
     expect(disabled).toEqual({ displayed: false, reason: "disabled" });
+    expect(quietLevel).toEqual({ displayed: false, reason: "disabled" });
+  });
+
+  it("uses proactivity level to make quiet-state proactive checks easier without bypassing active runtime", async () => {
+    const memoryAtomStore = new TestMemoryAtomStore([
+      makeMemoryAtom({
+        id: "atom-low-importance-rainy-hotpot",
+        threadId: "thread-a",
+        type: "episodic_scene",
+        text: "We kept the home window open while having hotpot on a rainy night.",
+        importance: 0.6,
+        sourceTurnIds: ["turn-hotpot"],
+        triggers: {
+          exact: [],
+          aliases: [],
+          secondary: [],
+          environment: ["rain", "virtual_home", "virtual_home.window=open", "last_seen_days>=30"],
+          semantic: ["shared scene memory"]
+        },
+        metadata: {
+          sharedExperience: true,
+          activity: "hotpot",
+          weather: "rain",
+          windowState: "open"
+        }
+      })
+    ]);
+    const sceneContext: RuntimeSceneContext = {
+      currentTime: "2026-06-28T08:00:00.000Z",
+      rain: true,
+      place: "home",
+      virtualHome: { windowOpen: true },
+      absenceDays: 45
+    };
+    const defaultService = new RuntimeService(defaultGreyfieldConfig, {
+      threadId: "thread-a",
+      memoryAtomStore
+    });
+    const activeService = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        ui: {
+          ...defaultGreyfieldConfig.ui,
+          proactivityLevel: 100
+        }
+      },
+      {
+        threadId: "thread-a",
+        memoryAtomStore
+      }
+    );
+    const hangingChat = createHangingChatFetch();
+    const runningService = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "secret",
+          model: "remote-model"
+        },
+        ui: {
+          ...defaultGreyfieldConfig.ui,
+          proactivityLevel: 100
+        }
+      },
+      {
+        threadId: "thread-a",
+        memoryAtomStore,
+        fetch: hangingChat.fetch
+      }
+    );
+
+    await expect(defaultService.checkProactiveMemory(sceneContext)).resolves.toEqual({
+      displayed: false,
+      reason: "no_candidate"
+    });
+    await expect(activeService.checkProactiveMemory(sceneContext)).resolves.toMatchObject({
+      displayed: true,
+      message: {
+        text: "It's raining again. I remembered our hotpot night at home."
+      }
+    });
+
+    const running = runningService.handle({ type: "text.input", text: "keep running" }, () => undefined);
+    await hangingChat.started;
+    await expect(runningService.checkProactiveMemory(sceneContext)).resolves.toEqual({
+      displayed: false,
+      reason: "active_runtime"
+    });
+    await runningService.handle({ type: "runtime.interrupt" }, () => undefined);
+    await running;
+    await expect(runningService.checkProactiveMemory(sceneContext)).resolves.toEqual({
+      displayed: false,
+      reason: "recent_interrupt"
+    });
   });
 
   it("uses the default low-disturbance policy for quiet windows and recent activity", async () => {
@@ -2097,6 +2208,26 @@ function createSseResponse(text: string): Response {
     }
   });
   return new Response(body, { status: 200 });
+}
+
+function createHangingChatFetch(): { fetch: typeof fetch; started: Promise<void> } {
+  let resolveStarted: (() => void) | undefined;
+  const started = new Promise<void>((resolve) => {
+    resolveStarted = resolve;
+  });
+  const fetch = vi.fn(async (_url, init) => {
+    const signal = init?.signal;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"慢"}}]}\n\n'));
+        resolveStarted?.();
+        signal?.addEventListener("abort", () => controller.close(), { once: true });
+      }
+    });
+    return new Response(body, { status: 200 });
+  }) as typeof globalThis.fetch;
+  return { fetch, started };
 }
 
 function getExtractionStatus(events: unknown[]): unknown {

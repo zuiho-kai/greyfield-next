@@ -422,7 +422,7 @@
         >
           <header class="settings-section__header">
             <h2>{{ t("section.window") }}</h2>
-            <span>{{ state.settings.speechBubbleEnabled ? t("status.bubbleOn") : t("status.bubbleOff") }}</span>
+            <span>{{ t("status.proactivity", { level: state.settings.proactivityLevel }) }}</span>
           </header>
           <div class="settings-fields settings-fields--compact">
             <label>
@@ -476,6 +476,21 @@
               />
             </label>
           </div>
+          <label class="settings-slider-row">
+            <span>{{ t("field.proactivity") }}</span>
+            <div class="settings-slider-row__control">
+              <input
+                :value="state.settings.proactivityLevel"
+                aria-label="主动程度"
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                @input="$emit('update-numeric-setting', 'proactivityLevel', valueFrom($event))"
+              />
+              <output>{{ state.settings.proactivityLevel }}</output>
+            </div>
+          </label>
         </div>
 
         <div
@@ -1032,7 +1047,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "update-setting": [key: keyof DesktopSettingsState, value: string];
-  "update-numeric-setting": [key: "modelScale" | "modelX" | "modelY" | "voiceVolume", value: string];
+  "update-numeric-setting": [key: "modelScale" | "modelX" | "modelY" | "voiceVolume" | "proactivityLevel", value: string];
   "update-boolean-setting": [
     key: "speechBubbleEnabled" | "voiceSpeechEnabled" | "proactiveMemoryEnabled" | "llmAtomExtractionEnabled",
     value: boolean

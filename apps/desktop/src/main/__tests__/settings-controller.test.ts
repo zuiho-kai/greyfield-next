@@ -58,7 +58,7 @@ describe("SettingsController", () => {
     const controller = new SettingsController(
       {
         ...defaultGreyfieldConfig,
-        ui: { ...defaultGreyfieldConfig.ui, speechBubbleEnabled: false, proactiveMemoryEnabled: true }
+        ui: { ...defaultGreyfieldConfig.ui, speechBubbleEnabled: false, proactiveMemoryEnabled: true, proactivityLevel: 80 }
       },
       save,
       emit
@@ -69,9 +69,10 @@ describe("SettingsController", () => {
     expect(next.ui.speechBubbleEnabled).toBe(false);
     expect(next.ui.proactiveMemoryEnabled).toBe(true);
     expect(next.ui.locale).toBe("en-US");
+    expect(next.ui.proactivityLevel).toBe(80);
     expect(save).toHaveBeenCalledWith(
       expect.objectContaining({
-        ui: { ...defaultGreyfieldConfig.ui, speechBubbleEnabled: false, proactiveMemoryEnabled: true }
+        ui: { ...defaultGreyfieldConfig.ui, speechBubbleEnabled: false, proactiveMemoryEnabled: true, proactivityLevel: 80 }
       })
     );
   });

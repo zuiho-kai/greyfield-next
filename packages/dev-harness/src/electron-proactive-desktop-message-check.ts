@@ -1,5 +1,5 @@
 import { _electron as electron, type ElectronApplication, type Page } from "playwright";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
@@ -21,6 +21,7 @@ const sceneContext: RuntimeSceneContext = {
 };
 const expectedText = "It's raining again. I remembered our hotpot night at home.";
 const forbiddenFragments = ["atom", "score", "trace", "database", "candidate"];
+const summaryPath = join(artifactDir, "summary.json");
 
 await rm(artifactDir, { recursive: true, force: true });
 await mkdir(artifactDir, { recursive: true });
@@ -57,6 +58,17 @@ try {
       attachProactiveEventProbe(controlsWindow)
     ]);
 
+    await triggerProactiveCheck(petWindow, sceneContext);
+    await assertProactiveEventCountStays(petWindow, 0, "default proactivity level allowed low-confidence proactive display");
+    await assertNoChatMessages(chatWindow);
+
+    await showSettingsWindow(app);
+    await setProactivityLevel(settingsWindow, 100);
+    await waitForPersistedProactivityLevel(100);
+    await triggerProactiveCheck(petWindow, sceneContext);
+    await assertProactiveEventCountStays(petWindow, 0, "visible Settings window allowed proactive display");
+    await hideSettingsWindow(app);
+
     await triggerProactiveCheck(petWindow, {
       ...sceneContext,
       currentTime: "2026-06-28T23:00:00.000Z"
@@ -87,36 +99,49 @@ try {
     assertNaturalText(firstBubble, { exact: true });
     await assertBubbleTextFits(petWindow);
     await assertNoChatMessages(chatWindow);
-    const screenshotPath = join(artifactDir, "proactive-memory-bubble.png");
-    await petWindow.screenshot({ path: screenshotPath });
 
     await triggerProactiveCheck(petWindow, sceneContext);
     await assertProactiveEventCountStays(petWindow, 1, "cooldown allowed repeated proactive display");
 
+    await showSettingsWindow(app);
+    await setProactivityLevel(settingsWindow, 0);
+    await waitForPersistedProactivityLevel(0);
+    await hideSettingsWindow(app);
+    await triggerProactiveCheck(petWindow, {
+      ...sceneContext,
+      currentTime: "2026-06-28T12:00:00.000Z"
+    });
+    await assertProactiveEventCountStays(petWindow, 1, "zero proactivity level allowed proactive display");
+
+    await showSettingsWindow(app);
     await settingsWindow.getByLabel("Remembered moments").setChecked(false);
+    await hideSettingsWindow(app);
     await petWindow.locator(".speech-bubble").waitFor({ state: "detached", timeout: 5_000 });
     await triggerProactiveCheck(petWindow, sceneContext);
     await assertProactiveEventCountStays(petWindow, 1, "global disable allowed proactive display");
     await petWindow.locator(".speech-bubble").waitFor({ state: "detached", timeout: 1_000 });
 
-    console.log(
-      JSON.stringify(
-        {
-          ok: true,
-          displayedNaturalBubble: true,
-          scopedToPetWindow: true,
-          quietWindowBlockedDisplay: true,
-          recentActivityBlockedDisplay: true,
-          missingSignalBlockedDisplay: true,
-          cooldownBlockedRepeat: true,
-          globalDisableBlockedDisplay: true,
-          chatHistoryUnchanged: true,
-          screenshot: screenshotPath
-        },
-        null,
-        2
-      )
-    );
+    const summary = {
+      ok: true,
+      settingsSliderVisible: true,
+      settingsSliderPersisted100: true,
+      settingsSliderPersisted0: true,
+      defaultLevelBlockedLowConfidenceCandidate: true,
+      highLevelDisplayedLowConfidenceCandidate: true,
+      settingsWindowBlockedDisplay: true,
+      displayedNaturalBubble: true,
+      scopedToPetWindow: true,
+      quietWindowBlockedDisplay: true,
+      recentActivityBlockedDisplay: true,
+      missingSignalBlockedDisplay: true,
+      cooldownBlockedRepeat: true,
+      zeroLevelBlockedDisplay: true,
+      globalDisableBlockedDisplay: true,
+      chatHistoryUnchanged: true,
+      artifact: summaryPath
+    };
+    await writeFile(summaryPath, `${JSON.stringify(summary, null, 2)}\n`, "utf8");
+    console.log(JSON.stringify(summary, null, 2));
   } finally {
     await app.close();
   }
@@ -191,6 +216,72 @@ async function triggerProactiveCheck(page: Page, sceneContext: RuntimeSceneConte
   await page.evaluate((sceneContext) => {
     window.greyfield?.send("proactive:check", { sceneContext });
   }, sceneContext);
+}
+
+async function showSettingsWindow(app: ElectronApplication): Promise<void> {
+  await app.evaluate(({ BrowserWindow }) => {
+    for (const browserWindow of BrowserWindow.getAllWindows()) {
+      if (browserWindow.webContents.getURL().includes("window=settings")) {
+        browserWindow.show();
+      }
+    }
+  });
+  await assertSettingsWindowVisibility(app, true);
+}
+
+async function hideSettingsWindow(app: ElectronApplication): Promise<void> {
+  await app.evaluate(({ BrowserWindow }) => {
+    for (const browserWindow of BrowserWindow.getAllWindows()) {
+      if (browserWindow.webContents.getURL().includes("window=settings")) {
+        browserWindow.hide();
+      }
+    }
+  });
+  await assertSettingsWindowVisibility(app, false);
+}
+
+async function assertSettingsWindowVisibility(app: ElectronApplication, expectedVisible: boolean): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < 3_000) {
+    const visible = await app.evaluate(({ BrowserWindow }) => {
+      const settingsWindow = BrowserWindow.getAllWindows().find((browserWindow) =>
+        browserWindow.webContents.getURL().includes("window=settings")
+      );
+      return settingsWindow?.isVisible() ?? false;
+    });
+    if (visible === expectedVisible) {
+      return;
+    }
+    await delay(50);
+  }
+  throw new Error(`Settings window visibility did not become ${expectedVisible}`);
+}
+
+async function setProactivityLevel(page: Page, value: number): Promise<void> {
+  const slider = page.getByLabel("主动程度");
+  await slider.waitFor({ state: "attached" });
+  await slider.evaluate((input, value) => {
+    const slider = input as HTMLInputElement;
+    slider.value = String(value);
+    slider.dispatchEvent(new Event("input", { bubbles: true }));
+  }, value);
+  await page.waitForFunction(
+    (value) => (document.querySelector<HTMLInputElement>('input[aria-label="主动程度"]')?.value ?? "") === String(value),
+    value
+  );
+}
+
+async function waitForPersistedProactivityLevel(value: number): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < 3_000) {
+    const config = JSON.parse(await readFile(configPath, "utf8")) as { ui?: { proactivityLevel?: number } };
+    if (config.ui?.proactivityLevel === value) {
+      return;
+    }
+    await delay(50);
+  }
+  const raw = await readFile(configPath, "utf8");
+  throw new Error(`Timed out waiting for proactivityLevel=${value}; config=${raw}`);
 }
 
 async function waitForBubbleText(page: Page): Promise<string> {
@@ -302,7 +393,7 @@ function makeRainyHotpotAtom(): MemoryAtom {
     text: "We kept the home window open while having hotpot on a rainy night.",
     sourceTurnIds: ["turn-hotpot"],
     createdAt: "2026-05-01T08:00:00.000Z",
-    importance: 0.91,
+    importance: 0.6,
     triggerKeys: [],
     triggers: {
       exact: [],

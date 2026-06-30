@@ -4,6 +4,7 @@ import {
   buildProactiveMemoryCandidates,
   buildProactiveMemoryCandidatesFromSceneContext,
   buildProactiveMemoryDisplayMessage,
+  buildProactiveMemoryPolicyForLevel,
   type RuntimeSceneContext
 } from "../proactive-memory";
 
@@ -92,6 +93,65 @@ describe("proactive memory", () => {
     expect(first.nextTriggerState.lastTriggeredAt).toBe("2026-07-15T10:00:00.000Z");
     expect(first.nextTriggerState.atomLastTriggeredAt?.[atom.id]).toBe("2026-07-15T10:00:00.000Z");
     expect(second.response).toEqual({ displayed: false, reason: "cooldown" });
+  });
+
+  it("maps 0, 50, and 100 proactivity to disabled, default, and more active policy", () => {
+    const atom = { ...makeRainyWindowHotpotAtom(), importance: 0.6 };
+    const baseEnvironment = {
+      now: "2026-07-15T10:00:00.000Z",
+      weather: "rain" as const,
+      virtualHome: { windowOpen: true },
+      lastSeenDays: 45
+    };
+
+    const disabledPolicy = buildProactiveMemoryPolicyForLevel(0);
+    const defaultPolicy = buildProactiveMemoryPolicyForLevel(50);
+    const activePolicy = buildProactiveMemoryPolicyForLevel(100);
+
+    expect(disabledPolicy).toEqual({ enabled: false });
+    expect(defaultPolicy).toMatchObject({
+      enabled: true,
+      minImportance: 0.7,
+      globalCooldownMs: 6 * 60 * 60 * 1000,
+      perAtomCooldownMs: 7 * 24 * 60 * 60 * 1000,
+      defaultLongAbsenceDays: 30,
+      proactivityScoreBoost: 0
+    });
+    expect(activePolicy).toMatchObject({
+      enabled: true,
+      minImportance: 0.5,
+      globalCooldownMs: 60 * 60 * 1000,
+      perAtomCooldownMs: 24 * 60 * 60 * 1000,
+      defaultLongAbsenceDays: 7,
+      proactivityScoreBoost: 12
+    });
+
+    expect(
+      buildProactiveMemoryCandidates({
+        atoms: [atom],
+        environment: baseEnvironment,
+        policy: disabledPolicy
+      }).skipped
+    ).toEqual([{ reason: "policy_disabled" }]);
+    expect(
+      buildProactiveMemoryCandidates({
+        atoms: [atom],
+        environment: baseEnvironment,
+        policy: defaultPolicy
+      }).skipped
+    ).toEqual(expect.arrayContaining([{ atomId: atom.id, reason: "importance_below_threshold" }]));
+
+    const activeResult = buildProactiveMemoryCandidates({
+      atoms: [atom],
+      environment: baseEnvironment,
+      policy: activePolicy
+    });
+    expect(activeResult.candidates).toHaveLength(1);
+    expect(activeResult.candidates[0]?.score).toBe(162);
+    expect(activeResult.candidates[0]?.cooldown).toMatchObject({
+      globalCooldownMs: 60 * 60 * 1000,
+      perAtomCooldownMs: 24 * 60 * 60 * 1000
+    });
   });
 
   it("generates the same candidate from controlled runtime scene signals", () => {

@@ -110,7 +110,8 @@ describe("createDesktopRuntimeBridge", () => {
       modelScale: 1.4,
       modelX: 20,
       modelY: -10,
-      speechBubbleEnabled: false
+      speechBubbleEnabled: false,
+      proactivityLevel: 80
     });
 
     expect(sent).toEqual([
@@ -135,7 +136,7 @@ describe("createDesktopRuntimeBridge", () => {
             x: 20,
             y: -10
           },
-          ui: { speechBubbleEnabled: false }
+          ui: { speechBubbleEnabled: false, proactivityLevel: 80 }
         }
       ]
     ]);
@@ -243,6 +244,38 @@ describe("createDesktopRuntimeBridge", () => {
 
     expect(bridge.getState().proactiveMessage).toBeNull();
     expect(sent).toContainEqual(["settings:update", { ui: { proactiveMemoryEnabled: false } }]);
+  });
+
+  it("persists proactivity level and treats 0 as quiet mode for proactive pet messages", () => {
+    const sent: Array<[string, unknown]> = [];
+    let proactiveMessage:
+      | ((event: import("../../shared/ipc").DesktopProactiveMessage) => void)
+      | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: (channel, payload) => sent.push([channel, payload]),
+      on: (channel, handler) => {
+        if (channel === "proactive:message") {
+          proactiveMessage = handler as typeof proactiveMessage;
+        }
+        return () => undefined;
+      }
+    });
+
+    bridge.updateSettings({ proactivityLevel: 100 });
+    proactiveMessage?.({
+      text: "It's raining again. I remembered our hotpot night at home.",
+      createdAt: "2026-06-28T00:00:00.000Z"
+    });
+    bridge.updateSettings({ proactivityLevel: 0 });
+    proactiveMessage?.({
+      text: "This should stay quiet.",
+      createdAt: "2026-06-28T00:01:00.000Z"
+    });
+
+    expect(sent).toContainEqual(["settings:update", { ui: { proactivityLevel: 100 } }]);
+    expect(sent).toContainEqual(["settings:update", { ui: { proactivityLevel: 0 } }]);
+    expect(bridge.getState().settings.proactivityLevel).toBe(0);
+    expect(bridge.getState().proactiveMessage).toBeNull();
   });
 
   it("sends an LLM provider test request and reduces the result", () => {

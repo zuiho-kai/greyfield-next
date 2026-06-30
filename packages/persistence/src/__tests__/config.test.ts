@@ -18,6 +18,7 @@ describe("Greyfield config", () => {
     expect(defaultGreyfieldConfig.ui.speechBubbleEnabled).toBe(true);
     expect(defaultGreyfieldConfig.ui.proactiveMemoryEnabled).toBe(true);
     expect(defaultGreyfieldConfig.ui.locale).toBe("en-US");
+    expect(defaultGreyfieldConfig.ui.proactivityLevel).toBe(50);
     expect(defaultGreyfieldConfig.memory.llmAtomExtractionEnabled).toBe(false);
   });
 
@@ -27,7 +28,7 @@ describe("Greyfield config", () => {
       voice: { speechEnabled: true },
       audio: { microphoneId: "mic-2" },
       live2d: { scale: 1.25 },
-      ui: { speechBubbleEnabled: false, proactiveMemoryEnabled: false },
+      ui: { speechBubbleEnabled: false, proactiveMemoryEnabled: false, proactivityLevel: 80 },
       memory: { llmAtomExtractionEnabled: true }
     });
 
@@ -54,6 +55,7 @@ describe("Greyfield config", () => {
     expect(config.ui.speechBubbleEnabled).toBe(false);
     expect(config.ui.proactiveMemoryEnabled).toBe(false);
     expect(config.ui.locale).toBe("en-US");
+    expect(config.ui.proactivityLevel).toBe(80);
     expect(config.memory.llmAtomExtractionEnabled).toBe(true);
   });
 
@@ -63,6 +65,12 @@ describe("Greyfield config", () => {
     });
 
     expect(config.ui.locale).toBe("en-US");
+  });
+
+  it("keeps proactivity level within the Settings slider range", () => {
+    expect(mergeConfig({ ui: { proactivityLevel: -1 } }).ui.proactivityLevel).toBe(0);
+    expect(mergeConfig({ ui: { proactivityLevel: 100.6 } }).ui.proactivityLevel).toBe(100);
+    expect(mergeConfig({ ui: { proactivityLevel: Number.NaN } }).ui.proactivityLevel).toBe(50);
   });
 
   it("loads user config files written with a UTF-8 BOM", async () => {

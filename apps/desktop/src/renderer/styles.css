@@ -1013,6 +1013,30 @@ h1 {
   padding-top: 0;
 }
 
+.settings-slider-row {
+  align-items: center;
+}
+
+.settings-slider-row__control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.settings-slider-row__control input[type="range"] {
+  min-height: 32px;
+  padding: 0;
+}
+
+.settings-slider-row__control output {
+  color: #1f2933;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: right;
+}
+
 .settings-panel input,
 .settings-panel select,
 .settings-panel textarea {

@@ -5,6 +5,8 @@ describe("settings i18n", () => {
   it("maps Settings labels in zh-CN", () => {
     expect(settingsT("zh-CN", "nav.window")).toBe("窗口");
     expect(settingsT("zh-CN", "section.memoryExtraction")).toBe("记忆提取");
+    expect(settingsT("zh-CN", "field.proactivity")).toBe("主动程度");
+    expect(settingsT("zh-CN", "status.proactivity", { level: 80 })).toBe("主动 80/100");
     expect(settingsT("zh-CN", "provider.preview.label")).toBe("预览模式");
   });
 
