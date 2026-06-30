@@ -111,6 +111,7 @@ For privacy-sensitive or temporary-data PRs, also required:
 For screen or visual awareness PRs, also required:
 
 - Verify the visible mode on/off path from the desktop pet controls or pet interaction surface, not only from Chat.
+- Verify the small desktop panel exposes exactly the approved visible controls. For the default screen-awareness product, this means one Screen awareness toggle and no separate Shot, Clear, End, preview, frequency, frame-count, or manual capture buttons.
 - Verify user-initiated messages can use current visual context when enabled.
 - Verify proactive behavior: `proactivityLevel` 0 does not initiate screen-aware speech, and a positive level can use recent visual context without requiring the user to speak first.
 - Verify disabling screen awareness stops future visual context use and does not resurrect after reload.
@@ -132,7 +133,7 @@ Some features are not single checks. A project-owner review must verify the full
 - Voice companion: microphone capture, ASR, transcript-to-chat, text response, TTS playback, waveform mouth movement, Stop/cancel, queue cleanup, user-visible state, and fake/local provider coverage.
 - Provider settings: ordinary typing path, masked-secret echo, missing fields, testing state, success, failure, active-chat rejection, and no unintended provider requests.
 - Desktop pet interaction: model-pixel interaction, transparent pass-through, drag continuity, wheel bounds, pass-through toggles, bubble placement, and recovery controls.
-- Desktop screen awareness: desktop-control entry, mode on/off, user-initiated question, proactive use with `proactivityLevel`, provider fallback, reload/off recovery, raw-data non-persistence, and natural pet wording rather than attachment-management UI.
+- Desktop screen awareness: desktop-control entry, exactly one default toggle, no Shot/Clear/End/preview/frequency controls in the small panel, mode on/off, user-initiated question, proactive use with `proactivityLevel`, provider fallback, reload/off recovery, raw-data non-persistence, and natural pet wording rather than attachment-management UI.
 - Speech bubble: first-token display, long-reply cap, fade lifecycle, viewport/screen containment, disabled-bubble hit-area removal, and full Chat history retention.
 
 ## Reviewer-Lens Audits

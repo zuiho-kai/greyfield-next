@@ -31,6 +31,8 @@ If a feature touches proactive behavior, the story must state all three cases be
 
 Engineering safeguards such as sampling limits, frame caps, timeouts, duplicate filtering, or raw-data cleanup must not become visible product controls or PR scope unless the user approved those controls in product language.
 
+For desktop screen awareness specifically, the default approved shape is one ordinary pet-control toggle: off/on. Do not introduce separate Shot, Clear, End, preview, frequency, frame-count, or manual capture controls in the small desktop panel unless the issue explicitly says those controls are part of the product. Put sampling, retention, and advanced capture policy in Settings or keep them as internal defaults.
+
 ## Issue And Slice Gate
 
 Roadmap and phase issues are coordination indexes. They are not ready-to-code scopes.
@@ -42,6 +44,8 @@ Before assigning implementation work or opening a feature PR:
 3. Write the issue so another agent can finish it without chat context.
 4. Name explicit non-goals so adjacent work does not leak in.
 5. Name the acceptance evidence: unit test, benchmark, harness, screenshot, or current-head doc proof.
+
+If the user's correction narrows visible controls or product shape, update the issue acceptance and harness expectations before telling a worker to continue implementation. A verbal correction in chat is not enough; the worker prompt and issue must block the old UI from reappearing.
 
 An atomic implementation issue must include:
 
@@ -89,6 +93,7 @@ git worktree add ../greyfield-next-main-runtime-persistence -b feature/main-runt
 - Agents must report changed files, verification commands, and unresolved risks before handoff.
 - An implementation handoff is not complete until the worker reports all of these, unless the coordinator explicitly requested a local-only spike: changed files, verification commands, artifacts/screenshots when user-visible, commit SHA, push status, PR URL or current PR number, remote head SHA, and unresolved risks. "Code is ready locally" is a status update, not a finished handoff.
 - For long-running delegated work, the worker must provide concrete progress or a blocker at least every 10-15 minutes when asked or when a validation loop stalls. A coordinator should actively check PR head, worktree status, and running processes instead of relying on sub-agent notifications as the only trigger.
+- After a worker completes first-pass wiring for a frontend/runtime feature, it should run the agreed targeted tests before broadening more UI or harness work. If no validation process, PR, or concrete status appears for 10-15 minutes, the coordinator should interrupt for status rather than silently waiting.
 - A coordinating agent merges results by PR review, not by copying unreviewed files between worktrees.
 - Split parallel work by disjoint write sets first, dependency order second. If one PR creates an interface and another consumes it, merge or rebase the provider PR before approving the consumer.
 - When a sibling PR merges while another PR is open, the coordinating agent must rebase the open PR and rerun its targeted verification before marking it ready.
@@ -113,6 +118,12 @@ git worktree add ../greyfield-next-main-runtime-persistence -b feature/main-runt
 - If the PR changes V1 acceptance, update `packages/dev-harness/v1-features.json` in the same branch.
 - If the PR fixes a real missed behavior, update the nearest retro/QA doc in the same branch.
 - If bot or human review finds that the PR combines unrelated capability, UI, privacy, and architecture work, split the PR instead of continuing review churn.
+
+## Rule And Docs Change Hygiene
+
+- Before editing agent rules, planning docs, or issue closeout docs, run `git status --short --branch` and identify whether the current branch already backs an open feature PR.
+- Do not mix process-rule changes into feature branches such as Settings, Chat, memory, or screen-awareness implementation PRs unless the issue explicitly includes that docs work.
+- If the current checkout has unrelated modified files or belongs to an open feature PR, create a separate docs branch/worktree from `origin/main` for the rule update.
 
 Suggested PR body:
 
