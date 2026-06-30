@@ -34,7 +34,8 @@
     "toggleClickThrough": "CommandOrControl+Shift+P"
   },
   "ui": {
-    "speechBubbleEnabled": true
+    "speechBubbleEnabled": true,
+    "locale": "zh-CN"
   },
   "characterFile": "characters/greyfield.yaml"
 }

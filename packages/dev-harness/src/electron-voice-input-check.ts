@@ -98,7 +98,7 @@ try {
     await chatWindow.getByRole("button", { name: "Voice" }).click();
     await chatWindow.locator(".stop-button").click();
     await waitForMicrophoneProbeEvent(chatWindow, "cancel");
-    await chatWindow.locator(".status-pill", { hasText: "Stopped" }).waitFor({ timeout: 10_000 });
+    await chatWindow.locator('[data-testid="chat-status"][data-status-tone="stopped"]').waitFor({ timeout: 10_000 });
     if (asrRequests !== 0) {
       throw new Error(`Stop during listening still sent ASR requests: ${asrRequests}`);
     }

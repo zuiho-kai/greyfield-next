@@ -10,9 +10,9 @@ describe("settings i18n", () => {
     expect(settingsT("zh-CN", "provider.preview.label")).toBe("预览模式");
   });
 
-  it("falls back to en-US for unsupported locales and missing zh-CN keys", () => {
-    expect(normalizeSettingsLocale("fr-FR")).toBe("en-US");
-    expect(settingsT("fr-FR", "nav.window")).toBe("Window");
+  it("falls back to zh-CN for unsupported locales", () => {
+    expect(normalizeSettingsLocale("fr-FR")).toBe("zh-CN");
+    expect(settingsT("fr-FR", "nav.window")).toBe("窗口");
   });
 
   it("formats translated status messages with values", () => {
@@ -28,5 +28,19 @@ describe("settings i18n", () => {
     expect(settingsT("zh-CN", "memory.field.recallCues")).toBe("召回线索");
     expect(settingsT("zh-CN", "memory.action.viewSource")).toBe("查看来源");
     expect(settingsT("zh-CN", "memory.empty")).toBe("暂无记忆。");
+  });
+
+  it("maps Chat and desktop control labels in zh-CN", () => {
+    expect(settingsT("zh-CN", "chat.title")).toBe("聊天");
+    expect(settingsT("zh-CN", "chat.action.send")).toBe("发送");
+    expect(settingsT("zh-CN", "chat.status.waiting.detail")).toBe("可以继续发送下一条消息。");
+    expect(settingsT("zh-CN", "chat.captureOnce")).toBe("截图");
+    expect(settingsT("zh-CN", "chat.observeNormal")).toBe("中");
+    expect(settingsT("zh-CN", "chat.clearObservation")).toBe("清除");
+    expect(settingsT("en-US", "chat.captureOnce")).toBe("Shot");
+    expect(settingsT("en-US", "chat.observeNormal")).toBe("Mid");
+    expect(settingsT("en-US", "chat.clearObservation")).toBe("Clear");
+    expect(settingsT("zh-CN", "controls.placeholder")).toBe("和 Greyfield 说话...");
+    expect(settingsT("zh-CN", "controls.stop")).toBe("停止回复或语音");
   });
 });

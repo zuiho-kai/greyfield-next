@@ -5,7 +5,7 @@ import { describeMemoryExtractionStatus } from "../settings-memory-extraction-st
 
 describe("describeMemoryExtractionStatus", () => {
   it("explains that better memory off keeps standard local memory on", () => {
-    const status = describeMemoryExtractionStatus(createInitialDesktopRendererState());
+    const status = describeMemoryExtractionStatus(createInitialDesktopRendererState(), "en-US");
 
     expect(status).toEqual({
       tone: "standard",
@@ -14,8 +14,17 @@ describe("describeMemoryExtractionStatus", () => {
     });
   });
 
+  it("uses Chinese for the default locale", () => {
+    const status = describeMemoryExtractionStatus(createInitialDesktopRendererState());
+
+    expect(status).toMatchObject({
+      tone: "standard",
+      label: "标准记忆"
+    });
+  });
+
   it("shows standard fallback wording when the chat provider is not OpenAI-compatible", () => {
-    const status = describeMemoryExtractionStatus(enabledState());
+    const status = describeMemoryExtractionStatus(enabledState(), "en-US");
 
     expect(status).toMatchObject({
       tone: "fallback",
@@ -34,15 +43,15 @@ describe("describeMemoryExtractionStatus", () => {
       providerModel: ""
     });
 
-    expect(describeMemoryExtractionStatus(baseState).detail).toContain("Base URL");
-    expect(describeMemoryExtractionStatus(providerReadyState({ providerApiKey: "", providerHasApiKey: false })).detail).toContain(
+    expect(describeMemoryExtractionStatus(baseState, "en-US").detail).toContain("Base URL");
+    expect(describeMemoryExtractionStatus(providerReadyState({ providerApiKey: "", providerHasApiKey: false }), "en-US").detail).toContain(
       "saved API key"
     );
-    expect(describeMemoryExtractionStatus(providerReadyState({ providerModel: "" })).detail).toContain("chat model name");
+    expect(describeMemoryExtractionStatus(providerReadyState({ providerModel: "" }), "en-US").detail).toContain("chat model name");
   });
 
   it("shows ready wording when better memory is enabled and the provider is complete", () => {
-    const status = describeMemoryExtractionStatus(providerReadyState());
+    const status = describeMemoryExtractionStatus(providerReadyState(), "en-US");
 
     expect(status).toEqual({
       tone: "ready",
@@ -58,7 +67,8 @@ describe("describeMemoryExtractionStatus", () => {
           reason: "provider-failure",
           message: "Better memory could not use the chat provider for this message, so Greyfield used standard local memory instead."
         })
-      })
+      }),
+      "en-US"
     );
 
     expect(status).toEqual({
@@ -75,7 +85,8 @@ describe("describeMemoryExtractionStatus", () => {
           reason: "invalid-output",
           message: "The chat provider did not return usable memory for this message, so Greyfield used standard local memory instead."
         })
-      })
+      }),
+      "en-US"
     );
 
     expect(status).toEqual({
@@ -96,7 +107,8 @@ describe("describeMemoryExtractionStatus", () => {
           llmAttempted: true,
           fallbackUsed: true
         }
-      })
+      }),
+      "en-US"
     );
 
     expect(status).toEqual({
@@ -117,7 +129,8 @@ describe("describeMemoryExtractionStatus", () => {
           llmAttempted: false,
           fallbackUsed: false
         }
-      })
+      }),
+      "en-US"
     );
 
     expect(status).toEqual({

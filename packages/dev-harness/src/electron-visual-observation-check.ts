@@ -77,8 +77,8 @@ try {
   await assertDesktopControlsHaveSingleScreenAwarenessToggle(controls);
   summary.desktopControlsSingleScreenAwarenessToggle = true;
 
-  await controls.getByRole("button", { name: "Turn Screen awareness on" }).click();
-  await controls.getByRole("button", { name: "Turn Screen awareness off" }).waitFor({ timeout: 10_000 });
+  await controls.getByRole("button", { name: /^(Turn Screen awareness on|开启屏幕感知)$/ }).click();
+  await controls.getByRole("button", { name: /^(Turn Screen awareness off|关闭屏幕感知)$/ }).waitFor({ timeout: 10_000 });
   await assertDesktopControlsHaveSingleScreenAwarenessToggle(controls);
   await controls.screenshot({ path: controlsScreenshotPath });
   summary.desktopControlToggleEnabled = true;
@@ -105,11 +105,11 @@ try {
   await assertProactiveEventCountStays(pet, proactiveCount, "proactivityLevel=0 allowed proactive screen-aware speech");
   summary.proactivityZeroBlocksScreenAwareSpeech = true;
 
-  await controls.getByRole("button", { name: "Turn Screen awareness off" }).click();
-  await controls.getByRole("button", { name: "Turn Screen awareness on" }).waitFor({ timeout: 10_000 });
+  await controls.getByRole("button", { name: /^(Turn Screen awareness off|关闭屏幕感知)$/ }).click();
+  await controls.getByRole("button", { name: /^(Turn Screen awareness on|开启屏幕感知)$/ }).waitFor({ timeout: 10_000 });
   await controls.reload();
   await controls.waitForSelector(".desktop-control-panel");
-  await controls.getByRole("button", { name: "Turn Screen awareness on" }).waitFor({ timeout: 10_000 });
+  await controls.getByRole("button", { name: /^(Turn Screen awareness on|开启屏幕感知)$/ }).waitFor({ timeout: 10_000 });
   await assertDesktopControlsHaveSingleScreenAwarenessToggle(controls);
   await chat.reload();
   await chat.waitForSelector(".chat-shell");
@@ -231,7 +231,9 @@ async function assertChatLookPanelAbsent(chat: Page): Promise<void> {
     chat.locator(".observation-panel"),
     chat.locator(".observation-preview-strip"),
     chat.getByText("Look", { exact: true }),
+    chat.getByText("观察", { exact: true }),
     chat.getByRole("button", { name: "Capture one screenshot" }),
+    chat.getByRole("button", { name: "截图" }),
     chat.getByRole("button", { name: "Observe slowly" }),
     chat.getByRole("button", { name: "High frequency observation" }),
     chat.getByRole("button", { name: "Delete temporary observation" })
@@ -244,7 +246,7 @@ async function assertChatLookPanelAbsent(chat: Page): Promise<void> {
 }
 
 async function assertDesktopControlsHaveSingleScreenAwarenessToggle(controls: Page): Promise<void> {
-  const screenAwarenessToggleCount = await controls.getByRole("button", { name: /Screen awareness/u }).count();
+  const screenAwarenessToggleCount = await controls.getByRole("button", { name: /Screen awareness|屏幕感知/u }).count();
   if (screenAwarenessToggleCount !== 1) {
     throw new Error(`Desktop controls must expose exactly one Screen awareness toggle; found ${screenAwarenessToggleCount}.`);
   }
@@ -266,8 +268,8 @@ async function assertDesktopControlsHaveSingleScreenAwarenessToggle(controls: Pa
 }
 
 async function sendDesktopControlMessage(page: Page, text: string): Promise<void> {
-  await page.getByLabel("Desktop message").fill(text);
-  await page.getByRole("button", { name: "Send message" }).click();
+  await page.getByLabel(/^(Desktop message|桌面消息)$/).fill(text);
+  await page.getByRole("button", { name: /^(Send message|发送消息)$/ }).click();
 }
 
 async function installRuntimeRecorder(page: Page): Promise<void> {

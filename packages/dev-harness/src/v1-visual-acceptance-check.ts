@@ -179,12 +179,12 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
       );
     }
     artifacts.push(await screenshot(controlsWindow, artifactDir, "controls-active-state.png", "Active desktop controls button state."));
-    await controlsWindow.getByRole("button", { name: "Turn voice output off" }).click();
+    await controlsWindow.getByRole("button", { name: /^(Turn voice output off|关闭语音输出)$/ }).click();
 
     const chatWindow = await waitForRoleWindow(app, "chat");
     await chatWindow.waitForSelector(".chat-shell");
-    await chatWindow.getByLabel("Message").fill("验收一下桌宠前端。");
-    await chatWindow.getByRole("button", { name: "Send" }).click();
+    await chatWindow.getByTestId("chat-message-input").fill("验收一下桌宠前端。");
+    await chatWindow.getByTestId("chat-send-button").click();
     await chatWindow.locator(".message-list .assistant", { hasText: "你好，我醒着。现在可以继续做桌宠了。" }).waitFor();
     await petWindow.locator(".speech-bubble").waitFor({ state: "visible" });
     const bubbleText = await petWindow.locator(".speech-bubble").textContent();
@@ -199,7 +199,7 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     });
     const settingsWindow = await waitForRoleWindow(app, "settings");
     await settingsWindow.waitForSelector(".greyfield-shell");
-    await settingsWindow.locator(".provider-status--preview", { hasText: "Fake provider is active" }).waitFor();
+    await settingsWindow.locator(".provider-status--preview", { hasText: /Fake provider is active|本地假服务/ }).waitFor();
     const settingsLayout = await readSettingsLayout(settingsWindow);
     if (!settingsLayout.noHorizontalOverflow || !settingsLayout.windowControlsUsable) {
       throw new Error(`Settings window has horizontal overflow: ${JSON.stringify(settingsLayout)}`);
@@ -224,11 +224,11 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     artifacts.push(
       await screenshot(settingsWindow, artifactDir, "settings-provider-preview.png", "Settings provider preview state.")
     );
-    await settingsWindow.getByLabel("Memory extraction", { exact: true }).scrollIntoViewIfNeeded();
+    await settingsWindow.getByLabel(/^(Memory extraction|记忆提取)$/, { exact: true }).scrollIntoViewIfNeeded();
     artifacts.push(
       await screenshot(settingsWindow, artifactDir, "settings-memory-extraction.png", "Settings Memory extraction section.")
     );
-    await settingsWindow.getByLabel("Scale").scrollIntoViewIfNeeded();
+    await settingsWindow.getByLabel(/^(Scale|缩放)$/).scrollIntoViewIfNeeded();
     artifacts.push(
       await screenshot(settingsWindow, artifactDir, "settings-window-controls.png", "Settings Window controls.")
     );
@@ -472,9 +472,9 @@ async function verifyActiveControlContrast(page: Page): Promise<{
   className?: string;
   icon?: { width: number; height: number };
 }> {
-  const voiceButton = page.getByRole("button", { name: "Turn voice output on" });
+  const voiceButton = page.getByRole("button", { name: /^(Turn voice output on|开启语音输出)$/ });
   await voiceButton.click();
-  await page.getByRole("button", { name: "Turn voice output off" }).waitFor();
+  await page.getByRole("button", { name: /^(Turn voice output off|关闭语音输出)$/ }).waitFor();
   await page.waitForTimeout(100);
   return page.evaluate(() => {
     const activeButton = document.querySelector<HTMLButtonElement>(".desktop-control-button--active");
@@ -579,7 +579,7 @@ async function readSettingsLayout(page: Page): Promise<VisualAcceptanceSummaryIn
   return page.evaluate(() => {
     const scrollWidth = document.scrollingElement?.scrollWidth ?? document.documentElement.scrollWidth;
     const compactInputs = Array.from(document.querySelectorAll<HTMLInputElement>(".settings-fields--compact input"));
-    const memorySection = document.querySelector<HTMLElement>('[aria-label="Memory extraction"]');
+    const memorySection = document.querySelector<HTMLElement>('[aria-label="Memory extraction"], [aria-label="记忆提取"]');
     const memoryText = memorySection?.textContent ?? "";
     const windowControlsUsable =
       compactInputs.length >= 4 &&
@@ -602,7 +602,8 @@ async function readSettingsLayout(page: Page): Promise<VisualAcceptanceSummaryIn
     return {
       providerPreviewVisible: document.querySelector(".provider-status--preview") !== null,
       memoryExtractionVisible: memorySection !== null,
-      memoryExtractionToggleVisible: memorySection?.querySelector('input[aria-label="Better memory extraction"]') != null,
+      memoryExtractionToggleVisible:
+        memorySection?.querySelector('input[aria-label="Better memory extraction"], input[aria-label="增强记忆提取"]') != null,
       memoryExtractionManualCandidateControlsAbsent: !/\b(accept|reject|candidate|pending)\b/i.test(memoryText),
       settingsShellVisible: document.querySelector(".greyfield-shell") !== null,
       viewportWidth: window.innerWidth,

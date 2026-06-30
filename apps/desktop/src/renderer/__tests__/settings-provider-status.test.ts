@@ -6,10 +6,19 @@ describe("describeProviderStatus", () => {
   it("marks fake providers as preview mode", () => {
     const state = createInitialDesktopRendererState();
 
-    expect(describeProviderStatus(state)).toEqual({
+    expect(describeProviderStatus(state, "en-US")).toEqual({
       tone: "preview",
       label: "Preview",
       detail: "Fake provider is active. Use OpenAI-compatible for a real LLM chat."
+    });
+  });
+
+  it("uses Chinese for the default locale", () => {
+    const state = createInitialDesktopRendererState();
+
+    expect(describeProviderStatus(state)).toMatchObject({
+      tone: "preview",
+      label: "预览模式"
     });
   });
 
@@ -21,13 +30,13 @@ describe("describeProviderStatus", () => {
     state.settings.providerHasApiKey = false;
     state.settings.providerModel = "";
 
-    expect(describeProviderStatus(state)).toMatchObject({ tone: "blocked", label: "Needs Base URL" });
+    expect(describeProviderStatus(state, "en-US")).toMatchObject({ tone: "blocked", label: "Needs Base URL" });
 
     state.settings.providerBaseUrl = "https://llm.example/v1";
-    expect(describeProviderStatus(state)).toMatchObject({ tone: "blocked", label: "Needs API key" });
+    expect(describeProviderStatus(state, "en-US")).toMatchObject({ tone: "blocked", label: "Needs API key" });
 
     state.settings.providerHasApiKey = true;
-    expect(describeProviderStatus(state)).toMatchObject({ tone: "blocked", label: "Needs model" });
+    expect(describeProviderStatus(state, "en-US")).toMatchObject({ tone: "blocked", label: "Needs model" });
   });
 
   it("marks complete OpenAI-compatible settings as ready", () => {
@@ -37,7 +46,7 @@ describe("describeProviderStatus", () => {
     state.settings.providerHasApiKey = true;
     state.settings.providerModel = "mimo-v2.5";
 
-    expect(describeProviderStatus(state)).toEqual({
+    expect(describeProviderStatus(state, "en-US")).toEqual({
       tone: "ready",
       label: "Ready to test",
       detail: "Provider settings are complete. Run Test LLM before a real chat."

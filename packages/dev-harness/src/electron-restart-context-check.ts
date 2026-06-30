@@ -139,8 +139,8 @@ async function waitForRoleWindow(app: ElectronApplication, roleName: "chat"): Pr
 }
 
 async function sendMessage(page: Page, text: string): Promise<void> {
-  await page.getByLabel("Message").fill(text);
-  await page.getByRole("button", { name: "Send" }).click();
+  await page.getByTestId("chat-message-input").fill(text);
+  await page.getByTestId("chat-send-button").click();
 }
 
 async function readRequestBody(request: IncomingMessage): Promise<string> {

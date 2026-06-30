@@ -68,7 +68,7 @@ describe("SettingsController", () => {
 
     expect(next.ui.speechBubbleEnabled).toBe(false);
     expect(next.ui.proactiveMemoryEnabled).toBe(true);
-    expect(next.ui.locale).toBe("en-US");
+    expect(next.ui.locale).toBe("zh-CN");
     expect(next.ui.proactivityLevel).toBe(80);
     expect(save).toHaveBeenCalledWith(
       expect.objectContaining({

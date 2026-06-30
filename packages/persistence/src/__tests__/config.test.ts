@@ -17,7 +17,7 @@ describe("Greyfield config", () => {
     expect(defaultGreyfieldConfig.window.modelPassThrough).toBe(false);
     expect(defaultGreyfieldConfig.ui.speechBubbleEnabled).toBe(true);
     expect(defaultGreyfieldConfig.ui.proactiveMemoryEnabled).toBe(true);
-    expect(defaultGreyfieldConfig.ui.locale).toBe("en-US");
+    expect(defaultGreyfieldConfig.ui.locale).toBe("zh-CN");
     expect(defaultGreyfieldConfig.ui.proactivityLevel).toBe(50);
     expect(defaultGreyfieldConfig.memory.llmAtomExtractionEnabled).toBe(false);
   });
@@ -54,7 +54,7 @@ describe("Greyfield config", () => {
     });
     expect(config.ui.speechBubbleEnabled).toBe(false);
     expect(config.ui.proactiveMemoryEnabled).toBe(false);
-    expect(config.ui.locale).toBe("en-US");
+    expect(config.ui.locale).toBe("zh-CN");
     expect(config.ui.proactivityLevel).toBe(80);
     expect(config.memory.llmAtomExtractionEnabled).toBe(true);
   });
@@ -64,7 +64,7 @@ describe("Greyfield config", () => {
       ui: { locale: "fr-FR" } as unknown as Partial<typeof defaultGreyfieldConfig.ui>
     });
 
-    expect(config.ui.locale).toBe("en-US");
+    expect(config.ui.locale).toBe("zh-CN");
   });
 
   it("keeps proactivity level within the Settings slider range", () => {
