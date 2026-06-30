@@ -84,10 +84,16 @@ export function describeSourcePassageStatus(passage: DesktopMemorySourcePassage,
 
 export function describeSourcePassageMeta(passage: DesktopMemorySourcePassage, locale?: SettingsLocale): string {
   const timestamp = passage.createdAt ? formatMemoryTimestamp(passage.createdAt) : "";
+  const suffix = passage.observationSource
+    ? locale === "zh-CN"
+      ? " · 来源：用户主动截图/观察问答中确认的信息"
+      : " · Source: user-confirmed screenshot/observation Q&A"
+    : "";
   if (passage.status === "available") {
-    return timestamp
+    const base = timestamp
       ? settingsT(locale, "memory.source.meta.availableWithTime", { timestamp })
       : settingsT(locale, "memory.source.meta.available");
+    return `${base}${suffix}`;
   }
   if (passage.status === "missing") {
     return timestamp

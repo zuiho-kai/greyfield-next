@@ -832,6 +832,105 @@ describe("createDesktopRuntimeBridge", () => {
     detach();
   });
 
+  it("captures a screenshot, sends it once with the next chat turn, and clears preview frames", async () => {
+    const sent: Array<[string, unknown]> = [];
+    let observationState: ((state: import("../../shared/ipc").DesktopIpcEventMap["observation:state"]) => void) | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: (channel, payload) => sent.push([channel, payload]),
+      on: (channel, handler) => {
+        if (channel === "observation:state") {
+          observationState = handler as typeof observationState;
+        }
+        return () => undefined;
+      }
+    });
+
+    bridge.captureScreenshot();
+    const readyObservation = {
+      status: "ready",
+      mode: "single",
+      observationId: "obs-1",
+      frames: [
+        {
+          id: "frame-1",
+          index: 0,
+          dataUrl: "data:image/png;base64,QQ==",
+          mimeType: "image/png",
+          createdAt: "2026-06-30T00:00:00.000Z",
+          source: "screenshot",
+          hash: "a"
+        }
+      ],
+      duplicateCount: 0,
+      maxFrames: 1,
+      timeoutMs: 0,
+      intervalMs: 0,
+      message: "Screenshot ready."
+    } satisfies import("../../shared/ipc").DesktopIpcEventMap["observation:state"];
+    observationState?.(readyObservation);
+
+    const state = await bridge.sendText("看一下");
+
+    expect(sent).toContainEqual(["observation:capture", { mode: "single" }]);
+    expect(sent).toContainEqual([
+      "runtime:input",
+      expect.objectContaining({
+        type: "text.input",
+        text: "看一下",
+        attachments: [expect.objectContaining({ dataUrl: "data:image/png;base64,QQ==" })],
+        observation: expect.objectContaining({ id: "obs-1", mode: "single", frameCount: 1, dedupedFrameCount: 1 })
+      })
+    ]);
+    const runtimeInputIndex = sent.findIndex(([channel]) => channel === "runtime:input");
+    const observationDeleteIndex = sent.findIndex(([channel]) => channel === "observation:delete");
+    expect(runtimeInputIndex).toBeGreaterThan(-1);
+    expect(observationDeleteIndex).toBeGreaterThan(runtimeInputIndex);
+    expect(state.messages.at(-1)).toMatchObject({
+      role: "user",
+      text: "看一下",
+      observationSummary: "Used 1 temporary screenshot for this reply."
+    });
+    expect(state.observation.frames).toEqual([]);
+
+    observationState?.(readyObservation);
+    expect(bridge.getState().observation.frames).toEqual([]);
+
+    observationState?.({
+      ...readyObservation,
+      status: "idle",
+      observationId: "",
+      frames: [],
+      message: ""
+    });
+    expect(bridge.getState().observation).toMatchObject({ status: "idle", frames: [] });
+  });
+
+  it("controls observation frequency, high-frequency confirmation, stop, and delete", () => {
+    const sent: Array<[string, unknown]> = [];
+    const bridge = createDesktopRuntimeBridge({
+      send: (channel, payload) => sent.push([channel, payload]),
+      on: () => () => undefined
+    });
+
+    const warning = bridge.startObservation("high");
+    expect(warning.observation.highFrequencyConfirmation).toBe(true);
+    expect(sent).not.toContainEqual(["observation:start", { mode: "high" }]);
+
+    const highStarted = bridge.startObservation("high");
+    expect(highStarted.observation.status).toBe("observing");
+    bridge.startObservation("low");
+    bridge.startObservation("normal");
+    bridge.stopObservation();
+    bridge.deleteObservation();
+
+    expect(sent).toContainEqual(["observation:start", { mode: "high" }]);
+    expect(sent).toContainEqual(["observation:start", { mode: "low" }]);
+    expect(sent).toContainEqual(["observation:start", { mode: "normal" }]);
+    expect(sent).toContainEqual(["observation:stop", {}]);
+    expect(sent).toContainEqual(["observation:delete", {}]);
+    expect(bridge.getState().observation).toMatchObject({ status: "idle", frames: [] });
+  });
+
   it("reduces runtime errors into visible chat state", () => {
     let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
     const bridge = createDesktopRuntimeBridge({

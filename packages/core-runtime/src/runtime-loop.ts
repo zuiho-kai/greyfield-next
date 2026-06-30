@@ -29,6 +29,7 @@ import type { ASRProvider, LLMProvider, MemoryStore, TTSProvider } from "./provi
 import type { CharacterPersona } from "./persona";
 import type { SessionStore, SessionTurn, SessionTurnLookup } from "./session-store";
 import type { StageDriver } from "./stage-driver";
+import type { RuntimeImageAttachment, RuntimeObservationMetadata } from "./vision-attachments";
 
 export interface GreyfieldRuntimeOptions {
   llm: LLMProvider;
@@ -100,7 +101,7 @@ export class GreyfieldRuntime {
       return;
     }
 
-    await this.handleTextInput(input.text, emit);
+    await this.handleTextInput(input, emit);
   }
 
   private async handleAudioChunk(data: Uint8Array, emit: RuntimeEventHandler): Promise<void> {
@@ -148,7 +149,7 @@ export class GreyfieldRuntime {
         return;
       }
       await emit({ type: "transcript.final", text: transcript });
-      await this.handleTextInput(transcript, emit);
+      await this.handleTextInput({ type: "text.input", text: transcript }, emit);
     } catch (error) {
       if (this.interrupted) {
         await emit({ type: "runtime.status", status: "interrupted" });
@@ -163,7 +164,19 @@ export class GreyfieldRuntime {
     }
   }
 
-  private async handleTextInput(text: string, emit: RuntimeEventHandler): Promise<void> {
+  private async handleTextInput(input: Extract<RuntimeInputEvent, { type: "text.input" }>, emit: RuntimeEventHandler): Promise<void> {
+    const text = input.text;
+    const attachments = normalizeRuntimeImageAttachments(input.attachments);
+    const observation = createObservationMetadata(input.observation, attachments);
+    if (attachments.length > 0 && this.options.llm.supportsVision !== true) {
+      await emit({
+        type: "error",
+        message:
+          "This chat provider does not support vision input yet. Greyfield kept the screenshot temporary and did not send it. Switch to a vision-capable provider or ask without the image."
+      });
+      return;
+    }
+
     this.interrupted = false;
     this.activeAbortController = new AbortController();
     await emit({ type: "runtime.status", status: "thinking" });
@@ -229,6 +242,8 @@ export class GreyfieldRuntime {
       handoff: handoffSummary,
       recent,
       input: redactPromptPrivateText(text, this.options.promptRedactionSecrets),
+      inputAttachments: attachments,
+      observation,
       sessionId: this.options.sessionStore.sessionId,
       threadId: this.threadId,
       recallContext,
@@ -271,7 +286,11 @@ export class GreyfieldRuntime {
     }
 
     if (finalText.length > 0) {
-      const userTurn = await this.options.sessionStore.append({ role: "user", content: text });
+      const userTurn = await this.options.sessionStore.append({
+        role: "user",
+        content: text,
+        ...(observation ? { meta: { observation } } : {})
+      });
       await this.options.sessionStore.append({ role: "assistant", content: finalText });
       const atomExtractionStatus = await this.extractMemoryAtomsForTurn(text, userTurn.id);
       if (atomExtractionStatus) {
@@ -284,6 +303,9 @@ export class GreyfieldRuntime {
         }
       } catch (error) {
         console.warn(`Greyfield memory summary unavailable: ${formatError(error)}`);
+      }
+      if (observation) {
+        await emit({ type: "observation.used", observation });
       }
       await emit({ type: "assistant.text.final", text: finalText });
     }
@@ -528,6 +550,36 @@ export class GreyfieldRuntime {
       sourceTurns: draft.sourceTurns
     });
   }
+}
+
+function normalizeRuntimeImageAttachments(attachments: RuntimeImageAttachment[] | undefined): RuntimeImageAttachment[] {
+  if (!attachments) {
+    return [];
+  }
+  return attachments.filter((attachment) => {
+    const dataUrl = attachment.dataUrl.trim();
+    const mimeType = attachment.mimeType.trim();
+    return dataUrl.startsWith(`data:${mimeType};base64,`) && mimeType.startsWith("image/");
+  });
+}
+
+function createObservationMetadata(
+  observation: Extract<RuntimeInputEvent, { type: "text.input" }>["observation"],
+  attachments: RuntimeImageAttachment[]
+): RuntimeObservationMetadata | undefined {
+  if (attachments.length === 0) {
+    return;
+  }
+  const mode = observation?.mode ?? (attachments.length === 1 ? "single" : "normal");
+  const frameCount = observation?.frameCount ?? attachments.length;
+  const dedupedFrameCount = observation?.dedupedFrameCount ?? attachments.length;
+  return {
+    kind: "visual-observation",
+    mode,
+    frameCount,
+    dedupedFrameCount,
+    source: mode === "single" ? "user-active-screenshot" : "user-active-observation"
+  };
 }
 
 function normalizeAssistantText(text: string): string {

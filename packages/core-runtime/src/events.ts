@@ -1,8 +1,9 @@
 import type { RecallContext, SummarySegment } from "./memory-context";
 import type { MemoryAtomExtractionStatus } from "./memory-atoms";
+import type { RuntimeImageAttachment, RuntimeObservationInput, RuntimeObservationMetadata } from "./vision-attachments";
 
 export type RuntimeInputEvent =
-  | { type: "text.input"; text: string }
+  | { type: "text.input"; text: string; attachments?: RuntimeImageAttachment[]; observation?: RuntimeObservationInput }
   | { type: "audio.chunk"; data: Uint8Array }
   | { type: "audio.end" }
   | { type: "runtime.interrupt" }
@@ -20,6 +21,7 @@ export type RuntimeOutputEvent =
   | { type: "assistant.audio.chunk"; text: string; data: Uint8Array }
   | { type: "assistant.audio.error"; text: string; message: string }
   | { type: "assistant.audio.end" }
+  | { type: "observation.used"; observation: RuntimeObservationMetadata }
   | { type: "memory.recall.context"; context: RecallContext }
   | { type: "memory.summary.created"; segment: SummarySegment }
   | { type: "memory.atom.extraction.status"; status: MemoryAtomExtractionStatus }

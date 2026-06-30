@@ -1,8 +1,9 @@
 import type { CharacterPersona } from "./persona";
-import type { ChatMessage } from "./providers";
+import type { ChatMessage, ChatContentPart } from "./providers";
 import { formatRecallContextForPrompt, type RecallContext } from "./memory-context";
 import { formatMemoryAtomRecallContextForPrompt, type MemoryAtomRecallContext } from "./memory-atoms";
 import type { SessionTurn } from "./session-store";
+import type { RuntimeImageAttachment, RuntimeObservationMetadata } from "./vision-attachments";
 
 export interface PromptAssemblyInput {
   persona: CharacterPersona;
@@ -10,6 +11,8 @@ export interface PromptAssemblyInput {
   handoff: string;
   recent: SessionTurn[];
   input: string;
+  inputAttachments?: RuntimeImageAttachment[];
+  observation?: RuntimeObservationMetadata;
   sessionId: string;
   threadId: string;
   recallContext?: RecallContext;
@@ -36,14 +39,45 @@ export function assemblePrompt(input: PromptAssemblyInput): ChatMessage[] {
     input.memory.trim().length > 0 ? `Memory:\n${input.memory.trim()}` : "Memory: none yet.",
     input.atomRecallContext ? formatAtomRecallContextSection(input.atomRecallContext) : "",
     input.recallContext ? formatRecallContextSection(input.recallContext) : "",
-    input.handoff.trim().length > 0 ? `Recent handoff:\n${input.handoff.trim()}` : "Recent handoff: none yet."
+    input.handoff.trim().length > 0 ? `Recent handoff:\n${input.handoff.trim()}` : "Recent handoff: none yet.",
+    input.observation ? formatObservationBoundary(input.observation) : ""
   ].filter((section) => section.length > 0);
 
   return [
     { role: "system", content: systemSections.join("\n\n") },
     ...input.recent.map((turn): ChatMessage => ({ role: turn.role === "assistant" ? "assistant" : "user", content: turn.content })),
-    { role: "user", content: input.input }
+    { role: "user", content: formatUserInputContent(input.input, input.inputAttachments) }
   ];
+}
+
+function formatUserInputContent(text: string, attachments: RuntimeImageAttachment[] | undefined): string | ChatContentPart[] {
+  const trimmed = text.trim();
+  if (!attachments || attachments.length === 0) {
+    return trimmed;
+  }
+  return [
+    { type: "text", text: trimmed.length > 0 ? trimmed : "Please answer based on the temporary screenshot or observation frames." },
+    ...attachments.map((attachment): ChatContentPart => ({
+      type: "image_url",
+      image_url: {
+        url: attachment.dataUrl,
+        detail: attachment.source === "screenshot" ? "high" : "low"
+      }
+    }))
+  ];
+}
+
+function formatObservationBoundary(observation: RuntimeObservationMetadata): string {
+  const source =
+    observation.source === "user-active-screenshot" ? "one user-requested screenshot" : "a user-requested short screenshot sequence";
+  return [
+    "Temporary visual observation:",
+    `- Source: ${source}.`,
+    `- Frames sent this turn: ${observation.dedupedFrameCount} of ${observation.frameCount}.`,
+    "- Raw screenshots, frame data, and local file paths are temporary input only.",
+    "- Do not claim ongoing screen monitoring. Only use these images for this reply.",
+    "- Durable facts or preferences may be remembered only when the conversation confirms them."
+  ].join("\n");
 }
 
 function formatRecallContextSection(context: RecallContext): string {

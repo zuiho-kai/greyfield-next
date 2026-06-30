@@ -19,6 +19,7 @@ interface OpenAICompatibleChunk {
 }
 
 export class OpenAICompatibleLLMProvider implements LLMProvider {
+  readonly supportsVision = true;
   private readonly fetchImpl: typeof fetch;
 
   constructor(private readonly options: OpenAICompatibleLLMProviderOptions) {

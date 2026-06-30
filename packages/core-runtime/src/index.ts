@@ -12,3 +12,4 @@ export * from "./providers";
 export * from "./runtime-loop";
 export * from "./session-store";
 export * from "./stage-driver";
+export * from "./vision-attachments";

@@ -38,6 +38,10 @@
     @interrupt="interrupt"
     @start-voice-input="startVoiceInput"
     @stop-voice-input="stopVoiceInput"
+    @capture-screenshot="captureScreenshot"
+    @start-observation="startObservation"
+    @stop-observation="stopObservation"
+    @delete-observation="deleteObservation"
     @open-settings="openSettings"
   />
   <SettingsWindow
@@ -90,6 +94,7 @@ import { resolveSpeechBubbleSourceText } from "./speech-bubble-source";
 import { formatSpeechBubbleText } from "./speech-bubble-text";
 import { normalizeSettingsLocale } from "./settings-i18n";
 import { isMaskedApiKey } from "../shared/secrets";
+import type { RuntimeObservationMode } from "@greyfield/core-runtime";
 
 const queryModelPath =
   typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("live2dModel") : null;
@@ -250,6 +255,22 @@ async function stopVoiceInput(): Promise<void> {
   } catch (error) {
     syncState(bridge.failVoiceInput(formatVoiceInputError(error)));
   }
+}
+
+function captureScreenshot(): void {
+  syncState(bridge.captureScreenshot());
+}
+
+function startObservation(mode: Exclude<RuntimeObservationMode, "single">): void {
+  syncState(bridge.startObservation(mode));
+}
+
+function stopObservation(): void {
+  syncState(bridge.stopObservation());
+}
+
+function deleteObservation(): void {
+  syncState(bridge.deleteObservation());
 }
 
 function syncState(nextState: DesktopRendererState): void {
