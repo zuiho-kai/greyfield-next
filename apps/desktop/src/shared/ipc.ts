@@ -3,6 +3,8 @@ import type {
   MemoryAtom,
   RecallContext,
   RuntimeInputEvent,
+  RuntimeImageAttachment,
+  RuntimeObservationMode,
   RuntimeOutputEvent,
   RuntimeSceneContext,
   SessionTurn,
@@ -42,6 +44,7 @@ export interface DesktopMemorySourcePassage {
   text?: string;
   createdAt?: string;
   message?: string;
+  observationSource?: boolean;
 }
 
 export type DesktopMemorySummarySegment = SummarySegment & {
@@ -100,6 +103,23 @@ export interface DesktopPersonaState {
   persona?: CharacterPersona;
 }
 
+export interface DesktopObservationFrame extends RuntimeImageAttachment {
+  index: number;
+}
+
+export interface DesktopObservationState {
+  status: "idle" | "capturing" | "observing" | "ready" | "stopped" | "error";
+  mode: RuntimeObservationMode;
+  observationId: string;
+  frames: DesktopObservationFrame[];
+  duplicateCount: number;
+  maxFrames: number;
+  timeoutMs: number;
+  intervalMs: number;
+  message: string;
+  highFrequencyWarning?: string;
+}
+
 export interface DesktopIpcRequestMap {
   "runtime:input": RuntimeInputEvent;
   "runtime:speech-playback": DesktopSpeechPlaybackEvent;
@@ -114,6 +134,10 @@ export interface DesktopIpcRequestMap {
   "memory:atom-clear-current-role": {};
   "memory:atom-export": { id: string };
   "memory:export-request": {};
+  "observation:capture": { mode: "single" };
+  "observation:start": { mode: Exclude<RuntimeObservationMode, "single"> };
+  "observation:stop": {};
+  "observation:delete": {};
   "proactive:check": DesktopProactiveCheckRequest;
   "persona:load": {};
   "persona:save": DesktopPersonaSaveRequest;
@@ -152,6 +176,7 @@ export interface DesktopIpcEventMap {
   "memory:debug-snapshot": DesktopMemoryDebugSnapshot;
   "memory:action-result": DesktopMemoryActionResult;
   "memory:export-result": DesktopMemoryActionResult & { export?: DesktopMemoryExport };
+  "observation:state": DesktopObservationState;
   "proactive:message": DesktopProactiveMessage;
   "persona:state": DesktopPersonaState;
   "settings:changed": RendererGreyfieldConfig;

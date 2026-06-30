@@ -8,14 +8,16 @@ import { createDesktopRuntimeStoreOptions, resolveCharacterPath } from "./deskto
 import { createChatWindowOptions, createControlsWindowOptions, createPetWindowOptions, createSettingsWindowOptions, resolvePreloadPath, resolveRendererHtmlPath } from "./electron-window-options";
 import { Live2DModelController, type Live2DModelInfo } from "./live2d-model-controller";
 import { resolveLive2DModelSelection } from "./live2d-model-selection";
+import { ObservationController } from "./observation-controller";
 import { toWindowMenuPoint } from "./pet-menu";
 import { PetWindowController } from "./pet-window-controller";
 import { RuntimeIpcController } from "./runtime-ipc-controller";
 import { RuntimeService } from "./runtime-service";
+import { ElectronScreenCaptureSource } from "./screen-capture-source";
 import { redactConfigForRenderer } from "./settings-redaction";
 import { SettingsController } from "./settings-controller";
 import { getUsableWindow, hideWindowIfUsable, showWindowIfUsable } from "./window-lifecycle";
-import type { DesktopPersonaSaveRequest, DesktopProactiveCheckRequest } from "../shared/ipc";
+import type { DesktopObservationState, DesktopPersonaSaveRequest, DesktopProactiveCheckRequest } from "../shared/ipc";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 let petWindow: BrowserWindow | undefined;
@@ -26,6 +28,7 @@ let tray: Tray | undefined;
 let settingsController: SettingsController | undefined;
 let runtimeService: RuntimeService | undefined;
 let runtimeIpcController: RuntimeIpcController | undefined;
+let observationController: ObservationController | undefined;
 let petWindowController: PetWindowController | undefined;
 let live2DModelController: Live2DModelController | undefined;
 let isQuitting = false;
@@ -54,6 +57,10 @@ async function createWindows(): Promise<void> {
   runtimeIpcController = new RuntimeIpcController({
     service: runtimeService,
     broadcast: broadcastRuntimeEvent
+  });
+  observationController = new ObservationController({
+    captureSource: new ElectronScreenCaptureSource(),
+    broadcast: broadcastObservationState
   });
   settingsController = new SettingsController(
     config,
@@ -189,6 +196,22 @@ function registerIpc(): void {
 
   ipcMain.on("memory:export-request", (event) => {
     void exportMemory(event.sender);
+  });
+
+  ipcMain.on("observation:capture", () => {
+    void observationController?.captureSingle();
+  });
+
+  ipcMain.on("observation:start", (_event, payload) => {
+    observationController?.startSequence(payload.mode);
+  });
+
+  ipcMain.on("observation:stop", () => {
+    observationController?.stop();
+  });
+
+  ipcMain.on("observation:delete", () => {
+    observationController?.delete();
   });
 
   ipcMain.on("proactive:check", (_event, payload) => {
@@ -597,6 +620,12 @@ function broadcastVoiceTestResult(sender: Electron.WebContents, result: Awaited<
   }
 }
 
+function broadcastObservationState(state: DesktopObservationState): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send("observation:state", state);
+  }
+}
+
 function broadcastSettings(config: GreyfieldConfig): void {
   const rendererConfig = redactConfigForRenderer(config);
   for (const window of BrowserWindow.getAllWindows()) {
@@ -611,6 +640,10 @@ function attachSettingsReplayOnLoad(window: BrowserWindow): void {
       return;
     }
     window.webContents.send("settings:changed", redactConfigForRenderer(config));
+    const observationState = observationController?.getState();
+    if (observationState) {
+      window.webContents.send("observation:state", observationState);
+    }
   });
 }
 

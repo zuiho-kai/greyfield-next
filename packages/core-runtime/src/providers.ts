@@ -1,8 +1,14 @@
 export type MessageRole = "system" | "user" | "assistant" | "tool";
 
+export type ChatMessageContent = string | ChatContentPart[];
+
+export type ChatContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string; detail?: "low" | "high" | "auto" } };
+
 export interface ChatMessage {
   role: MessageRole;
-  content: string;
+  content: ChatMessageContent;
 }
 
 export interface ToolDefinition {
@@ -16,6 +22,7 @@ export interface LLMStreamOptions {
 }
 
 export interface LLMProvider {
+  readonly supportsVision?: boolean;
   stream(messages: ChatMessage[], tools?: ToolDefinition[], options?: LLMStreamOptions): AsyncIterable<string>;
 }
 

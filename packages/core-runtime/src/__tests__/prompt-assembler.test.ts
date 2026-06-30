@@ -72,7 +72,7 @@ describe("assemblePrompt", () => {
       }
     });
 
-    const systemContent = messages[0]?.content ?? "";
+    const systemContent = typeof messages[0]?.content === "string" ? messages[0].content : "";
     expect(messages[0]?.role).toBe("system");
     expect(systemContent).toContain("Greyfield");
     expect(systemContent).toContain("User address: captain");
@@ -93,7 +93,7 @@ describe("assemblePrompt", () => {
     expect(systemContent).toContain("Source turns: session-a-1, session-a-2");
     expect(systemContent.indexOf("Long-term recall context:")).toBeLessThan(systemContent.indexOf("Recall context:"));
     expect(systemContent).toContain("thread-a");
-    expect(messages.map((message) => message.content)).toEqual([
+    expect(messages.map((message) => (typeof message.content === "string" ? message.content : ""))).toEqual([
       expect.stringContaining("Recent focus"),
       "上次说要做桌宠。",
       "我记得，先让角色活起来。",

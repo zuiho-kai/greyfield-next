@@ -1,9 +1,21 @@
 import type { ASRProvider, LLMProvider, MemoryStore, TTSProvider } from "@greyfield/core-runtime";
 
 export class FakeLLMProvider implements LLMProvider {
+  readonly supportsVision = true;
+  readonly visionAttachmentCounts: number[] = [];
+
   constructor(private readonly chunks = ["你好，我醒着。", " 现在可以继续做桌宠了。"]) {}
 
-  async *stream(): AsyncIterable<string> {
+  async *stream(messages: Parameters<LLMProvider["stream"]>[0]): AsyncIterable<string> {
+    const last = messages.at(-1);
+    const imageCount = Array.isArray(last?.content)
+      ? last.content.filter((part) => part.type === "image_url").length
+      : 0;
+    this.visionAttachmentCounts.push(imageCount);
+    if (imageCount > 0) {
+      yield `Fake vision saw ${imageCount} temporary frame${imageCount === 1 ? "" : "s"}.`;
+      return;
+    }
     for (const chunk of this.chunks) {
       yield chunk;
     }

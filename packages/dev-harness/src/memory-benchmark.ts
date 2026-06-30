@@ -1644,7 +1644,12 @@ function promptTextInternalLeaks(text: string): string[] {
 function createScriptedAtomLLMProvider(responses: Record<string, unknown>, turnId: string): LLMProvider {
   return {
     stream: async function* (messages: ChatMessage[]): AsyncIterable<string> {
-      if (!messages[0]?.content.includes("You extract Greyfield long-term memory atoms")) {
+      const firstContent = messages[0]?.content;
+      const firstText =
+        typeof firstContent === "string"
+          ? firstContent
+          : firstContent?.flatMap((part) => (part.type === "text" ? [part.text] : [])).join(" ") ?? "";
+      if (!firstText.includes("You extract Greyfield long-term memory atoms")) {
         throw new Error("Scripted atom LLM provider only supports memory atom extraction prompts.");
       }
       const response = responses[turnId] ?? { atoms: [] };

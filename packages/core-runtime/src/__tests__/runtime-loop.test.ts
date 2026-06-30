@@ -7,6 +7,8 @@ import type { AppendDeletedMemoryEvidence, DeletedMemoryEvidence, DeletedMemoryE
 import type { MemoryAtom, MemoryAtomStore, UpdateMemoryAtom } from "../memory-atoms";
 import type { LLMProvider, MemoryStore, TTSProvider } from "../providers";
 import type { RuntimeOutputEvent } from "../events";
+import type { RuntimeImageAttachment } from "../vision-attachments";
+import { filterDistinctObservationFrames } from "../vision-attachments";
 
 const memoryStore: MemoryStore = {
   load: async () => "- Prefers direct progress over vague planning.",
@@ -52,6 +54,157 @@ describe("GreyfieldRuntime", () => {
       { role: "user", content: "Are you there?" },
       { role: "assistant", content: "Hello there. I am awake." }
     ]);
+  });
+
+  it("sends a temporary screenshot to a vision-capable provider without persisting image data", async () => {
+    let capturedMessages: Parameters<LLMProvider["stream"]>[0] = [];
+    const sessionStore = new InMemorySessionStore("session-vision");
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        supportsVision: true,
+        stream: async function* (messages) {
+          capturedMessages = messages;
+          yield "I can answer from the screenshot.";
+        }
+      },
+      tts: { synthesize: async (text) => new Uint8Array([text.length]) },
+      memoryStore,
+      sessionStore,
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default",
+      threadId: "thread-vision"
+    });
+    const events: RuntimeOutputEvent[] = [];
+
+    await runtime.handle(
+      {
+        type: "text.input",
+        text: "看一下这个画面",
+        attachments: [makeImageAttachment("frame-1", "screenshot", "A")],
+        observation: { id: "obs-a", mode: "single", frameCount: 1, dedupedFrameCount: 1 }
+      },
+      (event) => {
+        events.push(event);
+      }
+    );
+
+    expect(capturedMessages.at(-1)?.content).toEqual([
+      { type: "text", text: "看一下这个画面" },
+      { type: "image_url", image_url: { url: expect.stringContaining("data:image/png;base64,"), detail: "high" } }
+    ]);
+    expect(events).toContainEqual({
+      type: "observation.used",
+      observation: {
+        kind: "visual-observation",
+        mode: "single",
+        frameCount: 1,
+        dedupedFrameCount: 1,
+        source: "user-active-screenshot"
+      }
+    });
+    const turns = await sessionStore.getRecent(2);
+    expect(JSON.stringify(turns)).not.toContain("data:image");
+    expect(turns[0]).toMatchObject({
+      role: "user",
+      content: "看一下这个画面",
+      meta: {
+        observation: {
+          kind: "visual-observation",
+          source: "user-active-screenshot"
+        }
+      }
+    });
+  });
+
+  it("uses short observation key frames for a vision-capable provider", async () => {
+    let capturedMessages: Parameters<LLMProvider["stream"]>[0] = [];
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        supportsVision: true,
+        stream: async function* (messages) {
+          capturedMessages = messages;
+          yield "I saw the sequence.";
+        }
+      },
+      tts: { synthesize: async (text) => new Uint8Array([text.length]) },
+      memoryStore,
+      sessionStore: new InMemorySessionStore("session-sequence"),
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default"
+    });
+
+    await runtime.handle(
+      {
+        type: "text.input",
+        text: "看一会发生了什么",
+        attachments: [
+          makeImageAttachment("frame-1", "observation-frame", "A"),
+          makeImageAttachment("frame-2", "observation-frame", "B")
+        ],
+        observation: { id: "obs-sequence", mode: "normal", frameCount: 3, dedupedFrameCount: 2, durationMs: 6000 }
+      },
+      () => undefined
+    );
+
+    const content = capturedMessages.at(-1)?.content;
+    expect(Array.isArray(content) ? content.filter((part) => part.type === "image_url") : []).toHaveLength(2);
+    expect(capturedMessages[0]?.content).toContain("Temporary visual observation:");
+    expect(capturedMessages[0]?.content).toContain("Frames sent this turn: 2 of 3.");
+    expect(JSON.stringify(capturedMessages)).toContain("data:image/png;base64,");
+  });
+
+  it("degrades clearly when the provider does not support vision", async () => {
+    let streamCalled = false;
+    const sessionStore = new InMemorySessionStore("session-no-vision");
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* () {
+          streamCalled = true;
+          yield "Should not run.";
+        }
+      },
+      tts: { synthesize: async (text) => new Uint8Array([text.length]) },
+      memoryStore,
+      sessionStore,
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default"
+    });
+    const events: RuntimeOutputEvent[] = [];
+
+    await runtime.handle(
+      {
+        type: "text.input",
+        text: "看一下",
+        attachments: [makeImageAttachment("frame-1", "screenshot", "A")]
+      },
+      (event) => {
+        events.push(event);
+      }
+    );
+
+    expect(streamCalled).toBe(false);
+    expect(events).toContainEqual({
+      type: "error",
+      message:
+        "This chat provider does not support vision input yet. Greyfield kept the screenshot temporary and did not send it. Switch to a vision-capable provider or ask without the image."
+    });
+    expect(await sessionStore.getRecent(2)).toEqual([]);
+  });
+
+  it("filters duplicate observation frames and caps high frequency input", () => {
+    const result = filterDistinctObservationFrames(
+      [
+        { id: "a", dataUrl: "data:image/png;base64,A", hash: "same" },
+        { id: "b", dataUrl: "data:image/png;base64,B", hash: "same" },
+        { id: "c", dataUrl: "data:image/png;base64,C", hash: "c" },
+        { id: "d", dataUrl: "data:image/png;base64,D", hash: "d" }
+      ],
+      { maxFrames: 2 }
+    );
+
+    expect(result.frames.map((frame) => frame.id)).toEqual(["a", "c"]);
+    expect(result.duplicateCount).toBe(1);
+    expect(result.truncated).toBe(true);
   });
 
   it("injects recalled summary segments into the LLM prompt when a summary store is configured", async () => {
@@ -216,7 +369,7 @@ describe("GreyfieldRuntime", () => {
     const runtime = new GreyfieldRuntime({
       llm: {
         stream: async function* (messages) {
-          if (messages[0]?.content.includes("You extract Greyfield long-term memory atoms")) {
+          if (messageContentText(messages[0]?.content).includes("You extract Greyfield long-term memory atoms")) {
             yield JSON.stringify({
               atoms: [
                 {
@@ -268,7 +421,7 @@ describe("GreyfieldRuntime", () => {
     const runtime = new GreyfieldRuntime({
       llm: {
         stream: async function* (messages) {
-          if (messages[0]?.content.includes("You extract Greyfield long-term memory atoms")) {
+          if (messageContentText(messages[0]?.content).includes("You extract Greyfield long-term memory atoms")) {
             yield JSON.stringify({
               atoms: [
                 {
@@ -990,6 +1143,28 @@ describe("GreyfieldRuntime", () => {
     expect(setMouthOpen).not.toHaveBeenCalled();
   });
 });
+
+function makeImageAttachment(
+  id: string,
+  source: RuntimeImageAttachment["source"],
+  marker: string
+): RuntimeImageAttachment {
+  return {
+    id,
+    source,
+    dataUrl: `data:image/png;base64,${Buffer.from(marker).toString("base64")}`,
+    mimeType: "image/png",
+    createdAt: "2026-06-30T00:00:00.000Z",
+    hash: marker
+  };
+}
+
+function messageContentText(content: Parameters<LLMProvider["stream"]>[0][number]["content"] | undefined): string {
+  if (typeof content === "string") {
+    return content;
+  }
+  return content?.flatMap((part) => (part.type === "text" ? [part.text] : [])).join(" ") ?? "";
+}
 
 class TestMemoryAtomStore implements MemoryAtomStore {
   constructor(private readonly atoms: MemoryAtom[] = []) {}

@@ -9,10 +9,12 @@ describe("createGreyfieldDesktopApi", () => {
     api.send("window:set-click-through", { enabled: true });
     api.send("provider:test-llm", {});
     api.send("memory:atom-update", { id: "atom-1", text: "Edited atom memory." });
+    api.send("observation:start", { mode: "low" });
 
     expect(send).toHaveBeenCalledWith("window:set-click-through", { enabled: true });
     expect(send).toHaveBeenCalledWith("provider:test-llm", {});
     expect(send).toHaveBeenCalledWith("memory:atom-update", { id: "atom-1", text: "Edited atom memory." });
+    expect(send).toHaveBeenCalledWith("observation:start", { mode: "low" });
   });
 
   it("returns an unsubscribe function for event handlers", () => {

@@ -89,6 +89,7 @@ export interface MemorySourcePassage {
   text?: string;
   createdAt?: string;
   message?: string;
+  observationSource?: boolean;
 }
 
 export type MemoryLibrarySummarySegment = SummarySegment & {
@@ -820,7 +821,8 @@ export class RuntimeService {
         status: "available",
         role: turn.role,
         text: turn.content,
-        createdAt: turn.createdAt
+        createdAt: turn.createdAt,
+        ...(isObservationSourceTurn(turn) ? { observationSource: true } : {})
       };
     });
   }
@@ -1031,7 +1033,18 @@ export class RuntimeService {
 }
 
 class MainFakeLLMProvider implements LLMProvider {
-  async *stream(): AsyncIterable<string> {
+  readonly supportsVision = true;
+
+  async *stream(messages: ChatMessage[]): AsyncIterable<string> {
+    const last = messages.at(-1);
+    const attachmentCount = Array.isArray(last?.content)
+      ? last.content.filter((part) => part.type === "image_url").length
+      : 0;
+    if (attachmentCount > 0) {
+      yield `我看到了这次临时观察里的 ${attachmentCount} 张画面。`;
+      yield "可以继续问我画面里的细节。";
+      return;
+    }
     yield "你好，我醒着。";
     yield "现在可以继续做桌宠了。";
   }
@@ -1139,6 +1152,16 @@ function normalizeSourceRefs(refs: SourceTurnRef[]): SourceTurnRef[] {
 
 function hasSessionTurnLookup(store: SessionStore): store is SessionStore & SessionTurnLookup {
   return "getByIds" in store && typeof store.getByIds === "function";
+}
+
+function isObservationSourceTurn(turn: SessionTurn): boolean {
+  const observation = turn.meta?.observation;
+  return (
+    typeof observation === "object" &&
+    observation !== null &&
+    "kind" in observation &&
+    observation.kind === "visual-observation"
+  );
 }
 
 const redactedSecretPlaceholder = "[redacted-secret]";
