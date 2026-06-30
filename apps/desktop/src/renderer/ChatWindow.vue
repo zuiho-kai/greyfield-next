@@ -75,6 +75,7 @@
           class="voice-input-button"
           :class="{ 'voice-input-button--active': state.voiceInput.status === 'listening' }"
           :disabled="state.voiceInput.status === 'transcribing'"
+          data-testid="chat-voice-input-button"
           @click="$emit(state.voiceInput.status === 'listening' ? 'stop-voice-input' : 'start-voice-input')"
         >
           <span>🎙️</span> {{ voiceInputLabel }}

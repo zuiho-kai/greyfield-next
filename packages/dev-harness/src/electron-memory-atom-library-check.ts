@@ -70,6 +70,10 @@ try {
       {
         ...defaultGreyfieldConfig,
         characterFile: currentRoleCharacterFile,
+        ui: {
+          ...defaultGreyfieldConfig.ui,
+          locale: "en-US"
+        },
         provider: {
           ...defaultGreyfieldConfig.provider,
           llm: "openai-compatible",

@@ -35,6 +35,7 @@ await writeFile(
       ...defaultGreyfieldConfig,
       ui: {
         ...defaultGreyfieldConfig.ui,
+        locale: "en-US",
         speechBubbleEnabled: true,
         proactiveMemoryEnabled: true
       }
