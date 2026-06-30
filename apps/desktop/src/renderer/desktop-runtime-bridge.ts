@@ -98,6 +98,7 @@ export interface DesktopSettingsState {
   modelY: number;
   speechBubbleEnabled: boolean;
   proactiveMemoryEnabled: boolean;
+  settingsLocale: GreyfieldConfig["ui"]["locale"];
   llmAtomExtractionEnabled: boolean;
 }
 
@@ -1039,6 +1040,7 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       modelY: defaultGreyfieldConfig.live2d.y,
       speechBubbleEnabled: defaultGreyfieldConfig.ui.speechBubbleEnabled,
       proactiveMemoryEnabled: defaultGreyfieldConfig.ui.proactiveMemoryEnabled,
+      settingsLocale: defaultGreyfieldConfig.ui.locale,
       llmAtomExtractionEnabled: defaultGreyfieldConfig.memory.llmAtomExtractionEnabled
     },
     window: {

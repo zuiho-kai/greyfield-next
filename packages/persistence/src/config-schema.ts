@@ -1,3 +1,9 @@
+export type GreyfieldLocale = "en-US" | "zh-CN";
+
+export function normalizeGreyfieldLocale(locale: unknown): GreyfieldLocale {
+  return locale === "zh-CN" ? "zh-CN" : "en-US";
+}
+
 export interface GreyfieldConfig {
   provider: {
     llm: string;
@@ -39,6 +45,7 @@ export interface GreyfieldConfig {
   ui: {
     speechBubbleEnabled: boolean;
     proactiveMemoryEnabled: boolean;
+    locale: GreyfieldLocale;
   };
   memory: {
     llmAtomExtractionEnabled: boolean;
@@ -90,7 +97,8 @@ export const defaultGreyfieldConfig: GreyfieldConfig = {
   },
   ui: {
     speechBubbleEnabled: true,
-    proactiveMemoryEnabled: true
+    proactiveMemoryEnabled: true,
+    locale: "en-US"
   },
   memory: {
     llmAtomExtractionEnabled: false
@@ -99,6 +107,7 @@ export const defaultGreyfieldConfig: GreyfieldConfig = {
 };
 
 export function mergeConfig(partial: GreyfieldConfigPatch): GreyfieldConfig {
+  const ui = { ...defaultGreyfieldConfig.ui, ...partial.ui };
   return {
     ...defaultGreyfieldConfig,
     ...partial,
@@ -108,7 +117,7 @@ export function mergeConfig(partial: GreyfieldConfigPatch): GreyfieldConfig {
     window: { ...defaultGreyfieldConfig.window, ...partial.window },
     live2d: { ...defaultGreyfieldConfig.live2d, ...partial.live2d },
     hotkeys: { ...defaultGreyfieldConfig.hotkeys, ...partial.hotkeys },
-    ui: { ...defaultGreyfieldConfig.ui, ...partial.ui },
+    ui: { ...ui, locale: normalizeGreyfieldLocale(ui.locale) },
     memory: { ...defaultGreyfieldConfig.memory, ...partial.memory }
   };
 }

@@ -88,6 +88,7 @@ import { createPetWindowShape } from "./pet-window-shape";
 import { placeSpeechBubble, type Rect } from "./speech-bubble-placement";
 import { resolveSpeechBubbleSourceText } from "./speech-bubble-source";
 import { formatSpeechBubbleText } from "./speech-bubble-text";
+import { normalizeSettingsLocale } from "./settings-i18n";
 import { isMaskedApiKey } from "../shared/secrets";
 
 const queryModelPath =
@@ -189,6 +190,7 @@ if (typeof window !== "undefined") {
       modelY: config.live2d.y,
       speechBubbleEnabled: config.ui.speechBubbleEnabled,
       proactiveMemoryEnabled: config.ui.proactiveMemoryEnabled,
+      settingsLocale: config.ui.locale,
       llmAtomExtractionEnabled: config.memory.llmAtomExtractionEnabled
     });
     state.window.modelPassThrough = config.window.modelPassThrough;
@@ -257,7 +259,9 @@ function syncState(nextState: DesktopRendererState): void {
 }
 
 function updateSetting(key: keyof DesktopSettingsState, value: string): void {
-  const patch: Partial<DesktopSettingsState> = { [key]: value };
+  const patch: Partial<DesktopSettingsState> = {
+    [key]: key === "settingsLocale" ? normalizeSettingsLocale(value) : value
+  };
   if (
     state.settings.providerLLM !== "openai-compatible" &&
     value.trim().length > 0 &&

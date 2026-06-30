@@ -24,6 +24,8 @@ const currentThreadId = "desktop:characters-greyfield-yaml";
 const otherRoleCharacterFile = "characters/other-role.yaml";
 const otherThreadId = "desktop:characters-other-role-yaml";
 const otherRoleSummaryText = "Other role summary must stay isolated.";
+const memoryLibrarySelector = '[data-harness="settings-memory-library"]';
+const memorySourceDrilldownSelector = '[data-harness="memory-source-drilldown"]';
 
 let app: ElectronApplication | undefined;
 try {
@@ -95,7 +97,7 @@ try {
   let settings = await waitForRoleWindow(app, "settings");
   await settings.waitForSelector(".greyfield-shell");
   await settings.getByRole("button", { name: "Refresh memory" }).click();
-  let memoryLibrary = settings.locator('[aria-label="Memory Library"]');
+  let memoryLibrary = settings.locator(memoryLibrarySelector);
   await waitForCurrentSummary(memoryLibrary);
   await assertMemoryPrivacyCopy(memoryLibrary);
   await assertOtherRoleSummaryHidden(memoryLibrary);
@@ -107,7 +109,7 @@ try {
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Scenes" }).waitFor();
   await memoryLibrary.locator(".memory-library__stats", { hasText: "Enabled" }).waitFor();
   await memoryLibrary.locator(".memory-library__source-link", { hasText: "source passages ready" }).waitFor();
-  const summarySource = await openSourceDrilldown(memoryLibrary, '[aria-label="Summary memory summary-1"]');
+  const summarySource = await openSourceDrilldown(memoryLibrary, "summary-1");
   await summarySource.getByText("From you").first().waitFor();
   await summarySource.getByText("Saved locally").first().waitFor();
   await summarySource.locator(".memory-library__source-row p", { hasText: "第一轮：我喜欢 Hiyori。" }).waitFor();
@@ -115,25 +117,25 @@ try {
     includes: ["From you", "Saved from conversation", "第一轮：我喜欢 Hiyori。"],
     excludes: ["Unknown role", "desktop-main-session-1", "Turn", summaryBoundedTail]
   });
-  await assertNoHorizontalOverflow(settings, '[aria-label="Memory source drilldown"]');
+  await assertNoHorizontalOverflow(settings, memorySourceDrilldownSelector);
   await settings.screenshot({ path: settingsSourceScreenshotPath, fullPage: true });
   await closeSourceDrilldown(memoryLibrary);
   await memoryLibrary.locator(".memory-library__block--recall", { hasText: "Last recalled memory" }).waitFor();
   await memoryLibrary.locator(".memory-library__block--recall", { hasText: 'Matched recall cue "hiyori"' }).waitFor();
   await assertMemoryLibraryTextSafe(memoryLibrary);
 
-  await settings.getByLabel("Memory text summary-1").fill("Edited memory: User prefers Hiyori and Sakura.");
-  await settings.getByLabel("Recall cues summary-1").fill("edited-hiyori, hiyori, sakura");
-  await settings.getByRole("button", { name: "Save memory summary-1" }).click();
+  await memorySummaryText(memoryLibrary, "summary-1").fill("Edited memory: User prefers Hiyori and Sakura.");
+  await memorySummaryCues(memoryLibrary, "summary-1").fill("edited-hiyori, hiyori, sakura");
+  await memorySummarySave(memoryLibrary, "summary-1").click();
   await memoryLibrary.getByText("Memory summary-1 saved.").waitFor();
   const editedSummaryJsonl = await waitForFileContaining(summaryPath, [
     "Edited memory: User prefers Hiyori and Sakura.",
     "edited-hiyori"
   ]);
 
-  await settings.getByRole("button", { name: "Export library" }).click();
-  await settings.getByLabel("Memory library export").waitFor();
-  const exportedMemoryText = await settings.getByLabel("Memory library export").inputValue();
+  await memoryLibrary.locator('[data-harness="memory-library-export"]').click();
+  await settings.locator('[data-harness="memory-library-export-text"]').waitFor();
+  const exportedMemoryText = await settings.locator('[data-harness="memory-library-export-text"]').inputValue();
   if (
     !exportedMemoryText.includes("Edited memory: User prefers Hiyori and Sakura.") ||
     !exportedMemoryText.includes("第一轮：我喜欢 Hiyori。")
@@ -144,7 +146,7 @@ try {
     throw new Error(`Memory export leaked a provider secret or other-role summary: ${exportedMemoryText}`);
   }
 
-  await settings.getByRole("button", { name: "Disable memory summary-1" }).click();
+  await memorySummaryToggle(memoryLibrary, "summary-1").click();
   await memoryLibrary.getByText("Memory summary-1 disabled.").waitFor();
   await waitForFileContaining(summaryPath, ['"id":"summary-1"', '"disabled":true']);
 
@@ -161,7 +163,7 @@ try {
     throw new Error(`Disabled summary-1 was not reported as skipped: ${JSON.stringify(disabledRecall.context)}`);
   }
 
-  await settings.getByRole("button", { name: "Enable memory summary-1" }).click();
+  await memorySummaryToggle(memoryLibrary, "summary-1").click();
   await waitForFileContaining(summaryPath, ['"id":"summary-1"', '"disabled":false']);
   await resetMemoryEvents(chat);
   await sendMessageAndWaitForNextAssistant(chat, "edited-hiyori 重新启用后应该能想起吗？");
@@ -177,10 +179,10 @@ try {
   settings = await waitForRoleWindow(app, "settings");
   await settings.waitForSelector(".greyfield-shell");
   await settings.getByRole("button", { name: "Refresh memory" }).click();
-  memoryLibrary = settings.locator('[aria-label="Memory Library"]');
+  memoryLibrary = settings.locator(memoryLibrarySelector);
   await waitForCurrentSummary(memoryLibrary);
   await memoryLibrary.getByText("Edited memory: User prefers Hiyori and Sakura.").waitFor();
-  const reloadedCueValue = await settings.getByLabel("Recall cues summary-1").inputValue();
+  const reloadedCueValue = await memorySummaryCues(memoryLibrary, "summary-1").inputValue();
   if (reloadedCueValue !== "edited-hiyori, hiyori, sakura") {
     throw new Error(`Reloaded summary cues were not persisted: ${reloadedCueValue}`);
   }
@@ -189,7 +191,7 @@ try {
   await settings.screenshot({ path: settingsReloadedScreenshotPath, fullPage: true });
 
   await switchCharacter(settings, otherRoleCharacterFile);
-  await memoryLibrary.locator('[aria-label="Summary memory summary-other-role"]', { hasText: otherRoleSummaryText }).waitFor();
+  await memorySummaryCard(memoryLibrary, "summary-other-role").filter({ hasText: otherRoleSummaryText }).waitFor();
   if (((await memoryLibrary.textContent()) ?? "").includes("Edited memory: User prefers Hiyori and Sakura.")) {
     throw new Error("Role-B Memory Library rendered role-A summary.");
   }
@@ -197,7 +199,7 @@ try {
   await waitForCurrentSummary(memoryLibrary);
   await assertOtherRoleSummaryHidden(memoryLibrary);
 
-  await settings.getByRole("button", { name: "Delete memory summary-1" }).click();
+  await memorySummaryDelete(memoryLibrary, "summary-1").click();
   await memoryLibrary
     .getByText("Memory summary-1 deleted. Remembered source evidence was hidden from recall, source views, and exports.")
     .waitFor();
@@ -210,7 +212,7 @@ try {
     throw new Error(`Deleted summary-1 was still recalled: ${JSON.stringify(recallAfterDelete.context)}`);
   }
 
-  await settings.getByRole("button", { name: "Export library" }).click();
+  await memoryLibrary.locator('[data-harness="memory-library-export"]').click();
   const exportAfterDelete = await waitForMemoryExportValue(settings, (value) => {
     return (
       !value.includes("Edited memory: User prefers Hiyori and Sakura.") &&
@@ -362,17 +364,41 @@ function isMemoryRecallEvent(
   return typeof event === "object" && event !== null && "type" in event && event.type === "memory.recall.context";
 }
 
-async function openSourceDrilldown(memoryLibrary: Locator, cardSelector: string): Promise<Locator> {
-  const card = memoryLibrary.locator(cardSelector);
-  await card.getByRole("button", { name: /View source/iu }).click();
-  const source = memoryLibrary.locator('[aria-label="Memory source drilldown"]');
+function memorySummaryCard(memoryLibrary: Locator, id: string): Locator {
+  return memoryLibrary.locator(`[data-harness="memory-summary-card"][data-memory-id="${id}"]`);
+}
+
+function memorySummaryText(memoryLibrary: Locator, id: string): Locator {
+  return memoryLibrary.locator(`[data-harness="memory-summary-text"][data-memory-id="${id}"]`);
+}
+
+function memorySummaryCues(memoryLibrary: Locator, id: string): Locator {
+  return memoryLibrary.locator(`[data-harness="memory-summary-cues"][data-memory-id="${id}"]`);
+}
+
+function memorySummarySave(memoryLibrary: Locator, id: string): Locator {
+  return memoryLibrary.locator(`[data-harness="memory-summary-save"][data-memory-id="${id}"]`);
+}
+
+function memorySummaryToggle(memoryLibrary: Locator, id: string): Locator {
+  return memoryLibrary.locator(`[data-harness="memory-summary-toggle"][data-memory-id="${id}"]`);
+}
+
+function memorySummaryDelete(memoryLibrary: Locator, id: string): Locator {
+  return memoryLibrary.locator(`[data-harness="memory-summary-delete"][data-memory-id="${id}"]`);
+}
+
+async function openSourceDrilldown(memoryLibrary: Locator, id: string): Promise<Locator> {
+  const card = memorySummaryCard(memoryLibrary, id);
+  await card.locator('[data-harness="memory-source-open"]').click();
+  const source = memoryLibrary.locator(memorySourceDrilldownSelector);
   await source.waitFor();
   return source;
 }
 
 async function closeSourceDrilldown(memoryLibrary: Locator): Promise<void> {
-  const source = memoryLibrary.locator('[aria-label="Memory source drilldown"]');
-  await source.getByRole("button", { name: "Close source drilldown" }).click();
+  const source = memoryLibrary.locator(memorySourceDrilldownSelector);
+  await source.locator('[data-harness="memory-source-close"]').click();
   await source.waitFor({ state: "detached" });
 }
 
@@ -411,7 +437,7 @@ async function switchCharacter(settings: Page, characterFile: string): Promise<v
 }
 
 async function waitForCurrentSummary(memoryLibrary: Locator): Promise<void> {
-  await memoryLibrary.locator('[aria-label="Summary memory summary-1"]').waitFor();
+  await memorySummaryCard(memoryLibrary, "summary-1").waitFor();
 }
 
 async function assertOtherRoleSummaryHidden(memoryLibrary: Locator): Promise<void> {
@@ -464,7 +490,7 @@ async function waitForMemoryExportValue(page: Page, predicate: (value: string) =
   const started = Date.now();
   let lastValue = "";
   while (Date.now() - started < 5_000) {
-    lastValue = await page.getByLabel("Memory library export").inputValue().catch(() => "");
+    lastValue = await page.locator('[data-harness="memory-library-export-text"]').inputValue().catch(() => "");
     if (predicate(lastValue)) {
       return lastValue;
     }

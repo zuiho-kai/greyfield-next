@@ -341,9 +341,9 @@ button {
 }
 
 body.settings-window .greyfield-shell {
-  grid-template-columns: 88px minmax(220px, 1fr) minmax(280px, 380px);
+  grid-template-columns: minmax(108px, 0.3fr) minmax(200px, 1fr) minmax(280px, 380px);
   align-items: stretch;
-  gap: 16px;
+  gap: 14px;
   padding: 16px;
 }
 
@@ -498,8 +498,10 @@ body.settings-window .greyfield-shell {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 100%;
   min-width: 0;
-  padding: 10px 8px;
+  overflow: hidden;
+  padding: 10px 6px;
   border-right: 1px solid rgba(31, 41, 51, 0.1);
 }
 
@@ -509,17 +511,43 @@ body.settings-window .greyfield-shell {
 }
 
 .settings-nav button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
+  min-width: 0;
+  min-height: 38px;
   padding: 9px 8px;
   border: 1px solid rgba(31, 41, 51, 0.14);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.72);
   color: #253858;
   cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  overflow-wrap: anywhere;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
 }
 
 body.settings-window .settings-nav button {
   background: rgba(255, 255, 255, 0.92);
+}
+
+.settings-nav__button--active,
+body.settings-window .settings-nav__button--active {
+  border-color: rgba(31, 122, 107, 0.3);
+  background: rgba(31, 122, 107, 0.13);
+  color: #18594f;
+}
+
+.settings-nav__button:focus-visible {
+  outline: 2px solid rgba(31, 122, 107, 0.28);
+  outline-offset: 2px;
 }
 
 .stage-surface {
@@ -878,11 +906,23 @@ h1 {
   padding-top: 4px;
 }
 
+.settings-language-select {
+  align-items: center;
+  padding: 0 0 12px;
+  border-bottom: 1px solid rgba(31, 41, 51, 0.09);
+}
+
 .settings-section {
   display: grid;
   gap: 10px;
+  scroll-margin-top: 8px;
   padding: 0 0 14px;
   border-bottom: 1px solid rgba(31, 41, 51, 0.09);
+}
+
+.settings-section:focus-visible {
+  outline: 2px solid rgba(31, 122, 107, 0.22);
+  outline-offset: 3px;
 }
 
 .settings-section:last-child {
@@ -1720,7 +1760,9 @@ h1 {
   }
 
   body.settings-window .settings-nav button {
-    flex: 1 1 96px;
+    flex: 1 1 92px;
+    width: auto;
+    max-width: 100%;
   }
 
   .stage-surface {

@@ -1,4 +1,5 @@
 import type { DesktopRendererState } from "./desktop-runtime-bridge";
+import { settingsT, type SettingsLocale } from "./settings-i18n";
 
 export interface ProviderStatusView {
   tone: "ready" | "blocked" | "preview";
@@ -6,43 +7,43 @@ export interface ProviderStatusView {
   detail: string;
 }
 
-export function describeProviderStatus(state: DesktopRendererState): ProviderStatusView {
+export function describeProviderStatus(state: DesktopRendererState, locale?: SettingsLocale): ProviderStatusView {
   const llm = state.settings.providerLLM.trim();
   if (llm !== "openai-compatible") {
     return {
       tone: "preview",
-      label: "Preview",
-      detail: "Fake provider is active. Use OpenAI-compatible for a real LLM chat."
+      label: settingsT(locale, "provider.preview.label"),
+      detail: settingsT(locale, "provider.preview.detail")
     };
   }
 
   if (state.settings.providerBaseUrl.trim().length === 0) {
     return {
       tone: "blocked",
-      label: "Needs Base URL",
-      detail: "OpenAI-compatible chat needs a Base URL such as https://host/v1."
+      label: settingsT(locale, "provider.baseUrl.label"),
+      detail: settingsT(locale, "provider.baseUrl.detail")
     };
   }
 
   if (!state.settings.providerHasApiKey && state.settings.providerApiKey.trim().length === 0) {
     return {
       tone: "blocked",
-      label: "Needs API key",
-      detail: "Add an API key before testing or chatting with the real provider."
+      label: settingsT(locale, "provider.apiKey.label"),
+      detail: settingsT(locale, "provider.apiKey.detail")
     };
   }
 
   if (state.settings.providerModel.trim().length === 0) {
     return {
       tone: "blocked",
-      label: "Needs model",
-      detail: "Choose the provider model name before testing the LLM."
+      label: settingsT(locale, "provider.model.label"),
+      detail: settingsT(locale, "provider.model.detail")
     };
   }
 
   return {
     tone: "ready",
-    label: "Ready to test",
-    detail: "Provider settings are complete. Run Test LLM before a real chat."
+    label: settingsT(locale, "provider.ready.label"),
+    detail: settingsT(locale, "provider.ready.detail")
   };
 }

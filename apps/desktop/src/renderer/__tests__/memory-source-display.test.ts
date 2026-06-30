@@ -50,6 +50,20 @@ describe("memory source display helpers", () => {
     expect(describeRecallReason("semantic_match")).toBe("Semantic match");
     expect(describeRecallReason("")).toBe("Matched this memory");
   });
+
+  it("localizes Memory Library source labels for zh-CN", () => {
+    const userPassage = makePassage({ role: "user", createdAt: "2026-06-28T00:00:00.000Z" });
+
+    expect(describeMemorySourceCount({ sourceIds: ["desktop-main-session-1", "desktop-main-session-2"] }, "zh-CN")).toBe(
+      "已保存 2 个来源"
+    );
+    expect(describeMemorySourceCount({ sourcePassages: [userPassage] }, "zh-CN")).toBe("1 个来源片段可查看");
+    expect(describeSourcePassageHeading(userPassage, "zh-CN")).toBe("来自你");
+    expect(describeSourcePassageStatus(userPassage, "zh-CN")).toBe("已本地保存");
+    expect(describeSourcePassageMeta(userPassage, "zh-CN")).toBe("保存自 2026-06-28 00:00 的对话");
+    expect(describeSourcePassageBody(makePassage({ text: "" }), undefined, "zh-CN")).toBe("这个来源没有保存消息文本。");
+    expect(describeRecallReason("cue:hiyori", "zh-CN")).toBe("命中召回线索「hiyori」");
+  });
 });
 
 function makePassage(overrides: Partial<DesktopMemorySourcePassage> = {}): DesktopMemorySourcePassage {

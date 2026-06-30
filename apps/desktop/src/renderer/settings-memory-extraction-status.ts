@@ -1,4 +1,5 @@
 import type { DesktopRendererState } from "./desktop-runtime-bridge";
+import { settingsT, type SettingsLocale } from "./settings-i18n";
 
 export interface MemoryExtractionStatusView {
   tone: "standard" | "ready" | "fallback" | "success";
@@ -6,20 +7,20 @@ export interface MemoryExtractionStatusView {
   detail: string;
 }
 
-export function describeMemoryExtractionStatus(state: DesktopRendererState): MemoryExtractionStatusView {
+export function describeMemoryExtractionStatus(state: DesktopRendererState, locale?: SettingsLocale): MemoryExtractionStatusView {
   if (!state.settings.llmAtomExtractionEnabled) {
     return {
       tone: "standard",
-      label: "Standard memory",
-      detail: "Better extraction is off. Greyfield still saves simple local memories such as names, dates, and preferences."
+      label: settingsT(locale, "memory.standard.label"),
+      detail: settingsT(locale, "memory.standard.detail")
     };
   }
 
-  const providerRequirement = describeMemoryExtractionProviderRequirement(state);
+  const providerRequirement = describeMemoryExtractionProviderRequirement(state, locale);
   if (providerRequirement) {
     return {
       tone: "fallback",
-      label: "Standard fallback",
+      label: settingsT(locale, "memory.fallback.label"),
       detail: providerRequirement
     };
   }
@@ -27,7 +28,7 @@ export function describeMemoryExtractionStatus(state: DesktopRendererState): Mem
   if (state.memoryExtraction?.status === "fallback") {
     return {
       tone: "fallback",
-      label: "Standard fallback",
+      label: settingsT(locale, "memory.fallback.label"),
       detail: state.memoryExtraction.message
     };
   }
@@ -35,38 +36,38 @@ export function describeMemoryExtractionStatus(state: DesktopRendererState): Mem
   if (state.memoryExtraction?.status === "better") {
     return {
       tone: "success",
-      label: "Better memory used",
-      detail: "The last message was checked with the chat provider. Standard local memory stayed available."
+      label: settingsT(locale, "memory.betterUsed.label"),
+      detail: settingsT(locale, "memory.betterUsed.detail")
     };
   }
 
   if (state.memoryExtraction?.reason === "skipped-noise") {
     return {
       tone: "standard",
-      label: "No memory saved",
+      label: settingsT(locale, "memory.noSaved.label"),
       detail: state.memoryExtraction.message
     };
   }
 
   return {
     tone: "ready",
-    label: "Ready for better memory",
-    detail: "Greyfield can use the chat provider to notice richer memories. If it fails, standard local memory keeps running."
+    label: settingsT(locale, "memory.ready.label"),
+    detail: settingsT(locale, "memory.ready.detail")
   };
 }
 
-function describeMemoryExtractionProviderRequirement(state: DesktopRendererState): string {
+function describeMemoryExtractionProviderRequirement(state: DesktopRendererState, locale?: SettingsLocale): string {
   if (state.settings.providerLLM !== "openai-compatible") {
-    return "Better extraction needs the OpenAI-compatible chat provider. Standard local memory stays on until the provider is ready.";
+    return settingsT(locale, "memory.needsProvider");
   }
   if (state.settings.providerBaseUrl.trim().length === 0) {
-    return "Better extraction needs a chat provider Base URL. Standard local memory stays on until the provider is ready.";
+    return settingsT(locale, "memory.needsBaseUrl");
   }
   if (!state.settings.providerHasApiKey && state.settings.providerApiKey.trim().length === 0) {
-    return "Better extraction needs a saved API key. Standard local memory stays on until the provider is ready.";
+    return settingsT(locale, "memory.needsApiKey");
   }
   if (state.settings.providerModel.trim().length === 0) {
-    return "Better extraction needs a chat model name. Standard local memory stays on until the provider is ready.";
+    return settingsT(locale, "memory.needsModel");
   }
   return "";
 }

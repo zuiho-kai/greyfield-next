@@ -1,11 +1,21 @@
 <template>
   <main class="greyfield-shell">
-    <nav class="settings-nav" aria-label="Settings sections">
+    <nav class="settings-nav" :aria-label="t('nav.label')">
       <strong>Greyfield</strong>
-      <button type="button">Model</button>
-      <button type="button">Voice</button>
-      <button type="button">Window</button>
-      <button type="button" @click="$emit('open-chat')">Chat</button>
+      <button
+        v-for="item in settingsNavItems"
+        :key="item.id"
+        type="button"
+        class="settings-nav__button"
+        :class="{ 'settings-nav__button--active': activeSectionId === item.id }"
+        :aria-current="activeSectionId === item.id ? 'true' : undefined"
+        @click="scrollToSection(item.id)"
+      >
+        {{ item.label }}
+      </button>
+      <button type="button" class="settings-nav__button settings-nav__button--chat" @click="$emit('open-chat')">
+        {{ t("nav.chat") }}
+      </button>
     </nav>
     <section class="stage-surface" :class="{ speaking: state.status === 'speaking' }">
       <Live2DStageView
@@ -20,21 +30,41 @@
       />
     </section>
 
-    <aside class="control-surface">
+    <aside ref="controlSurfaceRef" class="control-surface" @scroll.passive="updateActiveSection">
       <header>
         <h1>Greyfield Next</h1>
-        <span class="status-pill">{{ state.status }}</span>
+        <span class="status-pill" :aria-label="t('app.status')">{{ localizedStageStatus }}</span>
       </header>
 
-      <section class="settings-panel" aria-label="Settings">
-        <div class="settings-section persona-editor" aria-label="Persona editor">
+      <section class="settings-panel" :aria-label="t('settings.label')">
+        <label class="settings-language-select">
+          <span>{{ t("settings.language") }}</span>
+          <select
+            :value="state.settings.settingsLocale"
+            autocomplete="off"
+            @change="$emit('update-setting', 'settingsLocale', valueFrom($event))"
+          >
+            <option v-for="locale in settingsLocales" :key="locale.value" :value="locale.value">
+              {{ locale.label }}
+            </option>
+          </select>
+        </label>
+
+        <div
+          id="settings-section-persona"
+          :ref="setSectionRef('persona')"
+          class="settings-section persona-editor"
+          :aria-label="sectionAriaLabel('persona')"
+          data-settings-section="persona"
+          tabindex="-1"
+        >
           <header class="settings-section__header">
-            <h2>Persona</h2>
+            <h2>{{ t("section.persona") }}</h2>
             <span>{{ personaStatusLabel }}</span>
           </header>
           <div class="settings-fields">
             <label>
-              <span>Name</span>
+              <span>{{ t("field.name") }}</span>
               <input
                 aria-label="Greyfield name"
                 :value="personaDraft.name"
@@ -45,7 +75,7 @@
               />
             </label>
             <label>
-              <span>User</span>
+              <span>{{ t("field.user") }}</span>
               <input
                 aria-label="User address"
                 :value="personaDraft.userAddress"
@@ -58,7 +88,7 @@
           </div>
           <div class="settings-fields settings-fields--stacked">
             <label>
-              <span>Personality</span>
+              <span>{{ t("field.personality") }}</span>
               <textarea
                 aria-label="Personality"
                 :value="personaDraft.personality"
@@ -69,7 +99,7 @@
               />
             </label>
             <label>
-              <span>Speaking style</span>
+              <span>{{ t("field.speakingStyle") }}</span>
               <textarea
                 aria-label="Speaking style"
                 :value="personaDraft.speakingStyle"
@@ -80,7 +110,7 @@
               />
             </label>
             <label>
-              <span>Boundaries</span>
+              <span>{{ t("field.boundaries") }}</span>
               <textarea
                 aria-label="Boundaries"
                 :value="personaDraft.boundariesText"
@@ -91,7 +121,7 @@
               />
             </label>
             <label>
-              <span>Greeting</span>
+              <span>{{ t("field.greeting") }}</span>
               <textarea
                 aria-label="Greeting"
                 :value="personaDraft.greeting"
@@ -109,7 +139,7 @@
               :disabled="personaSaveDisabled"
               @click="$emit('save-persona', personaDraft)"
             >
-              {{ state.persona.status === "saving" ? "Saving..." : "Save persona" }}
+              {{ state.persona.status === "saving" ? t("button.saving") : t("button.savePersona") }}
             </button>
           </div>
           <p
@@ -122,25 +152,32 @@
           </p>
         </div>
 
-        <div class="settings-section">
+        <div
+          id="settings-section-provider"
+          :ref="setSectionRef('provider')"
+          class="settings-section"
+          :aria-label="sectionAriaLabel('provider')"
+          data-settings-section="provider"
+          tabindex="-1"
+        >
           <header class="settings-section__header">
-            <h2>Provider</h2>
+            <h2>{{ t("section.provider") }}</h2>
             <span>{{ providerStatus.label }}</span>
           </header>
           <div class="settings-fields">
             <label>
-              <span>Provider</span>
+              <span>{{ t("field.provider") }}</span>
               <select
                 :value="state.settings.providerLLM"
                 autocomplete="off"
                 @change="$emit('update-setting', 'providerLLM', valueFrom($event))"
               >
-                <option value="fake">Fake preview</option>
-                <option value="openai-compatible">OpenAI-compatible</option>
+                <option value="fake">{{ t("provider.fakePreview") }}</option>
+                <option value="openai-compatible">{{ t("provider.openaiCompatible") }}</option>
               </select>
             </label>
             <label>
-              <span>Base URL</span>
+              <span>{{ t("field.baseUrl") }}</span>
               <input
                 :value="state.settings.providerBaseUrl"
                 autocomplete="off"
@@ -149,18 +186,18 @@
               />
             </label>
             <label>
-              <span>API Key</span>
+              <span>{{ t("field.apiKey") }}</span>
               <input
                 :value="state.settings.providerApiKey"
                 autocomplete="off"
                 spellcheck="false"
-                :placeholder="state.settings.providerHasApiKey ? 'Saved API key' : ''"
+                :placeholder="state.settings.providerHasApiKey ? t('provider.savedApiKey') : ''"
                 type="password"
                 @input="$emit('update-setting', 'providerApiKey', valueFrom($event))"
               />
             </label>
             <label>
-              <span>Model</span>
+              <span>{{ t("field.model") }}</span>
               <input
                 :value="state.settings.providerModel"
                 autocomplete="off"
@@ -202,25 +239,32 @@
           </p>
         </div>
 
-        <div class="settings-section">
+        <div
+          id="settings-section-voice"
+          :ref="setSectionRef('voice')"
+          class="settings-section"
+          :aria-label="sectionAriaLabel('voice')"
+          data-settings-section="voice"
+          tabindex="-1"
+        >
           <header class="settings-section__header">
-            <h2>Voice</h2>
-            <span>{{ state.settings.voiceSpeechEnabled ? "On" : "Off" }}</span>
+            <h2>{{ t("section.voice") }}</h2>
+            <span>{{ state.settings.voiceSpeechEnabled ? t("status.on") : t("status.off") }}</span>
           </header>
           <div class="settings-fields">
             <label>
-              <span>ASR</span>
+              <span>{{ t("field.asr") }}</span>
               <select
                 :value="state.settings.providerASR"
                 autocomplete="off"
                 @change="$emit('update-setting', 'providerASR', valueFrom($event))"
               >
                 <option value="fake">Fake microphone</option>
-                <option value="openai-compatible">OpenAI-compatible</option>
+                <option value="openai-compatible">{{ t("provider.openaiCompatible") }}</option>
               </select>
             </label>
             <label>
-              <span>ASR Model</span>
+              <span>{{ t("field.asrModel") }}</span>
               <input
                 :value="state.settings.providerASRModel"
                 autocomplete="off"
@@ -229,18 +273,18 @@
               />
             </label>
             <label>
-              <span>TTS</span>
+              <span>{{ t("field.tts") }}</span>
               <select
                 :value="state.settings.providerTTS"
                 autocomplete="off"
                 @change="$emit('update-setting', 'providerTTS', valueFrom($event))"
               >
-                <option value="fake">Local fallback</option>
-                <option value="openai-compatible">OpenAI-compatible</option>
+                <option value="fake">{{ t("provider.localFallback") }}</option>
+                <option value="openai-compatible">{{ t("provider.openaiCompatible") }}</option>
               </select>
             </label>
             <label>
-              <span>TTS Model</span>
+              <span>{{ t("field.ttsModel") }}</span>
               <input
                 :value="state.settings.providerTTSModel"
                 autocomplete="off"
@@ -249,7 +293,7 @@
               />
             </label>
             <label>
-              <span>Voice</span>
+              <span>{{ t("field.voice") }}</span>
               <input
                 :value="state.settings.voiceId"
                 autocomplete="off"
@@ -258,7 +302,7 @@
               />
             </label>
             <label>
-              <span>Speak</span>
+              <span>{{ t("field.speak") }}</span>
               <input
                 :checked="state.settings.voiceSpeechEnabled"
                 aria-label="Speak replies"
@@ -267,7 +311,7 @@
               />
             </label>
             <label>
-              <span>Volume</span>
+              <span>{{ t("field.volume") }}</span>
               <input
                 :value="state.settings.voiceVolume"
                 aria-label="Voice volume"
@@ -279,7 +323,7 @@
               />
             </label>
             <label>
-              <span>Mic</span>
+              <span>{{ t("field.mic") }}</span>
               <input
                 :value="state.settings.microphoneId"
                 autocomplete="off"
@@ -317,14 +361,21 @@
           </p>
         </div>
 
-        <div class="settings-section">
+        <div
+          id="settings-section-model"
+          :ref="setSectionRef('model')"
+          class="settings-section"
+          :aria-label="sectionAriaLabel('model')"
+          data-settings-section="model"
+          tabindex="-1"
+        >
           <header class="settings-section__header">
-            <h2>Live2D</h2>
-            <span>{{ currentBundledLive2DModel?.label ?? "Custom" }}</span>
+            <h2>{{ t("section.model") }}</h2>
+            <span>{{ currentBundledLive2DModel?.label ?? t("status.custom") }}</span>
           </header>
           <div class="settings-fields">
             <label>
-              <span>Character</span>
+              <span>{{ t("field.character") }}</span>
               <input
                 :value="state.settings.characterFile"
                 autocomplete="off"
@@ -333,7 +384,7 @@
               />
             </label>
             <label>
-              <span>Model</span>
+              <span>{{ t("field.model") }}</span>
               <select
                 aria-label="Live2D model"
                 :value="selectedLive2DModel"
@@ -348,7 +399,7 @@
                 >
                   {{ model.label }}
                 </option>
-                <option v-if="isCustomLive2DModel" :value="customLive2DModelValue">Custom model</option>
+                <option v-if="isCustomLive2DModel" :value="customLive2DModelValue">{{ t("live2d.customModel") }}</option>
               </select>
             </label>
           </div>
@@ -356,19 +407,26 @@
             {{ live2DModelNote }}
           </p>
           <div class="settings-actions">
-            <button type="button" @click="$emit('choose-model')">Import local model</button>
-            <button type="button" @click="$emit('reset-transform')">Reset transform</button>
+            <button type="button" @click="$emit('choose-model')">{{ t("button.importModel") }}</button>
+            <button type="button" @click="$emit('reset-transform')">{{ t("button.resetTransform") }}</button>
           </div>
         </div>
 
-        <div class="settings-section">
+        <div
+          id="settings-section-window"
+          :ref="setSectionRef('window')"
+          class="settings-section"
+          :aria-label="sectionAriaLabel('window')"
+          data-settings-section="window"
+          tabindex="-1"
+        >
           <header class="settings-section__header">
-            <h2>Window</h2>
-            <span>{{ state.settings.speechBubbleEnabled ? "Bubble on" : "Bubble off" }}</span>
+            <h2>{{ t("section.window") }}</h2>
+            <span>{{ state.settings.speechBubbleEnabled ? t("status.bubbleOn") : t("status.bubbleOff") }}</span>
           </header>
           <div class="settings-fields settings-fields--compact">
             <label>
-              <span>Scale</span>
+              <span>{{ t("field.scale") }}</span>
               <input
                 :value="state.settings.modelScale"
                 aria-label="Scale"
@@ -400,7 +458,7 @@
               />
             </label>
             <label>
-              <span>Bubble</span>
+              <span>{{ t("field.bubble") }}</span>
               <input
                 :checked="state.settings.speechBubbleEnabled"
                 aria-label="Speech Bubble"
@@ -409,7 +467,7 @@
               />
             </label>
             <label>
-              <span>Remembered moments</span>
+              <span>{{ t("field.rememberedMoments") }}</span>
               <input
                 :checked="state.settings.proactiveMemoryEnabled"
                 aria-label="Remembered moments"
@@ -420,13 +478,20 @@
           </div>
         </div>
 
-        <div class="settings-section" aria-label="Memory extraction">
+        <div
+          id="settings-section-memory"
+          :ref="setSectionRef('memory')"
+          class="settings-section"
+          :aria-label="t('section.memoryExtraction')"
+          data-settings-section="memory"
+          tabindex="-1"
+        >
           <header class="settings-section__header">
-            <h2>Memory extraction</h2>
+            <h2>{{ t("section.memoryExtraction") }}</h2>
             <span>{{ memoryExtractionStatus.label }}</span>
           </header>
           <label class="memory-extraction-toggle">
-            <span>Better memory</span>
+            <span>{{ t("field.betterMemory") }}</span>
             <input
               :checked="state.settings.llmAtomExtractionEnabled"
               aria-label="Better memory extraction"
@@ -444,18 +509,18 @@
           </div>
         </div>
 
-        <div class="settings-section memory-library" aria-label="Memory Library">
+        <div class="settings-section memory-library" :aria-label="t('section.memoryLibrary')" data-harness="settings-memory-library">
           <header class="settings-section__header">
-            <h2>Memory Library</h2>
+            <h2>{{ t("section.memoryLibrary") }}</h2>
             <span>{{ memoryLibraryStatusLabel }}</span>
           </header>
 
           <div class="memory-library__privacy" role="note">
-            <strong>Local memory controls</strong>
-            <span>Exports include memory text and source turns. Delete and clear remove library memories, not raw chat history; provider credentials stay out.</span>
+            <strong>{{ t("memory.controls.title") }}</strong>
+            <span>{{ t("memory.controls.detail") }}</span>
           </div>
 
-          <div class="memory-library__lanes" aria-label="Memory types">
+          <div class="memory-library__lanes" :aria-label="t('memory.types.label')">
             <span
               v-for="lane in memoryTypeLanes"
               :key="lane.label"
@@ -467,22 +532,25 @@
           </div>
 
           <div class="memory-library__stats">
-            <span>Raw turns {{ memoryRawCount }}</span>
-            <span>Enabled {{ memoryEnabledCount }}</span>
-            <span>Disabled {{ memoryDisabledCount }}</span>
+            <span>{{ t("memory.stats.rawTurns", { count: memoryRawCount }) }}</span>
+            <span>{{ t("memory.stats.enabled", { count: memoryEnabledCount }) }}</span>
+            <span>{{ t("memory.stats.disabled", { count: memoryDisabledCount }) }}</span>
           </div>
 
           <section
             v-if="selectedSourceDrilldown"
             class="memory-library__drilldown"
-            aria-label="Memory source drilldown"
+            :aria-label="t('memory.source.drilldown')"
+            data-harness="memory-source-drilldown"
           >
             <header class="memory-library__drilldown-header">
               <div>
                 <small>{{ selectedSourceKindLabel }}</small>
                 <h3>{{ selectedSourceTitle }}</h3>
               </div>
-              <button type="button" aria-label="Close source drilldown" @click="closeSourceDrilldown">Close</button>
+              <button type="button" :aria-label="t('memory.source.close')" data-harness="memory-source-close" @click="closeSourceDrilldown">
+                {{ t("memory.source.close") }}
+              </button>
             </header>
             <p class="memory-library__drilldown-summary">{{ selectedSourceSummary }}</p>
 
@@ -492,7 +560,7 @@
                 :key="`${passage.sessionId}:${passage.turnId}`"
                 class="memory-library__source-row"
                 :class="`memory-library__source-row--${passage.status}`"
-                :aria-label="`Source passage ${index + 1}`"
+                :aria-label="t('memory.source.passage', { index: index + 1 })"
               >
                 <header>
                   <strong>{{ sourcePassageHeading(passage) }}</strong>
@@ -500,105 +568,139 @@
                 </header>
                 <small>{{ sourcePassageMetaLabel(passage) }}</small>
                 <p>{{ sourcePassageBody(passage) }}</p>
-                <small v-if="sourcePassageShortened(passage)">Long source shortened for display.</small>
+                <small v-if="sourcePassageShortened(passage)">{{ t("memory.source.longShortened") }}</small>
               </article>
             </div>
-            <p v-else class="memory-library__source-empty">No original message is linked to this memory.</p>
+            <p v-else class="memory-library__source-empty">{{ t("memory.source.noOriginal") }}</p>
 
             <div v-if="selectedSummarySource" class="memory-library__drilldown-controls">
               <label class="memory-library__editor">
-                <span>Memory text</span>
+                <span>{{ t("memory.field.text") }}</span>
                 <textarea
-                  :aria-label="`Selected memory text`"
+                  :aria-label="t('memory.field.text')"
                   :value="memorySummaryDrafts[selectedSummarySource.id] ?? selectedSummarySource.summary"
+                  data-harness="memory-summary-text"
+                  :data-memory-id="selectedSummarySource.id"
                   rows="3"
                   spellcheck="false"
                   @input="setMemorySummaryDraft(selectedSummarySource.id, $event)"
                 />
               </label>
               <label class="memory-library__editor">
-                <span>Recall cues</span>
+                <span>{{ t("memory.field.recallCues") }}</span>
                 <input
-                  :aria-label="`Selected recall cues`"
+                  :aria-label="t('memory.field.recallCues')"
                   :value="memoryCueDrafts[selectedSummarySource.id] ?? selectedSummarySource.recallCues.join(', ')"
+                  data-harness="memory-summary-cues"
+                  :data-memory-id="selectedSummarySource.id"
                   autocomplete="off"
                   spellcheck="false"
                   @input="setMemoryCueDraft(selectedSummarySource.id, $event)"
                 />
               </label>
               <div class="memory-library__actions memory-library__actions--drilldown">
-                <button type="button" aria-label="Save selected memory" @click="saveMemorySummary(selectedSummarySource)">
-                  Save
+                <button
+                  type="button"
+                  :aria-label="t('memory.action.save')"
+                  data-harness="memory-summary-save"
+                  :data-memory-id="selectedSummarySource.id"
+                  @click="saveMemorySummary(selectedSummarySource)"
+                >
+                  {{ t("memory.action.save") }}
                 </button>
                 <button
                   type="button"
-                  :aria-label="`${selectedSummarySource.disabled ? 'Enable' : 'Disable'} selected memory`"
+                  :aria-label="memoryToggleActionLabel(selectedSummarySource.disabled)"
+                  data-harness="memory-summary-toggle"
+                  :data-memory-id="selectedSummarySource.id"
                   @click="toggleMemorySummary(selectedSummarySource)"
                 >
-                  {{ selectedSummarySource.disabled ? "Enable" : "Disable" }}
+                  {{ memoryToggleActionLabel(selectedSummarySource.disabled) }}
                 </button>
                 <button
                   type="button"
                   class="memory-library__danger"
-                  aria-label="Delete selected memory"
+                  :aria-label="t('memory.action.delete')"
+                  data-harness="memory-summary-delete"
+                  :data-memory-id="selectedSummarySource.id"
                   @click="$emit('memory-summary-delete', { id: selectedSummarySource.id })"
                 >
-                  Delete
+                  {{ t("memory.action.delete") }}
                 </button>
-                <button type="button" aria-label="Export memory library" @click="$emit('memory-export')">
-                  Export library
+                <button type="button" :aria-label="t('button.exportLibrary')" data-harness="memory-library-export" @click="$emit('memory-export')">
+                  {{ t("button.exportLibrary") }}
                 </button>
               </div>
             </div>
 
             <div v-else-if="selectedAtomSource" class="memory-library__drilldown-controls">
               <label class="memory-library__editor">
-                <span>Memory text</span>
+                <span>{{ t("memory.field.text") }}</span>
                 <textarea
-                  :aria-label="`Selected memory text`"
+                  :aria-label="t('memory.field.text')"
                   :value="memoryAtomDrafts[selectedAtomSource.id] ?? selectedAtomSource.text"
+                  data-harness="memory-atom-text"
+                  :data-memory-id="selectedAtomSource.id"
                   rows="3"
                   spellcheck="false"
                   @input="setMemoryAtomDraft(selectedAtomSource.id, $event)"
                 />
               </label>
               <div class="memory-library__actions memory-library__actions--drilldown">
-                <button type="button" aria-label="Save selected memory" @click="saveMemoryAtom(selectedAtomSource)">
-                  Save
-                </button>
-                <button type="button" aria-label="Export selected memory" @click="exportMemoryAtom(selectedAtomSource)">
-                  Export
+                <button
+                  type="button"
+                  :aria-label="t('memory.action.save')"
+                  data-harness="memory-atom-save"
+                  :data-memory-id="selectedAtomSource.id"
+                  @click="saveMemoryAtom(selectedAtomSource)"
+                >
+                  {{ t("memory.action.save") }}
                 </button>
                 <button
                   type="button"
-                  :aria-label="`${selectedAtomSource.disabled ? 'Enable' : 'Disable'} selected memory`"
+                  :aria-label="t('memory.action.export')"
+                  data-harness="memory-atom-export"
+                  :data-memory-id="selectedAtomSource.id"
+                  @click="exportMemoryAtom(selectedAtomSource)"
+                >
+                  {{ t("memory.action.export") }}
+                </button>
+                <button
+                  type="button"
+                  :aria-label="memoryToggleActionLabel(selectedAtomSource.disabled)"
+                  data-harness="memory-atom-toggle"
+                  :data-memory-id="selectedAtomSource.id"
                   @click="toggleMemoryAtom(selectedAtomSource)"
                 >
-                  {{ selectedAtomSource.disabled ? "Enable" : "Disable" }}
+                  {{ memoryToggleActionLabel(selectedAtomSource.disabled) }}
                 </button>
                 <button
                   type="button"
                   class="memory-library__danger"
-                  aria-label="Delete selected memory"
+                  :aria-label="t('memory.action.delete')"
+                  data-harness="memory-atom-delete"
+                  :data-memory-id="selectedAtomSource.id"
                   @click="$emit('memory-atom-delete', { id: selectedAtomSource.id })"
                 >
-                  Delete
+                  {{ t("memory.action.delete") }}
                 </button>
               </div>
             </div>
           </section>
 
-          <div v-if="memorySegments.length > 0" class="memory-library__list" aria-label="Summary memories">
+          <div v-if="memorySegments.length > 0" class="memory-library__list" :aria-label="t('memory.summaryMemories')">
             <article
               v-for="segment in memorySegments"
               :key="segment.id"
               class="memory-library__segment"
               :class="{ 'memory-library__segment--disabled': segment.disabled }"
-              :aria-label="`Summary memory ${segment.id}`"
+              :aria-label="`${t('memory.summaryMemory')} ${segment.id}`"
+              data-harness="memory-summary-card"
+              :data-memory-id="segment.id"
             >
               <header class="memory-library__segment-header">
                 <div>
-                  <small>Summary memory</small>
+                  <small>{{ t("memory.summaryMemory") }}</small>
                   <strong>{{ segment.summary }}</strong>
                 </div>
                 <span>{{ memorySegmentStatus(segment) }}</span>
@@ -606,15 +708,15 @@
 
               <dl class="memory-library__meta">
                 <div>
-                  <dt>Source</dt>
+                  <dt>{{ t("memory.meta.source") }}</dt>
                   <dd>{{ memorySourceLabel(segment) }}</dd>
                 </div>
                 <div>
-                  <dt>Last used</dt>
+                  <dt>{{ t("memory.meta.lastUsed") }}</dt>
                   <dd>{{ memoryLastUsedLabel(segment) }}</dd>
                 </div>
                 <div>
-                  <dt>Updated</dt>
+                  <dt>{{ t("memory.meta.updated") }}</dt>
                   <dd>{{ memoryUpdatedLabel(segment) }}</dd>
                 </div>
               </dl>
@@ -622,28 +724,33 @@
               <button
                 type="button"
                 class="memory-library__source-link"
-                :aria-label="`View source for summary memory`"
+                :aria-label="t('memory.action.viewSource')"
+                data-harness="memory-source-open"
                 @click="openSummarySourceDrilldown(segment)"
               >
                 <span>{{ memorySourceLabel(segment) }}</span>
-                <strong>View source</strong>
+                <strong>{{ t("memory.action.viewSource") }}</strong>
               </button>
 
               <label class="memory-library__editor">
-                <span>Memory text</span>
+                <span>{{ t("memory.field.text") }}</span>
                 <textarea
-                  :aria-label="`Memory text ${segment.id}`"
+                  :aria-label="`${t('memory.field.text')} ${segment.id}`"
                   :value="memorySummaryDrafts[segment.id] ?? segment.summary"
+                  data-harness="memory-summary-text"
+                  :data-memory-id="segment.id"
                   rows="3"
                   spellcheck="false"
                   @input="setMemorySummaryDraft(segment.id, $event)"
                 />
               </label>
               <label class="memory-library__editor">
-                <span>Recall cues</span>
+                <span>{{ t("memory.field.recallCues") }}</span>
                 <input
-                  :aria-label="`Recall cues ${segment.id}`"
+                  :aria-label="`${t('memory.field.recallCues')} ${segment.id}`"
                   :value="memoryCueDrafts[segment.id] ?? segment.recallCues.join(', ')"
+                  data-harness="memory-summary-cues"
+                  :data-memory-id="segment.id"
                   autocomplete="off"
                   spellcheck="false"
                   @input="setMemoryCueDraft(segment.id, $event)"
@@ -652,39 +759,48 @@
               <div class="memory-library__actions">
                 <button
                   type="button"
-                  :aria-label="`Save memory ${segment.id}`"
+                  :aria-label="`${t('memory.action.save')} ${segment.id}`"
+                  data-harness="memory-summary-save"
+                  :data-memory-id="segment.id"
                   @click="saveMemorySummary(segment)"
                 >
-                  Save
+                  {{ t("memory.action.save") }}
                 </button>
                 <button
                   type="button"
-                  :aria-label="`${segment.disabled ? 'Enable' : 'Disable'} memory ${segment.id}`"
+                  :aria-label="`${memoryToggleActionLabel(segment.disabled)} ${segment.id}`"
+                  data-harness="memory-summary-toggle"
+                  :data-memory-id="segment.id"
                   @click="toggleMemorySummary(segment)"
                 >
-                  {{ segment.disabled ? "Enable" : "Disable" }}
+                  {{ memoryToggleActionLabel(segment.disabled) }}
                 </button>
                 <button
                   type="button"
                   class="memory-library__danger"
-                  :aria-label="`Delete memory ${segment.id}`"
+                  :aria-label="`${t('memory.action.delete')} ${segment.id}`"
+                  data-harness="memory-summary-delete"
+                  :data-memory-id="segment.id"
                   @click="$emit('memory-summary-delete', { id: segment.id })"
                 >
-                  Delete
+                  {{ t("memory.action.delete") }}
                 </button>
               </div>
             </article>
           </div>
-          <div v-if="memoryAtomGroups.length > 0" class="memory-library__list" aria-label="Atom memories">
+          <div v-if="memoryAtomGroups.length > 0" class="memory-library__list" :aria-label="t('memory.atomMemories')">
             <section
               v-for="group in memoryAtomGroups"
               :key="group.type"
               class="memory-library__group"
-              :aria-label="`${group.label} memories`"
+              :aria-label="`${group.label} ${t('nav.memory')}`"
+              data-harness="memory-atom-group"
+              :data-memory-type="group.type"
+              :data-memory-count="group.atoms.length"
             >
               <header class="memory-library__group-header">
                 <h3>{{ group.label }}</h3>
-                <span>{{ group.atoms.length }} stored</span>
+                <span>{{ t("memory.stored", { count: group.atoms.length }) }}</span>
               </header>
               <article
                 v-for="atom in group.atoms"
@@ -692,6 +808,9 @@
                 class="memory-library__segment"
                 :class="{ 'memory-library__segment--disabled': atom.disabled }"
                 :aria-label="`${memoryAtomTypeLabel(atom)} memory ${atom.id}`"
+                data-harness="memory-atom-card"
+                :data-memory-id="atom.id"
+                :data-memory-type="atom.type"
               >
                 <header class="memory-library__segment-header">
                   <div>
@@ -703,15 +822,15 @@
 
                 <dl class="memory-library__meta">
                   <div>
-                    <dt>Source</dt>
+                    <dt>{{ t("memory.meta.source") }}</dt>
                     <dd>{{ memoryAtomSourceLabel(atom) }}</dd>
                   </div>
                   <div>
-                    <dt>Group</dt>
+                    <dt>{{ t("memory.meta.group") }}</dt>
                     <dd>{{ memoryAtomGroupLabel(atom.type) }}</dd>
                   </div>
                   <div>
-                    <dt>Updated</dt>
+                    <dt>{{ t("memory.meta.updated") }}</dt>
                     <dd>{{ memoryAtomUpdatedLabel(atom) }}</dd>
                   </div>
                 </dl>
@@ -719,54 +838,73 @@
                 <button
                   type="button"
                   class="memory-library__source-link"
-                  :aria-label="`View source for ${memoryAtomTypeLabel(atom)} memory`"
+                  :aria-label="t('memory.action.viewSource')"
+                  data-harness="memory-source-open"
                   @click="openAtomSourceDrilldown(atom)"
                 >
                   <span>{{ memoryAtomSourceLabel(atom) }}</span>
-                  <strong>View source</strong>
+                  <strong>{{ t("memory.action.viewSource") }}</strong>
                 </button>
 
                 <label class="memory-library__editor">
-                  <span>Memory text</span>
+                  <span>{{ t("memory.field.text") }}</span>
                   <textarea
-                    :aria-label="`Memory text ${atom.id}`"
+                    :aria-label="`${t('memory.field.text')} ${atom.id}`"
                     :value="memoryAtomDrafts[atom.id] ?? atom.text"
+                    data-harness="memory-atom-text"
+                    :data-memory-id="atom.id"
                     rows="3"
                     spellcheck="false"
                     @input="setMemoryAtomDraft(atom.id, $event)"
                   />
                 </label>
                 <div class="memory-library__actions memory-library__actions--atom">
-                  <button type="button" :aria-label="`Save memory ${atom.id}`" @click="saveMemoryAtom(atom)">
-                    Save
-                  </button>
-                  <button type="button" :aria-label="`Export memory ${atom.id}`" @click="exportMemoryAtom(atom)">
-                    Export
+                  <button
+                    type="button"
+                    :aria-label="`${t('memory.action.save')} ${atom.id}`"
+                    data-harness="memory-atom-save"
+                    :data-memory-id="atom.id"
+                    @click="saveMemoryAtom(atom)"
+                  >
+                    {{ t("memory.action.save") }}
                   </button>
                   <button
                     type="button"
-                    :aria-label="`${atom.disabled ? 'Enable' : 'Disable'} memory ${atom.id}`"
+                    :aria-label="`${t('memory.action.export')} ${atom.id}`"
+                    data-harness="memory-atom-export"
+                    :data-memory-id="atom.id"
+                    @click="exportMemoryAtom(atom)"
+                  >
+                    {{ t("memory.action.export") }}
+                  </button>
+                  <button
+                    type="button"
+                    :aria-label="`${memoryToggleActionLabel(atom.disabled)} ${atom.id}`"
+                    data-harness="memory-atom-toggle"
+                    :data-memory-id="atom.id"
                     @click="toggleMemoryAtom(atom)"
                   >
-                    {{ atom.disabled ? "Enable" : "Disable" }}
+                    {{ memoryToggleActionLabel(atom.disabled) }}
                   </button>
                   <button
                     type="button"
                     class="memory-library__danger"
-                    :aria-label="`Delete memory ${atom.id}`"
+                    :aria-label="`${t('memory.action.delete')} ${atom.id}`"
+                    data-harness="memory-atom-delete"
+                    :data-memory-id="atom.id"
                     @click="$emit('memory-atom-delete', { id: atom.id })"
                   >
-                    Delete
+                    {{ t("memory.action.delete") }}
                   </button>
                 </div>
               </article>
             </section>
           </div>
           <div v-if="memorySegments.length === 0 && memoryAtoms.length === 0" class="memory-library__empty">
-            No memories yet.
+            {{ t("memory.empty") }}
           </div>
           <div v-if="latestRecallItem" class="memory-library__block memory-library__block--recall">
-            <strong>Last recalled memory</strong>
+            <strong>{{ t("memory.lastRecalled") }}</strong>
             <p>{{ recallReasonLabel(latestRecallItem.reason) }}</p>
             <small>{{ recalledSourceLabel(latestRecallItem.sourceTurnIds.length) }}</small>
           </div>
@@ -781,21 +919,27 @@
           <textarea
             v-if="state.memoryDebug.exportText"
             class="memory-library__export"
-            aria-label="Memory library export"
+            :aria-label="t('memory.export.label')"
+            data-harness="memory-library-export-text"
             :value="state.memoryDebug.exportText"
             readonly
             rows="5"
           />
           <div class="settings-actions">
-            <button type="button" @click="$emit('refresh-memory-debug')">
-              {{ state.memoryDebug.status === "loading" ? "Refreshing..." : "Refresh memory" }}
+            <button type="button" data-harness="memory-refresh" @click="$emit('refresh-memory-debug')">
+              {{ state.memoryDebug.status === "loading" ? t("button.refreshing") : t("button.refreshMemory") }}
             </button>
-            <button type="button" @click="$emit('memory-export')">Export library</button>
+            <button type="button" data-harness="memory-library-export" @click="$emit('memory-export')">{{ t("button.exportLibrary") }}</button>
             <button type="button" class="memory-library__danger-action" @click="$emit('memory-summary-clear')">
-              Clear summary memory
+              {{ t("button.clearSummary") }}
             </button>
-            <button type="button" class="memory-library__danger-action" @click="$emit('memory-atom-clear-current-role')">
-              Clear current role atoms
+            <button
+              type="button"
+              class="memory-library__danger-action"
+              data-harness="memory-atom-clear-current-role"
+              @click="$emit('memory-atom-clear-current-role')"
+            >
+              {{ t("button.clearAtoms") }}
             </button>
           </div>
         </div>
@@ -807,7 +951,7 @@
 
       <section v-if="modelInfo" class="model-inspector" aria-label="Live2D model info">
         <header>
-          <h2>Live2D</h2>
+          <h2>{{ t("section.modelInfo") }}</h2>
           <span>{{ modelInfo.expressions.length }} exp / {{ motionCount }} mot</span>
         </header>
         <div v-if="modelInfo.expressions.length > 0" class="chip-group" aria-label="Expressions">
@@ -835,11 +979,11 @@
       <div class="toggles">
         <label>
           <input :checked="modelPassThrough" type="checkbox" @change="$emit('update:model-pass-through', checkedFrom($event))" />
-          Model Pass Through
+          {{ t("toggle.modelPassThrough") }}
         </label>
         <label>
           <input :checked="locked" type="checkbox" @change="$emit('update:locked', checkedFrom($event))" />
-          Lock
+          {{ t("toggle.lock") }}
         </label>
       </div>
 
@@ -851,7 +995,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { DesktopMemoryAtom, DesktopMemorySourcePassage, DesktopMemorySummarySegment } from "../shared/ipc";
 import type { DesktopPersonaFormState, DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
 import {
@@ -873,6 +1017,8 @@ import {
 import { describeProviderStatus } from "./settings-provider-status";
 import { describeMemoryExtractionStatus } from "./settings-memory-extraction-status";
 import { describeProviderTestStatus, describeTestLlmAction, describeTestVoiceAction } from "./settings-test-llm";
+import { normalizeSettingsLocale, settingsLocales, settingsT, type SettingsI18nKey } from "./settings-i18n";
+import { resolveActiveSettingsSection, settingsNavSectionIds, type SettingsSectionId } from "./settings-nav";
 
 type PersonaTextField = Exclude<keyof DesktopPersonaFormState, "expressionMap">;
 
@@ -917,33 +1063,49 @@ const emit = defineEmits<{
 const motionCount = computed(() =>
   Object.values(props.modelInfo?.motions ?? {}).reduce((total, count) => total + count, 0)
 );
-const providerStatus = computed(() => describeProviderStatus(props.state));
+const locale = computed(() => normalizeSettingsLocale(props.state.settings.settingsLocale));
+const t = (key: SettingsI18nKey, values?: Record<string, string | number>): string =>
+  settingsT(locale.value, key, values);
+const localizedStageStatus = computed(() => {
+  const key = `status.${props.state.status}` as SettingsI18nKey;
+  return settingsT(locale.value, key) === key ? props.state.status : settingsT(locale.value, key);
+});
+const settingsNavItems = computed<Array<{ id: SettingsSectionId; label: string }>>(() =>
+  settingsNavSectionIds.map((id) => ({ id, label: t(`nav.${id}` as SettingsI18nKey) }))
+);
+const providerStatus = computed(() => describeProviderStatus(props.state, locale.value));
 const testLlmAction = computed(() =>
   describeTestLlmAction(
     props.stageStatus,
     props.state.providerTest.status,
-    providerStatus.value.tone === "blocked" ? providerStatus.value.detail : ""
+    providerStatus.value.tone === "blocked" ? providerStatus.value.detail : "",
+    locale.value
   )
 );
-const providerTestStatus = computed(() => describeProviderTestStatus(props.state.providerTest));
+const providerTestStatus = computed(() => describeProviderTestStatus(props.state.providerTest, locale.value));
 const testVoiceAction = computed(() =>
-  describeTestVoiceAction(props.stageStatus, props.state.voiceTest.status, describeVoiceBlockedReason(props.state))
+  describeTestVoiceAction(
+    props.stageStatus,
+    props.state.voiceTest.status,
+    describeVoiceBlockedReason(props.state),
+    locale.value
+  )
 );
 const voiceTestStatus = computed(() => describeVoiceTestStatus(props.state.voiceTest));
 const personaStatusLabel = computed(() => {
   if (props.state.persona.status === "loading") {
-    return "Loading";
+    return t("status.loading");
   }
   if (props.state.persona.status === "saving") {
-    return "Saving";
+    return t("status.saving");
   }
   if (props.state.persona.status === "saved") {
-    return "Saved";
+    return t("status.saved");
   }
   if (props.state.persona.status === "error") {
-    return "Needs fix";
+    return t("status.needsFix");
   }
-  return "Ready";
+  return t("status.ready");
 });
 const personaStatusTone = computed(() => (props.state.persona.status === "error" ? "error" : "success"));
 const personaSaveDisabled = computed(
@@ -951,7 +1113,7 @@ const personaSaveDisabled = computed(
 );
 const personaFieldsDisabled = computed(() => props.state.persona.status === "loading" || props.state.persona.status === "saving");
 const memorySnapshot = computed(() => props.state.memoryDebug.snapshot);
-const memoryExtractionStatus = computed(() => describeMemoryExtractionStatus(props.state));
+const memoryExtractionStatus = computed(() => describeMemoryExtractionStatus(props.state, locale.value));
 const memoryRawCount = computed(() => memorySnapshot.value?.recentTurns.length ?? 0);
 const memorySummaryCount = computed(() => memorySnapshot.value?.summarySegments.length ?? 0);
 const memorySegments = computed(() => memorySnapshot.value?.summarySegments ?? []);
@@ -969,38 +1131,49 @@ const memoryDisabledCount = computed(
 const memoryStoredCount = computed(() => memorySummaryCount.value + memoryAtoms.value.length);
 const memoryLibraryStatusLabel = computed(() => {
   if (props.state.memoryDebug.status === "loading") {
-    return "Refreshing";
+    return t("status.refreshing");
   }
   if (!memorySnapshot.value) {
-    return "Not loaded";
+    return t("status.notLoaded");
   }
-  return `${memoryEnabledCount.value}/${memoryStoredCount.value} enabled`;
+  return `${memoryEnabledCount.value}/${memoryStoredCount.value} ${t("status.enabled")}`;
 });
 const latestRecallItem = computed(() => memorySnapshot.value?.lastRecallContext?.items[0] ?? null);
 const latestRecallById = computed(() => {
   const entries = (memorySnapshot.value?.lastRecallContext?.items ?? []).map((item) => [item.id, item] as const);
   return new Map(entries);
 });
-const memoryAtomTypeConfigs: Array<{ type: DesktopMemoryAtom["type"]; label: string; singular: string }> = [
-  { type: "fact", label: "Facts", singular: "Fact" },
-  { type: "preference", label: "Preferences", singular: "Preference" },
-  { type: "opinion", label: "Opinions", singular: "Opinion" },
-  { type: "relationship_event", label: "Relationships", singular: "Relationship" },
-  { type: "episodic_scene", label: "Scenes", singular: "Scene" },
-  { type: "promise", label: "Promises", singular: "Promise" }
+const memoryAtomTypeConfigKeys: Array<{
+  type: DesktopMemoryAtom["type"];
+  labelKey: SettingsI18nKey;
+  singularKey: SettingsI18nKey;
+}> = [
+  { type: "fact", labelKey: "memory.type.facts", singularKey: "memory.type.fact" },
+  { type: "preference", labelKey: "memory.type.preferences", singularKey: "memory.type.preference" },
+  { type: "opinion", labelKey: "memory.type.opinions", singularKey: "memory.type.opinion" },
+  { type: "relationship_event", labelKey: "memory.type.relationships", singularKey: "memory.type.relationship" },
+  { type: "episodic_scene", labelKey: "memory.type.scenes", singularKey: "memory.type.scene" },
+  { type: "promise", labelKey: "memory.type.promises", singularKey: "memory.type.promise" }
 ];
+const memoryAtomTypeConfigs = computed(() =>
+  memoryAtomTypeConfigKeys.map((config) => ({
+    type: config.type,
+    label: t(config.labelKey),
+    singular: t(config.singularKey)
+  }))
+);
 const memoryTypeLanes = computed<Array<{ label: string; detail: string }>>(() => [
   {
-    label: "Summary",
-    detail: `${memorySummaryCount.value} stored`
+    label: t("memory.type.summary"),
+    detail: t("memory.stored", { count: memorySummaryCount.value })
   },
-  ...memoryAtomTypeConfigs.map((config) => ({
+  ...memoryAtomTypeConfigs.value.map((config) => ({
     label: config.label,
-    detail: `${memoryAtoms.value.filter((atom) => atom.type === config.type).length} stored`
+    detail: t("memory.stored", { count: memoryAtoms.value.filter((atom) => atom.type === config.type).length })
   }))
 ]);
 const memoryAtomGroups = computed(() =>
-  memoryAtomTypeConfigs
+  memoryAtomTypeConfigs.value
     .map((config) => ({
       ...config,
       atoms: memoryAtoms.value.filter((atom) => atom.type === config.type)
@@ -1023,6 +1196,9 @@ const memoryCueDrafts = ref<Record<string, string>>({});
 const memoryAtomDrafts = ref<Record<string, string>>({});
 type MemorySourceSelection = { kind: "summary"; id: string } | { kind: "atom"; id: string };
 const selectedSource = ref<MemorySourceSelection | null>(null);
+const controlSurfaceRef = ref<HTMLElement | null>(null);
+const activeSectionId = ref<SettingsSectionId>("model");
+const sectionRefs = new Map<SettingsSectionId | "provider", HTMLElement>();
 const selectedSourceDrilldown = computed(() => {
   if (!selectedSource.value) {
     return null;
@@ -1045,10 +1221,10 @@ const selectedSourcePassages = computed(() =>
 );
 const selectedSourceKindLabel = computed(() => {
   if (selectedSourceDrilldown.value?.kind === "summary") {
-    return "Summary memory source";
+    return t("memory.source.kind.summary");
   }
   if (selectedSourceDrilldown.value?.kind === "atom") {
-    return `${memoryAtomTypeLabel(selectedSourceDrilldown.value.item)} memory source`;
+    return t("memory.source.kind.atom", { type: memoryAtomTypeLabel(selectedSourceDrilldown.value.item) });
   }
   return "";
 });
@@ -1071,7 +1247,7 @@ const selectedSourceSummary = computed(() => {
   return describeMemorySourceCount({
     sourcePassages: memorySourcePassages(item),
     sourceIds
-  });
+  }, locale.value);
 });
 const currentBundledLive2DModel = computed(() => findBundledLive2DModel(props.state.settings.modelPath));
 const isCustomLive2DModel = computed(() => currentBundledLive2DModel.value === undefined);
@@ -1083,14 +1259,22 @@ const live2DModelNote = computed(() => {
     return currentBundledLive2DModel.value.note;
   }
   if (currentBundledLive2DModel.value) {
-    return `Using bundled model: ${currentBundledLive2DModel.value.label}.`;
+    return t("live2d.usingBundled", { label: currentBundledLive2DModel.value.label });
   }
-  return `Using custom model: ${props.state.settings.modelPath}`;
+  return t("live2d.usingCustom", { path: props.state.settings.modelPath });
 });
 
 onMounted(() => {
   emit("request-persona");
   emit("refresh-memory-debug");
+  window.addEventListener("resize", updateActiveSection);
+  window.addEventListener("scroll", updateActiveSection, { passive: true });
+  void nextTick(updateActiveSection);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("resize", updateActiveSection);
+  window.removeEventListener("scroll", updateActiveSection);
 });
 
 watch(
@@ -1161,6 +1345,50 @@ function valueFrom(event: Event): string {
 
 function checkedFrom(event: Event): boolean {
   return event.target instanceof HTMLInputElement ? event.target.checked : false;
+}
+
+function memoryToggleActionLabel(disabled: boolean): string {
+  return disabled ? t("memory.action.enable") : t("memory.action.disable");
+}
+
+function sectionAriaLabel(id: SettingsSectionId | "provider"): string {
+  void id;
+  return locale.value === "zh-CN" ? "设置分区" : "Settings section";
+}
+
+function setSectionRef(id: SettingsSectionId | "provider"): (element: Element | null) => void {
+  return (element) => {
+    if (element instanceof HTMLElement) {
+      sectionRefs.set(id, element);
+      return;
+    }
+    sectionRefs.delete(id);
+  };
+}
+
+function scrollToSection(id: SettingsSectionId): void {
+  activeSectionId.value = id;
+  const section = sectionRefs.get(id);
+  if (!section) {
+    return;
+  }
+  section.scrollIntoView({ behavior: "smooth", block: "start" });
+  section.focus({ preventScroll: true });
+}
+
+function updateActiveSection(): void {
+  const sections = settingsNavItems.value.flatMap((item) => {
+    const element = sectionRefs.get(item.id);
+    return element ? [{ id: item.id, top: element.getBoundingClientRect().top }] : [];
+  });
+  const nextActiveSection = resolveActiveSettingsSection(
+    sections,
+    Math.max(controlSurfaceRef.value?.getBoundingClientRect().top ?? 0, 0) + 8
+  );
+  if (!nextActiveSection) {
+    return;
+  }
+  activeSectionId.value = nextActiveSection;
 }
 
 function selectLive2DModel(modelPath: string): void {
@@ -1250,25 +1478,25 @@ function closeSourceDrilldown(): void {
 }
 
 function memorySegmentStatus(segment: DesktopMemorySummarySegment): string {
-  return segment.disabled ? "Disabled" : "Enabled";
+  return memoryToggleStateLabel(segment.disabled);
 }
 
 function memorySourceLabel(segment: DesktopMemorySummarySegment): string {
   return describeMemorySourceCount({
     sourcePassages: memorySourcePassages(segment),
     sourceIds: summarySourceIds(segment)
-  });
+  }, locale.value);
 }
 
 function memoryLastUsedLabel(segment: DesktopMemorySummarySegment): string {
   if (segment.disabled) {
-    return "Disabled";
+    return memoryToggleStateLabel(true);
   }
   const recall = latestRecallById.value.get(segment.id);
   if (!recall) {
-    return "Not recalled this session";
+    return locale.value === "zh-CN" ? "本次会话未召回" : "Not recalled this session";
   }
-  return describeRecallReason(recall.reason);
+  return describeRecallReason(recall.reason, locale.value);
 }
 
 function memoryUpdatedLabel(segment: DesktopMemorySummarySegment): string {
@@ -1276,22 +1504,22 @@ function memoryUpdatedLabel(segment: DesktopMemorySummarySegment): string {
 }
 
 function memoryAtomStatus(atom: DesktopMemoryAtom): string {
-  return atom.disabled ? "Disabled" : "Enabled";
+  return memoryToggleStateLabel(atom.disabled);
 }
 
 function memoryAtomTypeLabel(atom: DesktopMemoryAtom): string {
-  return memoryAtomTypeConfigs.find((config) => config.type === atom.type)?.singular ?? "Memory";
+  return memoryAtomTypeConfigs.value.find((config) => config.type === atom.type)?.singular ?? t("memory.type.memory");
 }
 
 function memoryAtomGroupLabel(type: DesktopMemoryAtom["type"]): string {
-  return memoryAtomTypeConfigs.find((config) => config.type === type)?.label ?? "Memory";
+  return memoryAtomTypeConfigs.value.find((config) => config.type === type)?.label ?? t("memory.type.memory");
 }
 
 function memoryAtomSourceLabel(atom: DesktopMemoryAtom): string {
   return describeMemorySourceCount({
     sourcePassages: memorySourcePassages(atom),
     sourceIds: atom.sourceTurnIds
-  });
+  }, locale.value);
 }
 
 function memoryAtomUpdatedLabel(atom: DesktopMemoryAtom): string {
@@ -1303,19 +1531,19 @@ function memorySourcePassages(item: { sourcePassages?: DesktopMemorySourcePassag
 }
 
 function sourcePassageStatusLabel(passage: DesktopMemorySourcePassage): string {
-  return describeSourcePassageStatus(passage);
+  return describeSourcePassageStatus(passage, locale.value);
 }
 
 function sourcePassageHeading(passage: DesktopMemorySourcePassage): string {
-  return describeSourcePassageHeading(passage);
+  return describeSourcePassageHeading(passage, locale.value);
 }
 
 function sourcePassageMetaLabel(passage: DesktopMemorySourcePassage): string {
-  return describeSourcePassageMeta(passage);
+  return describeSourcePassageMeta(passage, locale.value);
 }
 
 function sourcePassageBody(passage: DesktopMemorySourcePassage): string {
-  return describeSourcePassageBody(passage);
+  return describeSourcePassageBody(passage, undefined, locale.value);
 }
 
 function sourcePassageShortened(passage: DesktopMemorySourcePassage): boolean {
@@ -1335,14 +1563,20 @@ function compactMemoryText(text: string): string {
 }
 
 function recallReasonLabel(reason: string): string {
-  return describeRecallReason(reason);
+  return describeRecallReason(reason, locale.value);
 }
 
 function recalledSourceLabel(count: number): string {
   if (count <= 0) {
-    return "No source passages attached to the last recall";
+    return locale.value === "zh-CN" ? "上次召回没有关联来源片段" : "No source passages attached to the last recall";
   }
-  return `${count} source ${count === 1 ? "passage" : "passages"} attached to the last recall`;
+  return locale.value === "zh-CN"
+    ? `上次召回关联 ${count} 个来源片段`
+    : `${count} source ${count === 1 ? "passage" : "passages"} attached to the last recall`;
+}
+
+function memoryToggleStateLabel(disabled: boolean): string {
+  return disabled ? t("memory.state.disabled") : t("memory.state.enabled");
 }
 
 function parseMemoryCues(text: string): string[] {
@@ -1354,16 +1588,16 @@ function describeVoiceBlockedReason(state: DesktopRendererState): string {
     return "";
   }
   if (state.settings.providerBaseUrl.trim().length === 0) {
-    return "OpenAI-compatible voice needs a Base URL before testing.";
+    return t("voice.blocked.baseUrl");
   }
   if (!state.settings.providerHasApiKey && state.settings.providerApiKey.trim().length === 0) {
-    return "Voice test needs an API key.";
+    return t("voice.blocked.apiKey");
   }
   if (state.settings.providerTTSModel.trim().length === 0) {
-    return "Choose the TTS model name before testing voice.";
+    return t("voice.blocked.ttsModel");
   }
   if (state.settings.voiceId.trim().length === 0) {
-    return "Choose the voice before testing.";
+    return t("voice.blocked.voice");
   }
   return "";
 }
@@ -1377,11 +1611,11 @@ function describeVoiceTestStatus(voiceTest: DesktopRendererState["voiceTest"]): 
     return null;
   }
   if (voiceTest.status === "testing") {
-    return { tone: "testing", label: "Testing voice", detail: voiceTest.message };
+    return { tone: "testing", label: t("voice.status.testing"), detail: t("voice.status.testingDetail") };
   }
   if (voiceTest.status === "success") {
-    return { tone: "success", label: "Voice test succeeded", detail: voiceTest.message };
+    return { tone: "success", label: t("test.voice.succeeded"), detail: voiceTest.message };
   }
-  return { tone: "error", label: "Voice test failed", detail: voiceTest.message };
+  return { tone: "error", label: t("test.voice.failed"), detail: voiceTest.message };
 }
 </script>
