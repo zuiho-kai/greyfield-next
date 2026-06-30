@@ -26,6 +26,7 @@ Greyfield Next is a TypeScript monorepo for a Live2D desktop companion. This fil
 - New feature work should end as a pull request, not an untracked local patch. Do not push directly to `main`.
 - Never use vague "code check this" review framing. Use module-owner and project-owner review levels plus explicit audit dimensions.
 - Frontend-visible PRs are not mergeable on green tests alone. The agent must exercise the ordinary user path, inspect current screenshots, and run the relevant harness gate before asking the user to verify manually.
+- Locale/i18n/default-label PRs must audit harness selectors before running heavy Electron gates. Critical user actions in harnesses should use stable `data-testid` or owner-state probes; non-i18n harnesses must pin their test locale instead of depending on product default language.
 - Do not poll or wait for GitHub CI, CodeRabbit, or other remote PR bots during active implementation. Use local targeted tests and harnesses while developing; inspect remote CI/bot review only when preparing to mark a PR ready, merge it, or debug an already-failing PR.
 - PRs with unresolved bot-authored inline review threads are not mergeable. Fix the issue or explicitly resolve the thread as not applicable; CI enforces this with `scripts/check-pr-bot-review-threads.mjs`.
 - V1 completion claims require a manifest/product-plan audit plus merged main/current-head evidence. PR-local evidence can support review, but it cannot be release wording until rerun on the target branch.

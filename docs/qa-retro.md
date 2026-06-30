@@ -1,5 +1,37 @@
 # QA Retro: Desktop Pet Interaction Miss
 
+## 2026-06-30 Regression: Simple i18n PR Burned Hours In Harness Selector Timeouts
+
+PR #159 changed the product default locale to `zh-CN`. The code change was small in product terms, but the default-language change turned many Playwright selectors into hidden blockers because several Electron harnesses still found controls by English visible text.
+
+What happened:
+
+- The PR was treated like a simple i18n/string cleanup, but changing `defaultGreyfieldConfig.ui.locale` changed the visible labels and accessible names for Chat, Settings, and desktop controls.
+- `pnpm harness:frontend-full` became an expensive discovery loop. Each stale English selector such as `Save persona`, `Voice`, or `Refresh memory` waited for a 30s Playwright timeout, then the next fix required another Electron build/launch cycle.
+- Some heavy harnesses were not testing i18n at all, but still depended on the product default language.
+- A separate V1 visual hit-test sampling flake appeared during aggregate runs, making it harder to separate real i18n fallout from unrelated harness instability.
+
+Root cause:
+
+- Harness selectors used user-facing copy as if it were a stable test API.
+- The PR plan did not classify "change default language" as a high-risk frontend-visible behavior change.
+- Full aggregate validation was used too early as the discovery tool instead of auditing selectors and running targeted failing harnesses first.
+
+How we avoid repeating it:
+
+- Locale, i18n, default-language, and visible-label PRs must start with a harness selector audit before heavy Electron runs. Search `packages/dev-harness/src` for `getByRole(... name:)`, `getByLabel("...")`, and `hasText: "..."` that reference UI copy.
+- Critical user actions in harnesses should use stable `data-testid` or owner-state probes. Visible text assertions belong in i18n-specific tests and screenshot/product checks, not as the primary locator for unrelated harnesses.
+- Harnesses that do not test i18n must explicitly set their temporary config locale, usually `ui.locale: "en-US"`, so product default language changes do not invalidate unrelated memory, persona, voice, or proactive checks.
+- Verification order for default-label PRs is targeted first: i18n/unit tests, `pnpm typecheck`, the affected Electron harnesses, then `pnpm harness:frontend-heavy` or `pnpm harness:frontend-full` once the targeted path is clean.
+- If an aggregate harness fails after targeted checks pass, single-run the failing child harness and classify the failure before changing product code. Do not repeatedly rerun the full aggregate suite as a probe.
+
+Reusable review checklist:
+
+- Did the PR change `defaultGreyfieldConfig.ui.locale`, `greyfield.config.json`, accessible names, placeholders, button labels, or Settings labels?
+- Did every newly interactive Chat/Settings/Controls command get a stable selector when a harness needs to click it?
+- Are non-i18n harness fixtures pinning locale instead of inheriting the app default?
+- Does the PR body separate targeted i18n evidence from aggregate frontend evidence?
+
 ## 2026-06-29 Regression: Coordinator Started A Feature Without Spawning The Worker
 
 After V2.1 MaiBot parity was re-split into product loops and atomic issues, the next implementation step should have opened a dedicated implementation sub-agent for the selected issue. Instead, the coordinating agent started by selecting #118, checking worktrees, fetching `origin/main`, and creating the feature worktree, but did not spawn the worker before the user interrupted.
