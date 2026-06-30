@@ -100,4 +100,41 @@ describe("assemblePrompt", () => {
       "现在继续。"
     ]);
   });
+
+  it("describes screen awareness as temporary desktop visual context", () => {
+    const messages = assemblePrompt({
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      memory: "",
+      handoff: "",
+      recent: [],
+      input: "看一下桌面",
+      inputAttachments: [
+        {
+          id: "screen-frame-1",
+          dataUrl: "data:image/png;base64,QQ==",
+          mimeType: "image/png",
+          createdAt: "2026-06-30T00:00:00.000Z",
+          source: "observation-frame"
+        }
+      ],
+      observation: {
+        kind: "visual-observation",
+        mode: "normal",
+        frameCount: 1,
+        dedupedFrameCount: 1,
+        source: "desktop-screen-awareness"
+      },
+      sessionId: "session-screen",
+      threadId: "thread-screen"
+    });
+
+    const systemContent = typeof messages[0]?.content === "string" ? messages[0].content : "";
+    expect(systemContent).toContain("recent desktop visual context from Screen awareness mode");
+    expect(systemContent).toContain("Raw screenshots, frame data, and local file paths are temporary input only.");
+    expect(systemContent).not.toContain("user-requested screenshot");
+    expect(messages.at(-1)?.content).toEqual([
+      { type: "text", text: "看一下桌面" },
+      { type: "image_url", image_url: { url: "data:image/png;base64,QQ==", detail: "low" } }
+    ]);
+  });
 });

@@ -51,6 +51,15 @@ describe("memory source display helpers", () => {
     expect(describeRecallReason("")).toBe("Matched this memory");
   });
 
+  it("labels screen-aware memory sources as desktop visual context plus user confirmation", () => {
+    const passage = makePassage({ observationSource: true, createdAt: "2026-06-30T00:00:00.000Z" });
+
+    expect(describeSourcePassageMeta(passage)).toBe(
+      "Saved from conversation on 2026-06-30 00:00 · Source: desktop visual context + user confirmation"
+    );
+    expect(describeSourcePassageMeta(passage, "zh-CN")).toBe("保存自 2026-06-30 00:00 的对话 · 来源：桌面视觉上下文 + 用户确认");
+  });
+
   it("localizes Memory Library source labels for zh-CN", () => {
     const userPassage = makePassage({ role: "user", createdAt: "2026-06-28T00:00:00.000Z" });
 

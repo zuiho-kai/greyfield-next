@@ -60,7 +60,7 @@ export function createChatWindowOptions(preload?: string): BrowserWindowConstruc
 
 export function createControlsWindowOptions(config: GreyfieldConfig, preload?: string): BrowserWindowConstructorOptions {
   return {
-    width: 420,
+    width: 456,
     height: 140,
     x: config.window.x ?? 0,
     y: (config.window.y ?? 0) + config.window.height - 150,

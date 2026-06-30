@@ -1,5 +1,5 @@
 import { createDefaultInteractionProfile, resolveEmotionReaction } from "@greyfield/stage-live2d";
-import type { RuntimeOutputEvent } from "@greyfield/core-runtime";
+import { summarizeObservationForTranscript, type RuntimeOutputEvent } from "@greyfield/core-runtime";
 import type { DesktopRendererState } from "./desktop-runtime-bridge";
 
 export type RendererInteractionProfile = ReturnType<typeof createDefaultInteractionProfile>;
@@ -154,7 +154,34 @@ export function reduceRuntimeEvent(
     };
   }
 
+  if (event.type === "observation.used") {
+    const index = findLastUserMessageIndex(state.messages);
+    if (index < 0) {
+      return state;
+    }
+    return {
+      ...state,
+      messages: state.messages.map((message, messageIndex) =>
+        messageIndex === index
+          ? {
+              ...message,
+              observationSummary: summarizeObservationForTranscript(event.observation)
+            }
+          : message
+      )
+    };
+  }
+
   return state;
+}
+
+function findLastUserMessageIndex(messages: DesktopRendererState["messages"]): number {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === "user") {
+      return index;
+    }
+  }
+  return -1;
 }
 
 function stageReactionForStatus(

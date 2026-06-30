@@ -153,6 +153,100 @@ describe("GreyfieldRuntime", () => {
     expect(JSON.stringify(capturedMessages)).toContain("data:image/png;base64,");
   });
 
+  it("uses desktop screen awareness metadata without persisting raw frame data", async () => {
+    let capturedMessages: Parameters<LLMProvider["stream"]>[0] = [];
+    const sessionStore = new InMemorySessionStore("session-screen-awareness");
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        supportsVision: true,
+        stream: async function* (messages) {
+          capturedMessages = messages;
+          yield "I used the recent desktop visual context.";
+        }
+      },
+      tts: { synthesize: async (text) => new Uint8Array([text.length]) },
+      memoryStore,
+      sessionStore,
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default",
+      threadId: "thread-screen-awareness"
+    });
+
+    await runtime.handle(
+      {
+        type: "text.input",
+        text: "桌面上是什么？",
+        attachments: [makeImageAttachment("screen-frame-1", "observation-frame", "screen")],
+        observation: {
+          id: "screen-1",
+          mode: "normal",
+          frameCount: 1,
+          dedupedFrameCount: 1,
+          source: "desktop-screen-awareness"
+        }
+      },
+      () => undefined
+    );
+
+    expect(capturedMessages[0]?.content).toContain("recent desktop visual context from Screen awareness mode");
+    const turns = await sessionStore.getRecent(2);
+    expect(JSON.stringify(turns)).not.toContain("data:image");
+    expect(turns[0]).toMatchObject({
+      role: "user",
+      content: "桌面上是什么？",
+      meta: {
+        observation: {
+          source: "desktop-screen-awareness"
+        }
+      }
+    });
+  });
+
+  it("degrades clearly when screen awareness context reaches a provider without vision", async () => {
+    let streamCalled = false;
+    const sessionStore = new InMemorySessionStore("session-screen-awareness-no-vision");
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* () {
+          streamCalled = true;
+          yield "Should not run.";
+        }
+      },
+      tts: { synthesize: async (text) => new Uint8Array([text.length]) },
+      memoryStore,
+      sessionStore,
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default"
+    });
+    const events: RuntimeOutputEvent[] = [];
+
+    await runtime.handle(
+      {
+        type: "text.input",
+        text: "桌面上是什么？",
+        attachments: [makeImageAttachment("screen-frame-1", "observation-frame", "screen")],
+        observation: {
+          id: "screen-1",
+          mode: "normal",
+          frameCount: 1,
+          dedupedFrameCount: 1,
+          source: "desktop-screen-awareness"
+        }
+      },
+      (event) => {
+        events.push(event);
+      }
+    );
+
+    expect(streamCalled).toBe(false);
+    expect(events).toContainEqual({
+      type: "error",
+      message:
+        "This chat provider does not support vision input yet. Greyfield kept the visual context temporary and did not send it. Switch to a vision-capable provider or ask without the image."
+    });
+    expect(await sessionStore.getRecent(2)).toEqual([]);
+  });
+
   it("degrades clearly when the provider does not support vision", async () => {
     let streamCalled = false;
     const sessionStore = new InMemorySessionStore("session-no-vision");
@@ -186,7 +280,7 @@ describe("GreyfieldRuntime", () => {
     expect(events).toContainEqual({
       type: "error",
       message:
-        "This chat provider does not support vision input yet. Greyfield kept the screenshot temporary and did not send it. Switch to a vision-capable provider or ask without the image."
+        "This chat provider does not support vision input yet. Greyfield kept the visual context temporary and did not send it. Switch to a vision-capable provider or ask without the image."
     });
     expect(await sessionStore.getRecent(2)).toEqual([]);
   });

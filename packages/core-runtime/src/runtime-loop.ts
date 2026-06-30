@@ -172,7 +172,7 @@ export class GreyfieldRuntime {
       await emit({
         type: "error",
         message:
-          "This chat provider does not support vision input yet. Greyfield kept the screenshot temporary and did not send it. Switch to a vision-capable provider or ask without the image."
+          "This chat provider does not support vision input yet. Greyfield kept the visual context temporary and did not send it. Switch to a vision-capable provider or ask without the image."
       });
       return;
     }
@@ -578,7 +578,7 @@ function createObservationMetadata(
     mode,
     frameCount,
     dedupedFrameCount,
-    source: mode === "single" ? "user-active-screenshot" : "user-active-observation"
+    source: observation?.source ?? (mode === "single" ? "user-active-screenshot" : "user-active-observation")
   };
 }
 

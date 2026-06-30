@@ -1,13 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   ObservationController,
-  observationModeConfigs,
   type CapturedObservationFrame,
   type ObservationCaptureSource
 } from "../observation-controller";
 
-describe("ObservationController", () => {
-  it("captures one temporary screenshot", async () => {
+describe("ObservationController screen awareness", () => {
+  it("turns on with recent desktop visual context without broadcasting raw frames", async () => {
     const states: unknown[] = [];
     const controller = new ObservationController({
       captureSource: new TestCaptureSource(["A"]),
@@ -15,55 +14,44 @@ describe("ObservationController", () => {
       now: () => new Date("2026-06-30T00:00:00.000Z")
     });
 
-    await controller.captureSingle();
+    await controller.setEnabled(true);
 
     expect(controller.getState()).toMatchObject({
+      enabled: true,
       status: "ready",
-      mode: "single",
-      frames: [expect.objectContaining({ source: "screenshot", dataUrl: "data:image/png;base64,QQ==" })]
+      observationId: "screen-2026-06-30T00-00-00-000Z",
+      message: "Screen awareness is on."
     });
-    expect(states).toContainEqual(expect.objectContaining({ status: "capturing" }));
+    expect(JSON.stringify(states)).not.toContain("data:image");
+    const payload = await controller.ensureFreshContext();
+    expect(payload).toMatchObject({
+      attachments: [expect.objectContaining({ dataUrl: "data:image/png;base64,QQ==", source: "observation-frame" })],
+      observation: expect.objectContaining({
+        source: "desktop-screen-awareness",
+        mode: "normal",
+        frameCount: 1,
+        dedupedFrameCount: 1
+      })
+    });
   });
 
-  it("dedupes frames and applies high-frequency timeout and max frame policy", async () => {
-    vi.useFakeTimers();
+  it("clears raw screen context when turned off", async () => {
     const controller = new ObservationController({
-      captureSource: new TestCaptureSource(["A", "A", "B", "C", "D", "E", "F", "G", "H", "I"]),
+      captureSource: new TestCaptureSource(["A"]),
       broadcast: () => undefined,
       now: () => new Date("2026-06-30T00:00:00.000Z")
     });
 
-    controller.startSequence("high");
-    await vi.advanceTimersByTimeAsync(observationModeConfigs.high.timeoutMs + observationModeConfigs.high.intervalMs);
+    await controller.setEnabled(true);
+    expect((await controller.ensureFreshContext()).attachments).toHaveLength(1);
 
-    const state = controller.getState();
-    expect(state.status).toBe("ready");
-    expect(state.mode).toBe("high");
-    expect(state.maxFrames).toBe(8);
-    expect(state.timeoutMs).toBe(5000);
-    expect(state.frames.length).toBeLessThanOrEqual(8);
-    expect(state.duplicateCount).toBeGreaterThanOrEqual(1);
-    vi.useRealTimers();
+    await controller.setEnabled(false);
+
+    expect(controller.getState()).toMatchObject({ enabled: false, status: "off", observationId: "" });
+    expect((await controller.ensureFreshContext()).attachments).toEqual([]);
   });
 
-  it("stops and deletes an active observation", async () => {
-    vi.useFakeTimers();
-    const controller = new ObservationController({
-      captureSource: new TestCaptureSource(["A", "B", "C"]),
-      broadcast: () => undefined,
-      now: () => new Date("2026-06-30T00:00:00.000Z")
-    });
-
-    controller.startSequence("low");
-    await vi.advanceTimersByTimeAsync(10);
-    controller.stop();
-    expect(controller.getState().status).toBe("stopped");
-    controller.delete();
-    expect(controller.getState()).toMatchObject({ status: "idle", frames: [] });
-    vi.useRealTimers();
-  });
-
-  it("does not restore a deleted single screenshot after an in-flight capture resolves", async () => {
+  it("does not resurrect raw context after an in-flight capture resolves", async () => {
     const captureSource = new DeferredCaptureSource();
     const controller = new ObservationController({
       captureSource,
@@ -71,41 +59,16 @@ describe("ObservationController", () => {
       now: () => new Date("2026-06-30T00:00:00.000Z")
     });
 
-    const capture = controller.captureSingle();
-    expect(controller.getState()).toMatchObject({ status: "capturing", frames: [] });
+    const enabling = controller.setEnabled(true);
+    expect(controller.getState()).toMatchObject({ enabled: true, status: "warming" });
 
-    controller.delete();
-    expect(controller.getState()).toMatchObject({ status: "idle", frames: [] });
-
+    await controller.setEnabled(false);
     captureSource.resolve("A");
-    await capture;
+    await enabling;
 
-    expect(controller.getState()).toMatchObject({ status: "idle", frames: [] });
+    expect(controller.getState()).toMatchObject({ enabled: false, status: "off" });
+    expect((await controller.ensureFreshContext()).attachments).toEqual([]);
   });
-
-  it.each(["delete", "stop"] as const)(
-    "does not restore sequence frames after %s while an in-flight capture resolves",
-    async (action) => {
-      const captureSource = new DeferredCaptureSource();
-      const controller = new ObservationController({
-        captureSource,
-        broadcast: () => undefined,
-        now: () => new Date("2026-06-30T00:00:00.000Z")
-      });
-
-      controller.startSequence("low");
-      expect(controller.getState()).toMatchObject({ status: "observing", frames: [] });
-
-      controller[action]();
-      expect(controller.getState()).toMatchObject({ status: "idle", frames: [] });
-
-      captureSource.resolve("A");
-      await Promise.resolve();
-      await Promise.resolve();
-
-      expect(controller.getState()).toMatchObject({ status: "idle", frames: [] });
-    }
-  );
 });
 
 class TestCaptureSource implements ObservationCaptureSource {

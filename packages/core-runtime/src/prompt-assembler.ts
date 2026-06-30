@@ -56,7 +56,7 @@ function formatUserInputContent(text: string, attachments: RuntimeImageAttachmen
     return trimmed;
   }
   return [
-    { type: "text", text: trimmed.length > 0 ? trimmed : "Please answer based on the temporary screenshot or observation frames." },
+    { type: "text", text: trimmed.length > 0 ? trimmed : "Please answer based on the temporary desktop visual context." },
     ...attachments.map((attachment): ChatContentPart => ({
       type: "image_url",
       image_url: {
@@ -69,13 +69,19 @@ function formatUserInputContent(text: string, attachments: RuntimeImageAttachmen
 
 function formatObservationBoundary(observation: RuntimeObservationMetadata): string {
   const source =
-    observation.source === "user-active-screenshot" ? "one user-requested screenshot" : "a user-requested short screenshot sequence";
+    observation.source === "desktop-screen-awareness"
+      ? "recent desktop visual context from Screen awareness mode"
+      : observation.source === "user-active-screenshot"
+        ? "one user-requested screenshot"
+        : "a user-requested short screenshot sequence";
   return [
     "Temporary visual observation:",
     `- Source: ${source}.`,
-    `- Frames sent this turn: ${observation.dedupedFrameCount} of ${observation.frameCount}.`,
+    observation.source === "desktop-screen-awareness"
+      ? "- Screen awareness may use a low-cost recent frame only for this turn."
+      : `- Frames sent this turn: ${observation.dedupedFrameCount} of ${observation.frameCount}.`,
     "- Raw screenshots, frame data, and local file paths are temporary input only.",
-    "- Do not claim ongoing screen monitoring. Only use these images for this reply.",
+    "- Do not claim control of the desktop or access beyond the provided visual input.",
     "- Durable facts or preferences may be remembered only when the conversation confirms them."
   ].join("\n");
 }
