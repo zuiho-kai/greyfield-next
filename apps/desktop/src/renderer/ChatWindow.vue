@@ -47,7 +47,7 @@
       <div class="observation-actions">
         <button type="button" class="observation-action" title="Capture one screenshot" aria-label="Capture one screenshot" @click="$emit('capture-screenshot')">
           <Camera :size="16" stroke-width="2.35" />
-          <span>Single</span>
+          <span>Once</span>
         </button>
         <button type="button" class="observation-action" title="Observe slowly" aria-label="Observe slowly" @click="$emit('start-observation', 'low')">
           <Gauge :size="16" stroke-width="2.35" />
@@ -55,7 +55,7 @@
         </button>
         <button type="button" class="observation-action" title="Observe normally" aria-label="Observe normally" @click="$emit('start-observation', 'normal')">
           <ScanEye :size="16" stroke-width="2.35" />
-          <span>Normal</span>
+          <span>Std</span>
         </button>
         <button
           type="button"
@@ -66,7 +66,7 @@
           @click="$emit('start-observation', 'high')"
         >
           <Zap :size="16" stroke-width="2.35" />
-          <span>{{ state.observation.highFrequencyConfirmation ? "Start high" : "High" }}</span>
+          <span>{{ state.observation.highFrequencyConfirmation ? "Start" : "High" }}</span>
         </button>
         <button
           type="button"
@@ -77,7 +77,7 @@
           @click="$emit('stop-observation')"
         >
           <Square :size="15" stroke-width="2.35" />
-          <span>End look</span>
+          <span>End</span>
         </button>
         <button
           type="button"
@@ -88,7 +88,7 @@
           @click="$emit('delete-observation')"
         >
           <Trash2 :size="16" stroke-width="2.35" />
-          <span>Delete</span>
+          <span>Clear</span>
         </button>
       </div>
     </section>
