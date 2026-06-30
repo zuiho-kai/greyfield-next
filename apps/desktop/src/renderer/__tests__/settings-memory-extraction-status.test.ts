@@ -4,13 +4,13 @@ import { createInitialDesktopRendererState, type DesktopRendererState } from "..
 import { describeMemoryExtractionStatus } from "../settings-memory-extraction-status";
 
 describe("describeMemoryExtractionStatus", () => {
-  it("explains that better memory off keeps standard local memory on", () => {
+  it("explains that better memory off keeps basic local memory on", () => {
     const status = describeMemoryExtractionStatus(createInitialDesktopRendererState(), "en-US");
 
     expect(status).toEqual({
       tone: "standard",
-      label: "Standard memory",
-      detail: "Better extraction is off. Greyfield still saves simple local memories such as names, dates, and preferences."
+      label: "Basic memory on",
+      detail: "Greyfield still saves simple local memories such as names, dates, and preferences."
     });
   });
 
@@ -19,7 +19,7 @@ describe("describeMemoryExtractionStatus", () => {
 
     expect(status).toMatchObject({
       tone: "standard",
-      label: "标准记忆"
+      label: "基础记忆开启"
     });
   });
 
@@ -28,10 +28,10 @@ describe("describeMemoryExtractionStatus", () => {
 
     expect(status).toMatchObject({
       tone: "fallback",
-      label: "Standard fallback"
+      label: "Using basic memory"
     });
     expect(status.detail).toContain("OpenAI-compatible chat provider");
-    expect(status.detail).toContain("Standard local memory stays on");
+    expect(status.detail).toContain("Basic local memory stays on");
   });
 
   it("shows provider requirement wording for missing Base URL, API key, and model", () => {
@@ -55,8 +55,8 @@ describe("describeMemoryExtractionStatus", () => {
 
     expect(status).toEqual({
       tone: "ready",
-      label: "Ready for better memory",
-      detail: "Greyfield can use the chat provider to notice richer memories. If it fails, standard local memory keeps running."
+      label: "Ready to remember more detail",
+      detail: "Greyfield can use the chat provider to notice richer details when helpful. If it fails, basic local memory keeps running."
     });
   });
 
@@ -73,7 +73,7 @@ describe("describeMemoryExtractionStatus", () => {
 
     expect(status).toEqual({
       tone: "fallback",
-      label: "Standard fallback",
+      label: "Using basic memory",
       detail: "Better memory could not use the chat provider for this message, so Greyfield used standard local memory instead."
     });
   });
@@ -91,7 +91,7 @@ describe("describeMemoryExtractionStatus", () => {
 
     expect(status).toEqual({
       tone: "fallback",
-      label: "Standard fallback",
+      label: "Using basic memory",
       detail: "The chat provider did not return usable memory for this message, so Greyfield used standard local memory instead."
     });
   });
@@ -113,8 +113,8 @@ describe("describeMemoryExtractionStatus", () => {
 
     expect(status).toEqual({
       tone: "success",
-      label: "Better memory used",
-      detail: "The last message was checked with the chat provider. Standard local memory stayed available."
+      label: "Remembered more detail",
+      detail: "The last message also used the chat provider to notice richer details. Basic local memory stayed available."
     });
   });
 
@@ -135,7 +135,7 @@ describe("describeMemoryExtractionStatus", () => {
 
     expect(status).toEqual({
       tone: "standard",
-      label: "No memory saved",
+      label: "Nothing new to remember",
       detail: "Greyfield did not find durable memory in this message, so nothing new was saved."
     });
   });

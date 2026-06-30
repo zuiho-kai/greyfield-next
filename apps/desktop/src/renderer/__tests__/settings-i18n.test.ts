@@ -4,7 +4,7 @@ import { normalizeSettingsLocale, settingsT } from "../settings-i18n";
 describe("settings i18n", () => {
   it("maps Settings labels in zh-CN", () => {
     expect(settingsT("zh-CN", "nav.window")).toBe("窗口");
-    expect(settingsT("zh-CN", "section.memoryExtraction")).toBe("记忆提取");
+    expect(settingsT("zh-CN", "section.memoryExtraction")).toBe("记忆方式");
     expect(settingsT("zh-CN", "field.proactivity")).toBe("主动程度");
     expect(settingsT("zh-CN", "status.proactivity", { level: 80 })).toBe("主动 80/100");
     expect(settingsT("zh-CN", "provider.preview.label")).toBe("预览模式");
@@ -22,11 +22,13 @@ describe("settings i18n", () => {
   });
 
   it("maps Memory Library control labels in zh-CN", () => {
-    expect(settingsT("zh-CN", "memory.controls.title")).toBe("本地记忆控制");
+    expect(settingsT("zh-CN", "memory.about.title")).toBe("这是什么");
+    expect(settingsT("zh-CN", "memory.status.saved", { count: 3 })).toBe("已保存 3 条记忆");
+    expect(settingsT("zh-CN", "memory.controls.title")).toBe("高级记忆控制");
     expect(settingsT("zh-CN", "memory.stats.rawTurns", { count: 2 })).toBe("原始轮次 2");
-    expect(settingsT("zh-CN", "memory.field.text")).toBe("记忆文本");
-    expect(settingsT("zh-CN", "memory.field.recallCues")).toBe("召回线索");
-    expect(settingsT("zh-CN", "memory.action.viewSource")).toBe("查看来源");
+    expect(settingsT("zh-CN", "memory.field.text")).toBe("记住的内容");
+    expect(settingsT("zh-CN", "memory.field.recallCues")).toBe("帮助想起它的词");
+    expect(settingsT("zh-CN", "memory.action.viewSource")).toBe("打开详情");
     expect(settingsT("zh-CN", "memory.empty")).toBe("暂无记忆。");
   });
 

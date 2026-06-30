@@ -283,12 +283,6 @@ try {
 
   let memoryLibrary = settings.locator(memoryLibrarySelector);
   await memoryLibrary.waitFor();
-  await assertMemoryAtomGroupCount(memoryLibrary, "fact", 1);
-  await assertMemoryAtomGroupCount(memoryLibrary, "preference", 1);
-  await assertMemoryAtomGroupCount(memoryLibrary, "opinion", 2);
-  await assertMemoryAtomGroupCount(memoryLibrary, "relationship_event", 2);
-  await assertMemoryAtomGroupCount(memoryLibrary, "episodic_scene", 2);
-  await assertMemoryAtomGroupCount(memoryLibrary, "promise", 1);
   await assertMemoryAtomCardCount(memoryLibrary, 9);
   await memoryAtomCard(memoryLibrary, "atom-fact").filter({ hasText: "User birthday is June 12." }).waitFor();
   await memoryAtomCard(memoryLibrary, "atom-preference").filter({ hasText: "1 source passage ready" }).waitFor();
@@ -435,15 +429,20 @@ try {
   await memoryAtomCard(memoryLibrary, "atom-fact").filter({ hasText: "User birthday is June 12." }).waitFor();
   await assertCurrentRoleOnly(memoryLibrary);
 
+  await openSourceDrilldown(memoryLibrary, "atom-preference");
   await memoryAtomText(memoryLibrary, "atom-preference").fill(editedAtomText);
   await memoryAtomSave(memoryLibrary, "atom-preference").click();
   await memoryLibrary.getByText("Atom memory atom-preference saved.").waitFor();
+  await closeSourceDrilldown(memoryLibrary);
   await waitForAtom("atom-preference", (atom) => atom.text === editedAtomText);
+  await openSourceDrilldown(memoryLibrary, "atom-promise");
   await memoryAtomText(memoryLibrary, "atom-promise").fill(editedPromiseText);
   await memoryAtomSave(memoryLibrary, "atom-promise").click();
   await memoryLibrary.getByText("Atom memory atom-promise saved.").waitFor();
+  await closeSourceDrilldown(memoryLibrary);
   await waitForAtom("atom-promise", (atom) => atom.text === editedPromiseText);
 
+  await openSourceDrilldown(memoryLibrary, "atom-preference");
   await memoryAtomExport(memoryLibrary, "atom-preference").click();
   await memoryLibrary.getByText("Atom memory atom-preference export is ready.").waitFor();
   await memoryExportText(settings).waitFor();
@@ -457,6 +456,8 @@ try {
   if (singleAtomExport.includes("Other role memory must stay isolated.")) {
     throw new Error("Single-atom export included another role's atom.");
   }
+  await closeSourceDrilldown(memoryLibrary);
+  await openSourceDrilldown(memoryLibrary, "atom-promise");
   await memoryAtomExport(memoryLibrary, "atom-promise").click();
   await memoryLibrary.getByText("Atom memory atom-promise export is ready.").waitFor();
   const promiseAtomExport = await memoryExportText(settings).inputValue();
@@ -466,16 +467,21 @@ try {
   if (promiseAtomExport.includes(providerSecret)) {
     throw new Error("Promise atom export included the configured provider API key.");
   }
+  await closeSourceDrilldown(memoryLibrary);
   await assertSettingsPageDoesNotExposeProviderSecret(settings);
 
+  await openSourceDrilldown(memoryLibrary, "atom-preference");
   await memoryAtomToggle(memoryLibrary, "atom-preference").click();
   await memoryLibrary.getByText("Atom memory atom-preference disabled.").waitFor();
+  await closeSourceDrilldown(memoryLibrary);
   await waitForAtom("atom-preference", (atom) => atom.disabled === true);
   clearCapturedRequests();
   await sendMessageAndWaitForNextAssistant(chat, "Hiyori 模型偏好还在吗？");
   assertLatestSystemPromptExcludes(editedAtomText, "disabled atom-preference should stay out of prompt recall");
 
+  await openSourceDrilldown(memoryLibrary, "atom-preference");
   await memoryAtomToggle(memoryLibrary, "atom-preference").click();
+  await closeSourceDrilldown(memoryLibrary);
   await waitForAtom("atom-preference", (atom) => atom.disabled === false);
   clearCapturedRequests();
   await sendMessageAndWaitForNextAssistant(chat, "Hiyori 模型偏好重新启用了吗？");
@@ -500,6 +506,7 @@ try {
   await sendMessageAndWaitForNextAssistant(chat, "pay-to-win game loops 这条记忆还在吗？");
   assertLatestSystemPromptIncludes(atomOpinionText, "atom-opinion should be recalled before deletion");
 
+  await openSourceDrilldown(memoryLibrary, "atom-opinion");
   await memoryAtomDelete(memoryLibrary, "atom-opinion").click();
   await memoryLibrary
     .getByText("Atom memory atom-opinion deleted. Remembered source evidence was hidden from recall, source views, and exports.")
@@ -842,10 +849,6 @@ async function refreshMemory(settings: Page): Promise<void> {
   await settings.locator('[data-harness="memory-refresh"]').click();
 }
 
-function memoryAtomGroup(memoryLibrary: Locator, type: string): Locator {
-  return memoryLibrary.locator(`[data-harness="memory-atom-group"][data-memory-type="${type}"]`);
-}
-
 function memoryAtomCard(memoryLibrary: Locator, id: string): Locator {
   return memoryLibrary.locator(`[data-harness="memory-atom-card"][data-memory-id="${id}"]`);
 }
@@ -872,15 +875,6 @@ function memoryAtomDelete(memoryLibrary: Locator, id: string): Locator {
 
 function memoryExportText(settings: Page): Locator {
   return settings.locator('[data-harness="memory-library-export-text"]');
-}
-
-async function assertMemoryAtomGroupCount(memoryLibrary: Locator, type: string, expectedCount: number): Promise<void> {
-  const group = memoryAtomGroup(memoryLibrary, type);
-  await group.waitFor();
-  const count = await group.getAttribute("data-memory-count");
-  if (count !== String(expectedCount)) {
-    throw new Error(`Memory atom group ${type} count mismatch: expected ${expectedCount}, got ${count}`);
-  }
 }
 
 async function assertMemoryAtomCardCount(memoryLibrary: Locator, expectedCount: number): Promise<void> {
