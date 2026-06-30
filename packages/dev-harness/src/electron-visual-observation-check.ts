@@ -77,7 +77,7 @@ try {
   summary.singleScreenshotQuestionPath = true;
 
   await chat.getByRole("button", { name: "Observe slowly" }).click();
-  await chat.getByRole("button", { name: "Stop observation" }).click();
+  await chat.getByRole("button", { name: "End observation" }).click();
   await chat.getByText(/Observation stopped|Observation ready/u).waitFor({ timeout: 10_000 });
   await chat.getByRole("button", { name: "Delete temporary observation" }).click();
   if ((await chat.locator(".observation-preview-strip img").count()) !== 0) {
@@ -90,7 +90,7 @@ try {
   await chat.getByRole("button", { name: "High frequency observation" }).click();
   await chat.getByText(/High frequency observation is short-lived/u).waitFor();
   await chat.locator(".observation-preview-strip img").first().waitFor({ timeout: 10_000 });
-  await chat.getByRole("button", { name: "Stop observation" }).click();
+  await chat.getByRole("button", { name: "End observation" }).click();
   await chat.getByText(/Observation stopped|Observation ready/u).waitFor({ timeout: 10_000 });
   summary.highFrequencyConfirmedAndStopped = true;
   await sendMessage(chat, "从这次观察问答中确认：记住我常玩的游戏是 Honkai Star Rail。");

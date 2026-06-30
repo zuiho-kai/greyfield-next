@@ -71,13 +71,13 @@
         <button
           type="button"
           class="observation-action observation-action--stop"
-          title="Stop observation"
-          aria-label="Stop observation"
+          title="End observation"
+          aria-label="End observation"
           :disabled="state.observation.status !== 'observing' && state.observation.status !== 'capturing'"
           @click="$emit('stop-observation')"
         >
           <Square :size="15" stroke-width="2.35" />
-          <span>Stop</span>
+          <span>End look</span>
         </button>
         <button
           type="button"
