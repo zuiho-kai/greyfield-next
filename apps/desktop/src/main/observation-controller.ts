@@ -32,6 +32,7 @@ export const observationModeConfigs: Record<RuntimeObservationMode, { intervalMs
 export class ObservationController {
   private state: DesktopObservationState = createInitialObservationState();
   private sequenceAbort: AbortController | undefined;
+  private generation = 0;
   private readonly now: () => Date;
   private readonly setTimer: typeof setTimeout;
   private readonly clearTimer: typeof clearTimeout;
@@ -48,6 +49,7 @@ export class ObservationController {
 
   async captureSingle(): Promise<void> {
     this.stop();
+    const generation = this.nextGeneration();
     const observationId = createObservationId(this.now());
     const config = observationModeConfigs.single;
     this.update({
@@ -61,6 +63,9 @@ export class ObservationController {
     });
     try {
       const frame = await this.captureFrame(observationId, 0, "screenshot");
+      if (!this.isCurrentObservation(generation, observationId, "capturing")) {
+        return;
+      }
       this.update({
         ...this.state,
         status: "ready",
@@ -68,6 +73,9 @@ export class ObservationController {
         message: "Screenshot ready. Confirm to send it with this chat turn, or delete it."
       });
     } catch (error) {
+      if (!this.isCurrentObservation(generation, observationId, "capturing")) {
+        return;
+      }
       this.update({
         ...this.state,
         status: "error",
@@ -78,6 +86,7 @@ export class ObservationController {
 
   startSequence(mode: Exclude<RuntimeObservationMode, "single">): void {
     this.stop();
+    const generation = this.nextGeneration();
     const observationId = createObservationId(this.now());
     const config = observationModeConfigs[mode];
     const abort = new AbortController();
@@ -92,10 +101,11 @@ export class ObservationController {
       message: formatObservingMessage(mode, config),
       ...(mode === "high" ? { highFrequencyWarning: "High frequency observation is short-lived and stops automatically after 5 seconds or 8 frames." } : {})
     });
-    void this.runSequence(abort, observationId, mode, config);
+    void this.runSequence(abort, generation, observationId, mode, config);
   }
 
   stop(): void {
+    this.generation += 1;
     const abort = this.sequenceAbort;
     this.sequenceAbort = undefined;
     abort?.abort();
@@ -118,6 +128,7 @@ export class ObservationController {
 
   private async runSequence(
     abort: AbortController,
+    generation: number,
     observationId: string,
     mode: Exclude<RuntimeObservationMode, "single">,
     config: { intervalMs: number; timeoutMs: number; maxFrames: number }
@@ -127,6 +138,9 @@ export class ObservationController {
     try {
       while (!abort.signal.aborted && Date.now() - startedAt < config.timeoutMs && captureIndex < config.maxFrames) {
         const frame = await this.captureFrame(observationId, captureIndex, "observation-frame");
+        if (!this.isCurrentSequence(abort, generation, observationId)) {
+          return;
+        }
         captureIndex += 1;
         const filtered = filterDistinctObservationFrames([...this.state.frames, frame], { maxFrames: config.maxFrames });
         this.update({
@@ -140,10 +154,10 @@ export class ObservationController {
         }
         await delay(config.intervalMs, abort.signal, this.setTimer, this.clearTimer);
       }
-      if (this.sequenceAbort === abort) {
+      if (this.isCurrentSequence(abort, generation, observationId)) {
         this.sequenceAbort = undefined;
       }
-      if (!abort.signal.aborted) {
+      if (this.isCurrentObservation(generation, observationId, "observing")) {
         this.update({
           ...this.state,
           status: "ready",
@@ -151,7 +165,7 @@ export class ObservationController {
         });
       }
     } catch (error) {
-      if (abort.signal.aborted) {
+      if (!this.isCurrentSequence(abort, generation, observationId)) {
         return;
       }
       this.update({
@@ -184,6 +198,23 @@ export class ObservationController {
   private update(state: DesktopObservationState): void {
     this.state = state;
     this.options.broadcast(this.getState());
+  }
+
+  private nextGeneration(): number {
+    this.generation += 1;
+    return this.generation;
+  }
+
+  private isCurrentObservation(
+    generation: number,
+    observationId: string,
+    expectedStatus: DesktopObservationState["status"]
+  ): boolean {
+    return this.generation === generation && this.state.observationId === observationId && this.state.status === expectedStatus;
+  }
+
+  private isCurrentSequence(abort: AbortController, generation: number, observationId: string): boolean {
+    return !abort.signal.aborted && this.sequenceAbort === abort && this.isCurrentObservation(generation, observationId, "observing");
   }
 }
 

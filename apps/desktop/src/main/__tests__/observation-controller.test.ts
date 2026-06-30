@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { ObservationController, observationModeConfigs, type ObservationCaptureSource } from "../observation-controller";
+import {
+  ObservationController,
+  observationModeConfigs,
+  type CapturedObservationFrame,
+  type ObservationCaptureSource
+} from "../observation-controller";
 
 describe("ObservationController", () => {
   it("captures one temporary screenshot", async () => {
@@ -57,6 +62,50 @@ describe("ObservationController", () => {
     expect(controller.getState()).toMatchObject({ status: "idle", frames: [] });
     vi.useRealTimers();
   });
+
+  it("does not restore a deleted single screenshot after an in-flight capture resolves", async () => {
+    const captureSource = new DeferredCaptureSource();
+    const controller = new ObservationController({
+      captureSource,
+      broadcast: () => undefined,
+      now: () => new Date("2026-06-30T00:00:00.000Z")
+    });
+
+    const capture = controller.captureSingle();
+    expect(controller.getState()).toMatchObject({ status: "capturing", frames: [] });
+
+    controller.delete();
+    expect(controller.getState()).toMatchObject({ status: "idle", frames: [] });
+
+    captureSource.resolve("A");
+    await capture;
+
+    expect(controller.getState()).toMatchObject({ status: "idle", frames: [] });
+  });
+
+  it.each(["delete", "stop"] as const)(
+    "does not restore sequence frames after %s while an in-flight capture resolves",
+    async (action) => {
+      const captureSource = new DeferredCaptureSource();
+      const controller = new ObservationController({
+        captureSource,
+        broadcast: () => undefined,
+        now: () => new Date("2026-06-30T00:00:00.000Z")
+      });
+
+      controller.startSequence("low");
+      expect(controller.getState()).toMatchObject({ status: "observing", frames: [] });
+
+      controller[action]();
+      expect(controller.getState()).toMatchObject({ status: "idle", frames: [] });
+
+      captureSource.resolve("A");
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(controller.getState()).toMatchObject({ status: "idle", frames: [] });
+    }
+  );
 });
 
 class TestCaptureSource implements ObservationCaptureSource {
@@ -72,5 +121,28 @@ class TestCaptureSource implements ObservationCaptureSource {
       mimeType: "image/png",
       hash: marker
     };
+  }
+}
+
+class DeferredCaptureSource implements ObservationCaptureSource {
+  private pendingResolve: ((frame: CapturedObservationFrame) => void) | undefined;
+
+  async capture() {
+    return new Promise<CapturedObservationFrame>((resolve) => {
+      this.pendingResolve = resolve;
+    });
+  }
+
+  resolve(marker: string): void {
+    const resolve = this.pendingResolve;
+    if (!resolve) {
+      throw new Error("No pending capture to resolve.");
+    }
+    this.pendingResolve = undefined;
+    resolve({
+      dataUrl: `data:image/png;base64,${Buffer.from(marker).toString("base64")}`,
+      mimeType: "image/png",
+      hash: marker
+    });
   }
 }

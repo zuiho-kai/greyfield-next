@@ -64,6 +64,16 @@ try {
   await sendMessage(chat, "看一下这个画面，并回答你看到了什么。");
   await chat.locator(".message-list .assistant:not(.draft)", { hasText: "临时观察" }).waitFor({ timeout: 10_000 });
   await chat.getByText("Used 1 temporary screenshot for this reply.").waitFor();
+  if ((await chat.locator(".observation-preview-strip img").count()) !== 0) {
+    throw new Error("Sent screenshot preview stayed visible after the observation turn.");
+  }
+  await chat.reload();
+  await chat.waitForSelector(".chat-shell");
+  await chat.getByRole("button", { name: "Capture one screenshot" }).waitFor();
+  await delay(500);
+  if ((await chat.locator(".observation-preview-strip img").count()) !== 0) {
+    throw new Error("Sent screenshot preview was replayed after the chat window reloaded.");
+  }
   summary.singleScreenshotQuestionPath = true;
 
   await chat.getByRole("button", { name: "Observe slowly" }).click();

@@ -846,7 +846,7 @@ describe("createDesktopRuntimeBridge", () => {
     });
 
     bridge.captureScreenshot();
-    observationState?.({
+    const readyObservation = {
       status: "ready",
       mode: "single",
       observationId: "obs-1",
@@ -866,7 +866,8 @@ describe("createDesktopRuntimeBridge", () => {
       timeoutMs: 0,
       intervalMs: 0,
       message: "Screenshot ready."
-    });
+    } satisfies import("../../shared/ipc").DesktopIpcEventMap["observation:state"];
+    observationState?.(readyObservation);
 
     const state = await bridge.sendText("看一下");
 
@@ -880,12 +881,28 @@ describe("createDesktopRuntimeBridge", () => {
         observation: expect.objectContaining({ id: "obs-1", mode: "single", frameCount: 1, dedupedFrameCount: 1 })
       })
     ]);
+    const runtimeInputIndex = sent.findIndex(([channel]) => channel === "runtime:input");
+    const observationDeleteIndex = sent.findIndex(([channel]) => channel === "observation:delete");
+    expect(runtimeInputIndex).toBeGreaterThan(-1);
+    expect(observationDeleteIndex).toBeGreaterThan(runtimeInputIndex);
     expect(state.messages.at(-1)).toMatchObject({
       role: "user",
       text: "看一下",
       observationSummary: "Used 1 temporary screenshot for this reply."
     });
     expect(state.observation.frames).toEqual([]);
+
+    observationState?.(readyObservation);
+    expect(bridge.getState().observation.frames).toEqual([]);
+
+    observationState?.({
+      ...readyObservation,
+      status: "idle",
+      observationId: "",
+      frames: [],
+      message: ""
+    });
+    expect(bridge.getState().observation).toMatchObject({ status: "idle", frames: [] });
   });
 
   it("controls observation frequency, high-frequency confirmation, stop, and delete", () => {

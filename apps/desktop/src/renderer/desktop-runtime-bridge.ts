@@ -146,6 +146,7 @@ export interface WindowStatePatch {
 export class DesktopRuntimeBridge {
   private state: DesktopRendererState = createInitialDesktopRendererState();
   private readonly stateChangeHandlers = new Set<DesktopStateChangeHandler>();
+  private readonly consumedObservationIds = new Set<string>();
   private readonly interactionProfile = createDefaultInteractionProfile();
   private personaCharacterFile = defaultGreyfieldConfig.characterFile;
   private speechPlaybackEpoch = 0;
@@ -291,6 +292,9 @@ export class DesktopRuntimeBridge {
       this.emitStateChange();
     });
     this.host?.on("observation:state", (observation) => {
+      if (observation.observationId.length > 0 && observation.frames.length > 0 && this.consumedObservationIds.has(observation.observationId)) {
+        return;
+      }
       this.state = {
         ...this.state,
         observation: {
@@ -360,6 +364,10 @@ export class DesktopRuntimeBridge {
         ...(observationPayload.attachments.length > 0 ? { attachments: observationPayload.attachments } : {}),
         ...(observationPayload.observation ? { observation: observationPayload.observation } : {})
       });
+      if (observationPayload.observation) {
+        this.consumedObservationIds.add(observationPayload.observation.id);
+        this.host.send("observation:delete", {});
+      }
       return this.getState();
     }
 
