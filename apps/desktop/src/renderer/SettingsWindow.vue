@@ -514,7 +514,7 @@
             <span>{{ t("field.betterMemory") }}</span>
             <input
               :checked="state.settings.llmAtomExtractionEnabled"
-              aria-label="Better memory extraction"
+              :aria-label="t('field.betterMemory')"
               type="checkbox"
               @change="$emit('update-boolean-setting', 'llmAtomExtractionEnabled', checkedFrom($event))"
             />
