@@ -96,6 +96,26 @@ For frontend-visible PRs, also required:
 - Current screenshots were opened and inspected by the author before asking for user verification.
 - The PR body names the visual/harness evidence used for Settings, Chat, Pet, speech bubble, Stop, or provider UI changes.
 - Product-shape regressions are treated as blockers even if DOM-level assertions pass.
+- Screenshots must be inspected for visible text truncation, selector/name collisions with existing controls, window overlap/clipping, and stale visual state after reload. Fix obvious user-facing polish issues in the same PR when they were introduced by that PR.
+- New buttons or controls must keep stable selectors or accessible names that do not break existing harnesses. If a new control shares visible text with an existing critical command such as Stop, update the new control label or the harness selector before merge.
+- Desktop-pet controls must be checked in the user's ordinary surface first. For pet sensing or awareness features, a Chat-only panel is a blocker unless the issue explicitly asked for a Chat/upload workflow.
+- Do not accept new user-visible controls that expose implementation details such as frame count, capture frequency tiers, timer caps, or manual preview/delete flows unless those controls were part of the approved product story.
+
+For privacy-sensitive or temporary-data PRs, also required:
+
+- Verify the full lifecycle: create/capture, use/send, stop, delete/clear, reload/replay, in-flight cancellation, source display, recall/export, and provider handoff.
+- Raw screenshots, audio, credentials, secret-like text, and other temporary inputs must not persist in session history, memory atoms, summaries, source fragments, exports, or replayed renderer/main-process state unless the issue explicitly says they should.
+- Deletion and consume paths must invalidate in-flight async work. A pending capture/request must not recreate data after the user stopped, deleted, or sent it once.
+- The harness or tests must include at least one negative assertion for raw-data non-persistence and one replay/reload assertion when main-process or renderer state can retain data.
+
+For screen or visual awareness PRs, also required:
+
+- Verify the visible mode on/off path from the desktop pet controls or pet interaction surface, not only from Chat.
+- Verify user-initiated messages can use current visual context when enabled.
+- Verify proactive behavior: `proactivityLevel` 0 does not initiate screen-aware speech, and a positive level can use recent visual context without requiring the user to speak first.
+- Verify disabling screen awareness stops future visual context use and does not resurrect after reload.
+- Verify unsupported providers degrade honestly without pretending Greyfield saw the screen.
+- Verify memory writeback stores only user-confirmed facts or summaries, never raw screenshots, frames, base64 data, or local capture paths.
 
 For completion or release-evidence PRs, also required:
 
@@ -112,6 +132,7 @@ Some features are not single checks. A project-owner review must verify the full
 - Voice companion: microphone capture, ASR, transcript-to-chat, text response, TTS playback, waveform mouth movement, Stop/cancel, queue cleanup, user-visible state, and fake/local provider coverage.
 - Provider settings: ordinary typing path, masked-secret echo, missing fields, testing state, success, failure, active-chat rejection, and no unintended provider requests.
 - Desktop pet interaction: model-pixel interaction, transparent pass-through, drag continuity, wheel bounds, pass-through toggles, bubble placement, and recovery controls.
+- Desktop screen awareness: desktop-control entry, mode on/off, user-initiated question, proactive use with `proactivityLevel`, provider fallback, reload/off recovery, raw-data non-persistence, and natural pet wording rather than attachment-management UI.
 - Speech bubble: first-token display, long-reply cap, fade lifecycle, viewport/screen containment, disabled-bubble hit-area removal, and full Chat history retention.
 
 ## Reviewer-Lens Audits

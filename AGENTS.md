@@ -42,6 +42,11 @@ Greyfield Next is a TypeScript monorepo for a Live2D desktop companion. This fil
 - After spawning implementation sub-agents, the coordinator must keep an active wait/review loop or set an explicit follow-up wakeup before ending the turn. Sub-agent notifications are not a substitute for coordinator ownership; do not assume a completed worker will automatically resume the main agent after a final response.
 - Implementation worker prompts should delegate push/open-PR authority by default: after local validation passes, the worker may push its assigned branch and open a Chinese PR unless the coordinator explicitly keeps that step. The coordinator still owns review, merge, issue closeout, and worker shutdown.
 - A reviewed, validated implementation branch must not sit as a local-only "ready" branch. After coordinator review finds no blocker, either the authorized worker already pushed/opened the PR, or the coordinator must do it immediately. PR bodies are written in Chinese unless the user asks otherwise.
+- Worker completion means validated, artifact-backed, committed, pushed, and attached to a PR/head SHA unless the coordinator explicitly asked for a local-only spike. A local "done" report without push/PR is not a completed implementation handoff.
+- Privacy-sensitive user-control features must test the lifecycle, not only the happy path: create, send/use, stop, delete, reload/replay, in-flight cancellation, source display, export/recall, and raw-data non-persistence.
+- Desktop-pet environment sensing features must be designed as a felt pet mode or state, not as chat attachment management, unless the user explicitly asks for an upload/preview workflow.
+- Screen or visual awareness work must state how it behaves when the user asks, when `proactivityLevel` causes Greyfield to speak first, and when the feature is off. Do not treat visual input and proactive speech as unrelated slices when the user-facing loop is one experience.
+- Do not invent user-visible preview/delete/high-frequency/timer/frame-cap interactions from engineering safeguards. Safety limits may exist internally, but visible product controls need explicit product approval.
 
 ## Required Reading Index
 

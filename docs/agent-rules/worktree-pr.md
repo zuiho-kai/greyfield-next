@@ -21,6 +21,16 @@ Before assigning implementation work:
 
 Do not substitute PR lists, merged commit lists, package names, or benchmark internals for the product story. Those belong after the product status, not before it.
 
+For desktop-pet sensing, awareness, or interaction features, the product story must name the pet mode/state first. "The user turns on screen awareness and Greyfield can naturally react to the desktop" is a product loop; "capture screenshot, preview frames, send attachment" is only an implementation path. Keep one felt loop in one issue/PR unless the user explicitly approves a split.
+
+If a feature touches proactive behavior, the story must state all three cases before coding:
+
+- user-initiated use;
+- Greyfield-initiated use when `proactivityLevel` allows active behavior;
+- disabled/off behavior.
+
+Engineering safeguards such as sampling limits, frame caps, timeouts, duplicate filtering, or raw-data cleanup must not become visible product controls or PR scope unless the user approved those controls in product language.
+
 ## Issue And Slice Gate
 
 Roadmap and phase issues are coordination indexes. They are not ready-to-code scopes.
@@ -45,6 +55,8 @@ An atomic implementation issue must include:
 A feature PR must link an atomic implementation issue. A roadmap issue may be linked for context, but it cannot be the only linked issue unless the PR only updates planning or documentation.
 
 If a PR starts touching multiple atomic issues, split it before review unless it is explicitly an integration PR. Integration PRs must name the cross-path scenario matrix they prove.
+
+Do not split a single felt desktop-pet mode into UI, runtime, proactive, memory, and privacy PRs by default. If those pieces are required for the ordinary user path to feel complete, they belong in one corrective/product PR with a clear scenario matrix.
 
 ## Before Creating A Worktree
 
@@ -75,12 +87,15 @@ git worktree add ../greyfield-next-main-runtime-persistence -b feature/main-runt
 - After spawning workers, the coordinator must not end with a final response that leaves worker completion unattended. Stay in an active wait loop, continue non-overlapping coordination, or create an explicit follow-up wakeup/check. Treat passive `subagent_notification` delivery as status data, not as a reliable main-agent trigger.
 - Each agent must read `AGENTS.md` and relevant guardrail docs inside its own worktree before editing.
 - Agents must report changed files, verification commands, and unresolved risks before handoff.
+- An implementation handoff is not complete until the worker reports all of these, unless the coordinator explicitly requested a local-only spike: changed files, verification commands, artifacts/screenshots when user-visible, commit SHA, push status, PR URL or current PR number, remote head SHA, and unresolved risks. "Code is ready locally" is a status update, not a finished handoff.
+- For long-running delegated work, the worker must provide concrete progress or a blocker at least every 10-15 minutes when asked or when a validation loop stalls. A coordinator should actively check PR head, worktree status, and running processes instead of relying on sub-agent notifications as the only trigger.
 - A coordinating agent merges results by PR review, not by copying unreviewed files between worktrees.
 - Split parallel work by disjoint write sets first, dependency order second. If one PR creates an interface and another consumes it, merge or rebase the provider PR before approving the consumer.
 - When a sibling PR merges while another PR is open, the coordinating agent must rebase the open PR and rerun its targeted verification before marking it ready.
 - Do not preserve merge-conflict docs or unrelated edits just because a subagent saw them. If a branch picked up stale roadmap/docs conflicts, drop or recreate that branch around its assigned code slice.
 - In each fresh worktree, run `pnpm install`, `pnpm typecheck`, and `pnpm` test/harness commands serially. Parallel agents may run in separate worktrees, but a single worktree must not run two `pnpm` commands concurrently.
 - Remote CI waiting should not occupy the main implementation loop. Use a low-frequency watcher or check once at merge readiness while the coordinator continues non-overlapping local work.
+- During development, prefer targeted local tests and the specific Electron/frontend harness that proves the touched user path. Full frontend/desktop CI is a merge-readiness gate; do not repeatedly run or wait on full CI during implementation unless the current failure is in that gate or the targeted evidence is missing.
 - If a sub-agent returns no usable result, hits a limit, or abandons the task, close or explicitly retire it before assigning another agent to the same worktree. Do not keep two live agents on the same worktree.
 - Do not close an implementation sub-agent just because it reached a final response, hit a budget ceiling, or says the implementation is ready. The worker still owns that issue/worktree through coordinator review, requested rework, PR feedback, and merge readiness. Prefer `resume` or follow-up input to the same worker when budget returns or review finds defects. Close the worker only after the PR is merged, the PR/worktree is abandoned, or the coordinator records that this worker is retired and no longer owns the worktree.
 
@@ -89,6 +104,7 @@ git worktree add ../greyfield-next-main-runtime-persistence -b feature/main-runt
 - New feature work should end as a pull request to the repository, not an untracked local patch.
 - Implementation worker prompts should normally authorize the worker to push its assigned branch and open the PR after its local verification passes. The worker-owned PR must use a Chinese body, link the assigned issue, and include exact verification commands/results plus unresolved risks.
 - Once an implementation sub-agent hands off a validated branch and coordinator review finds no blocker, the branch must already have a PR or the coordinator must open one immediately. Do not leave a branch local-only because ownership of the final push was ambiguous.
+- If a worker has a local commit that is meant for review, it must push the assigned branch and report the remote head SHA before claiming the PR is updated. The coordinator should treat a mismatch between local `HEAD` and PR `headRefOid` as an incomplete handoff.
 - The coordinator keeps merge authority even when push/open-PR authority is delegated. Before merge, the coordinator still checks current PR state, CI, unresolved review threads, and whether the issue closeout condition is satisfied.
 - Do not push directly to `main`.
 - Keep PRs small enough to review: one atomic feature point, one checkpoint phase with explicit scenario acceptance, or one bug class per PR.
