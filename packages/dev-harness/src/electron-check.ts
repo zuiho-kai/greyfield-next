@@ -904,11 +904,11 @@ async function verifyMemoryExtractionSettings(
   togglePersisted: boolean;
   manualCandidateControlsAbsent: boolean;
 }> {
-  const memorySection = settingsWindow.getByLabel(/^(Memory extraction|记忆提取)$/, { exact: true });
+  const memorySection = settingsWindow.getByLabel(/^(How memory works|记忆方式)$/, { exact: true });
   await memorySection.waitFor();
-  const toggle = memorySection.getByLabel(/^(Better memory extraction|增强记忆)$/);
+  const toggle = memorySection.getByLabel(/^(Remember more details|记住更多细节)$/);
   await toggle.waitFor();
-  await memorySection.locator(".memory-extraction-status--standard", { hasText: /Better extraction is off|增强提取已关闭/ }).waitFor();
+  await memorySection.locator(".memory-extraction-status--standard", { hasText: /Basic memory on|基础记忆开启/ }).waitFor();
   await assertNoManualMemoryCandidateControls(memorySection);
   await toggle.check();
   const savedConfig = await waitForBetterMemory(path, true);
