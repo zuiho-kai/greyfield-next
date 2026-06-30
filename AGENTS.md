@@ -47,6 +47,8 @@ Greyfield Next is a TypeScript monorepo for a Live2D desktop companion. This fil
 - Desktop-pet environment sensing features must be designed as a felt pet mode or state, not as chat attachment management, unless the user explicitly asks for an upload/preview workflow.
 - Screen or visual awareness work must state how it behaves when the user asks, when `proactivityLevel` causes Greyfield to speak first, and when the feature is off. Do not treat visual input and proactive speech as unrelated slices when the user-facing loop is one experience.
 - Do not invent user-visible preview/delete/high-frequency/timer/frame-cap interactions from engineering safeguards. Safety limits may exist internally, but visible product controls need explicit product approval.
+- Desktop screen awareness uses one ordinary pet-control toggle unless the approved product story says otherwise. Do not add separate Shot, Clear, End, preview, frequency, or frame-management controls to the small desktop panel; sampling and retention policy belong in Settings or internal defaults.
+- Before landing rule/docs changes, check the current branch, status, and PR ownership. If the checkout belongs to an open feature PR or has unrelated user/worker changes, use a separate docs branch/worktree instead of mixing process rules into business diffs.
 
 ## Required Reading Index
 
