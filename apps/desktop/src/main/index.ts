@@ -16,6 +16,7 @@ import { RuntimeService } from "./runtime-service";
 import { ElectronScreenCaptureSource } from "./screen-capture-source";
 import { redactConfigForRenderer } from "./settings-redaction";
 import { SettingsController } from "./settings-controller";
+import { buildTrayMenuTemplate } from "./tray-menu";
 import { applyWindowLayerMode } from "./window-layer-mode";
 import { getUsableWindow, hideWindowIfUsable, showWindowIfUsable } from "./window-lifecycle";
 import type { DesktopPersonaSaveRequest, DesktopProactiveCheckRequest, DesktopScreenAwarenessState } from "../shared/ipc";
@@ -136,15 +137,20 @@ function createTray(): void {
   }
   tray.setToolTip("Greyfield Next");
   tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: "Show Settings", click: () => showWindowIfUsable(settingsWindow) },
-      { label: "Open Chat", click: () => showWindowIfUsable(chatWindow) },
-      { label: "Show Controls", click: () => showWindowIfUsable(controlsWindow) },
-      { label: "Model Pass Through", type: "checkbox", checked: petWindowController?.isModelPassThrough(), click: () => setModelPassThrough(!petWindowController?.isModelPassThrough()) },
-      { label: "Interrupt", click: () => handleRuntimeInput({ type: "runtime.interrupt" }) },
-      { type: "separator" },
-      { label: "Quit", click: () => app.quit() }
-    ])
+    Menu.buildFromTemplate(
+      buildTrayMenuTemplate(
+        {
+          showModel: () => showWindowIfUsable(petWindow),
+          showSettings: () => showWindowIfUsable(settingsWindow),
+          openChat: () => showWindowIfUsable(chatWindow),
+          showControls: () => showWindowIfUsable(controlsWindow),
+          toggleModelPassThrough: () => setModelPassThrough(!petWindowController?.isModelPassThrough()),
+          interrupt: () => handleRuntimeInput({ type: "runtime.interrupt" }),
+          quit: () => app.quit()
+        },
+        { modelPassThrough: petWindowController?.isModelPassThrough() ?? false }
+      )
+    )
   );
 }
 
