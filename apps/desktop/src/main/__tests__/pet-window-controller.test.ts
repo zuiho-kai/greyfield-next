@@ -24,6 +24,23 @@ describe("PetWindowController", () => {
     expect(window.setBounds).toHaveBeenCalledWith({ x: 40, y: 70, width: 421, height: 620 });
   });
 
+  it("ignores subpixel drag jitter until movement reaches a full native pixel", () => {
+    const window = createFakePetWindow({ x: 10, y: 20, width: 421, height: 620 });
+    const controller = new PetWindowController({ getWindow: () => window });
+
+    controller.startDrag({ screenX: 100.1, screenY: 200.1 });
+    controller.moveDrag({ screenX: 100.6, screenY: 200.6 });
+    controller.moveDrag({ screenX: 100.49, screenY: 200.49 });
+
+    expect(window.setBounds).not.toHaveBeenCalled();
+
+    controller.moveDrag({ screenX: 101.2, screenY: 201.2 });
+    controller.moveDrag({ screenX: 100.61, screenY: 200.61 });
+
+    expect(window.setBounds).toHaveBeenCalledTimes(1);
+    expect(window.setBounds).toHaveBeenCalledWith({ x: 11, y: 21, width: 421, height: 620 });
+  });
+
   it("does not start a drag when locked or model pass-through is enabled", () => {
     const window = createFakePetWindow({ x: 10, y: 20, width: 421, height: 620 });
     const controller = new PetWindowController({ getWindow: () => window });
