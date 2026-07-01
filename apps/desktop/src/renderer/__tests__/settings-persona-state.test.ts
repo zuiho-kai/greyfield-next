@@ -31,6 +31,24 @@ describe("Settings persona state", () => {
     });
   });
 
+  it("maps the window layer mode between persisted config, renderer state, and patches", () => {
+    const settings = settingsFromConfig({
+      ...defaultGreyfieldConfig,
+      window: {
+        ...defaultGreyfieldConfig.window,
+        layerMode: "pet-front"
+      }
+    });
+
+    expect(settings.windowLayerMode).toBe("pet-front");
+    expect(configFromSettings({ ...settings, windowLayerMode: "controls-front" }).window).toMatchObject({
+      layerMode: "controls-front"
+    });
+    expect(settingsPatchToConfigPatch({ windowLayerMode: "follow-click" })).toEqual({
+      window: { layerMode: "follow-click" }
+    });
+  });
+
   it("maps persona files into the Settings form and save payload", () => {
     const form = personaFormFromPersona({
       name: "Mira",

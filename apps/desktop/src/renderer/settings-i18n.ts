@@ -46,10 +46,14 @@ export type SettingsI18nKey =
   | "field.mic"
   | "field.character"
   | "field.scale"
+  | "field.windowLayerMode"
   | "field.bubble"
   | "field.rememberedMoments"
   | "field.proactivity"
   | "field.betterMemory"
+  | "windowLayerMode.followClick"
+  | "windowLayerMode.controlsFront"
+  | "windowLayerMode.petFront"
   | "button.savePersona"
   | "button.saving"
   | "button.importModel"
@@ -305,10 +309,14 @@ const enUS: Record<SettingsI18nKey, string> = {
   "field.mic": "Mic",
   "field.character": "Character",
   "field.scale": "Scale",
+  "field.windowLayerMode": "Canvas layering",
   "field.bubble": "Bubble",
   "field.rememberedMoments": "Remembered moments",
   "field.proactivity": "Proactivity",
   "field.betterMemory": "Better memory",
+  "windowLayerMode.followClick": "By click (default)",
+  "windowLayerMode.controlsFront": "Input box stays in front",
+  "windowLayerMode.petFront": "Model stays in front",
   "button.savePersona": "Save persona",
   "button.saving": "Saving...",
   "button.importModel": "Import local model",
@@ -565,10 +573,14 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "field.mic": "麦克风",
   "field.character": "角色文件",
   "field.scale": "缩放",
+  "field.windowLayerMode": "画布层级",
   "field.bubble": "气泡",
   "field.rememberedMoments": "主动记忆提醒",
   "field.proactivity": "主动程度",
   "field.betterMemory": "增强记忆",
+  "windowLayerMode.followClick": "按点击决定（默认）",
+  "windowLayerMode.controlsFront": "输入框永远在前",
+  "windowLayerMode.petFront": "模型永远在前",
   "button.savePersona": "保存人格",
   "button.saving": "保存中...",
   "button.importModel": "导入本地模型",

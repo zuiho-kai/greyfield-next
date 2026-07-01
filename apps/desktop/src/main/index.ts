@@ -16,6 +16,7 @@ import { RuntimeService } from "./runtime-service";
 import { ElectronScreenCaptureSource } from "./screen-capture-source";
 import { redactConfigForRenderer } from "./settings-redaction";
 import { SettingsController } from "./settings-controller";
+import { applyWindowLayerMode } from "./window-layer-mode";
 import { getUsableWindow, hideWindowIfUsable, showWindowIfUsable } from "./window-lifecycle";
 import type { DesktopPersonaSaveRequest, DesktopProactiveCheckRequest, DesktopScreenAwarenessState } from "../shared/ipc";
 
@@ -94,6 +95,14 @@ async function createWindows(): Promise<void> {
   controlsWindow = new BrowserWindow(createControlsWindowOptions(config, preload));
   attachSettingsReplayOnLoad(controlsWindow);
   attachWindowLifecycle();
+  applyWindowLayerMode(
+    config.window.layerMode,
+    {
+      petWindow: getUsableWindow(petWindow),
+      controlsWindow: getUsableWindow(controlsWindow)
+    },
+    config.window.alwaysOnTop
+  );
 
   registerIpc();
   await loadRenderer(petWindow, "pet");
@@ -244,6 +253,16 @@ function registerIpc(): void {
         applyStoredShape();
       }
       broadcastWindowState();
+    }
+    if (nextConfig) {
+      applyWindowLayerMode(
+        nextConfig.window.layerMode,
+        {
+          petWindow: getUsableWindow(petWindow),
+          controlsWindow: getUsableWindow(controlsWindow)
+        },
+        nextConfig.window.alwaysOnTop
+      );
     }
   });
 

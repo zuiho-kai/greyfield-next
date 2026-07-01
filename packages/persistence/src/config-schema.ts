@@ -1,4 +1,5 @@
 export type GreyfieldLocale = "en-US" | "zh-CN";
+export type GreyfieldWindowLayerMode = "follow-click" | "controls-front" | "pet-front";
 
 export function normalizeGreyfieldLocale(locale: unknown): GreyfieldLocale {
   return locale === "en-US" ? "en-US" : "zh-CN";
@@ -27,6 +28,7 @@ export interface GreyfieldConfig {
     alwaysOnTop: boolean;
     clickThrough: boolean;
     modelPassThrough: boolean;
+    layerMode: GreyfieldWindowLayerMode;
     width: number;
     height: number;
     x?: number;
@@ -83,6 +85,7 @@ export const defaultGreyfieldConfig: GreyfieldConfig = {
     alwaysOnTop: true,
     clickThrough: false,
     modelPassThrough: false,
+    layerMode: "follow-click",
     width: 420,
     height: 620
   },
