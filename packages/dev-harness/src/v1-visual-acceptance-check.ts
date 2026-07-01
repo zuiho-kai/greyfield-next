@@ -224,7 +224,7 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     artifacts.push(
       await screenshot(settingsWindow, artifactDir, "settings-provider-preview.png", "Settings provider preview state.")
     );
-    await settingsWindow.getByLabel(/^(Memory extraction|记忆提取)$/, { exact: true }).scrollIntoViewIfNeeded();
+    await settingsWindow.getByLabel(/^(How memory works|记忆方式)$/, { exact: true }).scrollIntoViewIfNeeded();
     artifacts.push(
       await screenshot(settingsWindow, artifactDir, "settings-memory-extraction.png", "Settings Memory extraction section.")
     );
@@ -579,7 +579,7 @@ async function readSettingsLayout(page: Page): Promise<VisualAcceptanceSummaryIn
   return page.evaluate(() => {
     const scrollWidth = document.scrollingElement?.scrollWidth ?? document.documentElement.scrollWidth;
     const compactInputs = Array.from(document.querySelectorAll<HTMLInputElement>(".settings-fields--compact input"));
-    const memorySection = document.querySelector<HTMLElement>('[aria-label="Memory extraction"], [aria-label="记忆提取"]');
+    const memorySection = document.querySelector<HTMLElement>('[aria-label="How memory works"], [aria-label="记忆方式"]');
     const memoryText = memorySection?.textContent ?? "";
     const windowControlsUsable =
       compactInputs.length >= 4 &&
@@ -603,7 +603,7 @@ async function readSettingsLayout(page: Page): Promise<VisualAcceptanceSummaryIn
       providerPreviewVisible: document.querySelector(".provider-status--preview") !== null,
       memoryExtractionVisible: memorySection !== null,
       memoryExtractionToggleVisible:
-        memorySection?.querySelector('input[aria-label="Better memory extraction"], input[aria-label="增强记忆提取"]') != null,
+        memorySection?.querySelector('input[aria-label="Better memory"], input[aria-label="增强记忆"]') != null,
       memoryExtractionManualCandidateControlsAbsent: !/\b(accept|reject|candidate|pending)\b/i.test(memoryText),
       settingsShellVisible: document.querySelector(".greyfield-shell") !== null,
       viewportWidth: window.innerWidth,

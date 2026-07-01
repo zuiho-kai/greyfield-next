@@ -103,8 +103,9 @@ try {
   await settings.getByRole("button", { name: "Refresh memory" }).click();
   let memoryLibrary = settings.locator(memoryLibrarySelector);
   await waitForCurrentSummary(memoryLibrary);
-  await assertMemoryPrivacyCopy(memoryLibrary);
   await assertOtherRoleSummaryHidden(memoryLibrary);
+  await openAdvancedDetails(memoryLibrary);
+  await assertMemoryPrivacyCopy(memoryLibrary);
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Summary" }).waitFor();
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Facts" }).waitFor();
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Preferences" }).waitFor();
@@ -128,10 +129,12 @@ try {
   await memoryLibrary.locator(".memory-library__block--recall", { hasText: 'Matched recall cue "hiyori"' }).waitFor();
   await assertMemoryLibraryTextSafe(memoryLibrary);
 
+  await openSourceDrilldown(memoryLibrary, "summary-1");
   await memorySummaryText(memoryLibrary, "summary-1").fill("Edited memory: User prefers Hiyori and Sakura.");
   await memorySummaryCues(memoryLibrary, "summary-1").fill("edited-hiyori, hiyori, sakura");
   await memorySummarySave(memoryLibrary, "summary-1").click();
   await memoryLibrary.getByText("Memory summary-1 saved.").waitFor();
+  await closeSourceDrilldown(memoryLibrary);
   const editedSummaryJsonl = await waitForFileContaining(summaryPath, [
     "Edited memory: User prefers Hiyori and Sakura.",
     "edited-hiyori"
@@ -150,8 +153,10 @@ try {
     throw new Error(`Memory export leaked a provider secret or other-role summary: ${exportedMemoryText}`);
   }
 
+  await openSourceDrilldown(memoryLibrary, "summary-1");
   await memorySummaryToggle(memoryLibrary, "summary-1").click();
   await memoryLibrary.getByText("Memory summary-1 disabled.").waitFor();
+  await closeSourceDrilldown(memoryLibrary);
   await waitForFileContaining(summaryPath, ['"id":"summary-1"', '"disabled":true']);
 
   await resetMemoryEvents(chat);
@@ -167,7 +172,9 @@ try {
     throw new Error(`Disabled summary-1 was not reported as skipped: ${JSON.stringify(disabledRecall.context)}`);
   }
 
+  await openSourceDrilldown(memoryLibrary, "summary-1");
   await memorySummaryToggle(memoryLibrary, "summary-1").click();
+  await closeSourceDrilldown(memoryLibrary);
   await waitForFileContaining(summaryPath, ['"id":"summary-1"', '"disabled":false']);
   await resetMemoryEvents(chat);
   await sendMessageAndWaitForNextAssistant(chat, "edited-hiyori 重新启用后应该能想起吗？");
@@ -186,10 +193,13 @@ try {
   memoryLibrary = settings.locator(memoryLibrarySelector);
   await waitForCurrentSummary(memoryLibrary);
   await memoryLibrary.getByText("Edited memory: User prefers Hiyori and Sakura.").waitFor();
+  await openSourceDrilldown(memoryLibrary, "summary-1");
   const reloadedCueValue = await memorySummaryCues(memoryLibrary, "summary-1").inputValue();
   if (reloadedCueValue !== "edited-hiyori, hiyori, sakura") {
     throw new Error(`Reloaded summary cues were not persisted: ${reloadedCueValue}`);
   }
+  await closeSourceDrilldown(memoryLibrary);
+  await openAdvancedDetails(memoryLibrary);
   await assertMemoryPrivacyCopy(memoryLibrary);
   await assertOtherRoleSummaryHidden(memoryLibrary);
   await settings.screenshot({ path: settingsReloadedScreenshotPath, fullPage: true });
@@ -203,6 +213,7 @@ try {
   await waitForCurrentSummary(memoryLibrary);
   await assertOtherRoleSummaryHidden(memoryLibrary);
 
+  await openSourceDrilldown(memoryLibrary, "summary-1");
   await memorySummaryDelete(memoryLibrary, "summary-1").click();
   await memoryLibrary
     .getByText("Memory summary-1 deleted. Remembered source evidence was hidden from recall, source views, and exports.")
@@ -398,6 +409,15 @@ async function openSourceDrilldown(memoryLibrary: Locator, id: string): Promise<
   const source = memoryLibrary.locator(memorySourceDrilldownSelector);
   await source.waitFor();
   return source;
+}
+
+async function openAdvancedDetails(memoryLibrary: Locator): Promise<void> {
+  const details = memoryLibrary.locator('[data-harness="memory-advanced-details"]');
+  await details.waitFor();
+  const open = await details.evaluate((element) => element instanceof HTMLDetailsElement && element.open);
+  if (!open) {
+    await details.locator("summary").click();
+  }
 }
 
 async function closeSourceDrilldown(memoryLibrary: Locator): Promise<void> {

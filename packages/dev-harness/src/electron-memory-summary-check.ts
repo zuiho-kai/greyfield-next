@@ -112,8 +112,9 @@ try {
   const settings = await waitForRoleWindow(app, "settings");
   await settings.waitForSelector(".greyfield-shell");
   await settings.getByRole("button", { name: "Refresh memory" }).click();
-  const memoryLibrary = settings.locator('[aria-label="Memory Library"]');
+  const memoryLibrary = settings.locator('[data-harness="settings-memory-library"]');
   await memoryLibrary.waitFor();
+  await openAdvancedDetails(memoryLibrary);
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Summary" }).waitFor();
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Facts" }).waitFor();
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Preferences" }).waitFor();
@@ -121,7 +122,7 @@ try {
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Relationships" }).waitFor();
   await memoryLibrary.locator(".memory-library__lane", { hasText: "Scenes" }).waitFor();
   await memoryLibrary.locator(".memory-library__stats", { hasText: "Enabled" }).waitFor();
-  const summarySource = await openSourcePassage(memoryLibrary, '[aria-label="Summary memory summary-1"]');
+  const summarySource = await openSourcePassage(memoryLibrary, "summary-1");
   await summarySource.getByText("Source passage").first().waitFor();
   await summarySource.getByText("From you").first().waitFor();
   await summarySource.getByText("Saved locally").first().waitFor();
@@ -143,9 +144,9 @@ try {
   }
   await settings.screenshot({ path: settingsSourceScreenshotPath, fullPage: true });
 
-  await settings.getByLabel("Memory text summary-1").fill("Edited memory: User prefers Hiyori and Sakura.");
-  await settings.getByLabel("Recall cues summary-1").fill("edited-hiyori, hiyori, sakura");
-  await settings.getByRole("button", { name: "Save memory summary-1" }).click();
+  await memorySummaryText(memoryLibrary, "summary-1").fill("Edited memory: User prefers Hiyori and Sakura.");
+  await memorySummaryCues(memoryLibrary, "summary-1").fill("edited-hiyori, hiyori, sakura");
+  await memorySummarySave(memoryLibrary, "summary-1").click();
   await memoryLibrary.getByText("Memory summary-1 saved.").waitFor();
   const editedSummaryJsonl = await waitForFileContaining(summaryPath, [
     "Edited memory: User prefers Hiyori and Sakura.",
@@ -162,7 +163,7 @@ try {
     throw new Error("Memory export included the configured provider API key.");
   }
 
-  await settings.getByRole("button", { name: "Disable memory summary-1" }).click();
+  await memorySummaryToggle(memoryLibrary, "summary-1").click();
   await memoryLibrary.getByText("Memory summary-1 disabled.").waitFor();
   await waitForFileContaining(summaryPath, ['"id":"summary-1"', '"disabled":true']);
 
@@ -179,7 +180,7 @@ try {
     throw new Error(`Disabled summary-1 was not reported as skipped: ${JSON.stringify(disabledRecall.context)}`);
   }
 
-  await settings.getByRole("button", { name: "Delete memory summary-1" }).click();
+  await memorySummaryDelete(memoryLibrary, "summary-1").click();
   await memoryLibrary
     .getByText("Memory summary-1 deleted. Remembered source evidence was hidden from recall, source views, and exports.")
     .waitFor();
@@ -190,7 +191,7 @@ try {
   await waitForAssistantCount(chat, 6);
   await waitForFileContaining(summaryPath, ['"id":"summary-2"']);
   await settings.getByRole("button", { name: "Refresh memory" }).click();
-  await settings.locator('[aria-label="Summary memory summary-2"]').waitFor();
+  await memorySummaryCard(memoryLibrary, "summary-2").waitFor();
   await settings.getByRole("button", { name: "Clear summary memory" }).click();
   await memoryLibrary
     .getByText("Cleared 1 summary memory. Remembered source evidence was hidden from recall, source views, and exports.")
@@ -244,12 +245,45 @@ async function waitForRoleWindow(app: ElectronApplication, roleName: "chat" | "s
   throw new Error(`Timed out waiting for ${roleName} window`);
 }
 
-async function openSourcePassage(memoryLibrary: Locator, cardSelector: string): Promise<Locator> {
-  const card = memoryLibrary.locator(cardSelector);
-  await card.getByRole("button", { name: /View source/iu }).click();
-  const source = memoryLibrary.locator('[aria-label="Memory source drilldown"]');
+async function openSourcePassage(memoryLibrary: Locator, id: string): Promise<Locator> {
+  const card = memorySummaryCard(memoryLibrary, id);
+  await card.locator('[data-harness="memory-source-open"]').click();
+  const source = memoryLibrary.locator('[data-harness="memory-source-drilldown"]');
   await source.waitFor();
   return source;
+}
+
+async function openAdvancedDetails(memoryLibrary: Locator): Promise<void> {
+  const details = memoryLibrary.locator('[data-harness="memory-advanced-details"]');
+  await details.waitFor();
+  const open = await details.evaluate((element) => element instanceof HTMLDetailsElement && element.open);
+  if (!open) {
+    await details.locator("summary").click();
+  }
+}
+
+function memorySummaryCard(memoryLibrary: Locator, id: string): Locator {
+  return memoryLibrary.locator(`[data-harness="memory-summary-card"][data-memory-id="${id}"]`);
+}
+
+function memorySummaryText(memoryLibrary: Locator, id: string): Locator {
+  return memoryLibrary.locator(`[data-harness="memory-summary-text"][data-memory-id="${id}"]`);
+}
+
+function memorySummaryCues(memoryLibrary: Locator, id: string): Locator {
+  return memoryLibrary.locator(`[data-harness="memory-summary-cues"][data-memory-id="${id}"]`);
+}
+
+function memorySummarySave(memoryLibrary: Locator, id: string): Locator {
+  return memoryLibrary.locator(`[data-harness="memory-summary-save"][data-memory-id="${id}"]`);
+}
+
+function memorySummaryToggle(memoryLibrary: Locator, id: string): Locator {
+  return memoryLibrary.locator(`[data-harness="memory-summary-toggle"][data-memory-id="${id}"]`);
+}
+
+function memorySummaryDelete(memoryLibrary: Locator, id: string): Locator {
+  return memoryLibrary.locator(`[data-harness="memory-summary-delete"][data-memory-id="${id}"]`);
 }
 
 async function assertSourceStateText(

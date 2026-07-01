@@ -1244,6 +1244,12 @@ h1 {
   gap: 10px;
 }
 
+.memory-library__overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
 .memory-library__privacy,
 .memory-library__block,
 .memory-library__empty {
@@ -1307,6 +1313,30 @@ h1 {
 
 .memory-library__stats span {
   text-align: center;
+}
+
+.memory-library__advanced {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px dashed rgba(37, 56, 88, 0.22);
+  border-radius: 8px;
+  background: rgba(37, 56, 88, 0.04);
+}
+
+.memory-library__advanced summary {
+  cursor: pointer;
+  color: #465463;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.memory-library__advanced-content {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
 }
 
 .memory-library__block--recall {
@@ -1476,6 +1506,10 @@ h1 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   margin: 0;
+}
+
+.memory-library__meta--compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .memory-library__meta div {
