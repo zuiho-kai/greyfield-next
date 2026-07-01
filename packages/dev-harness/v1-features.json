@@ -286,6 +286,23 @@
       }
     },
     {
+      "id": "GFN-V1-016",
+      "title": "Windows double-click launcher",
+      "status": "completed",
+      "package": "apps/desktop",
+      "acceptance": [
+        "Windows users can start the desktop pet by double-clicking Launch Greyfield.vbs from the project root without opening cmd or PowerShell manually.",
+        "The double-click launcher starts the existing pnpm dev:live2d path through a hidden PowerShell window instead of introducing a separate desktop runtime.",
+        "Windows users can stop the dev pet by double-clicking Stop Greyfield.vbs, which reuses the existing pnpm dev:live2d:stop path.",
+        "Launcher failures for missing pnpm, missing dependencies, missing Electron setup, occupied dev port, and early startup exit show a user-visible Windows popup instead of failing silently.",
+        "Launcher stdout, stderr, Electron preparation, and stop command logs are written under .cache for troubleshooting.",
+        "The existing pnpm dev:live2d, pnpm dev:live2d:fast, and pnpm dev:live2d:stop developer command semantics remain unchanged."
+      ],
+      "qa": {
+        "script": "pnpm launch:windows; pnpm test -- windows-launcher-content; powershell scriptblock parse check for scripts/launch-greyfield-windows.ps1 and scripts/stop-greyfield-windows.ps1"
+      }
+    },
+    {
       "id": "GFN-V1-009",
       "title": "Fake provider acceptance chain",
       "status": "completed",

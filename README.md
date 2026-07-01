@@ -132,6 +132,7 @@ pnpm harness:electron:quick
 pnpm harness:electron:memory-control
 pnpm harness:memory-benchmark
 pnpm harness:frontend-full
+pnpm launch:windows
 pnpm dev:live2d
 pnpm dev:live2d:fast
 pnpm dev:live2d:stop
@@ -144,6 +145,10 @@ pnpm dev:live2d:stop
 `pnpm dev:live2d` starts the visible Electron desktop pet with the bundled Live2D official sample fixture. The default model is Momose Hiyori at `apps/desktop/public/assets/live2d/momose-hiyori/runtime/hiyori_free_t08.model3.json`. Set `GREYFIELD_LIVE2D_FIXTURE` to another `.model3.json` to test a different model without changing source files.
 
 Use `pnpm dev:live2d:fast` for the tight visual loop when main/preload did not change, and `pnpm dev:live2d:stop` to stop the visible pet through the PID file instead of scanning Windows processes. Use `pnpm harness:pet:quick` for frequent pet-window interaction checks; keep full `pnpm harness:electron` for checkpoint validation.
+
+Windows users who do not want to open a command line can double-click `Launch Greyfield.vbs` from the project root. It starts the same `pnpm dev:live2d` path in a hidden PowerShell window, prepares the Electron binary if needed, writes launcher logs under `.cache`, and shows a Windows popup if pnpm, dependencies, Electron, port `5173`, or early startup fail. Double-click `Stop Greyfield.vbs` to run the existing `pnpm dev:live2d:stop` path without opening a terminal. The first checkout still needs one-time setup with Node.js, pnpm, and `pnpm install`; this is a development launcher, not an installer, auto-updater, startup item, or background service.
+
+Run `pnpm launch:windows` after editing launcher templates to regenerate `Launch Greyfield.vbs`, `Stop Greyfield.vbs`, and their PowerShell helpers.
 
 CI is split into layers:
 
