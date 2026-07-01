@@ -603,7 +603,7 @@ async function readSettingsLayout(page: Page): Promise<VisualAcceptanceSummaryIn
       providerPreviewVisible: document.querySelector(".provider-status--preview") !== null,
       memoryExtractionVisible: memorySection !== null,
       memoryExtractionToggleVisible:
-        memorySection?.querySelector('input[aria-label="Remember more details"], input[aria-label="记住更多细节"]') != null,
+        memorySection?.querySelector('input[aria-label="Better memory"], input[aria-label="增强记忆"]') != null,
       memoryExtractionManualCandidateControlsAbsent: !/\b(accept|reject|candidate|pending)\b/i.test(memoryText),
       settingsShellVisible: document.querySelector(".greyfield-shell") !== null,
       viewportWidth: window.innerWidth,

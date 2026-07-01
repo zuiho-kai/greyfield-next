@@ -906,7 +906,7 @@ async function verifyMemoryExtractionSettings(
 }> {
   const memorySection = settingsWindow.getByLabel(/^(How memory works|记忆方式)$/, { exact: true });
   await memorySection.waitFor();
-  const toggle = memorySection.getByLabel(/^(Remember more details|记住更多细节)$/);
+  const toggle = memorySection.getByLabel(/^(Better memory|增强记忆)$/);
   await toggle.waitFor();
   await memorySection.locator(".memory-extraction-status--standard", { hasText: /Basic memory on|基础记忆开启/ }).waitFor();
   await assertNoManualMemoryCandidateControls(memorySection);
