@@ -99,6 +99,7 @@ export interface DesktopSettingsState {
   modelScale: number;
   modelX: number;
   modelY: number;
+  windowLayerMode: GreyfieldConfig["window"]["layerMode"];
   speechBubbleEnabled: boolean;
   proactiveMemoryEnabled: boolean;
   settingsLocale: GreyfieldConfig["ui"]["locale"];
@@ -1076,6 +1077,7 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       modelScale: defaultGreyfieldConfig.live2d.scale,
       modelX: defaultGreyfieldConfig.live2d.x,
       modelY: defaultGreyfieldConfig.live2d.y,
+      windowLayerMode: defaultGreyfieldConfig.window.layerMode,
       speechBubbleEnabled: defaultGreyfieldConfig.ui.speechBubbleEnabled,
       proactiveMemoryEnabled: defaultGreyfieldConfig.ui.proactiveMemoryEnabled,
       settingsLocale: defaultGreyfieldConfig.ui.locale,

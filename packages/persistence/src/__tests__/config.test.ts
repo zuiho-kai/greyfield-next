@@ -15,6 +15,7 @@ describe("Greyfield config", () => {
     expect(defaultGreyfieldConfig.voice.speechEnabled).toBe(false);
     expect(defaultGreyfieldConfig.live2d.modelPath).toContain(".model3.json");
     expect(defaultGreyfieldConfig.window.modelPassThrough).toBe(false);
+    expect(defaultGreyfieldConfig.window.layerMode).toBe("follow-click");
     expect(defaultGreyfieldConfig.ui.speechBubbleEnabled).toBe(true);
     expect(defaultGreyfieldConfig.ui.proactiveMemoryEnabled).toBe(true);
     expect(defaultGreyfieldConfig.ui.locale).toBe("zh-CN");
@@ -27,6 +28,7 @@ describe("Greyfield config", () => {
       provider: { model: "local-test-model" },
       voice: { speechEnabled: true },
       audio: { microphoneId: "mic-2" },
+      window: { layerMode: "controls-front" },
       live2d: { scale: 1.25 },
       ui: { speechBubbleEnabled: false, proactiveMemoryEnabled: false, proactivityLevel: 80 },
       memory: { llmAtomExtractionEnabled: true }
@@ -43,6 +45,7 @@ describe("Greyfield config", () => {
       apiKey: ""
     });
     expect(config.audio.microphoneId).toBe("mic-2");
+    expect(config.window.layerMode).toBe("controls-front");
     expect(config.voice).toMatchObject({
       id: "FunAudioLLM/CosyVoice2-0.5B:anna",
       volume: 0.85,

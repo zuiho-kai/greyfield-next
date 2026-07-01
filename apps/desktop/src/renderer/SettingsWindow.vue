@@ -477,6 +477,20 @@
             </label>
           </div>
           <label class="settings-slider-row">
+            <span>{{ t("field.windowLayerMode") }}</span>
+            <div class="settings-slider-row__control">
+              <select
+                :value="state.settings.windowLayerMode"
+                :aria-label="t('field.windowLayerMode')"
+                @change="$emit('update-setting', 'windowLayerMode', valueFrom($event))"
+              >
+                <option value="follow-click">{{ t("windowLayerMode.followClick") }}</option>
+                <option value="controls-front">{{ t("windowLayerMode.controlsFront") }}</option>
+                <option value="pet-front">{{ t("windowLayerMode.petFront") }}</option>
+              </select>
+            </div>
+          </label>
+          <label class="settings-slider-row">
             <span>{{ t("field.proactivity") }}</span>
             <div class="settings-slider-row__control">
               <input

@@ -189,6 +189,7 @@ if (typeof window !== "undefined") {
       modelScale: config.live2d.scale,
       modelX: config.live2d.x,
       modelY: config.live2d.y,
+      windowLayerMode: config.window.layerMode,
       speechBubbleEnabled: config.ui.speechBubbleEnabled,
       proactiveMemoryEnabled: config.ui.proactiveMemoryEnabled,
       settingsLocale: config.ui.locale,

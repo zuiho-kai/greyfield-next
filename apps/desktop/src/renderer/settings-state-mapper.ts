@@ -25,6 +25,7 @@ export function settingsFromConfig(config: RendererGreyfieldConfig | GreyfieldCo
     modelScale: config.live2d.scale,
     modelX: config.live2d.x,
     modelY: config.live2d.y,
+    windowLayerMode: config.window.layerMode,
     speechBubbleEnabled: config.ui.speechBubbleEnabled,
     proactiveMemoryEnabled: config.ui.proactiveMemoryEnabled,
     settingsLocale: config.ui.locale,
@@ -56,6 +57,10 @@ export function configFromSettings(settings: DesktopSettingsState): GreyfieldCon
     audio: {
       ...defaultGreyfieldConfig.audio,
       microphoneId: settings.microphoneId
+    },
+    window: {
+      ...defaultGreyfieldConfig.window,
+      layerMode: settings.windowLayerMode
     },
     live2d: {
       ...defaultGreyfieldConfig.live2d,
@@ -132,6 +137,9 @@ export function settingsPatchToConfigPatch(patch: DesktopSettingsPatch): Greyfie
   }
   if (patch.characterFile !== undefined) {
     configPatch.characterFile = patch.characterFile;
+  }
+  if (patch.windowLayerMode !== undefined) {
+    configPatch.window = { ...configPatch.window, layerMode: patch.windowLayerMode };
   }
   if (patch.speechBubbleEnabled !== undefined) {
     configPatch.ui = { ...configPatch.ui, speechBubbleEnabled: patch.speechBubbleEnabled };
