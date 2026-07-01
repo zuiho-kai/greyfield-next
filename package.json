@@ -43,6 +43,7 @@
     "harness:frontend-heavy": "tsx packages/dev-harness/src/frontend-full-check.ts --profile heavy",
     "harness:frontend-full": "tsx packages/dev-harness/src/frontend-full-check.ts",
     "harness:pet:quick": "tsx packages/dev-harness/src/electron-check.ts --quick",
+    "launch:windows": "node scripts/create-windows-launchers.mjs",
     "dev:live2d": "node apps/desktop/scripts/dev-live2d-electron.mjs",
     "dev:live2d:fast": "node apps/desktop/scripts/dev-live2d-electron.mjs --skip-build",
     "dev:live2d:rebuild": "node apps/desktop/scripts/dev-live2d-electron.mjs --force-build",
