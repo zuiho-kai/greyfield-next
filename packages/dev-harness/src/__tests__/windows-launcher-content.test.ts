@@ -9,6 +9,10 @@ async function loadLauncherModule(): Promise<{
   return import(pathToFileURL(join(process.cwd(), "scripts", "windows-launcher-content.mjs")).href);
 }
 
+function normalizeLauncherText(content: string): string {
+  return content.replace(/\r\n/g, "\n");
+}
+
 describe("Windows launcher scripts", () => {
   it("generates double-click VBS launchers that hide command windows and quote paths with spaces", async () => {
     const { buildLauncherFiles } = await loadLauncherModule();
@@ -47,7 +51,13 @@ describe("Windows launcher scripts", () => {
     const { buildLauncherFiles } = await loadLauncherModule();
 
     for (const file of buildLauncherFiles()) {
-      expect(readFileSync(join(process.cwd(), file.relativePath), "utf8")).toBe(file.content);
+      expect(normalizeLauncherText(readFileSync(join(process.cwd(), file.relativePath), "utf8"))).toBe(
+        normalizeLauncherText(file.content)
+      );
     }
+  });
+
+  it("treats CRLF and LF launcher files as the same generated content", () => {
+    expect(normalizeLauncherText("Option Explicit\r\n\r\nDim shell\r\n")).toBe("Option Explicit\n\nDim shell\n");
   });
 });
