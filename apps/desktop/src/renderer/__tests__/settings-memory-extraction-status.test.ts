@@ -10,7 +10,7 @@ describe("describeMemoryExtractionStatus", () => {
     expect(status).toEqual({
       tone: "standard",
       label: "Basic memory on",
-      detail: "Basic memory saves explicit facts from local chat, such as names, dates, and preferences. On later turns, Greyfield searches the memory library for relevant items and inserts the matching text into the prompt context. It does not call an extra memory model."
+      detail: "Basic memory saves explicit facts from local chat, such as names, dates, and preferences. Recall itself does not use a model: before each reply, Greyfield locally scores memory items by cues and keywords, then inserts the matching text into the prompt context."
     });
   });
 
@@ -56,7 +56,7 @@ describe("describeMemoryExtractionStatus", () => {
     expect(status).toEqual({
       tone: "ready",
       label: "Ready to remember more detail",
-      detail: "Enhanced memory adds one step before saving: Greyfield calls the configured memory model to extract subtler long-term details such as relationships, promises, scenes, and opinions. Recall is still controlled by the memory library and inserted into later prompt context; this mode costs API tokens."
+      detail: "Enhanced memory is not batched by N turns. After each user message, Greyfield tries to call the configured Memory model to extract subtler long-term details; obvious non-memory noise can be skipped locally. Recall still does not use a model: local scoring selects memory text, then the Chat model reads it in the next prompt. API tokens are spent during extraction, not recall."
     });
   });
 
@@ -114,7 +114,7 @@ describe("describeMemoryExtractionStatus", () => {
     expect(status).toEqual({
       tone: "success",
       label: "Remembered more detail",
-      detail: "The last message also used the chat provider to notice richer details. Basic local memory stayed available."
+      detail: "The last message also used the configured Memory model to notice richer details. Basic local memory stayed available."
     });
   });
 
