@@ -40,6 +40,8 @@ describe("V1 visual acceptance summary", () => {
       },
       settings: {
         providerPreviewVisible: true,
+        providerPreviewInViewport: true,
+        taskModelSlotsVisible: true,
         memoryExtractionVisible: true,
         memoryExtractionToggleVisible: true,
         memoryExtractionManualCandidateControlsAbsent: true,
@@ -80,7 +82,7 @@ describe("V1 visual acceptance summary", () => {
     expect(summary.visualReviewRequired.join("\n")).toContain("pet-initial.png");
     expect(summary.visualReviewRequired.join("\n")).toContain("controls-initial.png");
     expect(summary.visualReviewRequired.join("\n")).toContain("controls-active-state.png");
-    expect(summary.visualReviewRequired.join("\n")).toContain("settings-provider-preview.png");
+    expect(summary.visualReviewRequired.join("\n")).toContain("task model slots");
     expect(summary.visualReviewRequired.join("\n")).toContain("settings-memory-extraction.png");
     expect(summary.visualReviewRequired.join("\n")).toContain("settings-window-controls.png");
   });

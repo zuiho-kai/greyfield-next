@@ -13,6 +13,7 @@ export type SettingsI18nKey =
   | "nav.voice"
   | "nav.window"
   | "nav.persona"
+  | "nav.provider"
   | "nav.memory"
   | "nav.chat"
   | "app.status"
@@ -310,6 +311,7 @@ const enUS: Record<SettingsI18nKey, string> = {
   "nav.voice": "Voice",
   "nav.window": "Window",
   "nav.persona": "Persona",
+  "nav.provider": "Provider",
   "nav.memory": "Memory",
   "nav.chat": "Chat",
   "app.status": "Status",
@@ -608,6 +610,7 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "nav.voice": "语音",
   "nav.window": "窗口",
   "nav.persona": "人格",
+  "nav.provider": "模型服务",
   "nav.memory": "记忆",
   "nav.chat": "聊天",
   "app.status": "状态",

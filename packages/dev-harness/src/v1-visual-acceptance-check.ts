@@ -51,6 +51,8 @@ type VisualAcceptanceSummaryInput = {
   };
   settings: {
     providerPreviewVisible: boolean;
+    providerPreviewInViewport: boolean;
+    taskModelSlotsVisible: boolean;
     memoryExtractionVisible: boolean;
     memoryExtractionToggleVisible: boolean;
     memoryExtractionManualCandidateControlsAbsent: boolean;
@@ -81,7 +83,7 @@ export function buildV1VisualAcceptanceSummary(input: VisualAcceptanceSummaryInp
       "Open controls-active-state.png and confirm clicked controls keep visible icons instead of white-on-white blocks.",
       "Open pet-after-chat.png and confirm the speech bubble reads like a short subtitle and does not cover the model.",
       "Open chat-after-reply.png and confirm the full assistant reply stays in the Chat window.",
-      "Open settings-provider-preview.png and confirm Settings reads like a product surface, not a debug console.",
+      "Open settings-provider-preview.png and confirm the Provider / model service section and task model slots are visible.",
       "Open settings-memory-extraction.png and confirm Better memory is a normal toggle/status section without Accept/Reject candidate review controls.",
       "Open settings-window-controls.png and confirm Window scale/position controls are readable and not collapsed."
     ]
@@ -221,6 +223,15 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
       ...narrowSettingsLayout,
       narrowNoHorizontalOverflow: narrowSettingsLayout.noHorizontalOverflow
     };
+    await scrollSettingsProviderPreviewIntoView(settingsWindow);
+    const providerPreviewEvidence = await readProviderPreviewEvidence(settingsWindow);
+    if (
+      !providerPreviewEvidence.providerPreviewVisible ||
+      !providerPreviewEvidence.providerPreviewInViewport ||
+      !providerPreviewEvidence.taskModelSlotsVisible
+    ) {
+      throw new Error(`Settings provider preview is not visible in the artifact target: ${JSON.stringify(providerPreviewEvidence)}`);
+    }
     artifacts.push(
       await screenshot(settingsWindow, artifactDir, "settings-provider-preview.png", "Settings provider preview state.")
     );
@@ -250,7 +261,8 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
         bubbleText: bubbleText?.trim() ?? ""
       },
       settings: {
-        ...finalSettingsLayout
+        ...finalSettingsLayout,
+        ...providerPreviewEvidence
       },
       artifacts
     });
@@ -601,6 +613,8 @@ async function readSettingsLayout(page: Page): Promise<VisualAcceptanceSummaryIn
       });
     return {
       providerPreviewVisible: document.querySelector(".provider-status--preview") !== null,
+      providerPreviewInViewport: false,
+      taskModelSlotsVisible: document.querySelector('[data-task-model-slot="chat"]') !== null,
       memoryExtractionVisible: memorySection !== null,
       memoryExtractionToggleVisible:
         memorySection?.querySelector('input[aria-label="Better memory"], input[aria-label="增强记忆"]') != null,
@@ -612,6 +626,43 @@ async function readSettingsLayout(page: Page): Promise<VisualAcceptanceSummaryIn
       narrowNoHorizontalOverflow: scrollWidth <= window.innerWidth,
       windowControlsUsable
     };
+  });
+}
+
+async function scrollSettingsProviderPreviewIntoView(page: Page): Promise<void> {
+  await page.locator('[data-settings-section="provider"]').evaluate((element) => {
+    element.scrollIntoView({ block: "start" });
+  });
+  await page.locator('[data-task-model-slot="chat"]').waitFor();
+  await page.locator(".provider-status--preview", { hasText: /Fake provider is active|本地假服务/ }).waitFor();
+  await page.waitForTimeout(100);
+}
+
+async function readProviderPreviewEvidence(
+  page: Page
+): Promise<Pick<VisualAcceptanceSummaryInput["settings"], "providerPreviewVisible" | "providerPreviewInViewport" | "taskModelSlotsVisible">> {
+  return page.evaluate(() => {
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+    const providerSection = document.querySelector<HTMLElement>('[data-settings-section="provider"]');
+    const providerStatus = document.querySelector<HTMLElement>(".provider-status--preview");
+    const taskModelSlots = document.querySelector<HTMLElement>(".task-model-slots");
+    const chatTaskModelSlot = document.querySelector<HTMLElement>('[data-task-model-slot="chat"]');
+    return {
+      providerPreviewVisible: providerStatus !== null,
+      providerPreviewInViewport: isInViewport(providerSection, viewportWidth, viewportHeight),
+      taskModelSlotsVisible:
+        isInViewport(taskModelSlots, viewportWidth, viewportHeight) &&
+        isInViewport(chatTaskModelSlot, viewportWidth, viewportHeight)
+    };
+
+    function isInViewport(element: HTMLElement | null, width: number, height: number): boolean {
+      if (!element) {
+        return false;
+      }
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.right > 0 && rect.top < height && rect.left < width;
+    }
   });
 }
 

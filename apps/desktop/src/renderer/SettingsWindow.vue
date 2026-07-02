@@ -1179,7 +1179,7 @@ type MemorySourceSelection = { kind: "summary"; id: string } | { kind: "atom"; i
 const selectedSource = ref<MemorySourceSelection | null>(null);
 const controlSurfaceRef = ref<HTMLElement | null>(null);
 const activeSectionId = ref<SettingsSectionId>("model");
-const sectionRefs = new Map<SettingsSectionId | "provider", HTMLElement>();
+const sectionRefs = new Map<SettingsSectionId, HTMLElement>();
 const selectedSourceDrilldown = computed(() => {
   if (!selectedSource.value) {
     return null;
@@ -1332,12 +1332,12 @@ function memoryToggleActionLabel(disabled: boolean): string {
   return disabled ? t("memory.action.enable") : t("memory.action.disable");
 }
 
-function sectionAriaLabel(id: SettingsSectionId | "provider"): string {
+function sectionAriaLabel(id: SettingsSectionId): string {
   void id;
   return locale.value === "zh-CN" ? "设置分区" : "Settings section";
 }
 
-function setSectionRef(id: SettingsSectionId | "provider"): (element: Element | null) => void {
+function setSectionRef(id: SettingsSectionId): (element: Element | null) => void {
   return (element) => {
     if (element instanceof HTMLElement) {
       sectionRefs.set(id, element);
