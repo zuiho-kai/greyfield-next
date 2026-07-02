@@ -14,6 +14,10 @@ export function settingsFromConfig(config: RendererGreyfieldConfig | GreyfieldCo
     providerHasApiKey: hasApiKey,
     providerModel: config.provider.model,
     providerVisionModel: config.provider.visionModel,
+    providerPlannerModel: config.provider.taskModels.planner,
+    providerUtilityModel: config.provider.taskModels.utility,
+    providerMemoryModel: config.provider.taskModels.memory,
+    providerMultimodalModel: config.provider.taskModels.multimodal,
     providerASRModel: config.provider.asrModel,
     providerTTS: config.provider.tts,
     providerTTSModel: config.provider.ttsModel,
@@ -48,7 +52,17 @@ export function configFromSettings(settings: DesktopSettingsState): GreyfieldCon
       visionModel: settings.providerVisionModel,
       asrModel: settings.providerASRModel,
       tts: settings.providerTTS,
-      ttsModel: settings.providerTTSModel
+      ttsModel: settings.providerTTSModel,
+      taskModels: {
+        chat: settings.providerModel,
+        planner: settings.providerPlannerModel,
+        utility: settings.providerUtilityModel,
+        memory: settings.providerMemoryModel,
+        vision: settings.providerVisionModel,
+        multimodal: settings.providerMultimodalModel,
+        voiceAsr: settings.providerASRModel,
+        voiceTts: settings.providerTTSModel
+      }
     },
     voice: {
       ...defaultGreyfieldConfig.voice,
@@ -89,10 +103,42 @@ export function configFromSettings(settings: DesktopSettingsState): GreyfieldCon
 export function settingsPatchToConfigPatch(patch: DesktopSettingsPatch): GreyfieldConfigPatch {
   const configPatch: GreyfieldConfigPatch = {};
   if (patch.providerModel !== undefined) {
-    configPatch.provider = { ...configPatch.provider, model: patch.providerModel };
+    configPatch.provider = {
+      ...configPatch.provider,
+      model: patch.providerModel,
+      taskModels: { ...configPatch.provider?.taskModels, chat: patch.providerModel }
+    };
   }
   if (patch.providerVisionModel !== undefined) {
-    configPatch.provider = { ...configPatch.provider, visionModel: patch.providerVisionModel };
+    configPatch.provider = {
+      ...configPatch.provider,
+      visionModel: patch.providerVisionModel,
+      taskModels: { ...configPatch.provider?.taskModels, vision: patch.providerVisionModel }
+    };
+  }
+  if (patch.providerPlannerModel !== undefined) {
+    configPatch.provider = {
+      ...configPatch.provider,
+      taskModels: { ...configPatch.provider?.taskModels, planner: patch.providerPlannerModel }
+    };
+  }
+  if (patch.providerUtilityModel !== undefined) {
+    configPatch.provider = {
+      ...configPatch.provider,
+      taskModels: { ...configPatch.provider?.taskModels, utility: patch.providerUtilityModel }
+    };
+  }
+  if (patch.providerMemoryModel !== undefined) {
+    configPatch.provider = {
+      ...configPatch.provider,
+      taskModels: { ...configPatch.provider?.taskModels, memory: patch.providerMemoryModel }
+    };
+  }
+  if (patch.providerMultimodalModel !== undefined) {
+    configPatch.provider = {
+      ...configPatch.provider,
+      taskModels: { ...configPatch.provider?.taskModels, multimodal: patch.providerMultimodalModel }
+    };
   }
   if (patch.providerTTS !== undefined) {
     configPatch.provider = { ...configPatch.provider, tts: patch.providerTTS };
@@ -101,10 +147,18 @@ export function settingsPatchToConfigPatch(patch: DesktopSettingsPatch): Greyfie
     configPatch.provider = { ...configPatch.provider, asr: patch.providerASR };
   }
   if (patch.providerTTSModel !== undefined) {
-    configPatch.provider = { ...configPatch.provider, ttsModel: patch.providerTTSModel };
+    configPatch.provider = {
+      ...configPatch.provider,
+      ttsModel: patch.providerTTSModel,
+      taskModels: { ...configPatch.provider?.taskModels, voiceTts: patch.providerTTSModel }
+    };
   }
   if (patch.providerASRModel !== undefined) {
-    configPatch.provider = { ...configPatch.provider, asrModel: patch.providerASRModel };
+    configPatch.provider = {
+      ...configPatch.provider,
+      asrModel: patch.providerASRModel,
+      taskModels: { ...configPatch.provider?.taskModels, voiceAsr: patch.providerASRModel }
+    };
   }
   if (patch.providerLLM !== undefined) {
     configPatch.provider = { ...configPatch.provider, llm: patch.providerLLM };

@@ -88,6 +88,10 @@ export interface DesktopSettingsState {
   providerHasApiKey: boolean;
   providerModel: string;
   providerVisionModel: string;
+  providerPlannerModel: string;
+  providerUtilityModel: string;
+  providerMemoryModel: string;
+  providerMultimodalModel: string;
   providerASRModel: string;
   providerTTS: string;
   providerTTSModel: string;
@@ -1067,6 +1071,10 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       providerHasApiKey: defaultGreyfieldConfig.provider.apiKey.length > 0,
       providerModel: defaultGreyfieldConfig.provider.model,
       providerVisionModel: defaultGreyfieldConfig.provider.visionModel,
+      providerPlannerModel: defaultGreyfieldConfig.provider.taskModels.planner,
+      providerUtilityModel: defaultGreyfieldConfig.provider.taskModels.utility,
+      providerMemoryModel: defaultGreyfieldConfig.provider.taskModels.memory,
+      providerMultimodalModel: defaultGreyfieldConfig.provider.taskModels.multimodal,
       providerASRModel: defaultGreyfieldConfig.provider.asrModel,
       providerTTS: defaultGreyfieldConfig.provider.tts,
       providerTTSModel: defaultGreyfieldConfig.provider.ttsModel,

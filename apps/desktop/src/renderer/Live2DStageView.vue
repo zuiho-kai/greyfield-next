@@ -242,10 +242,36 @@ async function reactToTouch(event: PointerEvent): Promise<void> {
 
 function sampleModelHit(clientX: number, clientY: number): boolean {
   if (!usingFallback.value && renderer.value) {
-    return renderer.value.sampleAlphaAt(clientX, clientY);
+    return renderer.value.sampleAlphaAt(clientX, clientY) || sampleCanvasAlpha(".live2d-stage-canvas", clientX, clientY);
   }
   if (fallbackCanvas.value) {
     return sampleFallbackAlpha(clientX, clientY);
+  }
+  return false;
+}
+
+function sampleCanvasAlpha(selector: string, clientX: number, clientY: number): boolean {
+  const canvases = Array.from(document.querySelectorAll<HTMLCanvasElement>(selector));
+  for (const canvas of canvases) {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0 || clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+      continue;
+    }
+    const x = Math.min(canvas.width - 1, Math.max(0, Math.floor(((clientX - rect.left) / rect.width) * canvas.width)));
+    const y = Math.min(canvas.height - 1, Math.max(0, Math.floor(((clientY - rect.top) / rect.height) * canvas.height)));
+    const context = canvas.getContext("2d");
+    if (context && context.getImageData(x, y, 1, 1).data[3] >= 16) {
+      return true;
+    }
+    const gl = canvas.getContext("webgl2") ?? canvas.getContext("webgl");
+    if (!gl) {
+      continue;
+    }
+    const pixel = new Uint8Array(4);
+    gl.readPixels(x, canvas.height - 1 - y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+    if (pixel[3] >= 16) {
+      return true;
+    }
   }
   return false;
 }

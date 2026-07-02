@@ -59,5 +59,13 @@ describe("describeProviderStatus", () => {
       label: "Ready to test",
       detail: "Provider settings are complete. Run Test LLM before a real chat."
     });
+
+    state.settings.providerVisionModel = "";
+    state.settings.providerMultimodalModel = "mimo-multimodal";
+    expect(describeProviderStatus(state, "en-US")).toEqual({
+      tone: "ready",
+      label: "Ready to test",
+      detail: "Provider settings are complete. Run Test LLM before a real chat."
+    });
   });
 });

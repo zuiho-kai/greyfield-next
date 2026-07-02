@@ -4,6 +4,7 @@ import {
   OpenAICompatibleASRProvider,
   OpenAICompatibleLLMProvider,
   OpenAICompatibleTTSProvider,
+  LLMBackedMemoryAtomExtractor,
   buildProactiveMemoryDisplayMessage,
   buildProactiveMemoryPolicyForLevel,
   type ASRProvider,
@@ -43,7 +44,7 @@ import {
   sourceTurnIdsContainDeletedEvidence
 } from "@greyfield/core-runtime";
 import { createDefaultInteractionProfile, FakeStageDriver } from "@greyfield/stage-live2d";
-import type { GreyfieldConfig } from "@greyfield/persistence/config-schema";
+import { mergeConfig, type GreyfieldConfig } from "@greyfield/persistence/config-schema";
 
 export interface RuntimeServiceOptions {
   fetch?: typeof fetch;
@@ -160,7 +161,7 @@ export class RuntimeService {
   private lastScreenAwarenessProactiveAtMs: number | undefined;
 
   constructor(config: GreyfieldConfig, private readonly options: RuntimeServiceOptions = {}) {
-    this.config = config;
+    this.config = mergeConfig(config);
     this.memoryStore = options.memoryStore ?? new MainFakeMemoryStore();
     this.sessionStore = options.sessionStore ?? new InMemorySessionStore("desktop-main-session");
     this.summarySegmentStore = options.summarySegmentStore;
@@ -174,7 +175,7 @@ export class RuntimeService {
 
   updateConfig(config: GreyfieldConfig): void {
     const previousThreadId = this.threadId;
-    this.config = config;
+    this.config = mergeConfig(config);
     if (this.threadId !== previousThreadId) {
       this.proactiveTriggerState = {};
     }
@@ -423,7 +424,7 @@ export class RuntimeService {
     if (attachments.length === 0) {
       return { displayed: false, reason: "no_screen_context" };
     }
-    if (this.config.provider.visionModel.trim().length === 0) {
+    if (this.resolveVisualTaskModel().length === 0) {
       return { displayed: false, reason: "vision_model_missing" };
     }
     if (this.validateOpenAICompatibleVisionProviderConfig("chatting with screen awareness")) {
@@ -689,6 +690,7 @@ export class RuntimeService {
       memoryAtomStore: this.memoryAtomStore,
       deletedMemoryEvidenceStore: this.deletedMemoryEvidenceStore,
       memoryAtomExtractionMode: atomExtractionPolicy.mode,
+      ...(atomExtractionPolicy.mode === "hybrid" ? { memoryAtomExtractor: this.createMemoryAtomExtractor() } : {}),
       ...(atomExtractionPolicy.unavailableReason
         ? { memoryAtomExtractionUnavailableReason: atomExtractionPolicy.unavailableReason }
         : {}),
@@ -714,11 +716,18 @@ export class RuntimeService {
     if (!this.config.memory.llmAtomExtractionEnabled) {
       return { mode: "deterministic", unavailableReason: "disabled" };
     }
-    const providerConfigError = this.validateOpenAICompatibleProviderConfig("chatting");
+    const providerConfigError = this.validateOpenAICompatibleTaskModelConfig("memory", "memory extraction");
     if (this.config.provider.llm !== "openai-compatible" || providerConfigError) {
       return { mode: "deterministic", unavailableReason: "provider-unavailable" };
     }
     return { mode: "hybrid" };
+  }
+
+  private createMemoryAtomExtractor(): LLMBackedMemoryAtomExtractor {
+    return new LLMBackedMemoryAtomExtractor({
+      llm: this.createTaskLLMProvider("memory"),
+      mode: "hybrid"
+    });
   }
 
   private async emitRuntimeEvent(event: RuntimeOutputEvent, emit: RuntimeEventHandler): Promise<void> {
@@ -1029,15 +1038,22 @@ export class RuntimeService {
   }
 
   private createLLMProvider(): LLMProvider {
+    return this.createTaskLLMProvider("chat");
+  }
+
+  private createTaskLLMProvider(slot: "chat" | "planner" | "utility" | "memory"): LLMProvider {
     if (this.config.provider.llm === "openai-compatible") {
-      const providerConfigError = this.validateOpenAICompatibleProviderConfig("chatting");
+      const providerConfigError =
+        slot === "chat"
+          ? this.validateOpenAICompatibleProviderConfig("chatting")
+          : this.validateOpenAICompatibleTaskModelConfig(slot, "chatting");
       if (providerConfigError) {
         throw new Error(providerConfigError);
       }
       return new OpenAICompatibleLLMProvider({
         baseUrl: this.config.provider.baseUrl,
         apiKey: this.config.provider.apiKey,
-        model: this.config.provider.model,
+        model: this.resolveTaskModel(slot),
         fetch: this.options.fetch,
         timeoutMs: this.options.llmTimeoutMs
       });
@@ -1046,7 +1062,8 @@ export class RuntimeService {
   }
 
   private createVisionLLMProvider(): LLMProvider | undefined {
-    if (this.config.provider.visionModel.trim().length === 0) {
+    const model = this.resolveVisualTaskModel();
+    if (model.length === 0) {
       return undefined;
     }
     if (this.config.provider.llm === "openai-compatible") {
@@ -1057,7 +1074,7 @@ export class RuntimeService {
       return new OpenAICompatibleLLMProvider({
         baseUrl: this.config.provider.baseUrl,
         apiKey: this.config.provider.apiKey,
-        model: this.config.provider.visionModel,
+        model,
         supportsVision: true,
         fetch: this.options.fetch,
         timeoutMs: this.options.llmTimeoutMs
@@ -1075,7 +1092,7 @@ export class RuntimeService {
       return new OpenAICompatibleASRProvider({
         baseUrl: this.config.provider.baseUrl,
         apiKey: this.config.provider.apiKey,
-        model: this.config.provider.asrModel,
+        model: this.resolveTaskModel("voiceAsr"),
         fetch: this.options.fetch,
         timeoutMs: this.options.asrTimeoutMs
       });
@@ -1088,7 +1105,7 @@ export class RuntimeService {
       return new OpenAICompatibleTTSProvider({
         baseUrl: this.config.provider.baseUrl,
         apiKey: this.config.provider.apiKey,
-        model: this.config.provider.ttsModel,
+        model: this.resolveTaskModel("voiceTts"),
         fetch: this.options.fetch,
         timeoutMs: this.options.ttsTimeoutMs
       });
@@ -1106,7 +1123,7 @@ export class RuntimeService {
     if (this.config.provider.apiKey.trim().length === 0) {
       return `OpenAI-compatible provider needs an API key before ${action}.`;
     }
-    if (this.config.provider.model.trim().length === 0) {
+    if (this.resolveTaskModel("chat").length === 0) {
       return `OpenAI-compatible provider needs a model before ${action}.`;
     }
     return "";
@@ -1122,8 +1139,27 @@ export class RuntimeService {
     if (this.config.provider.apiKey.trim().length === 0) {
       return `OpenAI-compatible Vision model needs an API key before ${action}.`;
     }
-    if (this.config.provider.visionModel.trim().length === 0) {
+    if (this.resolveVisualTaskModel().length === 0) {
       return `OpenAI-compatible Vision model needs a model before ${action}.`;
+    }
+    return "";
+  }
+
+  private validateOpenAICompatibleTaskModelConfig(
+    slot: "planner" | "utility" | "memory",
+    action: "chatting" | "memory extraction"
+  ): string {
+    if (this.config.provider.llm !== "openai-compatible") {
+      return "";
+    }
+    if (this.config.provider.baseUrl.trim().length === 0) {
+      return `OpenAI-compatible ${slot} model needs a Base URL before ${action}.`;
+    }
+    if (this.config.provider.apiKey.trim().length === 0) {
+      return `OpenAI-compatible ${slot} model needs an API key before ${action}.`;
+    }
+    if (this.resolveTaskModel(slot).length === 0) {
+      return `OpenAI-compatible ${slot} model needs a model before ${action}.`;
     }
     return "";
   }
@@ -1138,7 +1174,7 @@ export class RuntimeService {
     if (this.config.provider.apiKey.trim().length === 0) {
       return "OpenAI-compatible TTS needs an API key before testing voice.";
     }
-    if (this.config.provider.ttsModel.trim().length === 0) {
+    if (this.resolveTaskModel("voiceTts").length === 0) {
       return "OpenAI-compatible TTS needs a TTS model before testing voice.";
     }
     if (this.config.voice.id.trim().length === 0) {
@@ -1157,10 +1193,18 @@ export class RuntimeService {
     if (this.config.provider.apiKey.trim().length === 0) {
       return `OpenAI-compatible ASR needs an API key before ${action}.`;
     }
-    if (this.config.provider.asrModel.trim().length === 0) {
+    if (this.resolveTaskModel("voiceAsr").length === 0) {
       return `OpenAI-compatible ASR needs an ASR model before ${action}.`;
     }
     return "";
+  }
+
+  private resolveTaskModel(slot: keyof GreyfieldConfig["provider"]["taskModels"]): string {
+    return this.config.provider.taskModels[slot].trim();
+  }
+
+  private resolveVisualTaskModel(): string {
+    return this.resolveTaskModel("vision") || this.resolveTaskModel("multimodal");
   }
 }
 

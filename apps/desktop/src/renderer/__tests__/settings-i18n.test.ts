@@ -7,6 +7,8 @@ describe("settings i18n", () => {
     expect(settingsT("zh-CN", "section.memoryExtraction")).toBe("记忆方式");
     expect(settingsT("zh-CN", "field.windowLayerMode")).toBe("画布层级");
     expect(settingsT("zh-CN", "field.proactivity")).toBe("主动程度");
+    expect(settingsT("zh-CN", "field.taskModelSlots.detail")).toContain("按任务路径分配模型");
+    expect(settingsT("en-US", "field.taskModelSlots.detail")).toContain("Assign a model per task path");
     expect(settingsT("zh-CN", "status.proactivity", { level: 80 })).toBe("主动 80/100");
     expect(settingsT("zh-CN", "provider.preview.label")).toBe("预览模式");
     expect(settingsT("zh-CN", "windowLayerMode.followClick")).toBe("按点击决定（默认）");

@@ -382,6 +382,60 @@ describe("RuntimeService", () => {
     expect(JSON.stringify(bodies[1]?.messages)).toContain("image_url");
   });
 
+  it("routes visual input to the Multimodal slot when the Vision slot is empty", async () => {
+    const fetch = vi.fn(async () => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"远程"}}]}\n\n'));
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        }
+      });
+      return new Response(body, { status: 200 });
+    });
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "secret",
+          model: "chat-model",
+          taskModels: {
+            ...defaultGreyfieldConfig.provider.taskModels,
+            chat: "chat-model",
+            vision: "",
+            multimodal: "multimodal-model"
+          }
+        }
+      },
+      { fetch }
+    );
+
+    await service.handle(
+      {
+        type: "text.input",
+        text: "看一下",
+        attachments: [
+          {
+            id: "frame-1",
+            source: "observation-frame",
+            dataUrl: `data:image/png;base64,${Buffer.from("screen").toString("base64")}`,
+            mimeType: "image/png",
+            createdAt: "2026-06-30T00:00:00.000Z"
+          }
+        ]
+      },
+      () => undefined
+    );
+
+    const body = readFetchJsonBodies(fetch)[0] as { model: string; messages: unknown[] };
+    expect(body.model).toBe("multimodal-model");
+    expect(JSON.stringify(body.messages)).toContain("image_url");
+  });
+
   it("does not call the chat provider for manual visual input when the Vision model is missing", async () => {
     const fetch = vi.fn();
     const service = new RuntimeService(
@@ -438,7 +492,12 @@ describe("RuntimeService", () => {
           llm: "openai-compatible",
           baseUrl: "https://llm.example/v1",
           apiKey: "secret",
-          model: "remote-model"
+          model: "chat-model",
+          taskModels: {
+            ...defaultGreyfieldConfig.provider.taskModels,
+            chat: "chat-model",
+            memory: "memory-model"
+          }
         },
         memory: {
           ...defaultGreyfieldConfig.memory,
@@ -454,6 +513,8 @@ describe("RuntimeService", () => {
     });
 
     expect(fetch).toHaveBeenCalledTimes(2);
+    const requestModels = readFetchJsonBodies(fetch) as Array<{ model: string }>;
+    expect(requestModels.map((body) => body.model)).toEqual(["chat-model", "memory-model"]);
     expect(getExtractionStatus(events)).toMatchObject({
       status: "better",
       reason: "provider-used",
@@ -2486,6 +2547,11 @@ function createMemoryExtractionFetch(mode: "success" | "provider-failure" | "inv
     }
     return createSseResponse("Stored.");
   }) as typeof fetch;
+}
+
+function readFetchJsonBodies(fetchMock: unknown): unknown[] {
+  const calls = (fetchMock as { mock?: { calls: Array<[unknown, RequestInit?]> } }).mock?.calls ?? [];
+  return calls.map((call) => JSON.parse(String(call[1]?.body)));
 }
 
 function createSseResponse(text: string): Response {

@@ -1,5 +1,16 @@
 export type GreyfieldLocale = "en-US" | "zh-CN";
 export type GreyfieldWindowLayerMode = "follow-click" | "controls-front" | "pet-front";
+export type GreyfieldTaskModelSlot =
+  | "chat"
+  | "planner"
+  | "utility"
+  | "memory"
+  | "vision"
+  | "multimodal"
+  | "voiceAsr"
+  | "voiceTts";
+
+export type GreyfieldTaskModelConfig = Record<GreyfieldTaskModelSlot, string>;
 
 export function normalizeGreyfieldLocale(locale: unknown): GreyfieldLocale {
   return locale === "en-US" ? "en-US" : "zh-CN";
@@ -14,6 +25,7 @@ export interface GreyfieldConfig {
     visionModel: string;
     asrModel: string;
     ttsModel: string;
+    taskModels: GreyfieldTaskModelConfig;
     baseUrl: string;
     apiKey: string;
   };
@@ -57,10 +69,12 @@ export interface GreyfieldConfig {
   characterFile: string;
 }
 
+type GreyfieldConfigValuePatch<Value> = Value extends object
+  ? { [Key in keyof Value]?: GreyfieldConfigValuePatch<Value[Key]> }
+  : Value;
+
 export type GreyfieldConfigPatch = {
-  [Key in keyof GreyfieldConfig]?: GreyfieldConfig[Key] extends object
-    ? Partial<GreyfieldConfig[Key]>
-    : GreyfieldConfig[Key];
+  [Key in keyof GreyfieldConfig]?: GreyfieldConfigValuePatch<GreyfieldConfig[Key]>;
 };
 
 export const defaultGreyfieldConfig: GreyfieldConfig = {
@@ -72,6 +86,16 @@ export const defaultGreyfieldConfig: GreyfieldConfig = {
     visionModel: "",
     asrModel: "whisper-1",
     ttsModel: "FunAudioLLM/CosyVoice2-0.5B",
+    taskModels: {
+      chat: "greyfield-fake-v1",
+      planner: "greyfield-fake-v1",
+      utility: "greyfield-fake-v1",
+      memory: "greyfield-fake-v1",
+      vision: "",
+      multimodal: "",
+      voiceAsr: "whisper-1",
+      voiceTts: "FunAudioLLM/CosyVoice2-0.5B"
+    },
     baseUrl: "https://api.openai.com/v1",
     apiKey: ""
   },
@@ -115,10 +139,11 @@ export const defaultGreyfieldConfig: GreyfieldConfig = {
 
 export function mergeConfig(partial: GreyfieldConfigPatch): GreyfieldConfig {
   const ui = { ...defaultGreyfieldConfig.ui, ...partial.ui };
+  const provider = normalizeProviderConfig(partial.provider);
   return {
     ...defaultGreyfieldConfig,
     ...partial,
-    provider: { ...defaultGreyfieldConfig.provider, ...partial.provider },
+    provider,
     voice: { ...defaultGreyfieldConfig.voice, ...partial.voice },
     audio: { ...defaultGreyfieldConfig.audio, ...partial.audio },
     window: { ...defaultGreyfieldConfig.window, ...partial.window },
@@ -131,6 +156,91 @@ export function mergeConfig(partial: GreyfieldConfigPatch): GreyfieldConfig {
     },
     memory: { ...defaultGreyfieldConfig.memory, ...partial.memory }
   };
+}
+
+function normalizeProviderConfig(partial: GreyfieldConfigPatch["provider"] | undefined): GreyfieldConfig["provider"] {
+  const input = partial ?? {};
+  const taskModels = input.taskModels ?? {};
+  const chatModel = normalizePairedTaskModelSlot({
+    taskModels,
+    slot: "chat",
+    legacyValue: input.model,
+    defaultSlotValue: defaultGreyfieldConfig.provider.taskModels.chat,
+    defaultLegacyValue: defaultGreyfieldConfig.provider.model
+  });
+  const visionModel = normalizePairedTaskModelSlot({
+    taskModels,
+    slot: "vision",
+    legacyValue: input.visionModel,
+    defaultSlotValue: defaultGreyfieldConfig.provider.taskModels.vision,
+    defaultLegacyValue: defaultGreyfieldConfig.provider.visionModel
+  });
+  const voiceAsrModel = normalizePairedTaskModelSlot({
+    taskModels,
+    slot: "voiceAsr",
+    legacyValue: input.asrModel,
+    defaultSlotValue: defaultGreyfieldConfig.provider.taskModels.voiceAsr,
+    defaultLegacyValue: defaultGreyfieldConfig.provider.asrModel
+  });
+  const voiceTtsModel = normalizePairedTaskModelSlot({
+    taskModels,
+    slot: "voiceTts",
+    legacyValue: input.ttsModel,
+    defaultSlotValue: defaultGreyfieldConfig.provider.taskModels.voiceTts,
+    defaultLegacyValue: defaultGreyfieldConfig.provider.ttsModel
+  });
+  const normalizedTaskModels: GreyfieldTaskModelConfig = {
+    chat: chatModel,
+    planner: normalizeModelSlot(taskModels.planner, chatModel),
+    utility: normalizeModelSlot(taskModels.utility, chatModel),
+    memory: normalizeModelSlot(taskModels.memory, chatModel),
+    vision: visionModel,
+    multimodal: normalizeModelSlot(taskModels.multimodal, visionModel),
+    voiceAsr: voiceAsrModel,
+    voiceTts: voiceTtsModel
+  };
+  return {
+    ...defaultGreyfieldConfig.provider,
+    ...input,
+    model: normalizedTaskModels.chat,
+    visionModel: normalizedTaskModels.vision,
+    asrModel: normalizedTaskModels.voiceAsr,
+    ttsModel: normalizedTaskModels.voiceTts,
+    taskModels: normalizedTaskModels
+  };
+}
+
+function normalizeModelSlot(value: string | undefined, fallback: string): string {
+  return typeof value === "string" ? value.trim() : fallback;
+}
+
+function normalizePairedTaskModelSlot(input: {
+  taskModels: Partial<GreyfieldTaskModelConfig>;
+  slot: GreyfieldTaskModelSlot;
+  legacyValue: string | undefined;
+  defaultSlotValue: string;
+  defaultLegacyValue: string;
+}): string {
+  const slotValue = taskModelSlotIsPresent(input.taskModels, input.slot) ? input.taskModels[input.slot] : undefined;
+  const normalizedSlotValue = typeof slotValue === "string" ? slotValue.trim() : undefined;
+  if (normalizedSlotValue !== undefined && normalizedSlotValue !== input.defaultSlotValue) {
+    return normalizedSlotValue;
+  }
+  if (modelFieldOverridesDefault(input.legacyValue, input.defaultLegacyValue)) {
+    return input.legacyValue?.trim() ?? "";
+  }
+  return normalizedSlotValue ?? input.defaultSlotValue;
+}
+
+function taskModelSlotIsPresent(
+  taskModels: Partial<GreyfieldTaskModelConfig>,
+  slot: GreyfieldTaskModelSlot
+): boolean {
+  return Object.prototype.hasOwnProperty.call(taskModels, slot);
+}
+
+function modelFieldOverridesDefault(value: string | undefined, defaultValue: string): boolean {
+  return value !== undefined && value.trim() !== defaultValue;
 }
 
 function normalizeProactivityLevel(value: number): number {

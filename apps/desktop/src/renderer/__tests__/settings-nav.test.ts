@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveActiveSettingsSection } from "../settings-nav";
+import { resolveActiveSettingsSection, settingsNavSectionIds } from "../settings-nav";
 
 describe("settings nav", () => {
   it("chooses the section closest to the control surface top", () => {
@@ -13,6 +13,20 @@ describe("settings nav", () => {
         40
       )
     ).toBe("voice");
+  });
+
+  it("includes the provider model-service section in navigation", () => {
+    expect(settingsNavSectionIds).toContain("provider");
+    expect(
+      resolveActiveSettingsSection(
+        [
+          { id: "persona", top: -180 },
+          { id: "provider", top: 16 },
+          { id: "memory", top: 520 }
+        ],
+        24
+      )
+    ).toBe("provider");
   });
 
   it("returns null before section refs are registered", () => {

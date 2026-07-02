@@ -337,7 +337,7 @@ try {
     throw new Error(`API key input lost the editable draft after masked settings echo: ${apiKeyDraft}`);
   }
   const savedApiKeyConfig = await waitForProviderApiKey(configPath, "greyfield-test-key");
-  await settingsWindow.getByRole("textbox", { name: /^(Model|模型)$/, exact: true }).fill("electron-harness-model");
+  await settingsWindow.getByRole("textbox", { name: /^(Chat reply|聊天回复)$/, exact: true }).fill("electron-harness-model");
   const savedConfig = await waitForSavedModel(configPath, "electron-harness-model");
   const providerSelect = settingsWindow.locator('[data-settings-section="provider"] select').first();
   await providerSelect.selectOption("fake");

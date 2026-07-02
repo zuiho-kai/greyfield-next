@@ -196,23 +196,27 @@
                 @input="$emit('update-setting', 'providerApiKey', valueFrom($event))"
               />
             </label>
-            <label>
-              <span>{{ t("field.model") }}</span>
+          </div>
+          <div class="task-model-slots" :aria-label="t('field.taskModelSlots')">
+            <header class="task-model-slots__header">
+              <strong>{{ t("field.taskModelSlots") }}</strong>
+              <span>{{ t("field.taskModelSlots.detail") }}</span>
+            </header>
+            <label
+              v-for="slot in taskModelSlots"
+              :key="slot.key"
+              class="task-model-slot"
+              :data-task-model-slot="slot.slot"
+            >
+              <span>{{ slot.label }}</span>
               <input
-                :value="state.settings.providerModel"
+                :aria-label="slot.label"
+                :value="slot.value"
                 autocomplete="off"
                 spellcheck="false"
-                @input="$emit('update-setting', 'providerModel', valueFrom($event))"
+                @input="$emit('update-setting', slot.key, valueFrom($event))"
               />
-            </label>
-            <label>
-              <span>{{ t("field.visionModel") }}</span>
-              <input
-                :value="state.settings.providerVisionModel"
-                autocomplete="off"
-                spellcheck="false"
-                @input="$emit('update-setting', 'providerVisionModel', valueFrom($event))"
-              />
+              <small>{{ slot.detail }}</small>
             </label>
           </div>
           <div class="provider-status" :class="`provider-status--${providerStatus.tone}`" role="status">
@@ -959,6 +963,72 @@ const settingsNavItems = computed<Array<{ id: SettingsSectionId; label: string }
   settingsNavSectionIds.map((id) => ({ id, label: t(`nav.${id}` as SettingsI18nKey) }))
 );
 const providerStatus = computed(() => describeProviderStatus(props.state, locale.value));
+const taskModelSlots = computed<
+  Array<{
+    slot: string;
+    key: keyof DesktopSettingsState;
+    label: string;
+    detail: string;
+    value: string;
+  }>
+>(() => [
+  {
+    slot: "chat",
+    key: "providerModel",
+    label: t("taskModel.chat.label"),
+    detail: t("taskModel.chat.detail"),
+    value: props.state.settings.providerModel
+  },
+  {
+    slot: "planner",
+    key: "providerPlannerModel",
+    label: t("taskModel.planner.label"),
+    detail: t("taskModel.planner.detail"),
+    value: props.state.settings.providerPlannerModel
+  },
+  {
+    slot: "utility",
+    key: "providerUtilityModel",
+    label: t("taskModel.utility.label"),
+    detail: t("taskModel.utility.detail"),
+    value: props.state.settings.providerUtilityModel
+  },
+  {
+    slot: "memory",
+    key: "providerMemoryModel",
+    label: t("taskModel.memory.label"),
+    detail: t("taskModel.memory.detail"),
+    value: props.state.settings.providerMemoryModel
+  },
+  {
+    slot: "vision",
+    key: "providerVisionModel",
+    label: t("taskModel.vision.label"),
+    detail: t("taskModel.vision.detail"),
+    value: props.state.settings.providerVisionModel
+  },
+  {
+    slot: "multimodal",
+    key: "providerMultimodalModel",
+    label: t("taskModel.multimodal.label"),
+    detail: t("taskModel.multimodal.detail"),
+    value: props.state.settings.providerMultimodalModel
+  },
+  {
+    slot: "voiceAsr",
+    key: "providerASRModel",
+    label: t("taskModel.voiceAsr.label"),
+    detail: t("taskModel.voiceAsr.detail"),
+    value: props.state.settings.providerASRModel
+  },
+  {
+    slot: "voiceTts",
+    key: "providerTTSModel",
+    label: t("taskModel.voiceTts.label"),
+    detail: t("taskModel.voiceTts.detail"),
+    value: props.state.settings.providerTTSModel
+  }
+]);
 const testLlmAction = computed(() =>
   describeTestLlmAction(
     props.stageStatus,
@@ -1109,7 +1179,7 @@ type MemorySourceSelection = { kind: "summary"; id: string } | { kind: "atom"; i
 const selectedSource = ref<MemorySourceSelection | null>(null);
 const controlSurfaceRef = ref<HTMLElement | null>(null);
 const activeSectionId = ref<SettingsSectionId>("model");
-const sectionRefs = new Map<SettingsSectionId | "provider", HTMLElement>();
+const sectionRefs = new Map<SettingsSectionId, HTMLElement>();
 const selectedSourceDrilldown = computed(() => {
   if (!selectedSource.value) {
     return null;
@@ -1262,12 +1332,12 @@ function memoryToggleActionLabel(disabled: boolean): string {
   return disabled ? t("memory.action.enable") : t("memory.action.disable");
 }
 
-function sectionAriaLabel(id: SettingsSectionId | "provider"): string {
+function sectionAriaLabel(id: SettingsSectionId): string {
   void id;
   return locale.value === "zh-CN" ? "设置分区" : "Settings section";
 }
 
-function setSectionRef(id: SettingsSectionId | "provider"): (element: Element | null) => void {
+function setSectionRef(id: SettingsSectionId): (element: Element | null) => void {
   return (element) => {
     if (element instanceof HTMLElement) {
       sectionRefs.set(id, element);

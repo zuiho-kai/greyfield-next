@@ -1,6 +1,6 @@
-export type SettingsSectionId = "model" | "voice" | "window" | "persona" | "memory";
+export type SettingsSectionId = "model" | "voice" | "window" | "persona" | "provider" | "memory";
 
-export const settingsNavSectionIds: SettingsSectionId[] = ["model", "voice", "window", "persona", "memory"];
+export const settingsNavSectionIds: SettingsSectionId[] = ["model", "voice", "window", "persona", "provider", "memory"];
 
 export interface SettingsSectionMeasurement {
   id: SettingsSectionId;
