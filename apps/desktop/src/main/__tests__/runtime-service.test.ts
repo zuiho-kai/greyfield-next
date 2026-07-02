@@ -2188,6 +2188,52 @@ describe("RuntimeService", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("degrades proactive screen awareness when the Vision provider stream fails", async () => {
+    const visualContext = {
+      attachments: [
+        {
+          id: "screen-frame-1",
+          dataUrl: `data:image/png;base64,${Buffer.from("screen").toString("base64")}`,
+          mimeType: "image/png",
+          createdAt: "2026-06-30T00:00:00.000Z",
+          source: "observation-frame" as const
+        }
+      ],
+      observation: {
+        id: "screen-1",
+        mode: "normal" as const,
+        frameCount: 1,
+        dedupedFrameCount: 1,
+        source: "desktop-screen-awareness" as const
+      }
+    };
+    const fetch = vi.fn(async () => new Response("rate limited", { status: 429, statusText: "Too Many Requests" }));
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "secret",
+          model: "chat-model",
+          visionModel: "vision-model"
+        },
+        ui: {
+          ...defaultGreyfieldConfig.ui,
+          proactivityLevel: 100
+        }
+      },
+      { fetch }
+    );
+
+    await expect(service.checkProactiveScreenAwareness(visualContext)).resolves.toEqual({
+      displayed: false,
+      reason: "vision_model_not_ready"
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("uses the default low-disturbance policy for quiet windows and recent activity", async () => {
     const memoryAtomStore = new TestMemoryAtomStore([
       makeMemoryAtom({

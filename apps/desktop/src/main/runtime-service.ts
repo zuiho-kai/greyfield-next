@@ -460,11 +460,15 @@ export class RuntimeService {
       }
     ];
     let text = "";
-    for await (const chunk of llm.stream(messages)) {
-      text += chunk;
-      if (text.length > 240) {
-        break;
+    try {
+      for await (const chunk of llm.stream(messages)) {
+        text += chunk;
+        if (text.length > 240) {
+          break;
+        }
       }
+    } catch {
+      return { displayed: false, reason: "vision_model_not_ready" };
     }
     const normalized = text.replace(/\s+/g, " ").trim();
     if (normalized.length === 0) {
