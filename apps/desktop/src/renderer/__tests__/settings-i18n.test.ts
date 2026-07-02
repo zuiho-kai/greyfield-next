@@ -33,7 +33,9 @@ describe("settings i18n", () => {
   });
 
   it("maps Memory Library control labels in zh-CN", () => {
-    expect(settingsT("zh-CN", "memory.about.title")).toBe("这是什么");
+    expect(settingsT("zh-CN", "memory.about.title")).toBe("记忆模式说明");
+    expect(settingsT("zh-CN", "memory.about.detail")).toContain("基础记忆是安全的本地兜底");
+    expect(settingsT("zh-CN", "memory.about.detail")).toContain("消耗 API token");
     expect(settingsT("zh-CN", "memory.status.saved", { count: 3 })).toBe("已保存 3 条记忆");
     expect(settingsT("zh-CN", "memory.controls.title")).toBe("高级记忆控制");
     expect(settingsT("zh-CN", "memory.stats.rawTurns", { count: 2 })).toBe("原始轮次 2");
