@@ -747,25 +747,40 @@ async function readProviderPreviewEvidence(
 async function readAvatarSectionEvidence(
   page: Page
 ): Promise<Pick<VisualAcceptanceSummaryInput["settings"], "avatarActiveAfterClick" | "live2dAvatarSectionVisible">> {
-  return page.evaluate(() => {
-    const activeButton = document.querySelector<HTMLButtonElement>(".settings-nav__button--active");
-    const modelSection = document.querySelector<HTMLElement>('[data-settings-section="model"]');
-    const headingText = modelSection?.querySelector("h2")?.textContent?.trim() ?? "";
-    const live2DSelect = modelSection?.querySelector<HTMLSelectElement>('select[aria-label="Live2D model"]');
-    const importButtonText = Array.from(modelSection?.querySelectorAll<HTMLButtonElement>("button") ?? []).map((button) =>
-      button.textContent?.trim() ?? ""
-    );
-    return {
-      avatarActiveAfterClick:
-        activeButton?.getAttribute("aria-current") === "true" &&
-        ["Live2D", "形象"].includes(activeButton.textContent?.trim() ?? ""),
-      live2dAvatarSectionVisible:
-        modelSection !== null &&
-        ["Live2D avatar", "形象（Live2D）"].includes(headingText) &&
-        live2DSelect !== null &&
-        (importButtonText.includes("Import Live2D model") || importButtonText.includes("导入 Live2D 模型"))
-    };
-  });
+  return page.evaluate(readAvatarSectionEvidenceFromDocument);
+}
+
+export function readAvatarSectionEvidenceFromDocument(): Pick<
+  VisualAcceptanceSummaryInput["settings"],
+  "avatarActiveAfterClick" | "live2dAvatarSectionVisible"
+> {
+  const viewportHeight = window.innerHeight;
+  const viewportWidth = window.innerWidth;
+  const activeButton = document.querySelector<HTMLButtonElement>(".settings-nav__button--active");
+  const modelSection = document.querySelector<HTMLElement>('[data-settings-section="model"]');
+  const live2DSelect = modelSection?.querySelector<HTMLSelectElement>('select[aria-label="Live2D model"]');
+  const live2DModelNote = modelSection?.querySelector<HTMLElement>(".live2d-model-note");
+  const modelActionButtonCount = modelSection?.querySelectorAll<HTMLButtonElement>(".settings-actions button").length ?? 0;
+  const activeButtonLabel = activeButton?.textContent?.trim() ?? "";
+  const avatarLabelVisible = /live\s*2d|avatar|形象/i.test(activeButtonLabel);
+
+  return {
+    avatarActiveAfterClick: activeButton?.getAttribute("aria-current") === "true" && avatarLabelVisible,
+    live2dAvatarSectionVisible:
+      isInViewport(modelSection, viewportWidth, viewportHeight) &&
+      isInViewport(live2DSelect, viewportWidth, viewportHeight) &&
+      (live2DSelect?.options.length ?? 0) > 0 &&
+      isInViewport(live2DModelNote, viewportWidth, viewportHeight) &&
+      modelActionButtonCount >= 2
+  };
+
+  function isInViewport(element: HTMLElement | null | undefined, width: number, height: number): boolean {
+    if (!element) {
+      return false;
+    }
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.right > 0 && rect.top < height && rect.left < width;
+  }
 }
 
 async function resizeElectronWindow(app: ElectronApplication, roleName: "pet" | "settings" | "chat", width: number, height: number): Promise<void> {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { join, resolve } from "node:path";
 import {
   buildV1VisualAcceptanceSummary,
+  readAvatarSectionEvidenceFromDocument,
   resolveV1VisualAcceptanceArtifactDir
 } from "../v1-visual-acceptance-check";
 
@@ -129,4 +130,98 @@ describe("V1 visual acceptance summary", () => {
       /must be a child/
     );
   });
+
+  it("recognizes the Live2D avatar section from stable controls instead of exact copy", () => {
+    const cleanup = installAvatarEvidenceDom({
+      activeButtonText: "Avatar appearance",
+      live2DOptionCount: 2,
+      actionButtonCount: 2
+    });
+
+    try {
+      expect(readAvatarSectionEvidenceFromDocument()).toEqual({
+        avatarActiveAfterClick: true,
+        live2dAvatarSectionVisible: true
+      });
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("rejects non-avatar sections even when generic model wording is active", () => {
+    const cleanup = installAvatarEvidenceDom({
+      activeButtonText: "Model service",
+      live2DOptionCount: 0,
+      actionButtonCount: 0
+    });
+
+    try {
+      expect(readAvatarSectionEvidenceFromDocument()).toEqual({
+        avatarActiveAfterClick: false,
+        live2dAvatarSectionVisible: false
+      });
+    } finally {
+      cleanup();
+    }
+  });
 });
+
+function installAvatarEvidenceDom(input: {
+  activeButtonText: string;
+  live2DOptionCount: number;
+  actionButtonCount: number;
+}): () => void {
+  const originalDocument = globalThis.document;
+  const originalWindow = globalThis.window;
+  const activeButton = createVisibleElement({
+    textContent: input.activeButtonText,
+    getAttribute: (name: string) => (name === "aria-current" ? "true" : null)
+  });
+  const live2DSelect = createVisibleElement({
+    options: Array.from({ length: input.live2DOptionCount })
+  });
+  const live2DModelNote = createVisibleElement();
+  const actionButtons = Array.from({ length: input.actionButtonCount }, () => createVisibleElement());
+  const modelSection = createVisibleElement({
+    querySelector: (selector: string) => {
+      if (selector === 'select[aria-label="Live2D model"]') {
+        return live2DSelect;
+      }
+      if (selector === ".live2d-model-note") {
+        return live2DModelNote;
+      }
+      return null;
+    },
+    querySelectorAll: (selector: string) => (selector === ".settings-actions button" ? actionButtons : [])
+  });
+  const documentStub = {
+    querySelector: (selector: string) => {
+      if (selector === ".settings-nav__button--active") {
+        return activeButton;
+      }
+      if (selector === '[data-settings-section="model"]') {
+        return modelSection;
+      }
+      return null;
+    }
+  };
+
+  Object.defineProperty(globalThis, "document", { configurable: true, value: documentStub });
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { innerHeight: 600, innerWidth: 800 } });
+
+  return () => {
+    Object.defineProperty(globalThis, "document", { configurable: true, value: originalDocument });
+    Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+  };
+}
+
+function createVisibleElement(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    textContent: "",
+    getAttribute: () => null,
+    getBoundingClientRect: () => ({ width: 120, height: 32, bottom: 120, right: 240, top: 88, left: 32 }),
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    ...overrides
+  };
+}
