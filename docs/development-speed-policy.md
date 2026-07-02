@@ -48,10 +48,29 @@ This keeps backend-only or docs-only changes fast while making Settings, Chat, P
 For frontend-visible PRs, green CI is necessary but not sufficient. Before opening or merging the PR, the author must:
 
 - Define the user-path acceptance before implementation, using normal UI actions rather than internal strings, test hooks, or direct IPC shortcuts.
-- Run targeted tests while editing, then run `pnpm harness:frontend-full` before claiming the frontend behavior is ready.
+- Run targeted tests while editing, then run the narrowest visual or Electron harness that proves the touched ordinary user path.
 - Inspect current visual artifacts from `.cache/greyfield-v1-visual-acceptance/latest/`, especially `pet-after-chat.png`, `chat-after-reply.png`, and `settings-provider-preview.png`.
 - Check product-shape assertions that automation can miss: no stale background blocks, no text/control overflow, no permanent desktop obstruction, no pet-face/body occlusion by speech bubbles, and no mismatch between Settings state and the path an ordinary user takes.
 - If the PR fixes a missed frontend behavior, add or update a harness assertion in the same branch so the next agent does not rely on the user as first-pass QA.
+- For low-risk UI, copy, navigation, or selector-only changes, targeted tests plus the focused ordinary-user visual/Electron harness and inspected artifacts are enough to claim the local behavior. Run `pnpm harness:frontend-full` only when the change is broad/risky, the issue explicitly requires it, the coordinator asks for merge readiness, or targeted evidence cannot prove the user path.
+
+### Bounded Frontend Validation
+
+For small UI, copy, navigation, or selector-visible changes, use this order:
+
+1. Search for stale labels and selectors before running broad gates, for example `rg "<old label>|<new label>|<selector>" apps packages`.
+2. Run the closest unit or renderer tests for the changed files.
+3. Run `pnpm typecheck` when TypeScript surfaces changed.
+4. Run the focused visual or Electron harness that exercises the ordinary user path, then open the current screenshots or artifacts.
+5. Decide whether `pnpm harness:frontend-full` is necessary. Skip it for low-risk localized changes when targeted tests, focused harness evidence, and inspected artifacts already prove the ordinary user path; report the skip reason in the handoff.
+
+If `pnpm harness:frontend-full` is required and fails, classify the failure before editing:
+
+- Directly related to the PR's changed user path: fix it in the PR and rerun the smallest failing command first.
+- Stale selector or assertion caused by this PR's intentional UI text/path change: update the nearest harness assertion in the PR.
+- Outside the changed user path, such as unrelated pet drag, Live2D, audio, or window behavior: stop and report an unrelated gate blocker. Include the command, failing check, error snippet, already-passing targeted evidence, and recommendation for a separate fix or coordinator approval.
+
+A worker may automatically rerun `pnpm harness:frontend-full` once after a directly related fix when the aggregate gate was required. A second aggregate failure requires a handoff or coordinator decision unless the coordinator already authorized broader harness repair. Do not change unrelated runtime behavior or harness mechanisms just to make a small UI PR green.
 
 ## Electron Harness Concurrency
 
@@ -119,6 +138,7 @@ Checkpoint evidence can be local or PR-local. Remote CI evidence is required onl
 - Do not open subagents as a default substitute for reading local code and running targeted tests.
 - After subagent findings, implement only the smallest high-value fixes first, then return to feature delivery.
 - For multi-agent implementation, the coordinator must assign explicit file ownership, expected verification commands, and forbidden adjacent scope. After handoff, the coordinator reviews the PR/diff and may merge only after dependency ordering and interface-impact checks are satisfied.
+- For small frontend workers, the prompt must state the bounded validation sequence and the out-of-scope failure rule from this document. Workers should report long harness phase status instead of silently waiting through repeated aggregate reruns.
 
 ## Practical Rule
 
