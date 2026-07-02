@@ -39,6 +39,13 @@ describe("V1 visual acceptance summary", () => {
         bubbleText: "你好，我醒着。"
       },
       settings: {
+        avatarNavVisible: true,
+        modelServiceNavVisible: true,
+        genericModelNavAbsent: true,
+        navFirstGlanceOrderCorrect: true,
+        modelServiceActiveAfterClick: true,
+        avatarActiveAfterClick: true,
+        live2dAvatarSectionVisible: true,
         providerPreviewVisible: true,
         providerPreviewInViewport: true,
         taskModelSlotsVisible: true,
@@ -58,9 +65,19 @@ describe("V1 visual acceptance summary", () => {
         { name: "controls-active-state.png", path: "artifact-root/controls-active-state.png", review: "Controls active" },
         { name: "chat-after-reply.png", path: "artifact-root/chat-after-reply.png", review: "Chat reply" },
         {
-          name: "settings-provider-preview.png",
-          path: "artifact-root/settings-provider-preview.png",
-          review: "Provider preview"
+          name: "settings-first-glance-nav.png",
+          path: "artifact-root/settings-first-glance-nav.png",
+          review: "First-glance Settings nav"
+        },
+        {
+          name: "settings-model-service-task-models.png",
+          path: "artifact-root/settings-model-service-task-models.png",
+          review: "Model service task models"
+        },
+        {
+          name: "settings-live2d-avatar.png",
+          path: "artifact-root/settings-live2d-avatar.png",
+          review: "Live2D avatar"
         },
         {
           name: "settings-memory-extraction.png",
@@ -77,12 +94,22 @@ describe("V1 visual acceptance summary", () => {
 
     expect(summary.ok).toBe(true);
     expect(summary.artifacts.map((artifact) => artifact.name)).toEqual(
-      expect.arrayContaining(["pet-initial.png", "chat-after-reply.png", "settings-provider-preview.png"])
+      expect.arrayContaining([
+        "pet-initial.png",
+        "chat-after-reply.png",
+        "settings-first-glance-nav.png",
+        "settings-model-service-task-models.png",
+        "settings-live2d-avatar.png"
+      ])
     );
     expect(summary.visualReviewRequired.join("\n")).toContain("pet-initial.png");
     expect(summary.visualReviewRequired.join("\n")).toContain("controls-initial.png");
     expect(summary.visualReviewRequired.join("\n")).toContain("controls-active-state.png");
-    expect(summary.visualReviewRequired.join("\n")).toContain("task model slots");
+    expect(summary.visualReviewRequired.join("\n")).toContain("settings-first-glance-nav.png");
+    expect(summary.visualReviewRequired.join("\n")).toContain("settings-model-service-task-models.png");
+    expect(summary.visualReviewRequired.join("\n")).toContain("settings-live2d-avatar.png");
+    expect(summary.visualReviewRequired.join("\n")).toContain("distinct Live2D/avatar");
+    expect(summary.visualReviewRequired.join("\n")).toContain("task models");
     expect(summary.visualReviewRequired.join("\n")).toContain("settings-memory-extraction.png");
     expect(summary.visualReviewRequired.join("\n")).toContain("settings-window-controls.png");
   });

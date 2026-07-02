@@ -262,6 +262,7 @@
         "Settings exposes a Test LLM action and renders first-token success or a readable failure without writing chat history.",
         "Settings provider/Test LLM harness proves fake Preview, missing Base URL/API key/model reasons, blocked states send no provider requests, testing, success, and failure states.",
         "Electron settings-active-chat harness proves Test LLM is rejected with visible Stop-or-wait guidance while chat is actively streaming and does not send an extra provider request.",
+        "V1 visual acceptance proves Settings first-glance navigation distinguishes Live2D/avatar settings from Model service task-model settings.",
         "V1 visual acceptance proves Settings Window scale/position controls remain readable and usable at narrow desktop widths."
       ],
       "qa": {

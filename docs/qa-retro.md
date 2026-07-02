@@ -149,6 +149,22 @@ Current command split:
 - Speech bubble lifecycle: `pnpm harness:electron:bubble-long-reply`
 - Settings provider user path: `pnpm harness:electron:settings-provider-test`
 
+## 2026-07-02 Regression: Settings Task Models Were Not Discoverable
+
+PR #178 added task model slots under the Settings provider area, and the harness proved the section could be forced into view. A normal user still saw the old Settings navigation label `Model`, which meant Live2D appearance, while the task-model controls lived under a later `Model service` entry.
+
+What happened:
+
+- Acceptance checked that task model DOM existed after scrolling to the provider section.
+- The first Settings view did not prove that avatar/Live2D settings and task model service settings were distinct entries.
+- The screenshot artifact focused on the provider section after manual scrolling, not the user path of clicking the navigation entry.
+
+How we avoid repeating it:
+
+- For Settings navigation changes, assert the visible nav labels and order before checking deep section content.
+- Harness screenshots should cover the ordinary click path: first-glance navigation, clicked section active state, and the resulting section heading/content.
+- Avoid generic `Model` wording when the UI surface distinguishes avatar/Live2D models from LLM/task models.
+
 ## 2026-06-27 Regression: Long Reply Bubble Drifted During Streaming
 
 The full frontend gate caught a desktop-pet polish issue that a looser visual check could have missed: during a long streaming reply, the pet bubble kept recomputing placement from live model bounds, so idle Live2D motion moved the same visible bubble by a few pixels.

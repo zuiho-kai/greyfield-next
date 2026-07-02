@@ -16,7 +16,7 @@ describe("settings nav", () => {
   });
 
   it("includes the provider model-service section in navigation", () => {
-    expect(settingsNavSectionIds).toContain("provider");
+    expect(settingsNavSectionIds).toEqual(["model", "provider", "voice", "window", "persona", "memory"]);
     expect(
       resolveActiveSettingsSection(
         [
