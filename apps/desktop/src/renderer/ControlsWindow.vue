@@ -104,15 +104,6 @@
         </button>
         <button
           type="button"
-          class="desktop-control-button desktop-control-button--quit"
-          :title="t('controls.quit')"
-          :aria-label="t('controls.quit')"
-          @click="$emit('quit')"
-        >
-          <Power :size="16" stroke-width="2.35" />
-        </button>
-        <button
-          type="button"
           class="desktop-control-button desktop-control-button--stop"
           :disabled="!canStop"
           :title="t('controls.stop')"
@@ -135,7 +126,6 @@ import {
   Mic,
   Minimize2,
   MousePointer2,
-  Power,
   ScanEye,
   SendHorizontal,
   Settings,
@@ -161,7 +151,6 @@ const emit = defineEmits<{
   "open-settings": [];
   "toggle-model-pass-through": [];
   "hide-controls": [];
-  quit: [];
   "drag-start": [payload: { screenX: number; screenY: number }];
   "drag-move": [payload: { screenX: number; screenY: number }];
   "drag-end": [];
