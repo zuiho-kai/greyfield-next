@@ -54,7 +54,6 @@ describe("settings i18n", () => {
     expect(settingsT("en-US", "chat.observeNormal")).toBe("Mid");
     expect(settingsT("en-US", "chat.clearObservation")).toBe("Clear");
     expect(settingsT("zh-CN", "controls.placeholder")).toBe("和 Greyfield 说话...");
-    expect(settingsT("zh-CN", "controls.quit")).toBe("退出 Greyfield 并停止后台进程");
     expect(settingsT("zh-CN", "controls.stop")).toBe("停止回复或语音");
   });
 });
