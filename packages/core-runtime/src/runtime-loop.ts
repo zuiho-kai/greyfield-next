@@ -40,6 +40,7 @@ export interface GreyfieldRuntimeOptions {
   summarySegmentStore?: SummarySegmentStore;
   memoryAtomStore?: MemoryAtomStore;
   deletedMemoryEvidenceStore?: DeletedMemoryEvidenceStore;
+  memoryEnabled?: boolean;
   memoryAtomExtractor?: MemoryAtomExtractor;
   memoryAtomExtractionMode?: MemoryAtomExtractionMode;
   memoryAtomExtractionUnavailableReason?: Extract<MemoryAtomExtractionStatusReason, "disabled" | "provider-unavailable">;
@@ -183,13 +184,21 @@ export class GreyfieldRuntime {
     this.activeAbortController = new AbortController();
     await emit({ type: "runtime.status", status: "thinking" });
 
-    const [memory, rawRecent, rawHandoff, rawMemoryAtoms, deletedEvidence] = await Promise.all([
-      this.options.memoryStore.load(),
+    const memoryEnabled = this.options.memoryEnabled ?? true;
+    const [rawRecent, rawHandoff] = await Promise.all([
       this.options.sessionStore.getRecent(this.recentTurnLimit),
-      this.options.sessionStore.createHandoff(this.recentTurnLimit),
-      this.loadMemoryAtoms(),
-      this.loadDeletedMemoryEvidence()
+      this.options.sessionStore.createHandoff(this.recentTurnLimit)
     ]);
+    let memory = "";
+    let rawMemoryAtoms: MemoryAtom[] = [];
+    let deletedEvidence: DeletedMemoryEvidence[] = [];
+    if (memoryEnabled) {
+      [memory, rawMemoryAtoms, deletedEvidence] = await Promise.all([
+        this.options.memoryStore.load(),
+        this.loadMemoryAtoms(),
+        this.loadDeletedMemoryEvidence()
+      ]);
+    }
     const recent = sanitizePromptTurns(
       filterDeletedSessionTurns(rawRecent, deletedEvidence, this.options.sessionStore.sessionId),
       this.options.promptRedactionSecrets
@@ -204,10 +213,12 @@ export class GreyfieldRuntime {
     const memoryAtoms = rawMemoryAtoms.filter(
       (atom) => !sourceTurnIdsContainDeletedEvidence(atom.sourceTurnIds, deletedEvidence, atom.sourceSessionId ?? this.options.sessionStore.sessionId)
     );
-    const summarySegments = (await this.loadSummarySegments()).filter(
-      (segment) => !sourceTurnIdsContainDeletedEvidence(getSummarySegmentSourceTurnIds(segment), deletedEvidence, segment.sessionId)
-    );
-    const recallContext = this.options.summarySegmentStore
+    const summarySegments = memoryEnabled
+      ? (await this.loadSummarySegments()).filter(
+          (segment) => !sourceTurnIdsContainDeletedEvidence(getSummarySegmentSourceTurnIds(segment), deletedEvidence, segment.sessionId)
+        )
+      : [];
+    const recallContext = memoryEnabled && this.options.summarySegmentStore
       ? buildRecallContext({
           input: redactPromptPrivateText(text, this.options.promptRedactionSecrets),
           summarySegments,
@@ -219,7 +230,7 @@ export class GreyfieldRuntime {
       await emit({ type: "memory.recall.context", context: recallContext });
     }
     let atomRecallContext =
-      memoryAtoms.length > 0
+      memoryEnabled && memoryAtoms.length > 0
         ? buildMemoryAtomRecallContext({
             input: redactPromptPrivateText(text, this.options.promptRedactionSecrets),
             atoms: memoryAtoms,
@@ -294,17 +305,19 @@ export class GreyfieldRuntime {
         ...(observation ? { meta: { observation } } : {})
       });
       await this.options.sessionStore.append({ role: "assistant", content: finalText });
-      const atomExtractionStatus = await this.extractMemoryAtomsForTurn(text, userTurn.id);
-      if (atomExtractionStatus) {
-        await emit({ type: "memory.atom.extraction.status", status: atomExtractionStatus });
-      }
-      try {
-        const createdSummary = await this.createSummaryForOldTurns();
-        if (createdSummary) {
-          await emit({ type: "memory.summary.created", segment: createdSummary });
+      if (memoryEnabled) {
+        const atomExtractionStatus = await this.extractMemoryAtomsForTurn(text, userTurn.id);
+        if (atomExtractionStatus) {
+          await emit({ type: "memory.atom.extraction.status", status: atomExtractionStatus });
         }
-      } catch (error) {
-        console.warn(`Greyfield memory summary unavailable: ${formatError(error)}`);
+        try {
+          const createdSummary = await this.createSummaryForOldTurns();
+          if (createdSummary) {
+            await emit({ type: "memory.summary.created", segment: createdSummary });
+          }
+        } catch (error) {
+          console.warn(`Greyfield memory summary unavailable: ${formatError(error)}`);
+        }
       }
       if (observation) {
         await emit({ type: "observation.used", observation });

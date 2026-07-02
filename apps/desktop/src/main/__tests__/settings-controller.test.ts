@@ -83,7 +83,7 @@ describe("SettingsController", () => {
     const controller = new SettingsController(
       {
         ...defaultGreyfieldConfig,
-        memory: { llmAtomExtractionEnabled: true }
+        memory: { ...defaultGreyfieldConfig.memory, llmAtomExtractionEnabled: true }
       },
       save,
       emit
@@ -92,7 +92,9 @@ describe("SettingsController", () => {
     const next = await controller.update({ provider: { model: "next-model" } });
 
     expect(next.memory.llmAtomExtractionEnabled).toBe(true);
-    expect(save).toHaveBeenCalledWith(expect.objectContaining({ memory: { llmAtomExtractionEnabled: true } }));
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({ memory: { ...defaultGreyfieldConfig.memory, llmAtomExtractionEnabled: true } })
+    );
   });
 
   it("updates task-specific model slots without overwriting chat provider state", async () => {

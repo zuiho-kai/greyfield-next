@@ -32,6 +32,7 @@ describe("Greyfield config", () => {
     expect(defaultGreyfieldConfig.ui.locale).toBe("zh-CN");
     expect(defaultGreyfieldConfig.ui.proactivityLevel).toBe(50);
     expect(defaultGreyfieldConfig.memory.llmAtomExtractionEnabled).toBe(false);
+    expect(defaultGreyfieldConfig.memory.llmAtomExtractionInterval).toBe(4);
   });
 
   it("deep-merges nested settings without dropping defaults", () => {
@@ -42,7 +43,7 @@ describe("Greyfield config", () => {
       window: { layerMode: "controls-front" },
       live2d: { scale: 1.25 },
       ui: { speechBubbleEnabled: false, proactiveMemoryEnabled: false, proactivityLevel: 80 },
-      memory: { llmAtomExtractionEnabled: true }
+      memory: { llmAtomExtractionEnabled: true, llmAtomExtractionInterval: 6 }
     });
 
     expect(config.provider).toMatchObject({
@@ -79,6 +80,7 @@ describe("Greyfield config", () => {
     expect(config.ui.locale).toBe("zh-CN");
     expect(config.ui.proactivityLevel).toBe(80);
     expect(config.memory.llmAtomExtractionEnabled).toBe(true);
+    expect(config.memory.llmAtomExtractionInterval).toBe(6);
   });
 
   it("migrates legacy model fields into MaiBot-style task model slots", () => {
@@ -213,6 +215,13 @@ describe("Greyfield config", () => {
     expect(mergeConfig({ ui: { proactivityLevel: -1 } }).ui.proactivityLevel).toBe(0);
     expect(mergeConfig({ ui: { proactivityLevel: 100.6 } }).ui.proactivityLevel).toBe(100);
     expect(mergeConfig({ ui: { proactivityLevel: Number.NaN } }).ui.proactivityLevel).toBe(50);
+  });
+
+  it("keeps enhanced memory extraction interval within the Settings range", () => {
+    expect(mergeConfig({ memory: { llmAtomExtractionInterval: -1 } }).memory.llmAtomExtractionInterval).toBe(1);
+    expect(mergeConfig({ memory: { llmAtomExtractionInterval: 7.6 } }).memory.llmAtomExtractionInterval).toBe(8);
+    expect(mergeConfig({ memory: { llmAtomExtractionInterval: 30 } }).memory.llmAtomExtractionInterval).toBe(20);
+    expect(mergeConfig({ memory: { llmAtomExtractionInterval: Number.NaN } }).memory.llmAtomExtractionInterval).toBe(4);
   });
 
   it("loads user config files written with a UTF-8 BOM", async () => {
