@@ -161,38 +161,34 @@ export function mergeConfig(partial: GreyfieldConfigPatch): GreyfieldConfig {
 function normalizeProviderConfig(partial: GreyfieldConfigPatch["provider"] | undefined): GreyfieldConfig["provider"] {
   const input = partial ?? {};
   const taskModels = input.taskModels ?? {};
-  const chatModel = normalizeModelSlot(
-    taskModelSlotIsPresent(taskModels, "chat")
-      ? taskModels.chat
-      : modelFieldOverridesDefault(input.model, defaultGreyfieldConfig.provider.model)
-        ? input.model
-        : undefined,
-    defaultGreyfieldConfig.provider.taskModels.chat
-  );
-  const visionModel = normalizeModelSlot(
-    taskModelSlotIsPresent(taskModels, "vision")
-      ? taskModels.vision
-      : modelFieldOverridesDefault(input.visionModel, defaultGreyfieldConfig.provider.visionModel)
-        ? input.visionModel
-        : undefined,
-    defaultGreyfieldConfig.provider.taskModels.vision
-  );
-  const voiceAsrModel = normalizeModelSlot(
-    taskModelSlotIsPresent(taskModels, "voiceAsr")
-      ? taskModels.voiceAsr
-      : modelFieldOverridesDefault(input.asrModel, defaultGreyfieldConfig.provider.asrModel)
-        ? input.asrModel
-        : undefined,
-    defaultGreyfieldConfig.provider.taskModels.voiceAsr
-  );
-  const voiceTtsModel = normalizeModelSlot(
-    taskModelSlotIsPresent(taskModels, "voiceTts")
-      ? taskModels.voiceTts
-      : modelFieldOverridesDefault(input.ttsModel, defaultGreyfieldConfig.provider.ttsModel)
-        ? input.ttsModel
-        : undefined,
-    defaultGreyfieldConfig.provider.taskModels.voiceTts
-  );
+  const chatModel = normalizePairedTaskModelSlot({
+    taskModels,
+    slot: "chat",
+    legacyValue: input.model,
+    defaultSlotValue: defaultGreyfieldConfig.provider.taskModels.chat,
+    defaultLegacyValue: defaultGreyfieldConfig.provider.model
+  });
+  const visionModel = normalizePairedTaskModelSlot({
+    taskModels,
+    slot: "vision",
+    legacyValue: input.visionModel,
+    defaultSlotValue: defaultGreyfieldConfig.provider.taskModels.vision,
+    defaultLegacyValue: defaultGreyfieldConfig.provider.visionModel
+  });
+  const voiceAsrModel = normalizePairedTaskModelSlot({
+    taskModels,
+    slot: "voiceAsr",
+    legacyValue: input.asrModel,
+    defaultSlotValue: defaultGreyfieldConfig.provider.taskModels.voiceAsr,
+    defaultLegacyValue: defaultGreyfieldConfig.provider.asrModel
+  });
+  const voiceTtsModel = normalizePairedTaskModelSlot({
+    taskModels,
+    slot: "voiceTts",
+    legacyValue: input.ttsModel,
+    defaultSlotValue: defaultGreyfieldConfig.provider.taskModels.voiceTts,
+    defaultLegacyValue: defaultGreyfieldConfig.provider.ttsModel
+  });
   const normalizedTaskModels: GreyfieldTaskModelConfig = {
     chat: chatModel,
     planner: normalizeModelSlot(taskModels.planner, chatModel),
@@ -216,6 +212,24 @@ function normalizeProviderConfig(partial: GreyfieldConfigPatch["provider"] | und
 
 function normalizeModelSlot(value: string | undefined, fallback: string): string {
   return typeof value === "string" ? value.trim() : fallback;
+}
+
+function normalizePairedTaskModelSlot(input: {
+  taskModels: Partial<GreyfieldTaskModelConfig>;
+  slot: GreyfieldTaskModelSlot;
+  legacyValue: string | undefined;
+  defaultSlotValue: string;
+  defaultLegacyValue: string;
+}): string {
+  const slotValue = taskModelSlotIsPresent(input.taskModels, input.slot) ? input.taskModels[input.slot] : undefined;
+  const normalizedSlotValue = typeof slotValue === "string" ? slotValue.trim() : undefined;
+  if (normalizedSlotValue !== undefined && normalizedSlotValue !== input.defaultSlotValue) {
+    return normalizedSlotValue;
+  }
+  if (modelFieldOverridesDefault(input.legacyValue, input.defaultLegacyValue)) {
+    return input.legacyValue?.trim() ?? "";
+  }
+  return normalizedSlotValue ?? input.defaultSlotValue;
 }
 
 function taskModelSlotIsPresent(

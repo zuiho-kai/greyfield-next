@@ -172,6 +172,35 @@ describe("Greyfield config", () => {
     });
   });
 
+  it("keeps customized legacy paired fields when full config only has default task model slots", () => {
+    const config = mergeConfig({
+      provider: {
+        model: "legacy-chat",
+        visionModel: "legacy-vision",
+        asrModel: "legacy-asr",
+        ttsModel: "legacy-tts",
+        taskModels: defaultGreyfieldConfig.provider.taskModels
+      }
+    });
+
+    expect(config.provider).toMatchObject({
+      model: "legacy-chat",
+      visionModel: "legacy-vision",
+      asrModel: "legacy-asr",
+      ttsModel: "legacy-tts"
+    });
+    expect(config.provider.taskModels).toMatchObject({
+      chat: "legacy-chat",
+      planner: "greyfield-fake-v1",
+      utility: "greyfield-fake-v1",
+      memory: "greyfield-fake-v1",
+      vision: "legacy-vision",
+      multimodal: "",
+      voiceAsr: "legacy-asr",
+      voiceTts: "legacy-tts"
+    });
+  });
+
   it("normalizes unsupported UI locales to the default Settings language", () => {
     const config = mergeConfig({
       ui: { locale: "fr-FR" } as unknown as Partial<typeof defaultGreyfieldConfig.ui>

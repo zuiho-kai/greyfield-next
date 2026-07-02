@@ -132,4 +132,54 @@ describe("SettingsController", () => {
       })
     });
   });
+
+  it("syncs explicit paired task model patches over stale legacy fields", async () => {
+    const save = vi.fn(async () => undefined);
+    const emit = vi.fn();
+    const controller = new SettingsController(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          model: "stale-chat",
+          visionModel: "stale-vision",
+          asrModel: "stale-asr",
+          ttsModel: "stale-tts",
+          taskModels: {
+            ...defaultGreyfieldConfig.provider.taskModels,
+            chat: "stale-chat",
+            vision: "stale-vision",
+            voiceAsr: "stale-asr",
+            voiceTts: "stale-tts"
+          }
+        }
+      },
+      save,
+      emit
+    );
+
+    const next = await controller.update({
+      provider: {
+        taskModels: {
+          chat: "slot-chat",
+          vision: "",
+          voiceAsr: "slot-asr",
+          voiceTts: "slot-tts"
+        }
+      }
+    });
+
+    expect(next.provider).toMatchObject({
+      model: "slot-chat",
+      visionModel: "",
+      asrModel: "slot-asr",
+      ttsModel: "slot-tts"
+    });
+    expect(next.provider.taskModels).toMatchObject({
+      chat: "slot-chat",
+      vision: "",
+      voiceAsr: "slot-asr",
+      voiceTts: "slot-tts"
+    });
+  });
 });
