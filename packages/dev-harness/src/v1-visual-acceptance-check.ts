@@ -50,6 +50,13 @@ type VisualAcceptanceSummaryInput = {
     bubbleText: string;
   };
   settings: {
+    avatarNavVisible: boolean;
+    modelServiceNavVisible: boolean;
+    genericModelNavAbsent: boolean;
+    navFirstGlanceOrderCorrect: boolean;
+    modelServiceActiveAfterClick: boolean;
+    avatarActiveAfterClick: boolean;
+    live2dAvatarSectionVisible: boolean;
     providerPreviewVisible: boolean;
     providerPreviewInViewport: boolean;
     taskModelSlotsVisible: boolean;
@@ -83,7 +90,9 @@ export function buildV1VisualAcceptanceSummary(input: VisualAcceptanceSummaryInp
       "Open controls-active-state.png and confirm clicked controls keep visible icons instead of white-on-white blocks.",
       "Open pet-after-chat.png and confirm the speech bubble reads like a short subtitle and does not cover the model.",
       "Open chat-after-reply.png and confirm the full assistant reply stays in the Chat window.",
-      "Open settings-provider-preview.png and confirm the Provider / model service section and task model slots are visible.",
+      "Open settings-first-glance-nav.png and confirm the first Settings view shows distinct Live2D/avatar and Model service navigation entries.",
+      "Open settings-model-service-task-models.png and confirm clicking Model service shows the task models without manual provider-section scrolling.",
+      "Open settings-live2d-avatar.png and confirm clicking Live2D/avatar shows the Live2D appearance/model section, not a generic model section.",
       "Open settings-memory-extraction.png and confirm Better memory is a normal toggle/status section without Accept/Reject candidate review controls.",
       "Open settings-window-controls.png and confirm Window scale/position controls are readable and not collapsed."
     ]
@@ -201,11 +210,26 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     });
     const settingsWindow = await waitForRoleWindow(app, "settings");
     await settingsWindow.waitForSelector(".greyfield-shell");
+    await settingsWindow.getByRole("button", { name: /^(Live2D|形象)$/ }).waitFor();
+    await settingsWindow.getByRole("button", { name: /^(Model service|模型服务)$/ }).waitFor();
     await settingsWindow.locator(".provider-status--preview", { hasText: /Fake provider is active|本地假服务/ }).waitFor();
     const settingsLayout = await readSettingsLayout(settingsWindow);
+    if (
+      !settingsLayout.avatarNavVisible ||
+      !settingsLayout.modelServiceNavVisible ||
+      !settingsLayout.genericModelNavAbsent
+    ) {
+      throw new Error(`Settings navigation does not distinguish avatar from model service: ${JSON.stringify(settingsLayout)}`);
+    }
     if (!settingsLayout.noHorizontalOverflow || !settingsLayout.windowControlsUsable) {
       throw new Error(`Settings window has horizontal overflow: ${JSON.stringify(settingsLayout)}`);
     }
+    if (!settingsLayout.navFirstGlanceOrderCorrect) {
+      throw new Error(`Settings first-glance navigation order is wrong: ${JSON.stringify(settingsLayout)}`);
+    }
+    artifacts.push(
+      await screenshot(settingsWindow, artifactDir, "settings-first-glance-nav.png", "Settings first-glance navigation.")
+    );
     if (
       !settingsLayout.memoryExtractionVisible ||
       !settingsLayout.memoryExtractionToggleVisible ||
@@ -223,17 +247,28 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
       ...narrowSettingsLayout,
       narrowNoHorizontalOverflow: narrowSettingsLayout.noHorizontalOverflow
     };
-    await scrollSettingsProviderPreviewIntoView(settingsWindow);
+    await clickSettingsNavButton(settingsWindow, /^(Model service|模型服务)$/);
+    await waitForSettingsSectionActive(settingsWindow, "provider");
     const providerPreviewEvidence = await readProviderPreviewEvidence(settingsWindow);
     if (
       !providerPreviewEvidence.providerPreviewVisible ||
       !providerPreviewEvidence.providerPreviewInViewport ||
-      !providerPreviewEvidence.taskModelSlotsVisible
+      !providerPreviewEvidence.taskModelSlotsVisible ||
+      !providerPreviewEvidence.modelServiceActiveAfterClick
     ) {
       throw new Error(`Settings provider preview is not visible in the artifact target: ${JSON.stringify(providerPreviewEvidence)}`);
     }
     artifacts.push(
-      await screenshot(settingsWindow, artifactDir, "settings-provider-preview.png", "Settings provider preview state.")
+      await screenshot(settingsWindow, artifactDir, "settings-model-service-task-models.png", "Settings model service task models.")
+    );
+    await clickSettingsNavButton(settingsWindow, /^(Live2D|形象)$/);
+    await waitForSettingsSectionActive(settingsWindow, "model");
+    const avatarEvidence = await readAvatarSectionEvidence(settingsWindow);
+    if (!avatarEvidence.avatarActiveAfterClick || !avatarEvidence.live2dAvatarSectionVisible) {
+      throw new Error(`Settings avatar section is not visible after nav click: ${JSON.stringify(avatarEvidence)}`);
+    }
+    artifacts.push(
+      await screenshot(settingsWindow, artifactDir, "settings-live2d-avatar.png", "Settings Live2D avatar section.")
     );
     await settingsWindow.getByLabel(/^(How memory works|记忆方式)$/, { exact: true }).scrollIntoViewIfNeeded();
     artifacts.push(
@@ -262,7 +297,8 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
       },
       settings: {
         ...finalSettingsLayout,
-        ...providerPreviewEvidence
+        ...providerPreviewEvidence,
+        ...avatarEvidence
       },
       artifacts
     });
@@ -556,11 +592,16 @@ async function dragDesktopControls(app: ElectronApplication, page: Page): Promis
     return false;
   }
 
-  const start = { x: handleBox.x + handleBox.width / 2, y: handleBox.y + handleBox.height / 2 };
-  await page.mouse.move(start.x, start.y);
-  await page.mouse.down();
-  await page.mouse.move(start.x + 72, start.y - 28, { steps: 6 });
-  await page.mouse.up();
+  const start = {
+    screenX: Math.round(before.x + handleBox.x + handleBox.width / 2),
+    screenY: Math.round(before.y + handleBox.y + handleBox.height / 2)
+  };
+  const end = { screenX: start.screenX + 72, screenY: start.screenY - 28 };
+  await page.evaluate((payload) => {
+    window.greyfield?.send("window:controls-drag-start", payload.start);
+    window.greyfield?.send("window:controls-drag-move", payload.end);
+    window.greyfield?.send("window:controls-drag-end", {});
+  }, { start, end });
   const started = Date.now();
   while (Date.now() - started < 3_000) {
     const after = await readRoleWindowBounds(app, "controls");
@@ -592,6 +633,9 @@ async function readSettingsLayout(page: Page): Promise<VisualAcceptanceSummaryIn
     const scrollWidth = document.scrollingElement?.scrollWidth ?? document.documentElement.scrollWidth;
     const compactInputs = Array.from(document.querySelectorAll<HTMLInputElement>(".settings-fields--compact input"));
     const memorySection = document.querySelector<HTMLElement>('[aria-label="How memory works"], [aria-label="记忆方式"]');
+    const navButtonLabels = Array.from(document.querySelectorAll<HTMLButtonElement>(".settings-nav__button")).map((button) =>
+      button.textContent?.trim() ?? ""
+    );
     const memoryText = memorySection?.textContent ?? "";
     const windowControlsUsable =
       compactInputs.length >= 4 &&
@@ -612,6 +656,15 @@ async function readSettingsLayout(page: Page): Promise<VisualAcceptanceSummaryIn
         );
       });
     return {
+      avatarNavVisible: navButtonLabels.includes("Live2D") || navButtonLabels.includes("形象"),
+      modelServiceNavVisible: navButtonLabels.includes("Model service") || navButtonLabels.includes("模型服务"),
+      genericModelNavAbsent: !navButtonLabels.includes("Model") && !navButtonLabels.includes("模型"),
+      navFirstGlanceOrderCorrect:
+        (navButtonLabels[0] === "Live2D" && navButtonLabels[1] === "Model service") ||
+        (navButtonLabels[0] === "形象" && navButtonLabels[1] === "模型服务"),
+      modelServiceActiveAfterClick: false,
+      avatarActiveAfterClick: false,
+      live2dAvatarSectionVisible: false,
       providerPreviewVisible: document.querySelector(".provider-status--preview") !== null,
       providerPreviewInViewport: false,
       taskModelSlotsVisible: document.querySelector('[data-task-model-slot="chat"]') !== null,
@@ -629,26 +682,51 @@ async function readSettingsLayout(page: Page): Promise<VisualAcceptanceSummaryIn
   });
 }
 
-async function scrollSettingsProviderPreviewIntoView(page: Page): Promise<void> {
-  await page.locator('[data-settings-section="provider"]').evaluate((element) => {
-    element.scrollIntoView({ block: "start" });
-  });
-  await page.locator('[data-task-model-slot="chat"]').waitFor();
-  await page.locator(".provider-status--preview", { hasText: /Fake provider is active|本地假服务/ }).waitFor();
+async function clickSettingsNavButton(page: Page, name: RegExp): Promise<void> {
+  await page.getByRole("button", { name }).click();
+}
+
+async function waitForSettingsSectionActive(page: Page, sectionId: "model" | "provider"): Promise<void> {
+  await page.waitForFunction(
+    (targetSectionId) => {
+      const section = document.querySelector<HTMLElement>(`[data-settings-section="${targetSectionId}"]`);
+      const activeButton = document.querySelector<HTMLButtonElement>(".settings-nav__button--active");
+      if (!section || !activeButton || activeButton.getAttribute("aria-current") !== "true") {
+        return false;
+      }
+      const expectedLabels =
+        targetSectionId === "provider" ? ["Model service", "模型服务"] : ["Live2D", "形象"];
+      if (!expectedLabels.includes(activeButton.textContent?.trim() ?? "")) {
+        return false;
+      }
+      const rect = section.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < window.innerHeight;
+    },
+    sectionId
+  );
   await page.waitForTimeout(100);
 }
 
 async function readProviderPreviewEvidence(
   page: Page
-): Promise<Pick<VisualAcceptanceSummaryInput["settings"], "providerPreviewVisible" | "providerPreviewInViewport" | "taskModelSlotsVisible">> {
+): Promise<
+  Pick<
+    VisualAcceptanceSummaryInput["settings"],
+    "modelServiceActiveAfterClick" | "providerPreviewVisible" | "providerPreviewInViewport" | "taskModelSlotsVisible"
+  >
+> {
   return page.evaluate(() => {
     const viewportHeight = window.innerHeight;
     const viewportWidth = window.innerWidth;
+    const activeButton = document.querySelector<HTMLButtonElement>(".settings-nav__button--active");
     const providerSection = document.querySelector<HTMLElement>('[data-settings-section="provider"]');
     const providerStatus = document.querySelector<HTMLElement>(".provider-status--preview");
     const taskModelSlots = document.querySelector<HTMLElement>(".task-model-slots");
     const chatTaskModelSlot = document.querySelector<HTMLElement>('[data-task-model-slot="chat"]');
     return {
+      modelServiceActiveAfterClick:
+        activeButton?.getAttribute("aria-current") === "true" &&
+        ["Model service", "模型服务"].includes(activeButton.textContent?.trim() ?? ""),
       providerPreviewVisible: providerStatus !== null,
       providerPreviewInViewport: isInViewport(providerSection, viewportWidth, viewportHeight),
       taskModelSlotsVisible:
@@ -664,6 +742,45 @@ async function readProviderPreviewEvidence(
       return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.right > 0 && rect.top < height && rect.left < width;
     }
   });
+}
+
+async function readAvatarSectionEvidence(
+  page: Page
+): Promise<Pick<VisualAcceptanceSummaryInput["settings"], "avatarActiveAfterClick" | "live2dAvatarSectionVisible">> {
+  return page.evaluate(readAvatarSectionEvidenceFromDocument);
+}
+
+export function readAvatarSectionEvidenceFromDocument(): Pick<
+  VisualAcceptanceSummaryInput["settings"],
+  "avatarActiveAfterClick" | "live2dAvatarSectionVisible"
+> {
+  const viewportHeight = window.innerHeight;
+  const viewportWidth = window.innerWidth;
+  const activeButton = document.querySelector<HTMLButtonElement>(".settings-nav__button--active");
+  const modelSection = document.querySelector<HTMLElement>('[data-settings-section="model"]');
+  const live2DSelect = modelSection?.querySelector<HTMLSelectElement>('select[aria-label="Live2D model"]');
+  const live2DModelNote = modelSection?.querySelector<HTMLElement>(".live2d-model-note");
+  const modelActionButtonCount = modelSection?.querySelectorAll<HTMLButtonElement>(".settings-actions button").length ?? 0;
+  const activeButtonLabel = activeButton?.textContent?.trim() ?? "";
+  const avatarLabelVisible = /live\s*2d|avatar|形象/i.test(activeButtonLabel);
+
+  return {
+    avatarActiveAfterClick: activeButton?.getAttribute("aria-current") === "true" && avatarLabelVisible,
+    live2dAvatarSectionVisible:
+      isInViewport(modelSection, viewportWidth, viewportHeight) &&
+      isInViewport(live2DSelect, viewportWidth, viewportHeight) &&
+      (live2DSelect?.options.length ?? 0) > 0 &&
+      isInViewport(live2DModelNote, viewportWidth, viewportHeight) &&
+      modelActionButtonCount >= 2
+  };
+
+  function isInViewport(element: HTMLElement | null | undefined, width: number, height: number): boolean {
+    if (!element) {
+      return false;
+    }
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.right > 0 && rect.top < height && rect.left < width;
+  }
 }
 
 async function resizeElectronWindow(app: ElectronApplication, roleName: "pet" | "settings" | "chat", width: number, height: number): Promise<void> {

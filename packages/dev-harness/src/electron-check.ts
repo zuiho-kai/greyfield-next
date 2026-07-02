@@ -302,7 +302,7 @@ try {
     configPath,
     "assets/live2d/momose-hiyori/runtime/hiyori_free_t08.model3.json"
   );
-  await settingsWindow.getByRole("button", { name: /^(Import local model|导入本地模型)$/ }).waitFor();
+  await settingsWindow.getByRole("button", { name: /^(Import Live2D model|导入 Live2D 模型)$/ }).waitFor();
   await settingsWindow.getByLabel(/^(Scale|缩放)$/).fill("1.36");
   await settingsWindow.getByLabel("Model X").fill("42");
   await settingsWindow.getByLabel("Model Y").fill("-24");
@@ -675,7 +675,8 @@ async function verifySettingsNavAndI18n(
   settingsWindow: Page,
   path: string
 ): Promise<{
-  modelNavWorked: boolean;
+  avatarNavWorked: boolean;
+  modelServiceNavWorked: boolean;
   voiceNavWorked: boolean;
   windowNavWorked: boolean;
   chatNavOpened: boolean;
@@ -692,7 +693,8 @@ async function verifySettingsNavAndI18n(
     throw new Error("Settings nav overflowed or overlapped in a narrow settings window");
   }
 
-  const modelNavWorked = await clickSettingsNavAndVerify(settingsWindow, "模型", "model");
+  const avatarNavWorked = await clickSettingsNavAndVerify(settingsWindow, "形象", "model");
+  const modelServiceNavWorked = await clickSettingsNavAndVerify(settingsWindow, "模型服务", "provider");
   const voiceNavWorked = await clickSettingsNavAndVerify(settingsWindow, "语音", "voice");
   const windowNavWorked = await clickSettingsNavAndVerify(settingsWindow, "窗口", "window");
 
@@ -716,7 +718,8 @@ async function verifySettingsNavAndI18n(
   await chatWindow.waitForSelector(".chat-shell");
 
   return {
-    modelNavWorked,
+    avatarNavWorked,
+    modelServiceNavWorked,
     voiceNavWorked,
     windowNavWorked,
     chatNavOpened: true,
@@ -822,7 +825,7 @@ async function waitForAuxiliaryWindowVisibility(roleName: "settings" | "chat", v
 async function clickSettingsNavAndVerify(
   settingsWindow: Page,
   buttonName: string,
-  sectionId: "model" | "voice" | "window"
+  sectionId: "model" | "provider" | "voice" | "window"
 ): Promise<boolean> {
   await settingsWindow.getByRole("button", { name: buttonName, exact: true }).click();
   const section = settingsWindow.locator(`[data-settings-section="${sectionId}"]`);
