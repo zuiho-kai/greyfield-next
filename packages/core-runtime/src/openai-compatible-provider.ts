@@ -4,6 +4,7 @@ export interface OpenAICompatibleLLMProviderOptions {
   baseUrl: string;
   apiKey: string;
   model: string;
+  supportsVision?: boolean;
   fetch?: typeof fetch;
   timeoutMs?: number;
 }
@@ -19,10 +20,11 @@ interface OpenAICompatibleChunk {
 }
 
 export class OpenAICompatibleLLMProvider implements LLMProvider {
-  readonly supportsVision = true;
+  readonly supportsVision: boolean;
   private readonly fetchImpl: typeof fetch;
 
   constructor(private readonly options: OpenAICompatibleLLMProviderOptions) {
+    this.supportsVision = options.supportsVision === true;
     this.fetchImpl = options.fetch ?? fetch;
   }
 

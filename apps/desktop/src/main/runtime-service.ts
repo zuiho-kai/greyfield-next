@@ -133,7 +133,8 @@ export interface ProactiveDesktopCheckResult {
     | "active_runtime"
     | "recent_interrupt"
     | "no_screen_context"
-    | "provider_no_vision"
+    | "vision_model_missing"
+    | "vision_model_not_ready"
     | "screen_awareness_cooldown"
     | ProactiveMemoryDisplayResult["reason"];
 }
@@ -422,9 +423,15 @@ export class RuntimeService {
     if (attachments.length === 0) {
       return { displayed: false, reason: "no_screen_context" };
     }
-    const llm = this.createLLMProvider();
-    if (llm.supportsVision !== true) {
-      return { displayed: false, reason: "provider_no_vision" };
+    if (this.config.provider.visionModel.trim().length === 0) {
+      return { displayed: false, reason: "vision_model_missing" };
+    }
+    if (this.validateOpenAICompatibleVisionProviderConfig("chatting with screen awareness")) {
+      return { displayed: false, reason: "vision_model_not_ready" };
+    }
+    const llm = this.createVisionLLMProvider();
+    if (!llm) {
+      return { displayed: false, reason: "vision_model_not_ready" };
     }
 
     const messages: ChatMessage[] = [
@@ -453,11 +460,15 @@ export class RuntimeService {
       }
     ];
     let text = "";
-    for await (const chunk of llm.stream(messages)) {
-      text += chunk;
-      if (text.length > 240) {
-        break;
+    try {
+      for await (const chunk of llm.stream(messages)) {
+        text += chunk;
+        if (text.length > 240) {
+          break;
+        }
       }
+    } catch {
+      return { displayed: false, reason: "vision_model_not_ready" };
     }
     const normalized = text.replace(/\s+/g, " ").trim();
     if (normalized.length === 0) {
@@ -670,6 +681,7 @@ export class RuntimeService {
     const atomExtractionPolicy = this.resolveMemoryAtomExtractionPolicy();
     return new GreyfieldRuntime({
       llm: this.createLLMProvider(),
+      visionLlm: this.createVisionLLMProvider(),
       asr: this.createASRProvider(),
       tts: this.createTTSProvider(),
       memoryStore: this.memoryStore,
@@ -1033,6 +1045,27 @@ export class RuntimeService {
     return new MainFakeLLMProvider();
   }
 
+  private createVisionLLMProvider(): LLMProvider | undefined {
+    if (this.config.provider.visionModel.trim().length === 0) {
+      return undefined;
+    }
+    if (this.config.provider.llm === "openai-compatible") {
+      const providerConfigError = this.validateOpenAICompatibleVisionProviderConfig("chatting with screen awareness");
+      if (providerConfigError) {
+        return undefined;
+      }
+      return new OpenAICompatibleLLMProvider({
+        baseUrl: this.config.provider.baseUrl,
+        apiKey: this.config.provider.apiKey,
+        model: this.config.provider.visionModel,
+        supportsVision: true,
+        fetch: this.options.fetch,
+        timeoutMs: this.options.llmTimeoutMs
+      });
+    }
+    return new MainFakeVisionLLMProvider();
+  }
+
   private createASRProvider(): ASRProvider {
     if (this.config.provider.asr === "openai-compatible") {
       const providerConfigError = this.validateASRProviderConfig("transcribing");
@@ -1079,6 +1112,22 @@ export class RuntimeService {
     return "";
   }
 
+  private validateOpenAICompatibleVisionProviderConfig(action: "chatting with screen awareness"): string {
+    if (this.config.provider.llm !== "openai-compatible") {
+      return "";
+    }
+    if (this.config.provider.baseUrl.trim().length === 0) {
+      return `OpenAI-compatible Vision model needs a Base URL before ${action}.`;
+    }
+    if (this.config.provider.apiKey.trim().length === 0) {
+      return `OpenAI-compatible Vision model needs an API key before ${action}.`;
+    }
+    if (this.config.provider.visionModel.trim().length === 0) {
+      return `OpenAI-compatible Vision model needs a model before ${action}.`;
+    }
+    return "";
+  }
+
   private validateTTSProviderConfig(): string {
     if (this.config.provider.tts !== "openai-compatible") {
       return "";
@@ -1116,6 +1165,13 @@ export class RuntimeService {
 }
 
 class MainFakeLLMProvider implements LLMProvider {
+  async *stream(messages: ChatMessage[]): AsyncIterable<string> {
+    yield "你好，我醒着。";
+    yield "现在可以继续做桌宠了。";
+  }
+}
+
+class MainFakeVisionLLMProvider implements LLMProvider {
   readonly supportsVision = true;
 
   async *stream(messages: ChatMessage[]): AsyncIterable<string> {
@@ -1133,8 +1189,7 @@ class MainFakeLLMProvider implements LLMProvider {
       yield "可以继续问我画面里的细节。";
       return;
     }
-    yield "你好，我醒着。";
-    yield "现在可以继续做桌宠了。";
+    yield "我现在没有新的画面可看。";
   }
 }
 

@@ -89,7 +89,7 @@ import { createPetWindowShape } from "./pet-window-shape";
 import { placeSpeechBubble, type Rect } from "./speech-bubble-placement";
 import { resolveSpeechBubbleSourceText } from "./speech-bubble-source";
 import { formatSpeechBubbleText } from "./speech-bubble-text";
-import { normalizeSettingsLocale } from "./settings-i18n";
+import { createTextSettingPatch } from "./settings-input-patch";
 import { isMaskedApiKey } from "../shared/secrets";
 
 const queryModelPath =
@@ -172,6 +172,7 @@ if (typeof window !== "undefined") {
   const detachSettings = window.greyfield?.on("settings:changed", (config) => {
     Object.assign(state.settings, {
       providerModel: config.provider.model,
+      providerVisionModel: config.provider.visionModel,
       providerLLM: config.provider.llm,
       providerASR: config.provider.asr,
       providerASRModel: config.provider.asrModel,
@@ -262,23 +263,7 @@ function syncState(nextState: DesktopRendererState): void {
 }
 
 function updateSetting(key: keyof DesktopSettingsState, value: string): void {
-  const patch: Partial<DesktopSettingsState> = {
-    [key]: key === "settingsLocale" ? normalizeSettingsLocale(value) : value
-  };
-  if (
-    state.settings.providerLLM !== "openai-compatible" &&
-    value.trim().length > 0 &&
-    (key === "providerBaseUrl" || key === "providerApiKey" || key === "providerModel")
-  ) {
-    patch.providerLLM = "openai-compatible";
-  }
-  if (state.settings.providerASR !== "openai-compatible" && value.trim().length > 0 && key === "providerASRModel") {
-    patch.providerASR = "openai-compatible";
-  }
-  if (state.settings.providerTTS !== "openai-compatible" && value.trim().length > 0 && key === "providerTTSModel") {
-    patch.providerTTS = "openai-compatible";
-  }
-  syncState(bridge.updateSettings(patch));
+  syncState(bridge.updateSettings(createTextSettingPatch(state.settings, key, value)));
 }
 
 function updateNumericSetting(key: "modelScale" | "modelX" | "modelY" | "voiceVolume" | "proactivityLevel", value: string): void {

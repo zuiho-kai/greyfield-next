@@ -205,6 +205,15 @@
                 @input="$emit('update-setting', 'providerModel', valueFrom($event))"
               />
             </label>
+            <label>
+              <span>{{ t("field.visionModel") }}</span>
+              <input
+                :value="state.settings.providerVisionModel"
+                autocomplete="off"
+                spellcheck="false"
+                @input="$emit('update-setting', 'providerVisionModel', valueFrom($event))"
+              />
+            </label>
           </div>
           <div class="provider-status" :class="`provider-status--${providerStatus.tone}`" role="status">
             <strong>{{ providerStatus.label }}</strong>

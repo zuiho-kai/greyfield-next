@@ -39,13 +39,21 @@ describe("describeProviderStatus", () => {
     expect(describeProviderStatus(state, "en-US")).toMatchObject({ tone: "blocked", label: "Needs model" });
   });
 
-  it("marks complete OpenAI-compatible settings as ready", () => {
+  it("marks complete chat settings as usable while warning when Vision model is empty", () => {
     const state = createInitialDesktopRendererState();
     state.settings.providerLLM = "openai-compatible";
     state.settings.providerBaseUrl = "https://llm.example/v1";
     state.settings.providerHasApiKey = true;
     state.settings.providerModel = "mimo-v2.5";
 
+    expect(describeProviderStatus(state, "en-US")).toEqual({
+      tone: "ready",
+      label: "Ready to test",
+      detail:
+        "Screen awareness needs a Vision model. Leave it empty to keep screenshots unavailable instead of sending them to the Chat model."
+    });
+
+    state.settings.providerVisionModel = "mimo-vl";
     expect(describeProviderStatus(state, "en-US")).toEqual({
       tone: "ready",
       label: "Ready to test",

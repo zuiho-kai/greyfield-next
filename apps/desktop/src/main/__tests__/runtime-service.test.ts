@@ -329,6 +329,104 @@ describe("RuntimeService", () => {
     expect(events).toContainEqual({ type: "assistant.text.final", text: "远程" });
   });
 
+  it("routes OpenAI-compatible visual input to the Vision model and keeps text chat on the Chat model", async () => {
+    const fetch = vi.fn(async () => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"远程"}}]}\n\n'));
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        }
+      });
+      return new Response(body, { status: 200 });
+    });
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "secret",
+          model: "chat-model",
+          visionModel: "vision-model"
+        }
+      },
+      { fetch }
+    );
+
+    await service.handle({ type: "text.input", text: "普通聊天" }, () => undefined);
+    await service.handle(
+      {
+        type: "text.input",
+        text: "看一下",
+        attachments: [
+          {
+            id: "frame-1",
+            source: "observation-frame",
+            dataUrl: `data:image/png;base64,${Buffer.from("screen").toString("base64")}`,
+            mimeType: "image/png",
+            createdAt: "2026-06-30T00:00:00.000Z"
+          }
+        ]
+      },
+      () => undefined
+    );
+
+    const bodies = (fetch.mock.calls as unknown as Array<[unknown, RequestInit?]>).map(
+      (call) => JSON.parse(String(call[1]?.body)) as { model: string; messages: unknown[] }
+    );
+    expect(bodies.map((body) => body.model)).toEqual(["chat-model", "vision-model"]);
+    expect(JSON.stringify(bodies[0]?.messages)).not.toContain("image_url");
+    expect(JSON.stringify(bodies[1]?.messages)).toContain("image_url");
+  });
+
+  it("does not call the chat provider for manual visual input when the Vision model is missing", async () => {
+    const fetch = vi.fn();
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "secret",
+          model: "chat-model",
+          visionModel: ""
+        }
+      },
+      { fetch }
+    );
+    const events: unknown[] = [];
+
+    await service.handle(
+      {
+        type: "text.input",
+        text: "看一下",
+        attachments: [
+          {
+            id: "frame-1",
+            source: "observation-frame",
+            dataUrl: `data:image/png;base64,${Buffer.from("screen").toString("base64")}`,
+            mimeType: "image/png",
+            createdAt: "2026-06-30T00:00:00.000Z"
+          }
+        ]
+      },
+      (event) => {
+        events.push(event);
+      }
+    );
+
+    expect(events).toContainEqual({
+      type: "error",
+      message:
+        "Screen awareness needs a ready Vision model before Greyfield can use visual context. Greyfield kept the screenshot temporary and did not send it to the Chat model."
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("uses better memory extraction when enabled and the chat provider is ready", async () => {
     const memoryAtomStore = new TestMemoryAtomStore([]);
     const fetch = createMemoryExtractionFetch("success");
@@ -1973,6 +2071,20 @@ describe("RuntimeService", () => {
       },
       { threadId: "thread-screen-awareness" }
     );
+    const visionService = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          visionModel: "fake-vision-model"
+        },
+        ui: {
+          ...defaultGreyfieldConfig.ui,
+          proactivityLevel: 100
+        }
+      },
+      { threadId: "thread-screen-awareness" }
+    );
     const quietService = new RuntimeService(
       {
         ...defaultGreyfieldConfig,
@@ -1992,16 +2104,134 @@ describe("RuntimeService", () => {
       displayed: false,
       reason: "no_screen_context"
     });
-    await expect(activeService.checkProactiveScreenAwareness(visualContext)).resolves.toMatchObject({
+    await expect(activeService.checkProactiveScreenAwareness(visualContext)).resolves.toEqual({
+      displayed: false,
+      reason: "vision_model_missing"
+    });
+    await expect(visionService.checkProactiveScreenAwareness(visualContext)).resolves.toMatchObject({
       displayed: true,
       message: {
         text: "我看到桌面上有新的画面，可以陪你一起看。"
       }
     });
-    await expect(activeService.checkProactiveScreenAwareness(visualContext)).resolves.toEqual({
+    await expect(visionService.checkProactiveScreenAwareness(visualContext)).resolves.toEqual({
       displayed: false,
       reason: "screen_awareness_cooldown"
     });
+  });
+
+  it("does not call the provider for proactive screen awareness when Vision model settings are incomplete", async () => {
+    const visualContext = {
+      attachments: [
+        {
+          id: "screen-frame-1",
+          dataUrl: `data:image/png;base64,${Buffer.from("screen").toString("base64")}`,
+          mimeType: "image/png",
+          createdAt: "2026-06-30T00:00:00.000Z",
+          source: "observation-frame" as const
+        }
+      ],
+      observation: {
+        id: "screen-1",
+        mode: "normal" as const,
+        frameCount: 1,
+        dedupedFrameCount: 1,
+        source: "desktop-screen-awareness" as const
+      }
+    };
+    const fetch = vi.fn();
+    const missingBaseUrl = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "",
+          apiKey: "secret",
+          model: "chat-model",
+          visionModel: "vision-model"
+        },
+        ui: {
+          ...defaultGreyfieldConfig.ui,
+          proactivityLevel: 100
+        }
+      },
+      { fetch }
+    );
+    const missingApiKey = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "",
+          model: "chat-model",
+          visionModel: "vision-model"
+        },
+        ui: {
+          ...defaultGreyfieldConfig.ui,
+          proactivityLevel: 100
+        }
+      },
+      { fetch }
+    );
+
+    await expect(missingBaseUrl.checkProactiveScreenAwareness(visualContext)).resolves.toEqual({
+      displayed: false,
+      reason: "vision_model_not_ready"
+    });
+    await expect(missingApiKey.checkProactiveScreenAwareness(visualContext)).resolves.toEqual({
+      displayed: false,
+      reason: "vision_model_not_ready"
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("degrades proactive screen awareness when the Vision provider stream fails", async () => {
+    const visualContext = {
+      attachments: [
+        {
+          id: "screen-frame-1",
+          dataUrl: `data:image/png;base64,${Buffer.from("screen").toString("base64")}`,
+          mimeType: "image/png",
+          createdAt: "2026-06-30T00:00:00.000Z",
+          source: "observation-frame" as const
+        }
+      ],
+      observation: {
+        id: "screen-1",
+        mode: "normal" as const,
+        frameCount: 1,
+        dedupedFrameCount: 1,
+        source: "desktop-screen-awareness" as const
+      }
+    };
+    const fetch = vi.fn(async () => new Response("rate limited", { status: 429, statusText: "Too Many Requests" }));
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "secret",
+          model: "chat-model",
+          visionModel: "vision-model"
+        },
+        ui: {
+          ...defaultGreyfieldConfig.ui,
+          proactivityLevel: 100
+        }
+      },
+      { fetch }
+    );
+
+    await expect(service.checkProactiveScreenAwareness(visualContext)).resolves.toEqual({
+      displayed: false,
+      reason: "vision_model_not_ready"
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("uses the default low-disturbance policy for quiet windows and recent activity", async () => {

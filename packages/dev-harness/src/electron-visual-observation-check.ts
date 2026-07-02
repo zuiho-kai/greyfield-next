@@ -83,6 +83,21 @@ try {
   await controls.screenshot({ path: controlsScreenshotPath });
   summary.desktopControlToggleEnabled = true;
 
+  const initialObservationUsedCount = await runtimeEventCount(pet, "observation.used");
+  await sendDesktopControlMessage(controls, "先试一下没有视觉模型时会怎样。");
+  await waitForRuntimeEvent(
+    pet,
+    (event) => event.type === "error" && event.message.includes("Vision model")
+  );
+  await assertRuntimeEventCountStays(pet, "observation.used", initialObservationUsedCount, "Missing Vision model still used screen context");
+  summary.noVisionModelFallback = true;
+
+  await pet.evaluate(() => {
+    window.greyfield?.send("settings:update", { provider: { visionModel: "fake-vision-model" } });
+  });
+  await delay(500);
+  summary.visionModelConfigured = true;
+
   await sendDesktopControlMessage(controls, "看一下我桌面上是什么。");
   await waitForRuntimeEvent(pet, (event) => event.type === "observation.used" && event.observation.source === "desktop-screen-awareness");
   await waitForRuntimeEvent(
@@ -326,6 +341,19 @@ async function runtimeEventCount(page: Page, type: RuntimeOutputEvent["type"]): 
       (window as typeof window & { __greyfieldRuntimeEvents?: RuntimeOutputEvent[] }).__greyfieldRuntimeEvents ?? [];
     return events.filter((event) => event.type === type).length;
   }, type);
+}
+
+async function assertRuntimeEventCountStays(
+  page: Page,
+  type: RuntimeOutputEvent["type"],
+  expectedCount: number,
+  message: string
+): Promise<void> {
+  await delay(700);
+  const actualCount = await runtimeEventCount(page, type);
+  if (actualCount !== expectedCount) {
+    throw new Error(`${message}; expected ${expectedCount}, got ${actualCount}`);
+  }
 }
 
 async function triggerProactiveCheck(page: Page, context: RuntimeSceneContext): Promise<void> {
