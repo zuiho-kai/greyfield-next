@@ -12,7 +12,7 @@ export class SettingsController {
     private readonly save: SaveSettings,
     private readonly emitChanged: EmitSettingsChanged
   ) {
-    this.config = initialConfig;
+    this.config = mergeConfig(initialConfig);
   }
 
   getCurrent(): GreyfieldConfig {
@@ -24,7 +24,11 @@ export class SettingsController {
       this.config = mergeConfig({
         ...this.config,
         ...patch,
-        provider: { ...this.config.provider, ...patch.provider },
+        provider: {
+          ...this.config.provider,
+          ...patch.provider,
+          taskModels: { ...this.config.provider.taskModels, ...patch.provider?.taskModels }
+        },
         voice: { ...this.config.voice, ...patch.voice },
         audio: { ...this.config.audio, ...patch.audio },
         window: { ...this.config.window, ...patch.window },

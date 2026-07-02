@@ -40,14 +40,14 @@ describe("describeMemoryExtractionStatus", () => {
       providerBaseUrl: "",
       providerApiKey: "",
       providerHasApiKey: false,
-      providerModel: ""
+      providerMemoryModel: ""
     });
 
     expect(describeMemoryExtractionStatus(baseState, "en-US").detail).toContain("Base URL");
     expect(describeMemoryExtractionStatus(providerReadyState({ providerApiKey: "", providerHasApiKey: false }), "en-US").detail).toContain(
       "saved API key"
     );
-    expect(describeMemoryExtractionStatus(providerReadyState({ providerModel: "" }), "en-US").detail).toContain("chat model name");
+    expect(describeMemoryExtractionStatus(providerReadyState({ providerMemoryModel: "" }), "en-US").detail).toContain("memory model name");
   });
 
   it("shows ready wording when better memory is enabled and the provider is complete", () => {
@@ -161,6 +161,7 @@ function providerReadyState(
     providerApiKey: "",
     providerHasApiKey: true,
     providerModel: "remote-model",
+    providerMemoryModel: "memory-model",
     ...settings
   });
   state.memoryExtraction = memoryExtraction ?? null;

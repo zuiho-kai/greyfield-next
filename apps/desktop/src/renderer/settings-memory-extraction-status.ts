@@ -66,7 +66,7 @@ function describeMemoryExtractionProviderRequirement(state: DesktopRendererState
   if (!state.settings.providerHasApiKey && state.settings.providerApiKey.trim().length === 0) {
     return settingsT(locale, "memory.needsApiKey");
   }
-  if (state.settings.providerModel.trim().length === 0) {
+  if (state.settings.providerMemoryModel.trim().length === 0) {
     return settingsT(locale, "memory.needsModel");
   }
   return "";

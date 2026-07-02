@@ -28,7 +28,47 @@ describe("Settings persona state", () => {
       visionModel: "next-vision"
     });
     expect(settingsPatchToConfigPatch({ providerVisionModel: "vlm-model" })).toEqual({
-      provider: { visionModel: "vlm-model" }
+      provider: { visionModel: "vlm-model", taskModels: { vision: "vlm-model" } }
+    });
+  });
+
+  it("maps task model slots without mutating the Chat model", () => {
+    const settings = settingsFromConfig({
+      ...defaultGreyfieldConfig,
+      provider: {
+        ...defaultGreyfieldConfig.provider,
+        model: "chat-model",
+        taskModels: {
+          ...defaultGreyfieldConfig.provider.taskModels,
+          chat: "chat-model",
+          planner: "planner-model",
+          utility: "utility-model",
+          memory: "memory-model",
+          multimodal: "multimodal-model"
+        }
+      }
+    });
+
+    expect(settings).toMatchObject({
+      providerModel: "chat-model",
+      providerPlannerModel: "planner-model",
+      providerUtilityModel: "utility-model",
+      providerMemoryModel: "memory-model",
+      providerMultimodalModel: "multimodal-model"
+    });
+
+    expect(configFromSettings({ ...settings, providerMemoryModel: "next-memory" }).provider).toMatchObject({
+      model: "chat-model",
+      taskModels: expect.objectContaining({
+        chat: "chat-model",
+        memory: "next-memory"
+      })
+    });
+    expect(settingsPatchToConfigPatch({ providerPlannerModel: "next-planner" })).toEqual({
+      provider: { taskModels: { planner: "next-planner" } }
+    });
+    expect(settingsPatchToConfigPatch({ providerMultimodalModel: "next-multimodal" })).toEqual({
+      provider: { taskModels: { multimodal: "next-multimodal" } }
     });
   });
 

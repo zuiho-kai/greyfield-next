@@ -94,4 +94,42 @@ describe("SettingsController", () => {
     expect(next.memory.llmAtomExtractionEnabled).toBe(true);
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ memory: { llmAtomExtractionEnabled: true } }));
   });
+
+  it("updates task-specific model slots without overwriting chat provider state", async () => {
+    const save = vi.fn(async () => undefined);
+    const emit = vi.fn();
+    const controller = new SettingsController(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "secret",
+          model: "chat-model",
+          taskModels: {
+            ...defaultGreyfieldConfig.provider.taskModels,
+            chat: "chat-model",
+            memory: "memory-model"
+          }
+        }
+      },
+      save,
+      emit
+    );
+
+    const next = await controller.update({ provider: { taskModels: { planner: "planner-model" } } });
+
+    expect(next.provider).toMatchObject({
+      llm: "openai-compatible",
+      baseUrl: "https://llm.example/v1",
+      apiKey: "secret",
+      model: "chat-model",
+      taskModels: expect.objectContaining({
+        chat: "chat-model",
+        memory: "memory-model",
+        planner: "planner-model"
+      })
+    });
+  });
 });

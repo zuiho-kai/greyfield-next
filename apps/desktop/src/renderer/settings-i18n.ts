@@ -33,6 +33,7 @@ export type SettingsI18nKey =
   | "field.boundaries"
   | "field.greeting"
   | "field.provider"
+  | "field.taskModelSlots"
   | "field.baseUrl"
   | "field.apiKey"
   | "field.model"
@@ -41,6 +42,22 @@ export type SettingsI18nKey =
   | "field.asrModel"
   | "field.tts"
   | "field.ttsModel"
+  | "taskModel.chat.label"
+  | "taskModel.chat.detail"
+  | "taskModel.planner.label"
+  | "taskModel.planner.detail"
+  | "taskModel.utility.label"
+  | "taskModel.utility.detail"
+  | "taskModel.memory.label"
+  | "taskModel.memory.detail"
+  | "taskModel.vision.label"
+  | "taskModel.vision.detail"
+  | "taskModel.multimodal.label"
+  | "taskModel.multimodal.detail"
+  | "taskModel.voiceAsr.label"
+  | "taskModel.voiceAsr.detail"
+  | "taskModel.voiceTts.label"
+  | "taskModel.voiceTts.detail"
   | "field.voice"
   | "field.speak"
   | "field.volume"
@@ -313,6 +330,7 @@ const enUS: Record<SettingsI18nKey, string> = {
   "field.boundaries": "Boundaries",
   "field.greeting": "Greeting",
   "field.provider": "Provider",
+  "field.taskModelSlots": "Task model slots",
   "field.baseUrl": "Base URL",
   "field.apiKey": "API Key",
   "field.model": "Model",
@@ -321,6 +339,22 @@ const enUS: Record<SettingsI18nKey, string> = {
   "field.asrModel": "ASR Model",
   "field.tts": "TTS",
   "field.ttsModel": "TTS Model",
+  "taskModel.chat.label": "Chat reply",
+  "taskModel.chat.detail": "Normal messages use this model. Test LLM checks this slot.",
+  "taskModel.planner.label": "Planning / proactive",
+  "taskModel.planner.detail": "Reserved for proactive planning and initiative decisions.",
+  "taskModel.utility.label": "Tools / helper",
+  "taskModel.utility.detail": "Reserved for small helper/tool tasks; not used by current V1 tools yet.",
+  "taskModel.memory.label": "Memory",
+  "taskModel.memory.detail": "Better memory can use this slot later; current extraction still falls back safely when provider config is incomplete.",
+  "taskModel.vision.label": "Vision / VLM",
+  "taskModel.vision.detail": "Screenshots and Screen awareness visual context use this model first.",
+  "taskModel.multimodal.label": "Multimodal",
+  "taskModel.multimodal.detail": "Fallback for visual turns when Vision is empty; reserved for richer image/audio tasks.",
+  "taskModel.voiceAsr.label": "Voice ASR",
+  "taskModel.voiceAsr.detail": "Voice transcription model slot; provider wiring stays in Voice settings.",
+  "taskModel.voiceTts.label": "Voice TTS",
+  "taskModel.voiceTts.detail": "Voice playback model slot; full ASR/TTS routing remains reserved.",
   "field.voice": "Voice",
   "field.speak": "Speak",
   "field.volume": "Volume",
@@ -392,7 +426,7 @@ const enUS: Record<SettingsI18nKey, string> = {
   "memory.needsProvider": "Remember more details needs the OpenAI-compatible chat provider. Basic local memory stays on until the provider is ready.",
   "memory.needsBaseUrl": "Remember more details needs a chat provider Base URL. Basic local memory stays on until the provider is ready.",
   "memory.needsApiKey": "Remember more details needs a saved API key. Basic local memory stays on until the provider is ready.",
-  "memory.needsModel": "Remember more details needs a chat model name. Basic local memory stays on until the provider is ready.",
+  "memory.needsModel": "Remember more details needs a memory model name. Basic local memory stays on until the provider is ready.",
   "memory.about.title": "What this is",
   "memory.about.detail": "Greyfield saves small reminders from local chats so later replies can feel more continuous.",
   "memory.status.loading": "Refreshing saved memories",
@@ -594,6 +628,7 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "field.boundaries": "边界",
   "field.greeting": "问候语",
   "field.provider": "服务",
+  "field.taskModelSlots": "任务模型槽位",
   "field.baseUrl": "Base URL",
   "field.apiKey": "API Key",
   "field.model": "模型",
@@ -602,6 +637,22 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "field.asrModel": "ASR 模型",
   "field.tts": "TTS",
   "field.ttsModel": "TTS 模型",
+  "taskModel.chat.label": "聊天回复",
+  "taskModel.chat.detail": "普通聊天回复使用这个模型；测试 LLM 也检查这个槽位。",
+  "taskModel.planner.label": "规划 / 主动性",
+  "taskModel.planner.detail": "预留给主动规划和是否先开口的判断；视觉主动路径会优先使用视觉槽位。",
+  "taskModel.utility.label": "工具 / 辅助",
+  "taskModel.utility.detail": "预留给小型工具和辅助任务；当前 V1 工具还不会直接调用。",
+  "taskModel.memory.label": "记忆",
+  "taskModel.memory.detail": "预留给增强记忆模型；配置不完整或失败时仍诚实退回基础记忆。",
+  "taskModel.vision.label": "视觉 / VLM",
+  "taskModel.vision.detail": "截图和 Screen awareness 的画面上下文优先走这个模型。",
+  "taskModel.multimodal.label": "多模态",
+  "taskModel.multimodal.detail": "视觉槽位留空时作为画面输入的备选；更完整的图像/音频任务仍是预留。",
+  "taskModel.voiceAsr.label": "语音 ASR",
+  "taskModel.voiceAsr.detail": "语音转文字模型槽位；provider 开关仍在语音设置里。",
+  "taskModel.voiceTts.label": "语音 TTS",
+  "taskModel.voiceTts.detail": "语音播放模型槽位；完整语音 provider 路由暂不扩展。",
   "field.voice": "音色",
   "field.speak": "朗读",
   "field.volume": "音量",
@@ -673,7 +724,7 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "memory.needsProvider": "“记住更多细节”需要 OpenAI 兼容聊天服务。在服务就绪前，基础本地记忆会继续开启。",
   "memory.needsBaseUrl": "“记住更多细节”需要聊天服务 Base URL。在服务就绪前，基础本地记忆会继续开启。",
   "memory.needsApiKey": "“记住更多细节”需要已保存的 API key。在服务就绪前，基础本地记忆会继续开启。",
-  "memory.needsModel": "“记住更多细节”需要聊天模型名称。在服务就绪前，基础本地记忆会继续开启。",
+  "memory.needsModel": "“记住更多细节”需要记忆模型名称。在服务就绪前，基础本地记忆会继续开启。",
   "memory.about.title": "这是什么",
   "memory.about.detail": "Greyfield 会把本地聊天里的小提醒存下来，让之后的回复更连贯。",
   "memory.status.loading": "正在刷新已保存的记忆",

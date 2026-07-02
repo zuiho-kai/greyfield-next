@@ -129,6 +129,12 @@ describe("createDesktopRuntimeBridge", () => {
             visionModel: "vision-model-b",
             tts: "openai-compatible",
             ttsModel: "FunAudioLLM/CosyVoice2-0.5B",
+            taskModels: {
+              chat: "local-model-b",
+              vision: "vision-model-b",
+              voiceAsr: "whisper-1",
+              voiceTts: "FunAudioLLM/CosyVoice2-0.5B"
+            },
             baseUrl: "https://llm.example/v1",
             apiKey: "secret"
           },
@@ -173,7 +179,8 @@ describe("createDesktopRuntimeBridge", () => {
         "settings:update",
         {
           provider: {
-            model: "next-model"
+            model: "next-model",
+            taskModels: { chat: "next-model" }
           }
         }
       ]

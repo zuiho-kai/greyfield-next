@@ -173,6 +173,10 @@ if (typeof window !== "undefined") {
     Object.assign(state.settings, {
       providerModel: config.provider.model,
       providerVisionModel: config.provider.visionModel,
+      providerPlannerModel: config.provider.taskModels.planner,
+      providerUtilityModel: config.provider.taskModels.utility,
+      providerMemoryModel: config.provider.taskModels.memory,
+      providerMultimodalModel: config.provider.taskModels.multimodal,
       providerLLM: config.provider.llm,
       providerASR: config.provider.asr,
       providerASRModel: config.provider.asrModel,

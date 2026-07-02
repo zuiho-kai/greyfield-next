@@ -9,6 +9,16 @@ describe("Greyfield config", () => {
     expect(defaultGreyfieldConfig.provider.llm).toBe("fake");
     expect(defaultGreyfieldConfig.provider.asr).toBe("fake");
     expect(defaultGreyfieldConfig.provider.visionModel).toBe("");
+    expect(defaultGreyfieldConfig.provider.taskModels).toMatchObject({
+      chat: "greyfield-fake-v1",
+      planner: "greyfield-fake-v1",
+      utility: "greyfield-fake-v1",
+      memory: "greyfield-fake-v1",
+      vision: "",
+      multimodal: "",
+      voiceAsr: "whisper-1",
+      voiceTts: "FunAudioLLM/CosyVoice2-0.5B"
+    });
     expect(defaultGreyfieldConfig.provider.asrModel).toBe("whisper-1");
     expect(defaultGreyfieldConfig.provider.baseUrl).toBe("https://api.openai.com/v1");
     expect(defaultGreyfieldConfig.audio.microphoneId).toBe("default");
@@ -43,6 +53,13 @@ describe("Greyfield config", () => {
       visionModel: "",
       asrModel: "whisper-1",
       ttsModel: "FunAudioLLM/CosyVoice2-0.5B",
+      taskModels: expect.objectContaining({
+        chat: "local-test-model",
+        planner: "local-test-model",
+        utility: "local-test-model",
+        memory: "local-test-model",
+        vision: ""
+      }),
       baseUrl: "https://api.openai.com/v1",
       apiKey: ""
     });
@@ -62,6 +79,57 @@ describe("Greyfield config", () => {
     expect(config.ui.locale).toBe("zh-CN");
     expect(config.ui.proactivityLevel).toBe(80);
     expect(config.memory.llmAtomExtractionEnabled).toBe(true);
+  });
+
+  it("migrates legacy model fields into MaiBot-style task model slots", () => {
+    const config = mergeConfig({
+      provider: {
+        model: "chat-model",
+        visionModel: "vision-model",
+        asrModel: "asr-model",
+        ttsModel: "tts-model"
+      }
+    });
+
+    expect(config.provider.taskModels).toMatchObject({
+      chat: "chat-model",
+      planner: "chat-model",
+      utility: "chat-model",
+      memory: "chat-model",
+      vision: "vision-model",
+      multimodal: "vision-model",
+      voiceAsr: "asr-model",
+      voiceTts: "tts-model"
+    });
+    expect(config.provider).toMatchObject({
+      model: "chat-model",
+      visionModel: "vision-model",
+      asrModel: "asr-model",
+      ttsModel: "tts-model"
+    });
+  });
+
+  it("keeps task-specific model slots isolated from the chat model", () => {
+    const config = mergeConfig({
+      provider: {
+        model: "chat-model",
+        taskModels: {
+          planner: "planner-model",
+          memory: "memory-model",
+          multimodal: "multimodal-model"
+        }
+      }
+    });
+
+    expect(config.provider.model).toBe("chat-model");
+    expect(config.provider.visionModel).toBe("");
+    expect(config.provider.taskModels).toMatchObject({
+      chat: "chat-model",
+      planner: "planner-model",
+      memory: "memory-model",
+      vision: "",
+      multimodal: "multimodal-model"
+    });
   });
 
   it("normalizes unsupported UI locales to the default Settings language", () => {

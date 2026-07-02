@@ -52,7 +52,7 @@ try {
 
     await settingsWindow.getByLabel("Base URL").fill("");
     await settingsWindow.getByLabel("API Key").fill("");
-    await settingsWindow.getByLabel(/^(Model|模型)$/, { exact: true }).fill("");
+    await settingsWindow.getByLabel(/^(Chat reply|聊天回复)$/, { exact: true }).fill("");
     await providerSelect.selectOption("openai-compatible");
     await settingsWindow.locator(".provider-status--blocked", { hasText: /Needs Base URL|需要 Base URL/ }).waitFor();
     await expectTestLlmBlocked(settingsWindow, /OpenAI-compatible chat needs a Base URL|Base URL/);
@@ -71,7 +71,7 @@ try {
     await expectTestLlmBlocked(settingsWindow, /Choose the provider model name|模型名称/);
     assertProviderRequestCount(0, "missing model");
 
-    await settingsWindow.getByLabel(/^(Model|模型)$/, { exact: true }).fill("settings-provider-test-model");
+    await settingsWindow.getByLabel(/^(Chat reply|聊天回复)$/, { exact: true }).fill("settings-provider-test-model");
     await settingsWindow.locator(".provider-status--ready", { hasText: /Ready to test|可以测试/ }).waitFor();
     const testButton = settingsWindow.getByRole("button", { name: /^(Test LLM|测试 LLM)$/ });
     if (!(await testButton.isEnabled())) {
