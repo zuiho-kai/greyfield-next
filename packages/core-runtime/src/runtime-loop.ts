@@ -33,6 +33,7 @@ import type { RuntimeImageAttachment, RuntimeObservationMetadata } from "./visio
 
 export interface GreyfieldRuntimeOptions {
   llm: LLMProvider;
+  visionLlm?: LLMProvider;
   asr?: ASRProvider;
   tts: TTSProvider;
   memoryStore: MemoryStore;
@@ -168,11 +169,12 @@ export class GreyfieldRuntime {
     const text = input.text;
     const attachments = normalizeRuntimeImageAttachments(input.attachments);
     const observation = createObservationMetadata(input.observation, attachments);
-    if (attachments.length > 0 && this.options.llm.supportsVision !== true) {
+    const llm = attachments.length > 0 ? this.options.visionLlm : this.options.llm;
+    if (!llm || (attachments.length > 0 && llm.supportsVision !== true)) {
       await emit({
         type: "error",
         message:
-          "This chat provider does not support vision input yet. Greyfield kept the visual context temporary and did not send it. Switch to a vision-capable provider or ask without the image."
+          "Screen awareness needs a Vision model before Greyfield can use visual context. Greyfield kept the screenshot temporary and did not send it to the Chat model."
       });
       return;
     }
@@ -254,7 +256,7 @@ export class GreyfieldRuntime {
     let sentenceBuffer = "";
     let usedTtsCharacters = 0;
 
-    for await (const chunk of this.options.llm.stream(messages, undefined, { signal: this.activeAbortController.signal })) {
+    for await (const chunk of llm.stream(messages, undefined, { signal: this.activeAbortController.signal })) {
       if (this.interrupted) {
         break;
       }

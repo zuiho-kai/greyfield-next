@@ -44,6 +44,9 @@ export function describeProviderStatus(state: DesktopRendererState, locale?: Set
   return {
     tone: "ready",
     label: settingsT(locale, "provider.ready.label"),
-    detail: settingsT(locale, "provider.ready.detail")
+    detail:
+      state.settings.providerVisionModel.trim().length === 0
+        ? settingsT(locale, "provider.visionModel.detail")
+        : settingsT(locale, "provider.ready.detail")
   };
 }

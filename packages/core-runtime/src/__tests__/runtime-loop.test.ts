@@ -61,6 +61,11 @@ describe("GreyfieldRuntime", () => {
     const sessionStore = new InMemorySessionStore("session-vision");
     const runtime = new GreyfieldRuntime({
       llm: {
+        stream: async function* () {
+          throw new Error("Chat model should not receive image input.");
+        }
+      },
+      visionLlm: {
         supportsVision: true,
         stream: async function* (messages) {
           capturedMessages = messages;
@@ -120,6 +125,11 @@ describe("GreyfieldRuntime", () => {
     let capturedMessages: Parameters<LLMProvider["stream"]>[0] = [];
     const runtime = new GreyfieldRuntime({
       llm: {
+        stream: async function* () {
+          throw new Error("Chat model should not receive image input.");
+        }
+      },
+      visionLlm: {
         supportsVision: true,
         stream: async function* (messages) {
           capturedMessages = messages;
@@ -158,6 +168,11 @@ describe("GreyfieldRuntime", () => {
     const sessionStore = new InMemorySessionStore("session-screen-awareness");
     const runtime = new GreyfieldRuntime({
       llm: {
+        stream: async function* () {
+          throw new Error("Chat model should not receive screen awareness image input.");
+        }
+      },
+      visionLlm: {
         supportsVision: true,
         stream: async function* (messages) {
           capturedMessages = messages;
@@ -202,6 +217,44 @@ describe("GreyfieldRuntime", () => {
     });
   });
 
+  it("routes visual turns to the Vision model and ordinary text to the Chat model", async () => {
+    let chatCalls = 0;
+    let visionCalls = 0;
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* () {
+          chatCalls += 1;
+          yield "Chat reply.";
+        }
+      },
+      visionLlm: {
+        supportsVision: true,
+        stream: async function* () {
+          visionCalls += 1;
+          yield "Vision reply.";
+        }
+      },
+      tts: { synthesize: async (text) => new Uint8Array([text.length]) },
+      memoryStore,
+      sessionStore: new InMemorySessionStore("session-routing"),
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default"
+    });
+
+    await runtime.handle({ type: "text.input", text: "普通聊天" }, () => undefined);
+    await runtime.handle(
+      {
+        type: "text.input",
+        text: "看一下",
+        attachments: [makeImageAttachment("frame-1", "screenshot", "A")]
+      },
+      () => undefined
+    );
+
+    expect(chatCalls).toBe(1);
+    expect(visionCalls).toBe(1);
+  });
+
   it("degrades clearly when screen awareness context reaches a provider without vision", async () => {
     let streamCalled = false;
     const sessionStore = new InMemorySessionStore("session-screen-awareness-no-vision");
@@ -242,7 +295,7 @@ describe("GreyfieldRuntime", () => {
     expect(events).toContainEqual({
       type: "error",
       message:
-        "This chat provider does not support vision input yet. Greyfield kept the visual context temporary and did not send it. Switch to a vision-capable provider or ask without the image."
+        "Screen awareness needs a Vision model before Greyfield can use visual context. Greyfield kept the screenshot temporary and did not send it to the Chat model."
     });
     expect(await sessionStore.getRecent(2)).toEqual([]);
   });
@@ -280,7 +333,7 @@ describe("GreyfieldRuntime", () => {
     expect(events).toContainEqual({
       type: "error",
       message:
-        "This chat provider does not support vision input yet. Greyfield kept the visual context temporary and did not send it. Switch to a vision-capable provider or ask without the image."
+        "Screen awareness needs a Vision model before Greyfield can use visual context. Greyfield kept the screenshot temporary and did not send it to the Chat model."
     });
     expect(await sessionStore.getRecent(2)).toEqual([]);
   });

@@ -6,6 +6,24 @@ afterEach(() => {
 });
 
 describe("OpenAICompatibleLLMProvider", () => {
+  it("does not declare vision support unless the caller creates a Vision model provider", () => {
+    expect(
+      new OpenAICompatibleLLMProvider({
+        baseUrl: "https://example.test/v1",
+        apiKey: "test-key",
+        model: "chat-model"
+      }).supportsVision
+    ).toBe(false);
+    expect(
+      new OpenAICompatibleLLMProvider({
+        baseUrl: "https://example.test/v1",
+        apiKey: "test-key",
+        model: "vision-model",
+        supportsVision: true
+      }).supportsVision
+    ).toBe(true);
+  });
+
   it("streams chat completion delta content from an OpenAI-compatible SSE response", async () => {
     const fetch = vi.fn(async () => {
       const body = new ReadableStream<Uint8Array>({

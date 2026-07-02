@@ -172,6 +172,7 @@ if (typeof window !== "undefined") {
   const detachSettings = window.greyfield?.on("settings:changed", (config) => {
     Object.assign(state.settings, {
       providerModel: config.provider.model,
+      providerVisionModel: config.provider.visionModel,
       providerLLM: config.provider.llm,
       providerASR: config.provider.asr,
       providerASRModel: config.provider.asrModel,
@@ -268,7 +269,7 @@ function updateSetting(key: keyof DesktopSettingsState, value: string): void {
   if (
     state.settings.providerLLM !== "openai-compatible" &&
     value.trim().length > 0 &&
-    (key === "providerBaseUrl" || key === "providerApiKey" || key === "providerModel")
+    (key === "providerBaseUrl" || key === "providerApiKey" || key === "providerModel" || key === "providerVisionModel")
   ) {
     patch.providerLLM = "openai-compatible";
   }

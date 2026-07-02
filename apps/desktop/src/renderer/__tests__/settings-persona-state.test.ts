@@ -11,6 +11,27 @@ import {
 } from "../settings-state-mapper";
 
 describe("Settings persona state", () => {
+  it("maps the separate Vision model between persisted config, renderer state, and patches", () => {
+    const settings = settingsFromConfig({
+      ...defaultGreyfieldConfig,
+      provider: {
+        ...defaultGreyfieldConfig.provider,
+        model: "chat-model",
+        visionModel: "vision-model"
+      }
+    });
+
+    expect(settings.providerModel).toBe("chat-model");
+    expect(settings.providerVisionModel).toBe("vision-model");
+    expect(configFromSettings({ ...settings, providerVisionModel: "next-vision" }).provider).toMatchObject({
+      model: "chat-model",
+      visionModel: "next-vision"
+    });
+    expect(settingsPatchToConfigPatch({ providerVisionModel: "vlm-model" })).toEqual({
+      provider: { visionModel: "vlm-model" }
+    });
+  });
+
   it("maps proactivity level between persisted config, renderer state, and patches", () => {
     const settings = settingsFromConfig({
       ...defaultGreyfieldConfig,

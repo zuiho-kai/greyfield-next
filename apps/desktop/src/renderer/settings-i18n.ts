@@ -36,6 +36,7 @@ export type SettingsI18nKey =
   | "field.baseUrl"
   | "field.apiKey"
   | "field.model"
+  | "field.visionModel"
   | "field.asr"
   | "field.asrModel"
   | "field.tts"
@@ -96,6 +97,8 @@ export type SettingsI18nKey =
   | "provider.apiKey.detail"
   | "provider.model.label"
   | "provider.model.detail"
+  | "provider.visionModel.label"
+  | "provider.visionModel.detail"
   | "provider.ready.label"
   | "provider.ready.detail"
   | "memory.standard.label"
@@ -313,6 +316,7 @@ const enUS: Record<SettingsI18nKey, string> = {
   "field.baseUrl": "Base URL",
   "field.apiKey": "API Key",
   "field.model": "Model",
+  "field.visionModel": "Vision model",
   "field.asr": "ASR",
   "field.asrModel": "ASR Model",
   "field.tts": "TTS",
@@ -373,6 +377,8 @@ const enUS: Record<SettingsI18nKey, string> = {
   "provider.apiKey.detail": "Add an API key before testing or chatting with the real provider.",
   "provider.model.label": "Needs model",
   "provider.model.detail": "Choose the provider model name before testing the LLM.",
+  "provider.visionModel.label": "Vision not configured",
+  "provider.visionModel.detail": "Screen awareness needs a Vision model. Leave it empty to keep screenshots unavailable instead of sending them to the Chat model.",
   "provider.ready.label": "Ready to test",
   "provider.ready.detail": "Provider settings are complete. Run Test LLM before a real chat.",
   "memory.standard.label": "Basic memory on",
@@ -591,6 +597,7 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "field.baseUrl": "Base URL",
   "field.apiKey": "API Key",
   "field.model": "模型",
+  "field.visionModel": "视觉模型",
   "field.asr": "ASR",
   "field.asrModel": "ASR 模型",
   "field.tts": "TTS",
@@ -651,6 +658,8 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "provider.apiKey.detail": "测试或真实聊天前，请先填写 API key。",
   "provider.model.label": "需要模型",
   "provider.model.detail": "测试 LLM 前，请先填写模型名称。",
+  "provider.visionModel.label": "未配置视觉模型",
+  "provider.visionModel.detail": "屏幕感知需要单独的视觉模型。留空时不会把截图发给聊天模型。",
   "provider.ready.label": "可以测试",
   "provider.ready.detail": "模型服务配置已完整。真实聊天前建议先运行 Test LLM。",
   "memory.standard.label": "基础记忆开启",

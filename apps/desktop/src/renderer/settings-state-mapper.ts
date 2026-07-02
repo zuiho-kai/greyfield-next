@@ -13,6 +13,7 @@ export function settingsFromConfig(config: RendererGreyfieldConfig | GreyfieldCo
     providerApiKey: isMaskedApiKey(config.provider.apiKey) ? "" : config.provider.apiKey,
     providerHasApiKey: hasApiKey,
     providerModel: config.provider.model,
+    providerVisionModel: config.provider.visionModel,
     providerASRModel: config.provider.asrModel,
     providerTTS: config.provider.tts,
     providerTTSModel: config.provider.ttsModel,
@@ -44,6 +45,7 @@ export function configFromSettings(settings: DesktopSettingsState): GreyfieldCon
       baseUrl: settings.providerBaseUrl,
       apiKey: settings.providerApiKey,
       model: settings.providerModel,
+      visionModel: settings.providerVisionModel,
       asrModel: settings.providerASRModel,
       tts: settings.providerTTS,
       ttsModel: settings.providerTTSModel
@@ -88,6 +90,9 @@ export function settingsPatchToConfigPatch(patch: DesktopSettingsPatch): Greyfie
   const configPatch: GreyfieldConfigPatch = {};
   if (patch.providerModel !== undefined) {
     configPatch.provider = { ...configPatch.provider, model: patch.providerModel };
+  }
+  if (patch.providerVisionModel !== undefined) {
+    configPatch.provider = { ...configPatch.provider, visionModel: patch.providerVisionModel };
   }
   if (patch.providerTTS !== undefined) {
     configPatch.provider = { ...configPatch.provider, tts: patch.providerTTS };
