@@ -244,7 +244,7 @@ button {
 
 .desktop-control-actions {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 7px;
 }
 
@@ -313,6 +313,18 @@ button {
 .desktop-control-button--stop:hover:not(:disabled) {
   border-color: rgba(143, 49, 80, 0.28);
   background: #7b2442;
+  color: #ffffff;
+}
+
+.desktop-control-button--quit {
+  border-color: rgba(112, 66, 24, 0.18);
+  background: rgba(112, 66, 24, 0.14);
+  color: #6b3f18;
+}
+
+.desktop-control-button--quit:hover:not(:disabled) {
+  border-color: rgba(112, 66, 24, 0.28);
+  background: #704218;
   color: #ffffff;
 }
 

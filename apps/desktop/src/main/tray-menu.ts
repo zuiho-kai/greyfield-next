@@ -28,6 +28,6 @@ export function buildTrayMenuTemplate(actions: TrayMenuActions, state: TrayMenuS
     },
     { label: "Interrupt", click: actions.interrupt },
     { type: "separator" },
-    { label: "Quit", click: actions.quit }
+    { label: "Quit Greyfield", click: actions.quit }
   ];
 }
