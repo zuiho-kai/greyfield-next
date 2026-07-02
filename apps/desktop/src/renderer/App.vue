@@ -27,6 +27,7 @@
     @open-settings="openSettings"
     @toggle-model-pass-through="setModelPassThrough(!state.window.modelPassThrough)"
     @hide-controls="hideControls"
+    @quit="quitGreyfield"
     @drag-start="handleControlsDragStart"
     @drag-move="handleControlsDragMove"
     @drag-end="handleControlsDragEnd"
@@ -483,6 +484,10 @@ function hidePet(): void {
 
 function hideControls(): void {
   window.greyfield?.send("window:hide-controls", {});
+}
+
+function quitGreyfield(): void {
+  window.greyfield?.send("window:quit", {});
 }
 
 function handleControlsDragStart(payload: { screenX: number; screenY: number }): void {

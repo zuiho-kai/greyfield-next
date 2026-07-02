@@ -295,6 +295,7 @@ export type SettingsI18nKey =
   | "controls.actions"
   | "controls.openSettings"
   | "controls.hide"
+  | "controls.quit"
   | "controls.stop"
   | "controls.mic.start"
   | "controls.mic.stop"
@@ -594,6 +595,7 @@ const enUS: Record<SettingsI18nKey, string> = {
   "controls.actions": "Desktop pet quick actions",
   "controls.openSettings": "Open Settings",
   "controls.hide": "Hide controls",
+  "controls.quit": "Quit Greyfield and stop background processes",
   "controls.stop": "Stop reply or voice",
   "controls.mic.start": "Start microphone input",
   "controls.mic.stop": "Stop microphone input",
@@ -894,6 +896,7 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "controls.actions": "桌宠快捷操作",
   "controls.openSettings": "打开设置",
   "controls.hide": "隐藏控制条",
+  "controls.quit": "退出 Greyfield 并停止后台进程",
   "controls.stop": "停止回复或语音",
   "controls.mic.start": "开始麦克风输入",
   "controls.mic.stop": "停止麦克风输入",

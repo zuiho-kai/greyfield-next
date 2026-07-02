@@ -148,6 +148,7 @@ export interface DesktopIpcRequestMap {
   "window:open-chat": {};
   "window:hide-pet": {};
   "window:hide-controls": {};
+  "window:quit": {};
   "window:controls-drag-start": { screenX: number; screenY: number };
   "window:controls-drag-move": { screenX: number; screenY: number };
   "window:controls-drag-end": {};

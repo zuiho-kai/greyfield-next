@@ -297,6 +297,7 @@ function registerIpc(): void {
   ipcMain.on("window:open-chat", () => showWindowIfUsable(chatWindow));
   ipcMain.on("window:hide-pet", () => hideWindowIfUsable(petWindow));
   ipcMain.on("window:hide-controls", () => hideWindowIfUsable(controlsWindow));
+  ipcMain.on("window:quit", () => app.quit());
   ipcMain.on("window:controls-drag-start", (_event, payload: { screenX: number; screenY: number }) => {
     startControlsWindowDrag(payload);
   });

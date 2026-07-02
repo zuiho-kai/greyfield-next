@@ -25,7 +25,7 @@ describe("buildTrayMenuTemplate", () => {
       "Model Pass Through",
       "Interrupt",
       "separator",
-      "Quit"
+      "Quit Greyfield"
     ]);
   });
 
