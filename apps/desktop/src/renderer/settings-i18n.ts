@@ -35,6 +35,7 @@ export type SettingsI18nKey =
   | "field.greeting"
   | "field.provider"
   | "field.taskModelSlots"
+  | "field.taskModelSlots.detail"
   | "field.baseUrl"
   | "field.apiKey"
   | "field.model"
@@ -333,6 +334,7 @@ const enUS: Record<SettingsI18nKey, string> = {
   "field.greeting": "Greeting",
   "field.provider": "Provider",
   "field.taskModelSlots": "Task model slots",
+  "field.taskModelSlots.detail": "Assign a model per task path. Chat uses the chat reply slot; visual turns use Vision or Multimodal.",
   "field.baseUrl": "Base URL",
   "field.apiKey": "API Key",
   "field.model": "Model",
@@ -632,6 +634,7 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "field.greeting": "问候语",
   "field.provider": "服务",
   "field.taskModelSlots": "任务模型槽位",
+  "field.taskModelSlots.detail": "按任务路径分配模型。普通聊天走聊天回复；画面输入走视觉或多模态。",
   "field.baseUrl": "Base URL",
   "field.apiKey": "API Key",
   "field.model": "模型",

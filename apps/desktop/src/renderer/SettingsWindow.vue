@@ -200,7 +200,7 @@
           <div class="task-model-slots" :aria-label="t('field.taskModelSlots')">
             <header class="task-model-slots__header">
               <strong>{{ t("field.taskModelSlots") }}</strong>
-              <span>{{ t("taskModel.chat.detail") }}</span>
+              <span>{{ t("field.taskModelSlots.detail") }}</span>
             </header>
             <label
               v-for="slot in taskModelSlots"

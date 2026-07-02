@@ -162,19 +162,35 @@ function normalizeProviderConfig(partial: GreyfieldConfigPatch["provider"] | und
   const input = partial ?? {};
   const taskModels = input.taskModels ?? {};
   const chatModel = normalizeModelSlot(
-    modelFieldOverridesDefault(input.model, defaultGreyfieldConfig.provider.model) ? input.model : taskModels.chat,
+    taskModelSlotIsPresent(taskModels, "chat")
+      ? taskModels.chat
+      : modelFieldOverridesDefault(input.model, defaultGreyfieldConfig.provider.model)
+        ? input.model
+        : undefined,
     defaultGreyfieldConfig.provider.taskModels.chat
   );
   const visionModel = normalizeModelSlot(
-    modelFieldOverridesDefault(input.visionModel, defaultGreyfieldConfig.provider.visionModel) ? input.visionModel : taskModels.vision,
+    taskModelSlotIsPresent(taskModels, "vision")
+      ? taskModels.vision
+      : modelFieldOverridesDefault(input.visionModel, defaultGreyfieldConfig.provider.visionModel)
+        ? input.visionModel
+        : undefined,
     defaultGreyfieldConfig.provider.taskModels.vision
   );
   const voiceAsrModel = normalizeModelSlot(
-    modelFieldOverridesDefault(input.asrModel, defaultGreyfieldConfig.provider.asrModel) ? input.asrModel : taskModels.voiceAsr,
+    taskModelSlotIsPresent(taskModels, "voiceAsr")
+      ? taskModels.voiceAsr
+      : modelFieldOverridesDefault(input.asrModel, defaultGreyfieldConfig.provider.asrModel)
+        ? input.asrModel
+        : undefined,
     defaultGreyfieldConfig.provider.taskModels.voiceAsr
   );
   const voiceTtsModel = normalizeModelSlot(
-    modelFieldOverridesDefault(input.ttsModel, defaultGreyfieldConfig.provider.ttsModel) ? input.ttsModel : taskModels.voiceTts,
+    taskModelSlotIsPresent(taskModels, "voiceTts")
+      ? taskModels.voiceTts
+      : modelFieldOverridesDefault(input.ttsModel, defaultGreyfieldConfig.provider.ttsModel)
+        ? input.ttsModel
+        : undefined,
     defaultGreyfieldConfig.provider.taskModels.voiceTts
   );
   const normalizedTaskModels: GreyfieldTaskModelConfig = {
@@ -200,6 +216,13 @@ function normalizeProviderConfig(partial: GreyfieldConfigPatch["provider"] | und
 
 function normalizeModelSlot(value: string | undefined, fallback: string): string {
   return typeof value === "string" ? value.trim() : fallback;
+}
+
+function taskModelSlotIsPresent(
+  taskModels: Partial<GreyfieldTaskModelConfig>,
+  slot: GreyfieldTaskModelSlot
+): boolean {
+  return Object.prototype.hasOwnProperty.call(taskModels, slot);
 }
 
 function modelFieldOverridesDefault(value: string | undefined, defaultValue: string): boolean {
