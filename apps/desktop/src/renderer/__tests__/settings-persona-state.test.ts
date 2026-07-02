@@ -92,6 +92,24 @@ describe("Settings persona state", () => {
     });
   });
 
+  it("maps enhanced memory extraction interval through renderer settings", () => {
+    const settings = settingsFromConfig({
+      ...defaultGreyfieldConfig,
+      memory: {
+        ...defaultGreyfieldConfig.memory,
+        llmAtomExtractionInterval: 6
+      }
+    });
+
+    expect(settings.llmAtomExtractionInterval).toBe(6);
+    expect(configFromSettings({ ...settings, llmAtomExtractionInterval: 8 }).memory).toMatchObject({
+      llmAtomExtractionInterval: 8
+    });
+    expect(settingsPatchToConfigPatch({ llmAtomExtractionInterval: 3 })).toEqual({
+      memory: { llmAtomExtractionInterval: 3 }
+    });
+  });
+
   it("maps the window layer mode between persisted config, renderer state, and patches", () => {
     const settings = settingsFromConfig({
       ...defaultGreyfieldConfig,

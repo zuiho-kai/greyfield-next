@@ -955,6 +955,14 @@ h1 {
   padding-bottom: 0;
 }
 
+.settings-section--disabled {
+  opacity: 0.72;
+}
+
+.settings-section--disabled input:disabled {
+  cursor: not-allowed;
+}
+
 .settings-section__header {
   display: flex;
   align-items: center;
@@ -1232,6 +1240,11 @@ h1 {
 .memory-extraction-status--standard {
   border-color: rgba(37, 56, 88, 0.18);
   background: rgba(37, 56, 88, 0.08);
+}
+
+.memory-extraction-status--disabled {
+  border-color: rgba(37, 56, 88, 0.2);
+  background: rgba(37, 56, 88, 0.12);
 }
 
 .settings-actions button,

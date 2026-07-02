@@ -126,6 +126,8 @@ export type SettingsI18nKey =
   | "memory.betterUsed.label"
   | "memory.betterUsed.detail"
   | "memory.noSaved.label"
+  | "memory.development.label"
+  | "memory.development.detail"
   | "memory.ready.label"
   | "memory.ready.detail"
   | "memory.needsProvider"
@@ -370,7 +372,7 @@ const enUS: Record<SettingsI18nKey, string> = {
   "field.bubble": "Bubble",
   "field.rememberedMoments": "Remembered moments",
   "field.proactivity": "Proactivity",
-  "field.betterMemory": "Better memory",
+  "field.betterMemory": "Memory system",
   "windowLayerMode.followClick": "By click (default)",
   "windowLayerMode.controlsFront": "Input box stays in front",
   "windowLayerMode.petFront": "Model stays in front",
@@ -426,6 +428,8 @@ const enUS: Record<SettingsI18nKey, string> = {
   "memory.betterUsed.label": "Remembered more detail",
   "memory.betterUsed.detail": "The last message also used the configured Memory model to notice richer details. Basic local memory stayed available.",
   "memory.noSaved.label": "Nothing new to remember",
+  "memory.development.label": "In development",
+  "memory.development.detail": "Memory is paused while recall is redesigned. Greyfield will not recall saved memory, write new memory, create summaries, or call the Memory model.",
   "memory.ready.label": "Ready to remember more detail",
   "memory.ready.detail": "Enhanced memory is not batched by N turns. After each user message, Greyfield tries to call the configured Memory model to extract subtler long-term details; obvious non-memory noise can be skipped locally. Recall still does not use a model: local scoring selects memory text, then the Chat model reads it in the next prompt. API tokens are spent during extraction, not recall.",
   "memory.needsProvider": "Enhanced memory needs the OpenAI-compatible chat provider. Basic local memory stays on until the provider is ready.",
@@ -433,7 +437,7 @@ const enUS: Record<SettingsI18nKey, string> = {
   "memory.needsApiKey": "Enhanced memory needs a saved API key. Basic local memory stays on until the provider is ready.",
   "memory.needsModel": "Enhanced memory needs a memory model name. Basic local memory stays on until the provider is ready.",
   "memory.about.title": "How memory is used",
-  "memory.about.detail": "Before every reply, Greyfield locally recalls relevant memory text and adds it to the prompt; recall itself uses no model. Basic memory saves clear facts locally. Enhanced memory runs after each user message and tries the configured Memory model before saving richer details, while a separate summary-memory path can batch older turns.",
+  "memory.about.detail": "Memory is temporarily disabled because the current recall design is too naive. This area stays visible so the library can be rebuilt, but the feature cannot be started yet.",
   "memory.status.loading": "Refreshing saved memories",
   "memory.status.loading.detail": "Greyfield is checking the latest local memory for this character.",
   "memory.status.notLoaded": "Saved memories not loaded",
@@ -671,7 +675,7 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "field.bubble": "气泡",
   "field.rememberedMoments": "主动记忆提醒",
   "field.proactivity": "主动程度",
-  "field.betterMemory": "增强记忆",
+  "field.betterMemory": "记忆系统",
   "windowLayerMode.followClick": "按点击决定（默认）",
   "windowLayerMode.controlsFront": "输入框永远在前",
   "windowLayerMode.petFront": "模型永远在前",
@@ -727,6 +731,8 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "memory.betterUsed.label": "这次记住了更多细节",
   "memory.betterUsed.detail": "上一条消息也用你配置的“记忆模型”补充了更丰富的细节；基础本地记忆仍然可用。",
   "memory.noSaved.label": "这次没有新的记忆",
+  "memory.development.label": "开发中，暂不可用",
+  "memory.development.detail": "记忆系统已暂停，等待重做召回设计。Greyfield 现在不会召回已保存记忆、写入新记忆、生成摘要，也不会调用“记忆模型”。",
   "memory.ready.label": "已准备好记住更多细节",
   "memory.ready.detail": "增强记忆不是等 N 轮批量调用。每轮用户消息结束后，Greyfield 都会尝试调用你配置的“记忆模型”抽取关系、承诺、场景、观点等长期信息；明显不是记忆的噪声会在本地跳过。召回阶段仍不调用模型，只做本地检索/打分；真正回答时由“聊天模型”读取这些被塞进 prompt 的记忆。API token 花在抽取阶段，不花在召回阶段。",
   "memory.needsProvider": "增强记忆需要 OpenAI 兼容聊天服务。在服务就绪前，基础本地记忆会继续开启。",
@@ -734,7 +740,7 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "memory.needsApiKey": "增强记忆需要已保存的 API key。在服务就绪前，基础本地记忆会继续开启。",
   "memory.needsModel": "增强记忆需要记忆模型名称。在服务就绪前，基础本地记忆会继续开启。",
   "memory.about.title": "记忆怎么被使用",
-  "memory.about.detail": "每次回复前，Greyfield 会先从记忆库本地召回相关文本并加入提示词；召回本身不用模型。基础记忆只保存明确事实。增强记忆在每轮用户消息后尝试调用“记忆模型”再保存更细的长期信息；另一个摘要记忆机制才会批量处理更早的轮次。",
+  "memory.about.detail": "当前记忆召回设计太粗糙，先整体关闭。这里保留入口，方便后续重做记忆库、索引和冲突处理；现在不能启动。",
   "memory.status.loading": "正在刷新已保存的记忆",
   "memory.status.loading.detail": "Greyfield 正在检查这个角色当前的本地记忆。",
   "memory.status.notLoaded": "还没加载记忆",

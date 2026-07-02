@@ -54,7 +54,8 @@ async function createWindows(): Promise<void> {
     recallMaxItems: resolvePositiveIntegerEnv("GREYFIELD_RECALL_MAX_ITEMS"),
     recallMaxCharacters: resolvePositiveIntegerEnv("GREYFIELD_RECALL_MAX_CHARACTERS"),
     summaryBatchTurnLimit: resolvePositiveIntegerEnv("GREYFIELD_SUMMARY_BATCH_TURN_LIMIT"),
-    summaryMinTurns: resolvePositiveIntegerEnv("GREYFIELD_SUMMARY_MIN_TURNS")
+    summaryMinTurns: resolvePositiveIntegerEnv("GREYFIELD_SUMMARY_MIN_TURNS"),
+    memoryEnabled: false
   });
   runtimeIpcController = new RuntimeIpcController({
     service: runtimeService,
