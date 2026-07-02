@@ -10,7 +10,7 @@ describe("describeMemoryExtractionStatus", () => {
     expect(status).toEqual({
       tone: "standard",
       label: "Basic memory on",
-      detail: "Basic memory is local and lightweight. Greyfield can still remember simple facts, names, dates, and preferences without calling an LLM."
+      detail: "Basic memory saves explicit facts from local chat, such as names, dates, and preferences. On later turns, Greyfield searches the memory library for relevant items and inserts the matching text into the prompt context. It does not call an extra memory model."
     });
   });
 
@@ -56,7 +56,7 @@ describe("describeMemoryExtractionStatus", () => {
     expect(status).toEqual({
       tone: "ready",
       label: "Ready to remember more detail",
-      detail: "Enhanced memory is on. Greyfield will call the configured memory model to understand richer long-term details such as preferences, relationships, promises, scenes, and opinions. If that call fails, basic local memory still works."
+      detail: "Enhanced memory adds one step before saving: Greyfield calls the configured memory model to extract subtler long-term details such as relationships, promises, scenes, and opinions. Recall is still controlled by the memory library and inserted into later prompt context; this mode costs API tokens."
     });
   });
 
