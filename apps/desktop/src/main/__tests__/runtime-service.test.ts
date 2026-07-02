@@ -382,6 +382,51 @@ describe("RuntimeService", () => {
     expect(JSON.stringify(bodies[1]?.messages)).toContain("image_url");
   });
 
+  it("does not call the chat provider for manual visual input when the Vision model is missing", async () => {
+    const fetch = vi.fn();
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "secret",
+          model: "chat-model",
+          visionModel: ""
+        }
+      },
+      { fetch }
+    );
+    const events: unknown[] = [];
+
+    await service.handle(
+      {
+        type: "text.input",
+        text: "看一下",
+        attachments: [
+          {
+            id: "frame-1",
+            source: "observation-frame",
+            dataUrl: `data:image/png;base64,${Buffer.from("screen").toString("base64")}`,
+            mimeType: "image/png",
+            createdAt: "2026-06-30T00:00:00.000Z"
+          }
+        ]
+      },
+      (event) => {
+        events.push(event);
+      }
+    );
+
+    expect(events).toContainEqual({
+      type: "error",
+      message:
+        "Screen awareness needs a ready Vision model before Greyfield can use visual context. Greyfield kept the screenshot temporary and did not send it to the Chat model."
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("uses better memory extraction when enabled and the chat provider is ready", async () => {
     const memoryAtomStore = new TestMemoryAtomStore([]);
     const fetch = createMemoryExtractionFetch("success");
@@ -2073,6 +2118,74 @@ describe("RuntimeService", () => {
       displayed: false,
       reason: "screen_awareness_cooldown"
     });
+  });
+
+  it("does not call the provider for proactive screen awareness when Vision model settings are incomplete", async () => {
+    const visualContext = {
+      attachments: [
+        {
+          id: "screen-frame-1",
+          dataUrl: `data:image/png;base64,${Buffer.from("screen").toString("base64")}`,
+          mimeType: "image/png",
+          createdAt: "2026-06-30T00:00:00.000Z",
+          source: "observation-frame" as const
+        }
+      ],
+      observation: {
+        id: "screen-1",
+        mode: "normal" as const,
+        frameCount: 1,
+        dedupedFrameCount: 1,
+        source: "desktop-screen-awareness" as const
+      }
+    };
+    const fetch = vi.fn();
+    const missingBaseUrl = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "",
+          apiKey: "secret",
+          model: "chat-model",
+          visionModel: "vision-model"
+        },
+        ui: {
+          ...defaultGreyfieldConfig.ui,
+          proactivityLevel: 100
+        }
+      },
+      { fetch }
+    );
+    const missingApiKey = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "",
+          model: "chat-model",
+          visionModel: "vision-model"
+        },
+        ui: {
+          ...defaultGreyfieldConfig.ui,
+          proactivityLevel: 100
+        }
+      },
+      { fetch }
+    );
+
+    await expect(missingBaseUrl.checkProactiveScreenAwareness(visualContext)).resolves.toEqual({
+      displayed: false,
+      reason: "vision_model_not_ready"
+    });
+    await expect(missingApiKey.checkProactiveScreenAwareness(visualContext)).resolves.toEqual({
+      displayed: false,
+      reason: "vision_model_not_ready"
+    });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("uses the default low-disturbance policy for quiet windows and recent activity", async () => {

@@ -134,6 +134,7 @@ export interface ProactiveDesktopCheckResult {
     | "recent_interrupt"
     | "no_screen_context"
     | "vision_model_missing"
+    | "vision_model_not_ready"
     | "screen_awareness_cooldown"
     | ProactiveMemoryDisplayResult["reason"];
 }
@@ -422,9 +423,15 @@ export class RuntimeService {
     if (attachments.length === 0) {
       return { displayed: false, reason: "no_screen_context" };
     }
+    if (this.config.provider.visionModel.trim().length === 0) {
+      return { displayed: false, reason: "vision_model_missing" };
+    }
+    if (this.validateOpenAICompatibleVisionProviderConfig("chatting with screen awareness")) {
+      return { displayed: false, reason: "vision_model_not_ready" };
+    }
     const llm = this.createVisionLLMProvider();
     if (!llm) {
-      return { displayed: false, reason: "vision_model_missing" };
+      return { displayed: false, reason: "vision_model_not_ready" };
     }
 
     const messages: ChatMessage[] = [
@@ -1041,7 +1048,7 @@ export class RuntimeService {
     if (this.config.provider.llm === "openai-compatible") {
       const providerConfigError = this.validateOpenAICompatibleVisionProviderConfig("chatting with screen awareness");
       if (providerConfigError) {
-        throw new Error(providerConfigError);
+        return undefined;
       }
       return new OpenAICompatibleLLMProvider({
         baseUrl: this.config.provider.baseUrl,

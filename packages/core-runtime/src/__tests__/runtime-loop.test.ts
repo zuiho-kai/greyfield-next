@@ -295,7 +295,7 @@ describe("GreyfieldRuntime", () => {
     expect(events).toContainEqual({
       type: "error",
       message:
-        "Screen awareness needs a Vision model before Greyfield can use visual context. Greyfield kept the screenshot temporary and did not send it to the Chat model."
+        "Screen awareness needs a ready Vision model before Greyfield can use visual context. Greyfield kept the screenshot temporary and did not send it to the Chat model."
     });
     expect(await sessionStore.getRecent(2)).toEqual([]);
   });
@@ -333,7 +333,7 @@ describe("GreyfieldRuntime", () => {
     expect(events).toContainEqual({
       type: "error",
       message:
-        "Screen awareness needs a Vision model before Greyfield can use visual context. Greyfield kept the screenshot temporary and did not send it to the Chat model."
+        "Screen awareness needs a ready Vision model before Greyfield can use visual context. Greyfield kept the screenshot temporary and did not send it to the Chat model."
     });
     expect(await sessionStore.getRecent(2)).toEqual([]);
   });

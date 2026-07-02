@@ -174,7 +174,7 @@ export class GreyfieldRuntime {
       await emit({
         type: "error",
         message:
-          "Screen awareness needs a Vision model before Greyfield can use visual context. Greyfield kept the screenshot temporary and did not send it to the Chat model."
+          "Screen awareness needs a ready Vision model before Greyfield can use visual context. Greyfield kept the screenshot temporary and did not send it to the Chat model."
       });
       return;
     }
