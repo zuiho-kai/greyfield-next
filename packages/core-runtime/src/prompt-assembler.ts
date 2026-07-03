@@ -15,6 +15,7 @@ export interface PromptAssemblyInput {
   observation?: RuntimeObservationMetadata;
   sessionId: string;
   threadId: string;
+  now?: Date;
   recallContext?: RecallContext;
   atomRecallContext?: MemoryAtomRecallContext;
 }
@@ -34,6 +35,7 @@ export function assemblePrompt(input: PromptAssemblyInput): ChatMessage[] {
     `Expression map:\n${Object.entries(persona.expressionMap)
       .map(([state, expression]) => `- ${state}: ${expression}`)
       .join("\n")}`,
+    formatCurrentDateGrounding(input.now ?? new Date()),
     `Thread: ${input.threadId}`,
     `Session: ${input.sessionId}`,
     input.memory.trim().length > 0 ? `Memory:\n${input.memory.trim()}` : "Memory: none yet.",
@@ -101,4 +103,24 @@ function formatAtomRecallContextSection(context: MemoryAtomRecallContext): strin
 function readPersonaText(value: string | undefined, fallback: string): string {
   const normalized = value?.trim();
   return normalized && normalized.length > 0 ? normalized : fallback;
+}
+
+function formatCurrentDateGrounding(now: Date): string {
+  const currentDate = formatLocalDate(now);
+  return [
+    "Current date grounding:",
+    `- Current local date: ${currentDate}.`,
+    "- When the user asks about today, the current date, or the current year, use the current local date above as the reliable source.",
+    "- Temporary visual context may corroborate visible desktop date text, but if visual text conflicts with the current local date, state the conflict conservatively instead of confidently giving a stale date."
+  ].join("\n");
+}
+
+function formatLocalDate(date: Date): string {
+  if (Number.isNaN(date.getTime())) {
+    return formatLocalDate(new Date());
+  }
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
