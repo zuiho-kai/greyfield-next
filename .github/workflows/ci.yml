@@ -140,135 +140,13 @@ jobs:
         shell: pwsh
         run: |
           if ("${{ github.event_name }}" -ne "pull_request") {
-            "code_checks=true" >> $env:GITHUB_OUTPUT
-            "desktop_pet=true" >> $env:GITHUB_OUTPUT
-            "frontend_required=true" >> $env:GITHUB_OUTPUT
-            "frontend_smoke=true" >> $env:GITHUB_OUTPUT
-            "frontend_visual=true" >> $env:GITHUB_OUTPUT
-            "frontend_user_path=true" >> $env:GITHUB_OUTPUT
-            "frontend_full_heavy=true" >> $env:GITHUB_OUTPUT
+            ./scripts/classify-ci-changes.ps1 -All -OutputFile $env:GITHUB_OUTPUT
             exit 0
           }
 
           $base = "${{ github.event.pull_request.base.sha }}"
           $head = "${{ github.event.pull_request.head.sha }}"
-
-          $files = git diff --name-only $base $head
-          $codePatterns = @(
-            '^apps/',
-            '^packages/',
-            '^scripts/',
-            '^package\.json$',
-            '^pnpm-lock\.yaml$',
-            '^tsconfig',
-            '^\.github/workflows/ci\.yml$'
-          )
-          $desktopPatterns = @(
-            '^apps/desktop/',
-            '^packages/stage-live2d/',
-            '^packages/dev-harness/',
-            '^package\.json$',
-            '^pnpm-lock\.yaml$',
-            '^tsconfig',
-            '^\.github/workflows/ci\.yml$'
-          )
-          $frontendAllLayerPatterns = @(
-            '^apps/desktop/package\.json$',
-            '^apps/desktop/vite\.config\.ts$',
-            '^apps/desktop/tsconfig\.json$',
-            '^apps/desktop/scripts/',
-            '^packages/dev-harness/',
-            '^package\.json$',
-            '^pnpm-lock\.yaml$',
-            '^tsconfig',
-            '^\.github/workflows/ci\.yml$'
-          )
-          $frontendSmokePatterns = @(
-            '^apps/desktop/src/renderer/',
-            '^apps/desktop/public/assets/',
-            '^packages/stage-live2d/',
-            '^packages/dev-harness/',
-            '^package\.json$',
-            '^pnpm-lock\.yaml$',
-            '^tsconfig',
-            '^\.github/workflows/ci\.yml$'
-          )
-          $frontendVisualPatterns = @(
-            '^apps/desktop/src/renderer/',
-            '^apps/desktop/public/assets/',
-            '^packages/stage-live2d/',
-            '^packages/dev-harness/',
-            '^package\.json$',
-            '^pnpm-lock\.yaml$',
-            '^tsconfig',
-            '^\.github/workflows/ci\.yml$'
-          )
-          $frontendUserPathPatterns = @(
-            '^apps/desktop/src/',
-            '^apps/desktop/public/assets/',
-            '^packages/stage-live2d/',
-            '^packages/audio-runtime/',
-            '^packages/core-runtime/',
-            '^packages/persistence/',
-            '^packages/dev-harness/',
-            '^package\.json$',
-            '^pnpm-lock\.yaml$',
-            '^tsconfig',
-            '^\.github/workflows/ci\.yml$'
-          )
-          $frontendHeavyPatterns = @(
-            '^apps/desktop/src/main/',
-            '^apps/desktop/src/preload/',
-            '^apps/desktop/src/shared/',
-            '^apps/desktop/src/renderer/App\.vue$',
-            '^apps/desktop/src/renderer/ChatWindow\.vue$',
-            '^apps/desktop/src/renderer/ControlsWindow\.vue$',
-            '^apps/desktop/src/renderer/PetWindow\.vue$',
-            '^apps/desktop/src/renderer/SettingsWindow\.vue$',
-            '^apps/desktop/src/renderer/chat-status\.ts$',
-            '^apps/desktop/src/renderer/desktop-runtime-bridge\.ts$',
-            '^apps/desktop/src/renderer/memory-source-display\.ts$',
-            '^apps/desktop/src/renderer/pet-window-shape\.ts$',
-            '^apps/desktop/src/renderer/preview-runtime-events\.ts$',
-            '^apps/desktop/src/renderer/runtime-event-reducer\.ts$',
-            '^apps/desktop/src/renderer/settings-',
-            '^apps/desktop/src/renderer/speech-bubble-',
-            '^packages/audio-runtime/',
-            '^packages/core-runtime/',
-            '^packages/persistence/',
-            '^packages/dev-harness/',
-            '^package\.json$',
-            '^pnpm-lock\.yaml$',
-            '^tsconfig',
-            '^\.github/workflows/ci\.yml$'
-          )
-          function Test-AnyPathMatches($paths, $patterns) {
-            foreach ($file in $paths) {
-              foreach ($pattern in $patterns) {
-                if ($file -match $pattern) {
-                  return $true
-                }
-              }
-            }
-            return $false
-          }
-
-          $codeMatched = Test-AnyPathMatches $files $codePatterns
-          $desktopMatched = Test-AnyPathMatches $files $desktopPatterns
-          $frontendAllLayerMatched = Test-AnyPathMatches $files $frontendAllLayerPatterns
-          $frontendSmokeMatched = $frontendAllLayerMatched -or (Test-AnyPathMatches $files $frontendSmokePatterns)
-          $frontendVisualMatched = $frontendAllLayerMatched -or (Test-AnyPathMatches $files $frontendVisualPatterns)
-          $frontendUserPathMatched = $frontendAllLayerMatched -or (Test-AnyPathMatches $files $frontendUserPathPatterns)
-          $frontendHeavyMatched = $frontendAllLayerMatched -or (Test-AnyPathMatches $files $frontendHeavyPatterns)
-          $frontendRequired = $frontendSmokeMatched -or $frontendVisualMatched -or $frontendUserPathMatched -or $frontendHeavyMatched
-
-          "code_checks=$($codeMatched.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
-          "desktop_pet=$($desktopMatched.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
-          "frontend_required=$($frontendRequired.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
-          "frontend_smoke=$($frontendSmokeMatched.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
-          "frontend_visual=$($frontendVisualMatched.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
-          "frontend_user_path=$($frontendUserPathMatched.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
-          "frontend_full_heavy=$($frontendHeavyMatched.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          ./scripts/classify-ci-changes.ps1 -Base $base -Head $head -OutputFile $env:GITHUB_OUTPUT
 
   frontend-smoke:
     name: frontend-smoke
