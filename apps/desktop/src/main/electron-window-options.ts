@@ -1,9 +1,6 @@
 import type { BrowserWindowConstructorOptions } from "electron";
-import { createRequire } from "node:module";
 import { join, normalize } from "node:path";
 import type { GreyfieldConfig } from "@greyfield/persistence/config-schema";
-
-const require = createRequire(import.meta.url);
 
 export interface VisibleArea {
   x: number;
@@ -22,7 +19,7 @@ interface WindowPlacement {
 export function createPetWindowOptions(
   config: GreyfieldConfig,
   preload?: string,
-  displayWorkAreas: VisibleArea[] = getElectronDisplayWorkAreas()
+  displayWorkAreas: VisibleArea[] = []
 ): BrowserWindowConstructorOptions {
   const placement = createClampedPetPlacement(config, displayWorkAreas);
   return {
@@ -83,7 +80,7 @@ export function createChatWindowOptions(preload?: string): BrowserWindowConstruc
 export function createControlsWindowOptions(
   config: GreyfieldConfig,
   preload?: string,
-  displayWorkAreas: VisibleArea[] = getElectronDisplayWorkAreas()
+  displayWorkAreas: VisibleArea[] = []
 ): BrowserWindowConstructorOptions {
   const placement = createClampedControlsPlacement(config, displayWorkAreas);
   return {
@@ -180,15 +177,4 @@ function clampCoordinate(value: number, min: number, max: number): number {
     return min;
   }
   return Math.min(max, Math.max(min, Math.round(value)));
-}
-
-function getElectronDisplayWorkAreas(): VisibleArea[] {
-  try {
-    const electron = require("electron") as {
-      screen?: { getAllDisplays?: () => Array<{ workArea: VisibleArea }> };
-    };
-    return electron.screen?.getAllDisplays?.().map((display) => display.workArea) ?? [];
-  } catch {
-    return [];
-  }
 }
