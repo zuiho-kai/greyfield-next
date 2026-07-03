@@ -43,14 +43,36 @@
 
     <div class="message-list-container message-list" aria-live="polite">
       <div
-        v-for="(message, index) in state.messages"
-        :key="index"
-        :class="['message-item', message.role]"
+        v-for="messageView in messagesWithSegments"
+        :key="messageView.key"
+        :class="['message-item', messageView.message.role]"
       >
         <div class="message-content">
-          <div class="message-bubble">{{ message.text }}</div>
-          <small v-if="message.observationSummary" class="message-attachment-note">
-            {{ message.observationSummary }}
+          <template
+            v-for="segment in messageView.segments"
+            :key="segment.key"
+          >
+            <div
+              :id="segment.bubbleId"
+              :class="['message-bubble', { 'message-bubble--collapsed': segment.isLong && !isExpandedMessage(segment.key) }]"
+              :data-message-expanded="isExpandedMessage(segment.key)"
+            >
+              {{ segment.text }}
+            </div>
+            <button
+              v-if="segment.isLong"
+              type="button"
+              class="message-expand-toggle"
+              data-testid="chat-message-toggle"
+              :aria-controls="segment.bubbleId"
+              :aria-expanded="isExpandedMessage(segment.key)"
+              @click="toggleMessageExpansion(segment.key)"
+            >
+              {{ isExpandedMessage(segment.key) ? t("chat.message.collapse") : t("chat.message.expand") }}
+            </button>
+          </template>
+          <small v-if="messageView.message.observationSummary" class="message-attachment-note">
+            {{ messageView.message.observationSummary }}
           </small>
           <span class="message-time">{{ t("chat.justNow") }}</span>
         </div>
@@ -58,7 +80,29 @@
 
       <div v-if="state.assistantDraft" class="message-item assistant draft">
         <div class="message-content">
-          <div class="message-bubble">{{ state.assistantDraft }}</div>
+          <template
+            v-for="segment in draftSegments"
+            :key="segment.key"
+          >
+            <div
+              :id="segment.bubbleId"
+              :class="['message-bubble', { 'message-bubble--collapsed': segment.isLong && !isExpandedMessage(segment.key) }]"
+              :data-message-expanded="isExpandedMessage(segment.key)"
+            >
+              {{ segment.text }}
+            </div>
+            <button
+              v-if="segment.isLong"
+              type="button"
+              class="message-expand-toggle"
+              data-testid="chat-message-toggle"
+              :aria-controls="segment.bubbleId"
+              :aria-expanded="isExpandedMessage(segment.key)"
+              @click="toggleMessageExpansion(segment.key)"
+            >
+              {{ isExpandedMessage(segment.key) ? t("chat.message.collapse") : t("chat.message.expand") }}
+            </button>
+          </template>
           <span class="message-time">{{ chatStatus.label }}</span>
         </div>
       </div>
@@ -101,10 +145,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
-import type { DesktopRendererState } from "./desktop-runtime-bridge";
+import { computed, ref } from "vue";
+import type { DesktopMessage, DesktopRendererState } from "./desktop-runtime-bridge";
 import { describeScreenAwarenessNotice } from "./chat-screen-awareness-notice";
 import { describeChatStatus } from "./chat-status";
+import {
+  createChatMessageDisclosureKey,
+  draftMessageKey,
+  isLongChatMessage
+} from "./chat-message-disclosure";
+import { splitAssistantReplyForDisplay } from "./assistant-reply-segments";
 import { normalizeSettingsLocale, settingsT, type SettingsI18nKey } from "./settings-i18n";
 
 const props = defineProps<{
@@ -123,6 +173,77 @@ defineEmits<{
 
 function valueFrom(event: Event): string {
   return event.target instanceof HTMLInputElement ? event.target.value : "";
+}
+
+interface ChatMessageSegmentView {
+  key: string;
+  bubbleId: string;
+  text: string;
+  isLong: boolean;
+}
+
+interface ChatMessageView {
+  key: string;
+  message: DesktopMessage;
+  segments: ChatMessageSegmentView[];
+}
+
+const expandedMessageKeys = ref<Set<string>>(new Set());
+
+function messageKey(message: DesktopMessage, index: number): string {
+  return createChatMessageDisclosureKey(message, index);
+}
+
+const messagesWithSegments = computed<ChatMessageView[]>(() =>
+  props.state.messages.map((message, index) => {
+    const key = messageKey(message, index);
+    return {
+      key,
+      message,
+      segments: createMessageSegments(splitAssistantReplyForDisplay(message.text), key, (segmentIndex) =>
+        messageBubbleId(index, segmentIndex)
+      )
+    };
+  })
+);
+
+const draftSegments = computed<ChatMessageSegmentView[]>(() =>
+  createMessageSegments(splitAssistantReplyForDisplay(props.state.assistantDraft), draftMessageKey, draftBubbleId)
+);
+
+function createMessageSegments(
+  texts: string[],
+  baseKey: string,
+  bubbleIdForIndex: (segmentIndex: number) => string
+): ChatMessageSegmentView[] {
+  return texts.map((text, segmentIndex) => ({
+    key: `${baseKey}-segment-${segmentIndex}`,
+    bubbleId: bubbleIdForIndex(segmentIndex),
+    text,
+    isLong: isLongChatMessage(text)
+  }));
+}
+
+function messageBubbleId(index: number, segmentIndex: number): string {
+  return `chat-message-${index}-${segmentIndex}`;
+}
+
+function draftBubbleId(segmentIndex: number): string {
+  return `chat-message-draft-${segmentIndex}`;
+}
+
+function isExpandedMessage(key: string): boolean {
+  return expandedMessageKeys.value.has(key);
+}
+
+function toggleMessageExpansion(key: string): void {
+  const nextKeys = new Set(expandedMessageKeys.value);
+  if (nextKeys.has(key)) {
+    nextKeys.delete(key);
+  } else {
+    nextKeys.add(key);
+  }
+  expandedMessageKeys.value = nextKeys;
 }
 
 const locale = computed(() => normalizeSettingsLocale(props.state.settings.settingsLocale));

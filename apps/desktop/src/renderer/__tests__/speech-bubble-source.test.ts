@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { assistantReplySegmentCharacterLimit } from "../assistant-reply-segments";
 import { resolveSpeechBubbleSourceText } from "../speech-bubble-source";
 
 describe("resolveSpeechBubbleSourceText", () => {
@@ -63,5 +64,30 @@ describe("resolveSpeechBubbleSourceText", () => {
         ]
       })
     ).toBe("latest reply");
+  });
+
+  it("uses the latest natural reply segment for the final pet bubble text", () => {
+    const longReply = [
+      "我先短短拆开说。",
+      "第一段解释为什么 Chat 不能再用一整块长文本吞掉窗口。",
+      "第二段说明 Greyfield 应该像陪伴聊天一样用短句回应。",
+      "第三段继续补充，长内容可以进入完整 Chat 历史，但默认阅读节奏要轻一些。",
+      "第四段强调桌宠气泡不是文档阅读器，它只负责当前这一下陪伴感。",
+      "第五段用来确保这条回复超过展示分段阈值，测试能真正覆盖多段路径。",
+      "最后一段留给桌宠气泡显示，保持轻一点。"
+    ].join("");
+
+    const source = resolveSpeechBubbleSourceText({
+        assistantDraft: "",
+        status: "idle",
+        messages: [
+          { role: "user", text: "说说新的回复节奏" },
+          { role: "assistant", text: longReply }
+        ]
+      });
+
+    expect(source).toContain("最后一段留给桌宠气泡显示");
+    expect(source).not.toContain("我先短短拆开说");
+    expect(source.length).toBeLessThanOrEqual(assistantReplySegmentCharacterLimit);
   });
 });

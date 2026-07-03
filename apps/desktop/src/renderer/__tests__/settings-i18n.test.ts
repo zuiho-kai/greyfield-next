@@ -58,9 +58,13 @@ describe("settings i18n", () => {
     expect(settingsT("zh-CN", "chat.captureOnce")).toBe("截图");
     expect(settingsT("zh-CN", "chat.observeNormal")).toBe("中");
     expect(settingsT("zh-CN", "chat.clearObservation")).toBe("清除");
+    expect(settingsT("zh-CN", "chat.message.expand")).toBe("展开全文");
+    expect(settingsT("zh-CN", "chat.message.collapse")).toBe("收起");
     expect(settingsT("en-US", "chat.captureOnce")).toBe("Shot");
     expect(settingsT("en-US", "chat.observeNormal")).toBe("Mid");
     expect(settingsT("en-US", "chat.clearObservation")).toBe("Clear");
+    expect(settingsT("en-US", "chat.message.expand")).toBe("See more");
+    expect(settingsT("en-US", "chat.message.collapse")).toBe("Collapse");
     expect(settingsT("zh-CN", "controls.placeholder")).toBe("和 Greyfield 说话...");
     expect(settingsT("zh-CN", "controls.stop")).toBe("停止回复或语音");
   });

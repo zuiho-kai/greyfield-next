@@ -29,6 +29,7 @@ export function assemblePrompt(input: PromptAssemblyInput): ChatMessage[] {
     `Background:\n${readPersonaText(persona.background, "A Live2D desktop companion focused on presence, conversation, and continuity.")}`,
     `Personality:\n${readPersonaText(persona.personality, persona.tone)}`,
     `Speaking style:\n${speakingStyle}`,
+    formatCompanionReplyRhythm(),
     `Greeting:\n${readPersonaText(persona.greeting, "你好，我在。")}`,
     `Runtime boundary: Greyfield Next V1 is a visible Live2D desktop companion, not a desktop-control or multi-agent system.`,
     persona.boundaries.length > 0 ? `Boundaries:\n${persona.boundaries.map((boundary) => `- ${boundary}`).join("\n")}` : "",
@@ -50,6 +51,16 @@ export function assemblePrompt(input: PromptAssemblyInput): ChatMessage[] {
     ...input.recent.map((turn): ChatMessage => ({ role: turn.role === "assistant" ? "assistant" : "user", content: turn.content })),
     { role: "user", content: formatUserInputContent(input.input, input.inputAttachments) }
   ];
+}
+
+function formatCompanionReplyRhythm(): string {
+  return [
+    "Companion reply rhythm:",
+    "- Prefer short, spoken, companion-like replies instead of long explanatory blocks.",
+    "- Use natural sentences and short paragraphs; split complex answers into readable beats.",
+    "- When the user asks for depth, continue in concise chunks rather than one oversized message.",
+    "- Keep each beat suitable for a desktop pet speech bubble unless the user explicitly asks for long-form text."
+  ].join("\n");
 }
 
 function formatUserInputContent(text: string, attachments: RuntimeImageAttachment[] | undefined): string | ChatContentPart[] {
