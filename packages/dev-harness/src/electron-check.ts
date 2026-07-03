@@ -284,7 +284,7 @@ try {
   const auxiliaryWindowCloseRecovery = await verifyAuxiliaryWindowCloseRecovery();
   await settingsWindow.waitForSelector(".greyfield-shell");
   await settingsWindow.locator(".provider-status--preview", { hasText: /Fake provider is active|本地假服务/ }).waitFor();
-  const memoryExtractionSettings = await verifyMemoryExtractionSettings(settingsWindow, configPath);
+  const memoryExtractionSettings = await verifyMemoryExtractionSettings(settingsWindow);
   const live2DModelSelect = settingsWindow.getByLabel(/^(Live2D model|Live2D 模型)$/);
   await live2DModelSelect.waitFor();
   const live2DOptions = await live2DModelSelect.evaluate((select) =>
@@ -898,31 +898,39 @@ async function waitForSettingsLocale(path: string, locale: typeof defaultGreyfie
   throw new Error(`Settings locale did not become ${locale}: ${JSON.stringify(config?.ui ?? null)}`);
 }
 
-async function verifyMemoryExtractionSettings(
-  settingsWindow: Page,
-  path: string
-): Promise<{
-  defaultStandardVisible: boolean;
-  missingProviderFallbackVisible: boolean;
-  togglePersisted: boolean;
+async function verifyMemoryExtractionSettings(settingsWindow: Page): Promise<{
+  developmentStatusVisible: boolean;
+  toggleDisabled: boolean;
+  toggleUnchecked: boolean;
   manualCandidateControlsAbsent: boolean;
 }> {
   const memorySection = settingsWindow.getByLabel(/^(How memory works|记忆方式)$/, { exact: true });
   await memorySection.waitFor();
-  const toggle = memorySection.getByLabel(/^(Better memory|增强记忆)$/);
+  const toggle = memorySection.getByLabel(/^(Memory system|记忆系统)$/);
   await toggle.waitFor();
-  await memorySection.locator(".memory-extraction-status--standard", { hasText: /Basic memory on|基础记忆开启/ }).waitFor();
-  await assertNoManualMemoryCandidateControls(memorySection);
-  await toggle.check();
-  const savedConfig = await waitForBetterMemory(path, true);
-  await memorySection.locator(".memory-extraction-status--fallback", { hasText: /OpenAI-compatible chat provider|OpenAI 兼容聊天服务/ }).waitFor();
+  await expectDisabledMemoryToggle(toggle);
+  await memorySection
+    .locator(".memory-extraction-status--disabled", { hasText: /In development|开发中，暂不可用/ })
+    .waitFor();
+  await memorySection
+    .locator(".memory-extraction-status--disabled", { hasText: /Memory is paused|记忆系统已暂停/ })
+    .waitFor();
   await assertNoManualMemoryCandidateControls(memorySection);
   return {
-    defaultStandardVisible: true,
-    missingProviderFallbackVisible: true,
-    togglePersisted: savedConfig.memory.llmAtomExtractionEnabled,
+    developmentStatusVisible: true,
+    toggleDisabled: true,
+    toggleUnchecked: true,
     manualCandidateControlsAbsent: true
   };
+}
+
+async function expectDisabledMemoryToggle(toggle: Locator): Promise<void> {
+  if (!(await toggle.isDisabled())) {
+    throw new Error("Memory system toggle must stay disabled while memory is in development");
+  }
+  if (await toggle.isChecked()) {
+    throw new Error("Memory system toggle must stay unchecked while memory is in development");
+  }
 }
 
 async function assertNoManualMemoryCandidateControls(section: Locator): Promise<void> {
@@ -935,19 +943,6 @@ async function assertNoManualMemoryCandidateControls(section: Locator): Promise<
       throw new Error(`Memory extraction settings exposed a manual ${name} button`);
     }
   }
-}
-
-async function waitForBetterMemory(path: string, enabled: boolean): Promise<typeof defaultGreyfieldConfig> {
-  const started = Date.now();
-  let config: typeof defaultGreyfieldConfig | null = null;
-  while (Date.now() - started < 5_000) {
-    config = await readConfig(path).catch(() => null);
-    if (config?.memory.llmAtomExtractionEnabled === enabled) {
-      return config;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`Better memory setting did not become ${enabled}: ${JSON.stringify(config?.memory ?? null)}`);
 }
 
 async function waitForProviderApiKey(path: string, apiKey: string): Promise<typeof defaultGreyfieldConfig> {

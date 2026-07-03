@@ -35,7 +35,8 @@ export function settingsFromConfig(config: RendererGreyfieldConfig | GreyfieldCo
     proactiveMemoryEnabled: config.ui.proactiveMemoryEnabled,
     settingsLocale: config.ui.locale,
     proactivityLevel: config.ui.proactivityLevel,
-    llmAtomExtractionEnabled: config.memory.llmAtomExtractionEnabled
+    llmAtomExtractionEnabled: config.memory.llmAtomExtractionEnabled,
+    llmAtomExtractionInterval: config.memory.llmAtomExtractionInterval
   };
 }
 
@@ -94,7 +95,8 @@ export function configFromSettings(settings: DesktopSettingsState): GreyfieldCon
     },
     memory: {
       ...defaultGreyfieldConfig.memory,
-      llmAtomExtractionEnabled: settings.llmAtomExtractionEnabled
+      llmAtomExtractionEnabled: settings.llmAtomExtractionEnabled,
+      llmAtomExtractionInterval: settings.llmAtomExtractionInterval
     },
     characterFile: settings.characterFile
   };
@@ -214,6 +216,9 @@ export function settingsPatchToConfigPatch(patch: DesktopSettingsPatch): Greyfie
   }
   if (patch.llmAtomExtractionEnabled !== undefined) {
     configPatch.memory = { ...configPatch.memory, llmAtomExtractionEnabled: patch.llmAtomExtractionEnabled };
+  }
+  if (patch.llmAtomExtractionInterval !== undefined) {
+    configPatch.memory = { ...configPatch.memory, llmAtomExtractionInterval: patch.llmAtomExtractionInterval };
   }
   return configPatch;
 }

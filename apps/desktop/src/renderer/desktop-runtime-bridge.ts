@@ -110,6 +110,7 @@ export interface DesktopSettingsState {
   settingsLocale: GreyfieldConfig["ui"]["locale"];
   proactivityLevel: number;
   llmAtomExtractionEnabled: boolean;
+  llmAtomExtractionInterval: number;
 }
 
 export type DesktopSettingsPatch = Partial<DesktopSettingsState>;
@@ -1092,7 +1093,8 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       proactiveMemoryEnabled: defaultGreyfieldConfig.ui.proactiveMemoryEnabled,
       settingsLocale: defaultGreyfieldConfig.ui.locale,
       proactivityLevel: defaultGreyfieldConfig.ui.proactivityLevel,
-      llmAtomExtractionEnabled: defaultGreyfieldConfig.memory.llmAtomExtractionEnabled
+      llmAtomExtractionEnabled: defaultGreyfieldConfig.memory.llmAtomExtractionEnabled,
+      llmAtomExtractionInterval: defaultGreyfieldConfig.memory.llmAtomExtractionInterval
     },
     window: {
       modelPassThrough: defaultGreyfieldConfig.window.modelPassThrough,

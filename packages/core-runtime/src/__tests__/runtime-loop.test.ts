@@ -880,6 +880,56 @@ describe("GreyfieldRuntime", () => {
     expect(await sessionStore.getRecent(6)).toHaveLength(6);
   });
 
+  it("skips memory recall, summary, and atom extraction when memory is disabled", async () => {
+    const unavailableMemoryStore: MemoryStore = {
+      load: async () => {
+        throw new Error("memory should not be loaded");
+      },
+      save: async () => undefined,
+      consolidate: async () => ""
+    };
+    const summarySegmentStore: SummarySegmentStore = {
+      append: async () => {
+        throw new Error("summary should not be appended");
+      },
+      get: async () => null,
+      update: async () => null,
+      delete: async () => false,
+      list: async () => {
+        throw new Error("summary should not be listed");
+      }
+    };
+    const memoryAtomStore = new TestMemoryAtomStore([]);
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* () {
+          yield "Memory is paused.";
+        }
+      },
+      tts: { synthesize: async (text) => new Uint8Array([text.length]) },
+      memoryStore: unavailableMemoryStore,
+      summarySegmentStore,
+      memoryAtomStore,
+      memoryEnabled: false,
+      memoryAtomExtractionMode: "hybrid",
+      sessionStore: new InMemorySessionStore("session-memory-off"),
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default",
+      threadId: "thread-memory-off"
+    });
+    const events: RuntimeOutputEvent[] = [];
+
+    await runtime.handle({ type: "text.input", text: "Remember that I like roses." }, (event) => {
+      events.push(event);
+    });
+
+    expect(events).toContainEqual({ type: "assistant.text.final", text: "Memory is paused." });
+    expect(events).not.toContainEqual(expect.objectContaining({ type: "memory.recall.context" }));
+    expect(events).not.toContainEqual(expect.objectContaining({ type: "memory.summary.created" }));
+    expect(events).not.toContainEqual(expect.objectContaining({ type: "memory.atom.extraction.status" }));
+    expect(await memoryAtomStore.list("thread-memory-off")).toHaveLength(0);
+  });
+
   it("keeps chat usable when summary recall storage is unavailable", async () => {
     const summarySegmentStore: SummarySegmentStore = {
       append: async () => {

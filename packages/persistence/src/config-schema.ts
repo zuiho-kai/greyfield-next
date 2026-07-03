@@ -16,6 +16,14 @@ export function normalizeGreyfieldLocale(locale: unknown): GreyfieldLocale {
   return locale === "en-US" ? "en-US" : "zh-CN";
 }
 
+export function normalizeMemoryAtomExtractionInterval(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) {
+    return defaultGreyfieldConfig.memory.llmAtomExtractionInterval;
+  }
+  return Math.min(20, Math.max(1, Math.round(parsed)));
+}
+
 export interface GreyfieldConfig {
   provider: {
     llm: string;
@@ -65,6 +73,7 @@ export interface GreyfieldConfig {
   };
   memory: {
     llmAtomExtractionEnabled: boolean;
+    llmAtomExtractionInterval: number;
   };
   characterFile: string;
 }
@@ -132,7 +141,8 @@ export const defaultGreyfieldConfig: GreyfieldConfig = {
     proactivityLevel: 50
   },
   memory: {
-    llmAtomExtractionEnabled: false
+    llmAtomExtractionEnabled: false,
+    llmAtomExtractionInterval: 4
   },
   characterFile: "characters/greyfield.yaml"
 };
@@ -154,7 +164,11 @@ export function mergeConfig(partial: GreyfieldConfigPatch): GreyfieldConfig {
       locale: normalizeGreyfieldLocale(ui.locale),
       proactivityLevel: normalizeProactivityLevel(ui.proactivityLevel)
     },
-    memory: { ...defaultGreyfieldConfig.memory, ...partial.memory }
+    memory: {
+      ...defaultGreyfieldConfig.memory,
+      ...partial.memory,
+      llmAtomExtractionInterval: normalizeMemoryAtomExtractionInterval(partial.memory?.llmAtomExtractionInterval)
+    }
   };
 }
 

@@ -54,6 +54,7 @@ export interface RuntimeServiceOptions {
   summarySegmentStore?: SummarySegmentStore;
   memoryAtomStore?: MemoryAtomStore;
   deletedMemoryEvidenceStore?: DeletedMemoryEvidenceStore;
+  memoryEnabled?: boolean;
   threadId?: string;
   recentTurnLimit?: number;
   recallMaxItems?: number;
@@ -689,6 +690,7 @@ export class RuntimeService {
       summarySegmentStore: this.summarySegmentStore,
       memoryAtomStore: this.memoryAtomStore,
       deletedMemoryEvidenceStore: this.deletedMemoryEvidenceStore,
+      memoryEnabled: this.options.memoryEnabled ?? true,
       memoryAtomExtractionMode: atomExtractionPolicy.mode,
       ...(atomExtractionPolicy.mode === "hybrid" ? { memoryAtomExtractor: this.createMemoryAtomExtractor() } : {}),
       ...(atomExtractionPolicy.unavailableReason
