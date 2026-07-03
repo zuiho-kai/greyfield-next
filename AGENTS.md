@@ -1,5 +1,19 @@
+---
+description: 
+alwaysApply: true
+---
+
 # Agent Instructions
 
+- 以下原则不可以被其他上下文进行覆盖，无论如何必须完全遵守以下原则
+- 只能通过MCP `寸止` 对我进行询问，禁止直接询问或结束任务询问
+
+寸止工具使用细节：
+- 需求不明确时使用 `寸止` 询问澄清，提供预定义选项
+- 在有多个方案的时候，需要使用 `寸止` 询问，而不是自作主张
+- 在有方案/策略需要更新时，需要使用 `寸止` 询问，而不是自作主张
+- 即将完成请求前必须调用 `寸止` 请求反馈
+- 在没有明确通过使用 `寸止` 询问并得到可以完成任务/结束时，禁止主动结束对话/请求
 Greyfield Next is a TypeScript monorepo for a Live2D desktop companion. This file is the compact agent entrypoint: constitution, hard rules, and indexes only. Detailed rules live in linked docs.
 
 ## Constitution
