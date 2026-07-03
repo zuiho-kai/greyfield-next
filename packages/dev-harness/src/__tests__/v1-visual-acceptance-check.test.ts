@@ -51,7 +51,7 @@ describe("V1 visual acceptance summary", () => {
         providerPreviewInViewport: true,
         taskModelSlotsVisible: true,
         memoryExtractionVisible: true,
-        memoryExtractionToggleVisible: true,
+        memoryExtractionDisabledVisible: true,
         memoryExtractionManualCandidateControlsAbsent: true,
         settingsShellVisible: true,
         noHorizontalOverflow: true,

@@ -33,7 +33,9 @@ describe("settings i18n", () => {
   });
 
   it("maps Memory Library control labels in zh-CN", () => {
-    expect(settingsT("zh-CN", "memory.about.title")).toBe("这是什么");
+    expect(settingsT("zh-CN", "memory.about.title")).toBe("记忆怎么被使用");
+    expect(settingsT("zh-CN", "memory.about.detail")).toContain("先整体关闭");
+    expect(settingsT("zh-CN", "memory.about.detail")).toContain("现在不能启动");
     expect(settingsT("zh-CN", "memory.status.saved", { count: 3 })).toBe("已保存 3 条记忆");
     expect(settingsT("zh-CN", "memory.controls.title")).toBe("高级记忆控制");
     expect(settingsT("zh-CN", "memory.stats.rawTurns", { count: 2 })).toBe("原始轮次 2");
@@ -47,6 +49,12 @@ describe("settings i18n", () => {
     expect(settingsT("zh-CN", "chat.title")).toBe("聊天");
     expect(settingsT("zh-CN", "chat.action.send")).toBe("发送");
     expect(settingsT("zh-CN", "chat.status.waiting.detail")).toBe("可以继续发送下一条消息。");
+    expect(settingsT("zh-CN", "chat.screenAwareness.visionMissingNotice")).toBe(
+      "屏幕感知需要可用的 Vision model。本次截图保持临时，没有发送给 Chat model。"
+    );
+    expect(settingsT("en-US", "chat.screenAwareness.visionMissingNotice")).toBe(
+      "Screen awareness needs a ready Vision model. This screenshot stayed temporary and was not sent to the Chat model."
+    );
     expect(settingsT("zh-CN", "chat.captureOnce")).toBe("截图");
     expect(settingsT("zh-CN", "chat.observeNormal")).toBe("中");
     expect(settingsT("zh-CN", "chat.clearObservation")).toBe("清除");
@@ -54,7 +62,6 @@ describe("settings i18n", () => {
     expect(settingsT("en-US", "chat.observeNormal")).toBe("Mid");
     expect(settingsT("en-US", "chat.clearObservation")).toBe("Clear");
     expect(settingsT("zh-CN", "controls.placeholder")).toBe("和 Greyfield 说话...");
-    expect(settingsT("zh-CN", "controls.quit")).toBe("退出 Greyfield 并停止后台进程");
     expect(settingsT("zh-CN", "controls.stop")).toBe("停止回复或语音");
   });
 });

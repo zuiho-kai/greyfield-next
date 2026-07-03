@@ -17,7 +17,7 @@
     "frontend-full": {
       "tag": "frontend-full",
       "script": "pnpm harness:frontend-full",
-      "ciTrigger": "Runs on PRs that touch frontend-visible paths; non-frontend PRs keep the frontend-full check visible and pass it with an explicit skip message.",
+      "ciTrigger": "Runs on PRs that touch renderer/frontend-visible paths, stage rendering, runtime/audio/persistence user paths, or frontend harness entrypoints; dev launch scripts and fixture helpers use fast checks plus desktop-pet coverage without forcing frontend-full.",
       "scope": [
         "frontend unit logic",
         "real Live2D rendering",

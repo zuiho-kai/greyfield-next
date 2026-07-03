@@ -244,7 +244,7 @@ button {
 
 .desktop-control-actions {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 7px;
 }
 
@@ -313,18 +313,6 @@ button {
 .desktop-control-button--stop:hover:not(:disabled) {
   border-color: rgba(143, 49, 80, 0.28);
   background: #7b2442;
-  color: #ffffff;
-}
-
-.desktop-control-button--quit {
-  border-color: rgba(112, 66, 24, 0.18);
-  background: rgba(112, 66, 24, 0.14);
-  color: #6b3f18;
-}
-
-.desktop-control-button--quit:hover:not(:disabled) {
-  border-color: rgba(112, 66, 24, 0.28);
-  background: #704218;
   color: #ffffff;
 }
 
@@ -445,11 +433,31 @@ body.settings-window .greyfield-shell {
   color: #7b2442;
 }
 
+.chat-status-block {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin-top: -8px;
+}
+
 .chat-status-detail {
-  margin: -8px 0 0;
+  margin: 0;
   color: #465463;
   font-size: 13px;
   line-height: 1.4;
+}
+
+.screen-awareness-notice {
+  margin: 0;
+  padding: 7px 9px;
+  border: 1px solid rgba(47, 95, 143, 0.16);
+  border-radius: 8px;
+  background: rgba(47, 95, 143, 0.08);
+  color: #2f5f8f;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 @keyframes pulse {
@@ -477,6 +485,12 @@ body.settings-window .greyfield-shell {
 
 .settings-btn:active {
   transform: translateY(0);
+}
+
+.chat-alerts {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
 }
 
 .chat-error-box {
@@ -955,6 +969,14 @@ h1 {
   padding-bottom: 0;
 }
 
+.settings-section--disabled {
+  opacity: 0.72;
+}
+
+.settings-section--disabled input:disabled {
+  cursor: not-allowed;
+}
+
 .settings-section__header {
   display: flex;
   align-items: center;
@@ -1232,6 +1254,11 @@ h1 {
 .memory-extraction-status--standard {
   border-color: rgba(37, 56, 88, 0.18);
   background: rgba(37, 56, 88, 0.08);
+}
+
+.memory-extraction-status--disabled {
+  border-color: rgba(37, 56, 88, 0.2);
+  background: rgba(37, 56, 88, 0.12);
 }
 
 .settings-actions button,

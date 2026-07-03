@@ -481,7 +481,7 @@ describe("RuntimeService", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("uses better memory extraction when enabled and the chat provider is ready", async () => {
+  it("keeps desktop memory paused while the memory system is marked in development", async () => {
     const memoryAtomStore = new TestMemoryAtomStore([]);
     const fetch = createMemoryExtractionFetch("success");
     const service = new RuntimeService(
@@ -504,7 +504,7 @@ describe("RuntimeService", () => {
           llmAtomExtractionEnabled: true
         }
       },
-      { fetch, threadId: "thread-memory-enabled", memoryAtomStore }
+      { fetch, threadId: "thread-memory-enabled", memoryAtomStore, memoryEnabled: false }
     );
     const events: unknown[] = [];
 
@@ -512,25 +512,13 @@ describe("RuntimeService", () => {
       events.push(event);
     });
 
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(1);
     const requestModels = readFetchJsonBodies(fetch) as Array<{ model: string }>;
-    expect(requestModels.map((body) => body.model)).toEqual(["chat-model", "memory-model"]);
-    expect(getExtractionStatus(events)).toMatchObject({
-      status: "better",
-      reason: "provider-used",
-      llmAttempted: true,
-      fallbackUsed: true,
-      savedAtomCount: 2
-    });
-    expect(await memoryAtomStore.list("thread-memory-enabled")).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          type: "preference",
-          object: "rose"
-        })
-      ])
-    );
-    expect(await memoryAtomStore.list("thread-memory-enabled")).toHaveLength(2);
+    expect(requestModels.map((body) => body.model)).toEqual(["chat-model"]);
+    expect(events).not.toContainEqual(expect.objectContaining({ type: "memory.atom.extraction.status" }));
+    expect(events).not.toContainEqual(expect.objectContaining({ type: "memory.summary.created" }));
+    expect(events).not.toContainEqual(expect.objectContaining({ type: "memory.recall.context" }));
+    expect(await memoryAtomStore.list("thread-memory-enabled")).toHaveLength(0);
   });
 
   it("keeps standard local atom extraction when better memory is disabled", async () => {

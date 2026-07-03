@@ -18,15 +18,27 @@
       </button>
     </header>
 
-    <p class="chat-status-detail">{{ chatStatus.detail }}</p>
+    <div class="chat-status-block">
+      <p class="chat-status-detail">{{ chatStatus.detail }}</p>
+      <p
+        v-if="state.screenAwarenessNotice"
+        class="screen-awareness-notice"
+        role="status"
+        data-testid="screen-awareness-notice"
+      >
+        {{ screenAwarenessNoticeText }}
+      </p>
 
-    <div v-if="state.errorMessage" class="chat-error-box chat-error" role="alert">
-      <span class="error-icon">⚠️</span>
-      <p>{{ state.errorMessage }}</p>
-    </div>
-    <div v-if="state.voiceErrorMessage" class="chat-error-box voice-error-box" role="status">
-      <span class="error-icon">⚠️</span>
-      <p>{{ state.voiceErrorMessage }}</p>
+      <div v-if="state.errorMessage || state.voiceErrorMessage" class="chat-alerts" aria-live="polite">
+        <div v-if="state.errorMessage" class="chat-error-box chat-error" role="alert">
+          <span class="error-icon">⚠️</span>
+          <p>{{ state.errorMessage }}</p>
+        </div>
+        <div v-if="state.voiceErrorMessage" class="chat-error-box voice-error-box" role="status">
+          <span class="error-icon">⚠️</span>
+          <p>{{ state.voiceErrorMessage }}</p>
+        </div>
+      </div>
     </div>
 
     <div class="message-list-container message-list" aria-live="polite">
@@ -91,6 +103,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { DesktopRendererState } from "./desktop-runtime-bridge";
+import { describeScreenAwarenessNotice } from "./chat-screen-awareness-notice";
 import { describeChatStatus } from "./chat-status";
 import { normalizeSettingsLocale, settingsT, type SettingsI18nKey } from "./settings-i18n";
 
@@ -116,6 +129,7 @@ const locale = computed(() => normalizeSettingsLocale(props.state.settings.setti
 const t = (key: SettingsI18nKey, values?: Record<string, string | number>): string =>
   settingsT(locale.value, key, values);
 const chatStatus = computed(() => describeChatStatus(props.state, props.draft, locale.value));
+const screenAwarenessNoticeText = computed(() => describeScreenAwarenessNotice(props.state, locale.value));
 const voiceInputLabel = computed(() => {
   if (props.state.voiceInput.status === "listening") {
     return t("chat.voice.stopMic");

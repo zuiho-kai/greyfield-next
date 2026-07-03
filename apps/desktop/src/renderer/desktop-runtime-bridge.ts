@@ -33,6 +33,7 @@ export interface DesktopMessage {
 export interface DesktopRendererState {
   status: string;
   errorMessage: string;
+  screenAwarenessNotice: string;
   voiceErrorMessage: string;
   providerTest: {
     status: "idle" | "testing" | "success" | "error";
@@ -110,6 +111,7 @@ export interface DesktopSettingsState {
   settingsLocale: GreyfieldConfig["ui"]["locale"];
   proactivityLevel: number;
   llmAtomExtractionEnabled: boolean;
+  llmAtomExtractionInterval: number;
 }
 
 export type DesktopSettingsPatch = Partial<DesktopSettingsState>;
@@ -336,6 +338,7 @@ export class DesktopRuntimeBridge {
       ...this.state,
       status: "thinking",
       errorMessage: "",
+      screenAwarenessNotice: "",
       voiceErrorMessage: "",
       inputDraft: "",
       assistantDraft: "",
@@ -370,6 +373,7 @@ export class DesktopRuntimeBridge {
       ...this.state,
       status: "listening",
       errorMessage: "",
+      screenAwarenessNotice: "",
       proactiveMessage: null,
       voiceInput: {
         status: "listening",
@@ -410,6 +414,7 @@ export class DesktopRuntimeBridge {
       ...this.state,
       status: "error",
       errorMessage: message,
+      screenAwarenessNotice: "",
       voiceInput: {
         status: "error",
         message
@@ -427,6 +432,7 @@ export class DesktopRuntimeBridge {
         ...this.state,
         status: "interrupted",
         errorMessage: "",
+        screenAwarenessNotice: "",
         voiceErrorMessage: "",
         assistantDraft: "",
         proactiveMessage: null,
@@ -443,6 +449,7 @@ export class DesktopRuntimeBridge {
       ...this.state,
       status: "interrupted",
       errorMessage: "",
+      screenAwarenessNotice: "",
       voiceErrorMessage: "",
       assistantDraft: "",
       proactiveMessage: null,
@@ -465,7 +472,8 @@ export class DesktopRuntimeBridge {
         enabled,
         status: enabled ? "warming" : "off",
         message: enabled ? "Screen awareness is turning on." : ""
-      }
+      },
+      screenAwarenessNotice: enabled ? this.state.screenAwarenessNotice : ""
     };
     this.host?.send("screen-awareness:set-enabled", { enabled });
     return this.getState();
@@ -1030,6 +1038,7 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
   return {
     status: "idle",
     errorMessage: "",
+    screenAwarenessNotice: "",
     voiceErrorMessage: "",
     providerTest: {
       status: "idle",
@@ -1092,7 +1101,8 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       proactiveMemoryEnabled: defaultGreyfieldConfig.ui.proactiveMemoryEnabled,
       settingsLocale: defaultGreyfieldConfig.ui.locale,
       proactivityLevel: defaultGreyfieldConfig.ui.proactivityLevel,
-      llmAtomExtractionEnabled: defaultGreyfieldConfig.memory.llmAtomExtractionEnabled
+      llmAtomExtractionEnabled: defaultGreyfieldConfig.memory.llmAtomExtractionEnabled,
+      llmAtomExtractionInterval: defaultGreyfieldConfig.memory.llmAtomExtractionInterval
     },
     window: {
       modelPassThrough: defaultGreyfieldConfig.window.modelPassThrough,

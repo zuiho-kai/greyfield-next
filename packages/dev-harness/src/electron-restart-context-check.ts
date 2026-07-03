@@ -73,8 +73,14 @@ try {
     throw new Error(`Second launch prompt missed persisted assistant turn: ${JSON.stringify(secondMessages)}`);
   }
   const secondSystem = secondMessages[0]?.content ?? "";
-  if (!secondSystem.includes("Character: Greyfield") || !secondSystem.includes("Greyfield Memory")) {
-    throw new Error(`Second launch prompt missed persona or memory: ${secondSystem}`);
+  if (!secondSystem.includes("Character: Greyfield")) {
+    throw new Error(`Second launch prompt missed persona: ${secondSystem}`);
+  }
+  if (!secondSystem.includes("Memory: none yet.")) {
+    throw new Error(`Second launch prompt should keep memory paused: ${secondSystem}`);
+  }
+  if (!secondSystem.includes("Recent handoff:")) {
+    throw new Error(`Second launch prompt missed persisted recent handoff: ${secondSystem}`);
   }
 
   const sessionJsonl = await readFile(join(tempDir, "sessions", "desktop-main-session.jsonl"), "utf8");

@@ -40,7 +40,8 @@ describe("v1-features.json", () => {
       tag: "frontend-full",
       script: "pnpm harness:frontend-full"
     });
-    expect(manifest.qaProfiles["frontend-full"].ciTrigger).toContain("frontend-visible paths");
+    expect(manifest.qaProfiles["frontend-full"].ciTrigger).toContain("renderer/frontend-visible paths");
+    expect(manifest.qaProfiles["frontend-full"].ciTrigger).toContain("without forcing frontend-full");
     expect(manifest.qaProfiles["frontend-full"].scope).toEqual(
       expect.arrayContaining([
         "real Live2D rendering",

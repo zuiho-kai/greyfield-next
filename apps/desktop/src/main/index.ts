@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Tray } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, screen, Tray } from "electron";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -54,7 +54,8 @@ async function createWindows(): Promise<void> {
     recallMaxItems: resolvePositiveIntegerEnv("GREYFIELD_RECALL_MAX_ITEMS"),
     recallMaxCharacters: resolvePositiveIntegerEnv("GREYFIELD_RECALL_MAX_CHARACTERS"),
     summaryBatchTurnLimit: resolvePositiveIntegerEnv("GREYFIELD_SUMMARY_BATCH_TURN_LIMIT"),
-    summaryMinTurns: resolvePositiveIntegerEnv("GREYFIELD_SUMMARY_MIN_TURNS")
+    summaryMinTurns: resolvePositiveIntegerEnv("GREYFIELD_SUMMARY_MIN_TURNS"),
+    memoryEnabled: false
   });
   runtimeIpcController = new RuntimeIpcController({
     service: runtimeService,
@@ -82,7 +83,8 @@ async function createWindows(): Promise<void> {
     broadcastLog
   });
   const preload = resolvePreloadPath(currentDir);
-  petWindow = new BrowserWindow(createPetWindowOptions(config, preload));
+  const displayWorkAreas = screen.getAllDisplays().map((display) => display.workArea);
+  petWindow = new BrowserWindow(createPetWindowOptions(config, preload, displayWorkAreas));
   attachSettingsReplayOnLoad(petWindow);
   petWindowController = new PetWindowController({
     getWindow: () => getUsableWindow(petWindow),
@@ -93,7 +95,7 @@ async function createWindows(): Promise<void> {
   attachSettingsReplayOnLoad(settingsWindow);
   chatWindow = new BrowserWindow(createChatWindowOptions(preload));
   attachSettingsReplayOnLoad(chatWindow);
-  controlsWindow = new BrowserWindow(createControlsWindowOptions(config, preload));
+  controlsWindow = new BrowserWindow(createControlsWindowOptions(config, preload, displayWorkAreas));
   attachSettingsReplayOnLoad(controlsWindow);
   attachWindowLifecycle();
   applyWindowLayerMode(
@@ -155,9 +157,9 @@ function createTray(): void {
 }
 
 function createTrayIcon(): Electron.NativeImage {
-  const transparentPng =
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
-  return nativeImage.createFromDataURL(transparentPng).resize({ width: 16, height: 16 });
+  const iconPng =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAATJSURBVFhH1ZdbTBxlFMf75lvffOsTl3JrYmNMbDQ2JqYPXp5sYqQxMSa2IBYq0KWlYAulLKZ4AeWiNS0SlyqiUqq1sqUtyNLa1JICZSmWStkFFmZnb+xl9jJzjjnD7LL9Znbl9uI/OcnsZjK/c/vO931btvxfBQDbAODZqCFiCvvOpgoAtgLAXgBoAIDxYDhsDYRCc1Gj3wAwBQDnACAXAJ5kv7EuKeAiUZLuLgnCIrfk8c7Y7TA4OYk9w8OyXbwzjNfGzTjD87jo8fg8AYGLiOJ9AKjckCNKeoc9QoCzOHjx8ugIHuow4PM1JzG19DCmluowrYSsTLad5cfxYJsBzw/9iRa7Q3IHAnZJAjMAvMZ++z9F6aYobC6XcNU8jm+2NmHK4VJMJdOApxUfwfTio5j+QTmmHzqGL+s/w/OmWzjrcIYjoviIssEyEkqBP7I6HJGmPiNmlpetCb6drKhCtqMdP8nZoD4BgBqWpRKlnSIneHVPN6boStYN315UiRmFlfhWw1l8aOPEcEScoQZlmTFRw1CzUdop8s2AZxR+iBkHj2NpWxfO8s6I0pxZLFsW1Ykah2q+kbSz8Eyy909gy+UB5Jd8bgBoZdly9BKAmbr99S8aksM/6UcLasmOhtPacLLnyk7j1DwHoihNq7JAtaHl1nX7VhJ4Jw6yTEYmgzY8s6AKswqqsfHidXR4/S5VQ9IEW/C4/QXt7auD3+tSpb1qjBxIDM967yS+WtWKc7wrDAA34+FbqTlowj1VWaEBL8MT95LDE6U9Hp6VX4PZ+TV4++8ZVFbEchnoQQiFZqn5tOBpxT+gKUY3Y9UG4Nl5p/Bs7030CyFbbEICwB5/MGjruHFDA34E0+ObjhvA3A3AyfSdRvT4BTsA5EUdyPUEAtyZ6/1qOC21DnMsfhzrisFz++wr/0e1aMLcJPDsvFrUfX0BnV6/M9aIlAqfICx888egGk7r3MA6sBx5Igf2JYHnHKhF/fdGdPsEHgB0sgOIuJNm9e8jo2o41bt+IG7dT2CVKu0/r/QIOZAEnnNAj1/+OoQ+IbgQG8s0hCKSND0+O4fZugqNCdeEBi7mAVr6WpiaMw4kgefsr0PjnfsohMKzALBbWYiyE7/YXG5hX9NX2uPVMLHigexEa1zDdcc5MLTsQAL4CyWNaOVcIp2qAOCJeAeKnD6fs7n3mhoe7XbGCU2RAwngO/bXYcW5S8h7fEuq/YAOlVSGB7YF2FVRq4bH1bx6jKUqGr2QMHKCP51fjyMP5zAYjtD5cc9jDpDIK97rdTdcupIQvpp1rgXf8e5HcvScy+ujcrNsWTQRaaey8g7xnea2TYW/pGvGiZlFSRnB6uijoulEHfpgfhFeOfX5psAp9f0jU9Glpz4LsKKzP71sts5Lb3x8ZkNwipzgyuQzPtb5iUQvkac0nOhAWdv1Gz5TUrdmeHFLt5x2JXKCb2NZSSVfSERp2u72eu/+Y8Vj7T34YnljUviuwk9l8F+TFrnhlJq30pbPfn9VUi4nP9LVi/d4l6x2p2gcnkB9Z6+8q71d/6082/XfXcFu0whaOKdEDgvBMB3DB9Z1KdESdW70XkhN6vYLdqpr1Gh7VaDR++Fe9hubJiUrRYp10K6mPO9ea6r/Bct9CRlGiyoEAAAAAElFTkSuQmCC";
+  return nativeImage.createFromDataURL(iconPng).resize({ width: 16, height: 16 });
 }
 
 function registerIpc(): void {
@@ -297,7 +299,6 @@ function registerIpc(): void {
   ipcMain.on("window:open-chat", () => showWindowIfUsable(chatWindow));
   ipcMain.on("window:hide-pet", () => hideWindowIfUsable(petWindow));
   ipcMain.on("window:hide-controls", () => hideWindowIfUsable(controlsWindow));
-  ipcMain.on("window:quit", () => app.quit());
   ipcMain.on("window:controls-drag-start", (_event, payload: { screenX: number; screenY: number }) => {
     startControlsWindowDrag(payload);
   });

@@ -1,4 +1,4 @@
-import { _electron as electron, type ElectronApplication, type Page } from "playwright";
+import { _electron as electron, type ElectronApplication, type Locator, type Page } from "playwright";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -17,6 +17,7 @@ const sessionPath = join(tempDir, "sessions", "desktop-main-session.jsonl");
 const fakeScreenshotDataUrl =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA0lW1TAAAAHklEQVR42mP8z8AARLJgwoIFDBgYGBj+M8B8AAAp+gIGKq+qVwAAAABJRU5ErkJggg==";
 const controlsScreenshotPath = join(artifactDir, "controls-screen-awareness-on.png");
+const noVisionChatScreenshotPath = join(artifactDir, "chat-screen-awareness-no-vision-notice.png");
 const chatScreenshotPath = join(artifactDir, "chat-without-look-panel.png");
 const proactiveScreenshotPath = join(artifactDir, "pet-proactive-screen-awareness.png");
 const failureScreenshotPath = join(artifactDir, "failure-screen-awareness.png");
@@ -32,6 +33,7 @@ const summary: Record<string, unknown> = {
   ok: false,
   artifacts: {
     controlsScreenshotPath,
+    noVisionChatScreenshotPath,
     chatScreenshotPath,
     proactiveScreenshotPath,
     failureScreenshotPath,
@@ -76,6 +78,9 @@ try {
   summary.noChatLookPanel = true;
   await assertDesktopControlsHaveSingleScreenAwarenessToggle(controls);
   summary.desktopControlsSingleScreenAwarenessToggle = true;
+  await sendChatMessage(chat, "先保留一段聊天历史。");
+  await chat.locator(".message-item.assistant", { hasText: "你好，我醒着。现在可以继续做桌宠了。" }).waitFor({ timeout: 10_000 });
+  summary.seedChatHistoryVisible = true;
 
   await controls.getByRole("button", { name: /^(Turn Screen awareness on|开启屏幕感知)$/ }).click();
   await controls.getByRole("button", { name: /^(Turn Screen awareness off|关闭屏幕感知)$/ }).waitFor({ timeout: 10_000 });
@@ -90,7 +95,10 @@ try {
     (event) => event.type === "error" && event.message.includes("Vision model")
   );
   await assertRuntimeEventCountStays(pet, "observation.used", initialObservationUsedCount, "Missing Vision model still used screen context");
+  await assertNoVisionNoticeLowInterruption(chat);
+  await screenshotChatWindow(app, chat, noVisionChatScreenshotPath);
   summary.noVisionModelFallback = true;
+  summary.noVisionNoticeLowInterruption = true;
 
   await pet.evaluate(() => {
     window.greyfield?.send("settings:update", { provider: { visionModel: "fake-vision-model" } });
@@ -139,7 +147,7 @@ try {
   }
   summary.offModeDoesNotUseScreenContext = true;
 
-  await chat.screenshot({ path: chatScreenshotPath });
+  await screenshotChatWindow(app, chat, chatScreenshotPath);
   const sessionRaw = await readFile(sessionPath, "utf8");
   if (sessionRaw.includes("data:image") || sessionRaw.includes(fakeScreenshotDataUrl) || sessionRaw.includes("screen-frame")) {
     throw new Error(`Session persisted raw screen frame data: ${sessionRaw}`);
@@ -149,6 +157,7 @@ try {
     ok: true,
     rawScreenshotExcludedFromSession: true,
     controlsScreenshotPath,
+    noVisionChatScreenshotPath,
     chatScreenshotPath,
     proactiveScreenshotPath
   });
@@ -282,9 +291,90 @@ async function assertDesktopControlsHaveSingleScreenAwarenessToggle(controls: Pa
   }
 }
 
+async function assertNoVisionNoticeLowInterruption(chat: Page): Promise<void> {
+  const notice = chat.getByTestId("screen-awareness-notice");
+  await notice.waitFor({ timeout: 10_000 });
+  const noticeText = await notice.textContent();
+  if (!noticeText?.includes("屏幕感知") || !noticeText.includes("Vision model") || !noticeText.includes("没有发送给 Chat model")) {
+    throw new Error(`Screen-awareness notice does not explain the Vision model and Chat-model boundary: ${noticeText}`);
+  }
+  if (noticeText.includes("Screen awareness needs a ready Vision model before Greyfield can use visual context")) {
+    throw new Error(`Screen-awareness notice still exposes the raw runtime error: ${noticeText}`);
+  }
+  if ((await chat.locator(".chat-error").count()) !== 0) {
+    throw new Error("Screen-awareness Vision error still renders as the global chat error bar.");
+  }
+  await chat.locator(".message-item.assistant", { hasText: "你好，我醒着。现在可以继续做桌宠了。" }).waitFor({ timeout: 10_000 });
+  await assertNoOverlap(chat.locator(".screen-awareness-notice"), chat.locator(".message-list"), "notice and message list overlap");
+  await assertNoOverlap(chat.locator(".screen-awareness-notice"), chat.locator(".message-composer"), "notice and composer overlap");
+  const messageListBox = await chat.locator(".message-list").boundingBox();
+  const composerBox = await chat.locator(".message-composer").boundingBox();
+  if (!messageListBox || messageListBox.height < 80) {
+    throw new Error(`Message list is not usable after no-Vision notice: ${JSON.stringify(messageListBox)}`);
+  }
+  if (!composerBox || composerBox.height < 70) {
+    throw new Error(`Composer is not usable after no-Vision notice: ${JSON.stringify(composerBox)}`);
+  }
+}
+
+async function assertNoOverlap(first: Locator, second: Locator, message: string): Promise<void> {
+  const firstBox = await first.boundingBox();
+  const secondBox = await second.boundingBox();
+  if (!firstBox || !secondBox) {
+    throw new Error(`${message}; missing box first=${JSON.stringify(firstBox)} second=${JSON.stringify(secondBox)}`);
+  }
+  const separated =
+    firstBox.x + firstBox.width <= secondBox.x ||
+    secondBox.x + secondBox.width <= firstBox.x ||
+    firstBox.y + firstBox.height <= secondBox.y ||
+    secondBox.y + secondBox.height <= firstBox.y;
+  if (!separated) {
+    throw new Error(`${message}; first=${JSON.stringify(firstBox)} second=${JSON.stringify(secondBox)}`);
+  }
+}
+
 async function sendDesktopControlMessage(page: Page, text: string): Promise<void> {
   await page.getByLabel(/^(Desktop message|桌面消息)$/).fill(text);
   await page.getByRole("button", { name: /^(Send message|发送消息)$/ }).click();
+}
+
+async function sendChatMessage(page: Page, text: string): Promise<void> {
+  await page.getByTestId("chat-message-input").fill(text);
+  await page.getByTestId("chat-send-button").click();
+}
+
+async function screenshotChatWindow(app: ElectronApplication, page: Page, path: string): Promise<void> {
+  await app.evaluate(({ BrowserWindow }) => {
+    const chatWindow = BrowserWindow.getAllWindows().find((window) => {
+      const url = window.webContents.getURL();
+      return url.includes("window=chat");
+    });
+    if (!chatWindow) {
+      throw new Error("Chat window is unavailable for screenshot capture.");
+    }
+    chatWindow.show();
+    chatWindow.focus();
+  });
+  await page.bringToFront();
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      })
+  );
+  await delay(250);
+  const pngBase64 = await app.evaluate(async ({ BrowserWindow }) => {
+    const chatWindow = BrowserWindow.getAllWindows().find((window) => {
+      const url = window.webContents.getURL();
+      return url.includes("window=chat");
+    });
+    if (!chatWindow) {
+      throw new Error("Chat window is unavailable for screenshot capture.");
+    }
+    const image = await chatWindow.webContents.capturePage();
+    return image.toPNG().toString("base64");
+  });
+  await writeFile(path, Buffer.from(pngBase64, "base64"));
 }
 
 async function installRuntimeRecorder(page: Page): Promise<void> {

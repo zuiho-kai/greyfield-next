@@ -1,5 +1,42 @@
 # QA Retro: Desktop Pet Interaction Miss
 
+## 2026-07-03 Regression: Coordinator Confused Process Signals, Task State, And Worker Ownership
+
+During parallel Greyfield follow-up work, the coordinator made three related mistakes:
+
+- It treated Vite/Electron process state, a generated Live2D URL, and DOM/canvas checks as enough to say the latest app was "up", while the user's actual desktop still had no visible model or controls.
+- It confused two active tasks: the dev-launch/offscreen-window fix and the screen-date grounding fix, then answered about the wrong one when the user asked whether the previous task was complete.
+- It first opened multiple sub-agents without a stable ownership plan, then collapsed to one worker, then restored two workers. The missing invariant was one issue -> one worker -> one worktree -> one branch -> one PR, with the coordinator owning the ledger.
+
+Root cause:
+
+- "Started", "patched", "validated", "PR opened", and "merged" were not treated as distinct states.
+- The coordinator accepted indirect technical evidence instead of the user's visible desktop state.
+- Worker ownership was treated as movable chat context instead of a task contract.
+
+How we avoid repeating it:
+
+- Desktop launch and recovery claims require user-visible evidence: on-screen Electron window bounds, screenshot/harness artifacts, and non-empty model pixels when Live2D visibility is claimed. Ports, PIDs, URLs, and DOM existence are diagnostics only.
+- Parallel implementation must keep an explicit task ledger: issue, worktree, branch, worker, status, PR URL, and merge state. The coordinator must check live state before saying a task is done.
+- Do not repurpose an active worker for another issue unless the original task is explicitly retired or abandoned. Independent issues run in independent worktrees with independent workers.
+- Sub-agents do not coordinate with each other. The coordinator owns dependencies, status summaries, collision handling, review, and merge order.
+
+## 2026-07-03 Regression: Screen-Aware Date Answer Used A Stale Year
+
+Issue #188 exposed a grounding miss in the screen-awareness text path: when the user enabled screen input and asked "今天几号？", Greyfield could still answer with a stale year even though the desktop date was visible.
+
+What happened:
+
+- Runtime prompt assembly described temporary visual observation boundaries, but did not include a reliable current local date.
+- Vision context could corroborate visible desktop date text, but the model still had no explicit priority rule for "today" and current-year questions.
+- Existing screen-awareness tests covered routing, metadata, and raw screenshot non-persistence, but not date grounding.
+
+How we avoid repeating it:
+
+- Runtime prompts must include current local date grounding from system time, not a fixed date literal.
+- Date questions should use the current local date as the reliable source; visual date text can corroborate it, and conflicts should be stated conservatively.
+- Screen-awareness regression coverage should include a user text date question with desktop visual context and assert the answer does not fall back to a stale year.
+
 ## 2026-06-29 Regression: Coordinator Started A Feature Without Spawning The Worker
 
 After V2.1 MaiBot parity was re-split into product loops and atomic issues, the next implementation step should have opened a dedicated implementation sub-agent for the selected issue. Instead, the coordinating agent started by selecting #118, checking worktrees, fetching `origin/main`, and creating the feature worktree, but did not spawn the worker before the user interrupted.
