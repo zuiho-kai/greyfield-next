@@ -9,6 +9,9 @@ export function resolveLive2DFixturePath(): string {
   if (configured && existsSync(configured)) {
     return configured;
   }
+  if (configured) {
+    throw new Error(`GREYFIELD_LIVE2D_FIXTURE does not exist: ${configured}`);
+  }
 
   const packageFixture = join(
     workspaceRoot,

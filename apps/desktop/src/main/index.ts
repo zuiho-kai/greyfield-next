@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Tray } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, screen, Tray } from "electron";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -83,7 +83,8 @@ async function createWindows(): Promise<void> {
     broadcastLog
   });
   const preload = resolvePreloadPath(currentDir);
-  petWindow = new BrowserWindow(createPetWindowOptions(config, preload));
+  const displayWorkAreas = screen.getAllDisplays().map((display) => display.workArea);
+  petWindow = new BrowserWindow(createPetWindowOptions(config, preload, displayWorkAreas));
   attachSettingsReplayOnLoad(petWindow);
   petWindowController = new PetWindowController({
     getWindow: () => getUsableWindow(petWindow),
@@ -94,7 +95,7 @@ async function createWindows(): Promise<void> {
   attachSettingsReplayOnLoad(settingsWindow);
   chatWindow = new BrowserWindow(createChatWindowOptions(preload));
   attachSettingsReplayOnLoad(chatWindow);
-  controlsWindow = new BrowserWindow(createControlsWindowOptions(config, preload));
+  controlsWindow = new BrowserWindow(createControlsWindowOptions(config, preload, displayWorkAreas));
   attachSettingsReplayOnLoad(controlsWindow);
   attachWindowLifecycle();
   applyWindowLayerMode(

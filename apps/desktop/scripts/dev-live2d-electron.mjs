@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, stat, writeFile, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
@@ -9,8 +9,39 @@ const workspaceRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const desktopRoot = fileURLToPath(new URL("..", import.meta.url));
 const node = process.execPath;
 const pidFile = join(workspaceRoot, ".cache", "greyfield-live2d-dev-pids.json");
+const devCacheRoot = join(workspaceRoot, ".cache", "greyfield-live2d-dev");
+const bundledHiyoriModelPath = join(
+  workspaceRoot,
+  "apps",
+  "desktop",
+  "public",
+  "assets",
+  "live2d",
+  "momose-hiyori",
+  "runtime",
+  "hiyori_free_t08.model3.json"
+);
 const skipBuild = process.argv.includes("--skip-build");
 const forceBuild = process.argv.includes("--force-build");
+
+export const safeDevConfigPatch = Object.freeze({
+  window: {
+    alwaysOnTop: true,
+    clickThrough: false,
+    modelPassThrough: false,
+    layerMode: "follow-click",
+    width: 420,
+    height: 620,
+    x: 80,
+    y: 80
+  },
+  live2d: {
+    modelPath: "assets/live2d/momose-hiyori/runtime/hiyori_free_t08.model3.json",
+    scale: 1,
+    x: 0,
+    y: 0
+  }
+});
 
 function run(command, args, options = {}) {
   return spawn(command, args, {
@@ -49,7 +80,7 @@ async function waitForServer(url) {
   throw new Error(`Timed out waiting for ${url}`);
 }
 
-async function shouldBuild(outputFile, sourceDirs) {
+export async function shouldBuild(outputFile, sourceDirs) {
   if (forceBuild) {
     return true;
   }
@@ -84,67 +115,106 @@ async function newestMtimeMs(paths) {
   return newest;
 }
 
-function resolveConfiguredLive2DFixturePath() {
-  const configured = process.env.GREYFIELD_LIVE2D_FIXTURE;
-  if (configured && existsSync(configured)) {
+export function resolveLive2DFixturePath(options = {}) {
+  const env = options.env ?? process.env;
+  const exists = options.exists ?? existsSync;
+  const packageFixture = options.packageFixture ?? bundledHiyoriModelPath;
+  const configured = env.GREYFIELD_LIVE2D_FIXTURE;
+  if (configured && exists(configured)) {
     return configured;
   }
   if (configured) {
     throw new Error(`GREYFIELD_LIVE2D_FIXTURE does not exist: ${configured}`);
   }
-  return undefined;
+  if (exists(packageFixture)) {
+    return packageFixture;
+  }
+  throw new Error(
+    "No Live2D fixture found. Set GREYFIELD_LIVE2D_FIXTURE to a .model3.json file or install the bundled Hiyori assets."
+  );
 }
 
-function toViteFsModelUrl(modelPath) {
+export function toViteFsModelUrl(modelPath) {
   return `/@fs/${modelPath.replace(/\\/g, "/")}`;
 }
 
-function createRendererUrl(baseUrl) {
+export function createRendererUrl(baseUrl, options = {}) {
   const url = new URL(baseUrl);
-  const configuredFixture = resolveConfiguredLive2DFixturePath();
-  if (configuredFixture) {
-    url.searchParams.set("live2dModel", toViteFsModelUrl(configuredFixture));
-  }
+  url.searchParams.set("live2dModel", toViteFsModelUrl(resolveLive2DFixturePath(options)));
   return url.toString();
 }
 
-await mkdir(join(workspaceRoot, ".cache"), { recursive: true });
-
-if (await shouldBuild(join(desktopRoot, "dist-preload", "index.cjs"), [join(desktopRoot, "src", "preload")])) {
-  await waitForExit(run(node, ["scripts/build-preload.mjs"], { cwd: desktopRoot }));
+export function resolveDevLaunchPaths(options = {}) {
+  const env = options.env ?? process.env;
+  const cacheRoot = options.cacheRoot ?? devCacheRoot;
+  return {
+    cacheRoot,
+    configPath: env.GREYFIELD_CONFIG_PATH ?? join(cacheRoot, "greyfield.config.json"),
+    userDataPath: env.GREYFIELD_USER_DATA_PATH ?? join(cacheRoot, "user-data"),
+    shouldWriteSafeConfig: !env.GREYFIELD_CONFIG_PATH
+  };
 }
-if (await shouldBuild(join(desktopRoot, "dist-main", "index.mjs"), [join(desktopRoot, "src", "main")])) {
-  await waitForExit(run(node, ["scripts/build-main.mjs"], { cwd: desktopRoot }));
+
+export async function prepareDevLaunchEnvironment(options = {}) {
+  const env = options.env ?? process.env;
+  const paths = resolveDevLaunchPaths(options);
+  await mkdir(paths.cacheRoot, { recursive: true });
+  await mkdir(paths.userDataPath, { recursive: true });
+  if (paths.shouldWriteSafeConfig) {
+    await mkdir(dirname(paths.configPath), { recursive: true });
+    await writeFile(paths.configPath, `${JSON.stringify(safeDevConfigPatch, null, 2)}\n`, "utf8");
+  }
+  return {
+    GREYFIELD_CONFIG_PATH: paths.configPath,
+    GREYFIELD_USER_DATA_PATH: paths.userDataPath,
+    GREYFIELD_PROJECT_ROOT: env.GREYFIELD_PROJECT_ROOT ?? workspaceRoot
+  };
 }
 
-const port = process.env.GREYFIELD_DEV_PORT ?? "5173";
-const baseUrl = `http://127.0.0.1:${port}/`;
-const vite = run(node, ["node_modules/vite/bin/vite.js", "--host", "127.0.0.1", "--port", port], {
-  cwd: desktopRoot
-});
-await writePidFile({ parent: process.pid, vite: vite.pid });
+async function main() {
+  await mkdir(join(workspaceRoot, ".cache"), { recursive: true });
 
-let electron;
-try {
-  await waitForServer(baseUrl);
-  const url = createRendererUrl(baseUrl);
+  if (await shouldBuild(join(desktopRoot, "dist-preload", "index.cjs"), [join(desktopRoot, "src", "preload")])) {
+    await waitForExit(run(node, ["scripts/build-preload.mjs"], { cwd: desktopRoot }));
+  }
+  if (await shouldBuild(join(desktopRoot, "dist-main", "index.mjs"), [join(desktopRoot, "src", "main")])) {
+    await waitForExit(run(node, ["scripts/build-main.mjs"], { cwd: desktopRoot }));
+  }
 
-  electron = run(node, ["node_modules/electron/cli.js", "dist-main/index.mjs"], {
-    cwd: desktopRoot,
-    env: { GREYFIELD_DESKTOP_URL: url }
+  const launchEnv = await prepareDevLaunchEnvironment();
+  const port = process.env.GREYFIELD_DEV_PORT ?? "5173";
+  const baseUrl = `http://127.0.0.1:${port}/`;
+  const vite = run(node, ["node_modules/vite/bin/vite.js", "--host", "127.0.0.1", "--port", port], {
+    cwd: desktopRoot
   });
-  await writePidFile({ parent: process.pid, vite: vite.pid, electron: electron.pid });
-  await waitForExit(electron);
-} finally {
-  if (electron && !electron.killed) {
-    electron.kill();
+  await writePidFile({ parent: process.pid, vite: vite.pid });
+
+  let electron;
+  try {
+    await waitForServer(baseUrl);
+    const url = createRendererUrl(baseUrl);
+
+    electron = run(node, ["node_modules/electron/cli.js", "dist-main/index.mjs"], {
+      cwd: desktopRoot,
+      env: { GREYFIELD_DESKTOP_URL: url, ...launchEnv }
+    });
+    await writePidFile({ parent: process.pid, vite: vite.pid, electron: electron.pid });
+    await waitForExit(electron);
+  } finally {
+    if (electron && !electron.killed) {
+      electron.kill();
+    }
+    if (!vite.killed) {
+      vite.kill();
+    }
+    await rm(pidFile, { force: true });
   }
-  if (!vite.killed) {
-    vite.kill();
-  }
-  await rm(pidFile, { force: true });
 }
 
 async function writePidFile(pids) {
   await writeFile(pidFile, `${JSON.stringify({ ...pids, updatedAt: new Date().toISOString() }, null, 2)}\n`, "utf8");
+}
+
+if (resolve(process.argv[1] ?? "") === resolve(fileURLToPath(import.meta.url))) {
+  await main();
 }

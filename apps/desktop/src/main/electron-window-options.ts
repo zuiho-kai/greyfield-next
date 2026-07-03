@@ -2,12 +2,31 @@ import type { BrowserWindowConstructorOptions } from "electron";
 import { join, normalize } from "node:path";
 import type { GreyfieldConfig } from "@greyfield/persistence/config-schema";
 
-export function createPetWindowOptions(config: GreyfieldConfig, preload?: string): BrowserWindowConstructorOptions {
+export interface VisibleArea {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface WindowPlacement {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export function createPetWindowOptions(
+  config: GreyfieldConfig,
+  preload?: string,
+  displayWorkAreas: VisibleArea[] = []
+): BrowserWindowConstructorOptions {
+  const placement = createClampedPetPlacement(config, displayWorkAreas);
   return {
-    width: config.window.width,
-    height: config.window.height,
-    x: config.window.x,
-    y: config.window.y,
+    width: placement.width,
+    height: placement.height,
+    x: placement.x,
+    y: placement.y,
     transparent: true,
     backgroundColor: "#00000000",
     frame: false,
@@ -58,12 +77,17 @@ export function createChatWindowOptions(preload?: string): BrowserWindowConstruc
   };
 }
 
-export function createControlsWindowOptions(config: GreyfieldConfig, preload?: string): BrowserWindowConstructorOptions {
+export function createControlsWindowOptions(
+  config: GreyfieldConfig,
+  preload?: string,
+  displayWorkAreas: VisibleArea[] = []
+): BrowserWindowConstructorOptions {
+  const placement = createClampedControlsPlacement(config, displayWorkAreas);
   return {
-    width: 456,
-    height: 140,
-    x: config.window.x ?? 0,
-    y: (config.window.y ?? 0) + config.window.height - 150,
+    width: placement.width,
+    height: placement.height,
+    x: placement.x,
+    y: placement.y,
     transparent: true,
     backgroundColor: "#00000000",
     frame: false,
@@ -86,4 +110,71 @@ export function resolveRendererHtmlPath(mainOutputDir: string): string {
 
 export function resolvePreloadPath(mainOutputDir: string): string {
   return normalize(join(mainOutputDir, "../dist-preload/index.cjs"));
+}
+
+function createClampedPetPlacement(config: GreyfieldConfig, displayWorkAreas: VisibleArea[]): WindowPlacement {
+  const width = config.window.width;
+  const height = config.window.height;
+  return clampWindowPlacement(
+    {
+      x: config.window.x ?? 0,
+      y: config.window.y ?? 0,
+      width,
+      height
+    },
+    displayWorkAreas
+  );
+}
+
+function createClampedControlsPlacement(config: GreyfieldConfig, displayWorkAreas: VisibleArea[]): WindowPlacement {
+  const pet = createClampedPetPlacement(config, displayWorkAreas);
+  return clampWindowPlacement(
+    {
+      width: 456,
+      height: 140,
+      x: pet.x,
+      y: pet.y + pet.height - 150
+    },
+    displayWorkAreas
+  );
+}
+
+function clampWindowPlacement(placement: WindowPlacement, displayWorkAreas: VisibleArea[]): WindowPlacement {
+  const display = findNearestVisibleArea(placement, displayWorkAreas);
+  if (!display) {
+    return placement;
+  }
+  return {
+    ...placement,
+    x: clampCoordinate(placement.x, display.x, display.x + Math.max(0, display.width - placement.width)),
+    y: clampCoordinate(placement.y, display.y, display.y + Math.max(0, display.height - placement.height))
+  };
+}
+
+function findNearestVisibleArea(placement: WindowPlacement, displayWorkAreas: VisibleArea[]): VisibleArea | undefined {
+  if (displayWorkAreas.length === 0) {
+    return undefined;
+  }
+  const windowCenter = {
+    x: placement.x + placement.width / 2,
+    y: placement.y + placement.height / 2
+  };
+  return displayWorkAreas.reduce((nearest, candidate) => {
+    const nearestDistance = distanceToArea(windowCenter, nearest);
+    const candidateDistance = distanceToArea(windowCenter, candidate);
+    return candidateDistance < nearestDistance ? candidate : nearest;
+  });
+}
+
+function distanceToArea(point: { x: number; y: number }, area: VisibleArea): number {
+  const x = clampCoordinate(point.x, area.x, area.x + area.width);
+  const y = clampCoordinate(point.y, area.y, area.y + area.height);
+  return (point.x - x) ** 2 + (point.y - y) ** 2;
+}
+
+function clampCoordinate(value: number, min: number, max: number): number {
+  if (max < min) {
+    return min;
+  }
+  return Math.min(max, Math.max(min, Math.round(value)));
 }
