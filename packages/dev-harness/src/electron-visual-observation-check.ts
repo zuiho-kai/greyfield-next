@@ -295,8 +295,11 @@ async function assertNoVisionNoticeLowInterruption(chat: Page): Promise<void> {
   const notice = chat.getByTestId("screen-awareness-notice");
   await notice.waitFor({ timeout: 10_000 });
   const noticeText = await notice.textContent();
-  if (!noticeText?.includes("ready Vision model") || !noticeText.includes("did not send it to the Chat model")) {
+  if (!noticeText?.includes("屏幕感知") || !noticeText.includes("Vision model") || !noticeText.includes("没有发送给 Chat model")) {
     throw new Error(`Screen-awareness notice does not explain the Vision model and Chat-model boundary: ${noticeText}`);
+  }
+  if (noticeText.includes("Screen awareness needs a ready Vision model before Greyfield can use visual context")) {
+    throw new Error(`Screen-awareness notice still exposes the raw runtime error: ${noticeText}`);
   }
   if ((await chat.locator(".chat-error").count()) !== 0) {
     throw new Error("Screen-awareness Vision error still renders as the global chat error bar.");

@@ -26,7 +26,7 @@
         role="status"
         data-testid="screen-awareness-notice"
       >
-        {{ state.screenAwarenessNotice }}
+        {{ screenAwarenessNoticeText }}
       </p>
 
       <div v-if="state.errorMessage || state.voiceErrorMessage" class="chat-alerts" aria-live="polite">
@@ -103,6 +103,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { DesktopRendererState } from "./desktop-runtime-bridge";
+import { describeScreenAwarenessNotice } from "./chat-screen-awareness-notice";
 import { describeChatStatus } from "./chat-status";
 import { normalizeSettingsLocale, settingsT, type SettingsI18nKey } from "./settings-i18n";
 
@@ -128,6 +129,7 @@ const locale = computed(() => normalizeSettingsLocale(props.state.settings.setti
 const t = (key: SettingsI18nKey, values?: Record<string, string | number>): string =>
   settingsT(locale.value, key, values);
 const chatStatus = computed(() => describeChatStatus(props.state, props.draft, locale.value));
+const screenAwarenessNoticeText = computed(() => describeScreenAwarenessNotice(props.state, locale.value));
 const voiceInputLabel = computed(() => {
   if (props.state.voiceInput.status === "listening") {
     return t("chat.voice.stopMic");
