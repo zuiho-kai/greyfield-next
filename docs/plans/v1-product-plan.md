@@ -164,6 +164,60 @@ V1 要交付一个真正像桌面宠物的 Live2D 伴侣：透明地站在桌面
 
 ## 推荐下一步
 
+如果你现在要做的是“不要整体重写，但要把项目拉回统一产品感”，建议先按下面这份模块级诊断执行。
+
+### 模块级诊断：保留、重构、局部重写
+
+#### 应该保留
+
+- `apps/desktop` 作为 Electron 壳、窗口、IPC、tray/menu 入口
+- `packages/core-runtime` 作为对话循环、prompt 组装、provider 抽象
+- `packages/audio-runtime` 作为 TTS/ASR/播放队列
+- `packages/stage-live2d` 作为 Live2D 渲染、命中测试、动作/表情
+- `packages/persistence` 作为配置、记忆、session 存储
+- `packages/dev-harness` 作为验收和证据体系
+
+这些边界本身是对的，不建议推倒重来。
+
+#### 应该重构
+
+- `apps/desktop` 主入口
+  - 把 window、tray/menu、drag/shape、model selection、settings IPC、runtime IPC 拆成更小的 owner
+  - 避免入口文件继续长成“补丁总线”
+- Renderer UI 组织
+  - 把宠物体验、聊天体验、设置体验、控制体验分层
+  - 不要继续让功能随着开发顺序自然堆出来
+- 状态流和事件流
+  - 收口 renderer 内部分散状态
+  - 明确 main / renderer / runtime 各自只拥有一份真实状态
+- 窗口信息架构
+  - 先定义每个窗口的主任务、次任务、不可做的事
+  - 再回头排版和交互
+
+#### 可能需要局部重写
+
+- 某些大型 Vue 组件
+- 复杂 IPC 映射层
+- UI 状态 reducer / mapper
+- 窗口行为集中控制逻辑
+- GPT 最容易写出“能跑但不统一”的桥接层
+
+### UI / 交互基线
+
+- 气质目标：像桌宠，不像工具面板
+- 主体验顺序：桌宠存在感 > 对话反馈 > 设置/控制
+- 视觉原则：统一字体、间距、圆角、阴影、按钮状态、气泡样式、动效节奏
+- 交互原则：少打扰、低密度、可预期、随时可打断
+- 信息架构原则：Chat、Settings、Controls、Pet 各自有明确职责，不互相抢主位
+
+### 实际执行顺序
+
+1. 先定视觉和交互基线
+2. 再找当前最偏离基线的页面
+3. 优先拆入口文件和桥接层
+4. 再处理最脆弱的局部组件
+5. 最后才继续补功能
+
 V2.0b 记忆用户控制已在 #67 合入 main：
 
 1. 在 #63 的 V2.0a 基础上，Settings Memory 支持查看、编辑、禁用、删除、导出 summary memory。
