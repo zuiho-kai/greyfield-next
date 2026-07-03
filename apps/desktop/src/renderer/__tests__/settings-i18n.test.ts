@@ -49,6 +49,12 @@ describe("settings i18n", () => {
     expect(settingsT("zh-CN", "chat.title")).toBe("聊天");
     expect(settingsT("zh-CN", "chat.action.send")).toBe("发送");
     expect(settingsT("zh-CN", "chat.status.waiting.detail")).toBe("可以继续发送下一条消息。");
+    expect(settingsT("zh-CN", "chat.screenAwareness.visionMissingNotice")).toBe(
+      "屏幕感知需要可用的 Vision model。本次截图保持临时，没有发送给 Chat model。"
+    );
+    expect(settingsT("en-US", "chat.screenAwareness.visionMissingNotice")).toBe(
+      "Screen awareness needs a ready Vision model. This screenshot stayed temporary and was not sent to the Chat model."
+    );
     expect(settingsT("zh-CN", "chat.captureOnce")).toBe("截图");
     expect(settingsT("zh-CN", "chat.observeNormal")).toBe("中");
     expect(settingsT("zh-CN", "chat.clearObservation")).toBe("清除");

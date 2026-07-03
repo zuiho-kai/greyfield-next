@@ -266,6 +266,7 @@ export type SettingsI18nKey =
   | "chat.message"
   | "chat.placeholder"
   | "chat.observationIdle"
+  | "chat.screenAwareness.visionMissingNotice"
   | "chat.voice.stopMic"
   | "chat.voice.transcribing"
   | "chat.voice"
@@ -567,6 +568,7 @@ const enUS: Record<SettingsI18nKey, string> = {
   "chat.message": "Message",
   "chat.placeholder": "Type your message...",
   "chat.observationIdle": "Screenshots are temporary and only sent after you confirm with a message.",
+  "chat.screenAwareness.visionMissingNotice": "Screen awareness needs a ready Vision model. This screenshot stayed temporary and was not sent to the Chat model.",
   "chat.voice.stopMic": "Stop Mic",
   "chat.voice.transcribing": "Transcribing",
   "chat.voice": "Voice",
@@ -869,6 +871,7 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "chat.message": "消息",
   "chat.placeholder": "输入你想说的话...",
   "chat.observationIdle": "截图是临时的，只会在你发送消息确认后一起发给模型。",
+  "chat.screenAwareness.visionMissingNotice": "屏幕感知需要可用的 Vision model。本次截图保持临时，没有发送给 Chat model。",
   "chat.voice.stopMic": "停止麦克风",
   "chat.voice.transcribing": "转写中",
   "chat.voice": "语音",
