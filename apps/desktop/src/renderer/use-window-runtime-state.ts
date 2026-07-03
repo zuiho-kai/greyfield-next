@@ -14,6 +14,11 @@ export function useWindowRuntimeState(params: {
   const modelPassThrough = computed(() => state.value.window.modelPassThrough);
   const locked = computed(() => state.value.window.locked);
 
+  function applyState(nextState: DesktopRendererState): DesktopRendererState {
+    syncDraft(nextState);
+    return nextState;
+  }
+
   function syncDraft(nextState: DesktopRendererState): void {
     if (nextState.inputDraft !== state.value.inputDraft) {
       draft.value = nextState.inputDraft;
@@ -21,31 +26,31 @@ export function useWindowRuntimeState(params: {
     syncState(nextState);
   }
 
-  function sendText(text: string): Promise<DesktopRendererState> {
-    return Promise.resolve(bridge.sendText(text));
+  async function sendText(text: string): Promise<DesktopRendererState> {
+    return applyState(await bridge.sendText(text));
   }
 
-  function interrupt(): Promise<DesktopRendererState> {
+  async function interrupt(): Promise<DesktopRendererState> {
     microphoneRecorder?.cancel();
-    return Promise.resolve(bridge.interrupt());
+    return applyState(await bridge.interrupt());
   }
 
-  function startVoiceInput(): Promise<DesktopRendererState> {
-    return Promise.resolve(bridge.startVoiceInput());
+  async function startVoiceInput(): Promise<DesktopRendererState> {
+    return applyState(bridge.startVoiceInput());
   }
 
-  function stopVoiceInput(audio?: Uint8Array): Promise<DesktopRendererState> {
+  async function stopVoiceInput(audio?: Uint8Array): Promise<DesktopRendererState> {
     if (!microphoneRecorder) {
-      return Promise.resolve(bridge.failVoiceInput("Voice input is available from the pet controls or Chat window."));
+      return applyState(bridge.failVoiceInput("Voice input is available from the pet controls or Chat window."));
     }
     if (audio) {
-      return Promise.resolve(bridge.finishVoiceInput(audio));
+      return applyState(await bridge.finishVoiceInput(audio));
     }
-    return microphoneRecorder.stop().then((nextAudio) => bridge.finishVoiceInput(nextAudio));
+    return applyState(await bridge.finishVoiceInput(await microphoneRecorder.stop()));
   }
 
   function updateSetting(key: keyof DesktopSettingsState, value: string): Promise<DesktopRendererState> {
-    return Promise.resolve(bridge.updateSettings(createTextSettingPatch(state.value.settings, key, value)));
+    return Promise.resolve(applyState(bridge.updateSettings(createTextSettingPatch(state.value.settings, key, value))));
   }
 
   function updateNumericSetting(
@@ -54,7 +59,7 @@ export function useWindowRuntimeState(params: {
   ): Promise<DesktopRendererState> | undefined {
     const parsed = Number(value);
     if (Number.isFinite(parsed)) {
-      return Promise.resolve(bridge.updateSettings({ [key]: parsed }));
+      return Promise.resolve(applyState(bridge.updateSettings({ [key]: parsed })));
     }
   }
 
@@ -62,20 +67,24 @@ export function useWindowRuntimeState(params: {
     key: "speechBubbleEnabled" | "voiceSpeechEnabled" | "proactiveMemoryEnabled" | "llmAtomExtractionEnabled",
     value: boolean
   ): Promise<DesktopRendererState> {
-    return Promise.resolve(bridge.updateSettings({ [key]: value }));
+    return Promise.resolve(applyState(bridge.updateSettings({ [key]: value })));
   }
 
   function setModelPassThrough(value: boolean): Promise<DesktopRendererState> {
     window.greyfield?.send("settings:update", { window: { modelPassThrough: value } });
-    return Promise.resolve(bridge.setWindowState({ modelPassThrough: value }));
+    return Promise.resolve(applyState(bridge.setWindowState({ modelPassThrough: value })));
   }
 
   function setLocked(value: boolean): Promise<DesktopRendererState> {
-    return Promise.resolve(bridge.setWindowState({ locked: value }));
+    return Promise.resolve(applyState(bridge.setWindowState({ locked: value })));
+  }
+
+  function toggleSpeechOutput(): Promise<DesktopRendererState> {
+    return updateBooleanSetting("voiceSpeechEnabled", !state.value.settings.voiceSpeechEnabled);
   }
 
   function toggleScreenAwareness(): Promise<DesktopRendererState> {
-    return Promise.resolve(bridge.toggleScreenAwareness());
+    return Promise.resolve(applyState(bridge.toggleScreenAwareness()));
   }
 
   function chooseModel(): void {
@@ -83,16 +92,16 @@ export function useWindowRuntimeState(params: {
   }
 
   function resetTransform(): Promise<DesktopRendererState> {
-    return Promise.resolve(bridge.updateSettings({ modelScale: 1, modelX: 0, modelY: 0 }));
+    return Promise.resolve(applyState(bridge.updateSettings({ modelScale: 1, modelX: 0, modelY: 0 })));
   }
 
-  function testLLM(): Promise<DesktopRendererState> { return Promise.resolve(bridge.testLLMProvider()); }
-  function testVoice(): Promise<DesktopRendererState> { return Promise.resolve(bridge.testVoiceProvider()); }
-  function requestPersona(): Promise<DesktopRendererState> { return Promise.resolve(bridge.requestPersona()); }
+  function testLLM(): Promise<DesktopRendererState> { return Promise.resolve(applyState(bridge.testLLMProvider())); }
+  function testVoice(): Promise<DesktopRendererState> { return Promise.resolve(applyState(bridge.testVoiceProvider())); }
+  function requestPersona(): Promise<DesktopRendererState> { return Promise.resolve(applyState(bridge.requestPersona())); }
   function updatePersonaField(key: Exclude<keyof DesktopPersonaFormState, "expressionMap">, value: string): Promise<DesktopRendererState> {
-    return Promise.resolve(bridge.updatePersonaDraft({ ...bridge.getState().persona.form, [key]: value }));
+    return Promise.resolve(applyState(bridge.updatePersonaDraft({ ...bridge.getState().persona.form, [key]: value })));
   }
-  function savePersona(form: DesktopPersonaFormState): Promise<DesktopRendererState> { return Promise.resolve(bridge.savePersona(form)); }
+  function savePersona(form: DesktopPersonaFormState): Promise<DesktopRendererState> { return Promise.resolve(applyState(bridge.savePersona(form))); }
   function openSettings(): void { window.greyfield?.send("window:open-settings", {}); }
   function openChat(): void { window.greyfield?.send("window:open-chat", {}); }
   function hideControls(): void { window.greyfield?.send("window:hide-controls", {}); }
@@ -114,6 +123,7 @@ export function useWindowRuntimeState(params: {
     updateBooleanSetting,
     setModelPassThrough,
     setLocked,
+    toggleSpeechOutput,
     toggleScreenAwareness,
     chooseModel,
     resetTransform,
