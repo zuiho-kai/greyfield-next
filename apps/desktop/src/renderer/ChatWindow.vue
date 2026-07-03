@@ -18,15 +18,27 @@
       </button>
     </header>
 
-    <p class="chat-status-detail">{{ chatStatus.detail }}</p>
+    <div class="chat-status-block">
+      <p class="chat-status-detail">{{ chatStatus.detail }}</p>
+      <p
+        v-if="state.screenAwarenessNotice"
+        class="screen-awareness-notice"
+        role="status"
+        data-testid="screen-awareness-notice"
+      >
+        {{ state.screenAwarenessNotice }}
+      </p>
 
-    <div v-if="state.errorMessage" class="chat-error-box chat-error" role="alert">
-      <span class="error-icon">⚠️</span>
-      <p>{{ state.errorMessage }}</p>
-    </div>
-    <div v-if="state.voiceErrorMessage" class="chat-error-box voice-error-box" role="status">
-      <span class="error-icon">⚠️</span>
-      <p>{{ state.voiceErrorMessage }}</p>
+      <div v-if="state.errorMessage || state.voiceErrorMessage" class="chat-alerts" aria-live="polite">
+        <div v-if="state.errorMessage" class="chat-error-box chat-error" role="alert">
+          <span class="error-icon">⚠️</span>
+          <p>{{ state.errorMessage }}</p>
+        </div>
+        <div v-if="state.voiceErrorMessage" class="chat-error-box voice-error-box" role="status">
+          <span class="error-icon">⚠️</span>
+          <p>{{ state.voiceErrorMessage }}</p>
+        </div>
+      </div>
     </div>
 
     <div class="message-list-container message-list" aria-live="polite">

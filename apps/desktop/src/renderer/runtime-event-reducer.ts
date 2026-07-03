@@ -52,10 +52,28 @@ export function reduceRuntimeEvent(
 
   if (event.type === "error") {
     const lastUserMessage = [...state.messages].reverse().find((message) => message.role === "user")?.text ?? state.inputDraft;
+    if (isScreenAwarenessVisionError(event.message)) {
+      return {
+        ...state,
+        status: "error",
+        errorMessage: "",
+        screenAwarenessNotice: event.message,
+        voiceErrorMessage: "",
+        proactiveMessage: null,
+        inputDraft: lastUserMessage,
+        assistantDraft: "",
+        audioQueue: [],
+        stage: {
+          ...state.stage,
+          mouthOpen: 0
+        }
+      };
+    }
     return {
       ...state,
       status: "error",
       errorMessage: event.message,
+      screenAwarenessNotice: "",
       voiceErrorMessage: "",
       proactiveMessage: null,
       voiceInput: {
@@ -83,6 +101,7 @@ export function reduceRuntimeEvent(
         message: ""
       },
       errorMessage: "",
+      screenAwarenessNotice: "",
       proactiveMessage: null,
       messages: [...state.messages, { role: "user", text: event.text }]
     };
@@ -182,6 +201,13 @@ function findLastUserMessageIndex(messages: DesktopRendererState["messages"]): n
     }
   }
   return -1;
+}
+
+export function isScreenAwarenessVisionError(message: string): boolean {
+  return (
+    message.includes("Screen awareness needs a ready Vision model") &&
+    message.includes("did not send it to the Chat model")
+  );
 }
 
 function stageReactionForStatus(

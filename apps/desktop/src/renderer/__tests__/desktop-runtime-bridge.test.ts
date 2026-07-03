@@ -917,6 +917,37 @@ describe("createDesktopRuntimeBridge", () => {
     expect(bridge.getState()).toMatchObject({
       status: "error",
       errorMessage: "provider timed out",
+      screenAwarenessNotice: "",
+      assistantDraft: "",
+      audioQueue: []
+    });
+  });
+
+  it("routes screen-awareness Vision model errors to a low-interruption notice", async () => {
+    let runtimeEvent: ((event: import("@greyfield/core-runtime").RuntimeOutputEvent) => void) | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: () => undefined,
+      on: (channel, handler) => {
+        if (channel === "runtime:event") {
+          runtimeEvent = handler as typeof runtimeEvent;
+        }
+        return () => undefined;
+      }
+    });
+
+    await bridge.sendText("看一下屏幕");
+    runtimeEvent?.({
+      type: "error",
+      message:
+        "Screen awareness needs a ready Vision model before Greyfield can use visual context. Greyfield kept the screenshot temporary and did not send it to the Chat model."
+    });
+
+    expect(bridge.getState()).toMatchObject({
+      status: "error",
+      errorMessage: "",
+      screenAwarenessNotice:
+        "Screen awareness needs a ready Vision model before Greyfield can use visual context. Greyfield kept the screenshot temporary and did not send it to the Chat model.",
+      inputDraft: "看一下屏幕",
       assistantDraft: "",
       audioQueue: []
     });
@@ -939,6 +970,7 @@ describe("createDesktopRuntimeBridge", () => {
     const state = await bridge.sendText("重试一下");
 
     expect(state.errorMessage).toBe("");
+    expect(state.screenAwarenessNotice).toBe("");
     expect(sent).toContainEqual(["runtime:input", { type: "text.input", text: "重试一下" }]);
   });
 
