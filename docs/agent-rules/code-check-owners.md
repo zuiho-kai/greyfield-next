@@ -101,6 +101,7 @@ Required before opening or merging a feature PR.
 For frontend-visible PRs, also required:
 
 - The ordinary user path was tested, not only an internal state shortcut.
+- For desktop launch, pet-window visibility, tray recovery, or "the app is running" claims, process/port checks are not acceptance. Verify the Electron windows the user actually needs are on a visible display, inspect a screenshot or harness artifact, and prove the model canvas is non-empty when the claim includes Live2D visibility.
 - For navigation, Settings, onboarding, feature entry points, or renamed controls, verify the first-glance path before any forced scroll: open the default surface, confirm the entry is visible and named in user language, click it, confirm the intended section becomes active, and inspect a screenshot of that clicked state.
 - Do not accept `scrollIntoView`, direct URL/query params, test-only selectors, or DOM existence as evidence that a user can discover the feature. Those can supplement diagnostics, but they cannot be the primary acceptance for discoverability.
 - Current screenshots were opened and inspected by the author before asking for user verification.
@@ -143,6 +144,7 @@ Some features are not single checks. A project-owner review must verify the full
 - Voice companion: microphone capture, ASR, transcript-to-chat, text response, TTS playback, waveform mouth movement, Stop/cancel, queue cleanup, user-visible state, and fake/local provider coverage.
 - Provider settings: first-glance navigation to the provider/model-service entry, ordinary typing path, masked-secret echo, missing fields, testing state, success, failure, active-chat rejection, and no unintended provider requests.
 - Desktop pet interaction: model-pixel interaction, transparent pass-through, drag continuity, wheel bounds, pass-through toggles, bubble placement, and recovery controls.
+- Desktop launch/recovery: dev config isolation, model fixture selection, pet window on-screen bounds, controls window on-screen bounds, chat/settings recovery path, non-empty model pixels, and no reliance on stale appData coordinates.
 - Desktop screen awareness: desktop-control entry, exactly one default toggle, no Shot/Clear/End/preview/frequency controls in the small panel, mode on/off, user-initiated question, proactive use with `proactivityLevel`, provider fallback, reload/off recovery, raw-data non-persistence, and natural pet wording rather than attachment-management UI.
 - Speech bubble: first-token display, long-reply cap, fade lifecycle, viewport/screen containment, disabled-bubble hit-area removal, and full Chat history retention.
 
