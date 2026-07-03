@@ -4,6 +4,7 @@ import type { SessionTurn } from "../session-store";
 
 describe("assemblePrompt", () => {
   it("injects persona, boundaries, memory, handoff, and recent turns", () => {
+    const now = new Date();
     const recent: SessionTurn[] = [
       { id: "1", role: "user", content: "上次说要做桌宠。", createdAt: "2026-05-23T00:00:00.000Z" },
       { id: "2", role: "assistant", content: "我记得，先让角色活起来。", createdAt: "2026-05-23T00:00:01.000Z" }
@@ -30,6 +31,7 @@ describe("assemblePrompt", () => {
       input: "现在继续。",
       sessionId: "session-a",
       threadId: "thread-a",
+      now,
       atomRecallContext: {
         items: [
           {
@@ -80,6 +82,10 @@ describe("assemblePrompt", () => {
     expect(systemContent).toContain("warm, observant, and steady");
     expect(systemContent).toContain("short spoken replies with gentle humor");
     expect(systemContent).toContain("Welcome back.");
+    expect(systemContent).toContain("Current date grounding:");
+    expect(systemContent).toContain(`Current local date: ${formatLocalDateForTest(now)}.`);
+    expect(systemContent).toContain("use the current local date above as the reliable source");
+    expect(systemContent).toContain("instead of confidently giving a stale date");
     expect(systemContent).toContain("V1 cannot control the desktop");
     expect(systemContent).toContain("User wants a Live2D desktop companion");
     expect(systemContent).toContain("Long-term recall context:");
@@ -138,3 +144,7 @@ describe("assemblePrompt", () => {
     ]);
   });
 });
+
+function formatLocalDateForTest(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}

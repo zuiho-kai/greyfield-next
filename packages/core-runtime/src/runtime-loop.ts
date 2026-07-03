@@ -60,6 +60,7 @@ export interface GreyfieldRuntimeOptions {
   ttsEnabled?: boolean;
   ttsMaxCharactersPerTurn?: number;
   promptRedactionSecrets?: string[];
+  now?: () => Date;
 }
 
 const defaultTtsMaxCharactersPerTurn = 600;
@@ -259,6 +260,7 @@ export class GreyfieldRuntime {
       observation,
       sessionId: this.options.sessionStore.sessionId,
       threadId: this.threadId,
+      now: this.options.now?.() ?? new Date(),
       recallContext,
       atomRecallContext
     });

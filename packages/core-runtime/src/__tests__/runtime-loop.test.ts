@@ -217,6 +217,76 @@ describe("GreyfieldRuntime", () => {
     });
   });
 
+  it("grounds date questions with current local date when desktop screen awareness context is available", async () => {
+    let capturedMessages: Parameters<LLMProvider["stream"]>[0] = [];
+    const sessionStore = new InMemorySessionStore("session-screen-awareness-date");
+    const now = new Date();
+    const currentLocalDate = formatLocalDateForTest(now);
+    const currentYear = String(now.getFullYear());
+    const staleYear = currentYear === "2025" ? "2024" : "2025";
+    const expectedReply = `今天是 ${currentYear} 年 ${now.getMonth() + 1} 月 ${now.getDate()} 日。`;
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* () {
+          throw new Error("Chat model should not receive screen awareness image input.");
+        }
+      },
+      visionLlm: {
+        supportsVision: true,
+        stream: async function* (messages) {
+          capturedMessages = messages;
+          const system = messageContentText(messages[0]?.content);
+          if (system.includes(`Current local date: ${currentLocalDate}.`)) {
+            yield expectedReply;
+            return;
+          }
+          yield `今天是 ${staleYear} 年 ${now.getMonth() + 1} 月 ${now.getDate()} 日。`;
+        }
+      },
+      tts: { synthesize: async (text) => new Uint8Array([text.length]) },
+      memoryStore,
+      sessionStore,
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default",
+      threadId: "thread-screen-awareness-date",
+      now: () => now
+    });
+    const events: RuntimeOutputEvent[] = [];
+
+    await runtime.handle(
+      {
+        type: "text.input",
+        text: "今天几号？",
+        attachments: [makeImageAttachment("screen-frame-date", "observation-frame", "desktop-date-visible")],
+        observation: {
+          id: "screen-date",
+          mode: "normal",
+          frameCount: 1,
+          dedupedFrameCount: 1,
+          source: "desktop-screen-awareness"
+        }
+      },
+      (event) => {
+        events.push(event);
+      }
+    );
+
+    const system = messageContentText(capturedMessages[0]?.content);
+    expect(system).toContain("Current date grounding:");
+    expect(system).toContain(`Current local date: ${currentLocalDate}.`);
+    expect(system).toContain("recent desktop visual context from Screen awareness mode");
+    expect(events).toContainEqual({ type: "assistant.text.final", text: expectedReply });
+    expect(events.map((event) => JSON.stringify(event)).join("\n")).not.toContain(staleYear);
+    expect(await sessionStore.getRecent(2)).toMatchObject([
+      {
+        role: "user",
+        content: "今天几号？",
+        meta: { observation: { source: "desktop-screen-awareness" } }
+      },
+      { role: "assistant", content: expectedReply }
+    ]);
+  });
+
   it("routes visual turns to the Vision model and ordinary text to the Chat model", async () => {
     let chatCalls = 0;
     let visionCalls = 0;
@@ -1361,6 +1431,10 @@ function messageContentText(content: Parameters<LLMProvider["stream"]>[0][number
     return content;
   }
   return content?.flatMap((part) => (part.type === "text" ? [part.text] : [])).join(" ") ?? "";
+}
+
+function formatLocalDateForTest(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 class TestMemoryAtomStore implements MemoryAtomStore {
