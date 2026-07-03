@@ -63,6 +63,14 @@ The check must confirm:
 - Secrets and provider calls live on the intended process boundary.
 - Interrupt/error states leave UI, runtime, audio, and stage sane.
 
+For provider, settings, model-routing, and runtime-service changes, the integration owner must also test or inspect all three failure classes before PR-ready:
+
+- missing config, such as an empty model, Base URL, API key, or task model slot;
+- invalid or incomplete config, such as a filled model with missing credentials or an unsupported provider mode;
+- provider request failure, including non-OK responses, stream errors, timeouts, and aborts.
+
+Background or proactive paths must catch provider failures and return a non-disruptive result instead of bubbling an unhandled exception through IPC or a timer. User-initiated paths may show a clear error, but they must not send visual/audio/secret inputs to an unrelated fallback provider. Settings edits must be checked for cross-field mutation: changing a task-specific field such as a vision or voice model must not silently switch the chat provider or overwrite unrelated provider state.
+
 ## Level 3: Project Owner Check
 
 Required before checkpoint claims and PRs that change V1 behavior.
@@ -93,6 +101,8 @@ Required before opening or merging a feature PR.
 For frontend-visible PRs, also required:
 
 - The ordinary user path was tested, not only an internal state shortcut.
+- For navigation, Settings, onboarding, feature entry points, or renamed controls, verify the first-glance path before any forced scroll: open the default surface, confirm the entry is visible and named in user language, click it, confirm the intended section becomes active, and inspect a screenshot of that clicked state.
+- Do not accept `scrollIntoView`, direct URL/query params, test-only selectors, or DOM existence as evidence that a user can discover the feature. Those can supplement diagnostics, but they cannot be the primary acceptance for discoverability.
 - Current screenshots were opened and inspected by the author before asking for user verification.
 - The PR body names the visual/harness evidence used for Settings, Chat, Pet, speech bubble, Stop, or provider UI changes.
 - Product-shape regressions are treated as blockers even if DOM-level assertions pass.
@@ -131,7 +141,7 @@ For completion or release-evidence PRs, also required:
 Some features are not single checks. A project-owner review must verify the full matrix when the feature name implies it:
 
 - Voice companion: microphone capture, ASR, transcript-to-chat, text response, TTS playback, waveform mouth movement, Stop/cancel, queue cleanup, user-visible state, and fake/local provider coverage.
-- Provider settings: ordinary typing path, masked-secret echo, missing fields, testing state, success, failure, active-chat rejection, and no unintended provider requests.
+- Provider settings: first-glance navigation to the provider/model-service entry, ordinary typing path, masked-secret echo, missing fields, testing state, success, failure, active-chat rejection, and no unintended provider requests.
 - Desktop pet interaction: model-pixel interaction, transparent pass-through, drag continuity, wheel bounds, pass-through toggles, bubble placement, and recovery controls.
 - Desktop screen awareness: desktop-control entry, exactly one default toggle, no Shot/Clear/End/preview/frequency controls in the small panel, mode on/off, user-initiated question, proactive use with `proactivityLevel`, provider fallback, reload/off recovery, raw-data non-persistence, and natural pet wording rather than attachment-management UI.
 - Speech bubble: first-token display, long-reply cap, fade lifecycle, viewport/screen containment, disabled-bubble hit-area removal, and full Chat history retention.
