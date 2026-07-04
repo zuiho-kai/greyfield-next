@@ -21,6 +21,23 @@ How we avoid repeating it:
 - Do not repurpose an active worker for another issue unless the original task is explicitly retired or abandoned. Independent issues run in independent worktrees with independent workers.
 - Sub-agents do not coordinate with each other. The coordinator owns dependencies, status summaries, collision handling, review, and merge order.
 
+## 2026-07-04 Regression: Settings Window Could Not Wheel Scroll
+
+Manual QA found Settings could not scroll up or down even though frontend CI and visual artifacts were green.
+
+What happened:
+
+- The renderer entrypoint did not apply the window-role body class, so the Settings window missed `body.settings-window` CSS and inherited global `body { overflow: hidden }`.
+- The Settings control surface expanded to the full content height with `overflow: visible`, leaving no bounded scroll container for ordinary mouse-wheel input.
+- Existing visual harnesses checked Settings navigation, section visibility, screenshots, and horizontal overflow, but they used script-driven `scrollIntoViewIfNeeded()` for deep sections.
+- That meant automation could force sections into view while the ordinary user path, hovering the Settings panel and using the mouse wheel, stayed broken.
+
+How we avoid repeating it:
+
+- Settings visual acceptance must assert the Settings body class is applied before trusting layout screenshots.
+- Settings visual acceptance must exercise real wheel input on `.control-surface` and prove `scrollTop` moves down and back up.
+- Deep-section screenshots remain useful artifacts, but they cannot replace the ordinary scroll path for Settings usability.
+
 ## 2026-07-03 Regression: Screen-Aware Date Answer Used A Stale Year
 
 Issue #188 exposed a grounding miss in the screen-awareness text path: when the user enabled screen input and asked "今天几号？", Greyfield could still answer with a stale year even though the desktop date was visible.
