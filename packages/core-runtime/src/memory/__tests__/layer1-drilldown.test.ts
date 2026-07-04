@@ -114,6 +114,25 @@ describe("Layer 1 drilldown", () => {
     expect(result.text).not.toContain("今天天气不错");
   });
 
+  it("includes the index-time recap in the drilldown output", async () => {
+    const topic = makeTopic({ summary: "猫不吃饭，就医后开始吃药，正在好转。" });
+    const manager = makeManager({ topics: [topic], turns: makeTurns() });
+
+    const result = await recall("我的猫咪生病那事后来怎么样了", manager);
+
+    expect(result.text).toContain("话题概要：猫不吃饭，就医后开始吃药，正在好转。");
+    expect(result.text).toContain("当时的对话节选：");
+  });
+
+  it("includes the recap in the title-only fallback when Layer 1 is unavailable", async () => {
+    const topic = makeTopic({ summary: "猫不吃饭，就医后开始吃药，正在好转。" });
+    const manager = makeManager({ topics: [topic], noLookup: true });
+
+    const result = await recall("我的猫咪生病那事后来怎么样了", manager);
+
+    expect(result.text).toBe("相关话题：聊到猫咪生病去医院\n话题概要：猫不吃饭，就医后开始吃药，正在好转。");
+  });
+
   it("falls back to the topic title when no turn lookup is available", async () => {
     const manager = makeManager({ noLookup: true });
 

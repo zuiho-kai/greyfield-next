@@ -193,6 +193,52 @@ describe("cross-batch topic merging", () => {
   });
 });
 
+describe("index-time topic summaries", () => {
+  it("stores the LLM recap on the topic and uses it for the core memory text", async () => {
+    const { manager, topicStore, coreStore } = makeManager({
+      llmResponse: async function* () {
+        yield JSON.stringify([{
+          topic: "聊猫咪生病",
+          summary: "用户的猫不吃饭，去医院检查后开始吃药，情况在好转。",
+          keywords: ["猫咪", "生病", "医院"],
+          mentionCount: 5
+        }]);
+      }
+    });
+
+    await manager.onNewTurn(makeTurn(0, "我家猫生病了"));
+    await manager.onNewTurn(makeTurn(1, "去医院看看吧"));
+
+    expect(topicStore.topics[0].summary).toContain("开始吃药");
+    // Core memory carries the recap, not just the bare title
+    expect(coreStore.memories).toHaveLength(1);
+    expect(coreStore.memories[0].text).toContain("开始吃药");
+  });
+
+  it("keeps the newest recap when topics merge across batches", async () => {
+    let batchIndex = 0;
+    const { manager, topicStore } = makeManager({
+      llmResponse: async function* () {
+        batchIndex += 1;
+        yield JSON.stringify([{
+          topic: "聊猫咪生病",
+          summary: `第${batchIndex}批概要`,
+          keywords: ["猫咪", "生病", "医院"],
+          mentionCount: 1
+        }]);
+      }
+    });
+
+    for (let batch = 0; batch < 2; batch++) {
+      await manager.onNewTurn(makeTurn(batch * 2, `猫咪 ${batch}`));
+      await manager.onNewTurn(makeTurn(batch * 2 + 1, `生病 ${batch}`));
+    }
+
+    expect(topicStore.topics).toHaveLength(1);
+    expect(topicStore.topics[0].summary).toBe("第2批概要");
+  });
+});
+
 describe("explicit memory failures", () => {
   it("does not throw from onNewTurn when the explicit write fails", async () => {
     const coreStore = new FakeCoreStore();

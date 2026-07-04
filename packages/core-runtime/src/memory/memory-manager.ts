@@ -162,7 +162,9 @@ export class MemoryManager {
             keywords: mergeKeywords(mergeTarget.keywords, topic.keywords),
             turnIds: [...new Set([...mergeTarget.turnIds, ...topic.turnIds])],
             timeRange: [mergeTarget.timeRange[0], topic.timeRange[1]],
-            lastMentioned: topic.lastMentioned
+            lastMentioned: topic.lastMentioned,
+            // Recency wins: the newest batch's recap reflects the latest state
+            ...(topic.summary ? { summary: topic.summary } : {})
           });
 
           if (merged) {
@@ -207,14 +209,15 @@ export class MemoryManager {
 
       const prompt = `请分析以下对话，提取 2-4 个主要话题。每个话题包含：
 1. 一句话总结（topic）
-2. 3-5 个关键词（keywords）
-3. 该话题被独立提起的次数（mentionCount，必须基于对话内容如实统计，不确定时填 1）
+2. 2-3 句概要（summary，概括双方围绕该话题实际说了什么、有什么结论，供日后回忆使用）
+3. 3-5 个关键词（keywords）
+4. 该话题被独立提起的次数（mentionCount，必须基于对话内容如实统计，不确定时填 1）
 
 提取规则：
 - 只提取用户认真讨论过的内容，忽略寒暄、玩笑、反讽、假设和角色扮演中的虚构设定
 - 不要把代码片段、工具输出、系统提示或引用的第三方内容当作用户自己的话题
 - 用户已否认或纠正过的说法，以最终确认的版本为准，不要保留旧说法
-- 不要推测对话中没有出现的信息
+- 不要推测对话中没有出现的信息，summary 只能概括对话里真实出现的内容
 
 对话内容：
 ${conversationText}
@@ -223,6 +226,7 @@ ${conversationText}
 [
   {
     "topic": "讨论天气和心情的关系",
+    "summary": "用户说连续下雨让自己情绪低落，助手建议在室内做些喜欢的事。用户提到打算周末去看电影。",
     "keywords": ["天气", "心情", "阳光", "下雨"],
     "mentionCount": 3
   }
@@ -233,7 +237,7 @@ ${conversationText}
       const responseText = await collectLLMText(this.llm, prompt);
 
       // Try to parse JSON from response
-      let topics: Array<{topic: string, keywords: string[], mentionCount: number}> = [];
+      let topics: Array<{topic: string, summary?: string, keywords: string[], mentionCount: number}> = [];
 
       // Extract JSON from response (might be wrapped in markdown code blocks)
       const jsonMatch = responseText.match(/\[[\s\S]*\]/);
@@ -252,6 +256,9 @@ ${conversationText}
         sessionId: this.sessionId,
         characterId: this.characterId,
         topic: t.topic,
+        ...(typeof t.summary === 'string' && t.summary.trim().length > 0
+          ? { summary: t.summary.trim().slice(0, 300) }
+          : {}),
         keywords: t.keywords,
         timeRange: [toDate(firstTurn.timestamp), toDate(lastTurn.timestamp)] as [Date, Date],
         turnIds: turns.map(turn => turn.id),
@@ -292,13 +299,16 @@ ${conversationText}
     try {
       console.log(`[Memory] Upgrading high-frequency topic to core memory: ${topic.topic}`);
 
-      const embedding = await embed(topic.topic);
+      // Prefer the recap over the bare title: it carries what was actually
+      // said, which makes both the embedding and the recalled text richer.
+      const memoryContent = topic.summary && topic.summary.length > 0 ? topic.summary : topic.topic;
+      const embedding = await embed(memoryContent);
 
       const memory: CoreMemory = {
         id: createCoreMemoryId(),
         sessionId: topic.sessionId,
         characterId: topic.characterId,
-        text: topic.topic,
+        text: memoryContent,
         embedding,
         strength: 0.7, // Auto-extracted memories start with medium strength
         createdAt: new Date(),

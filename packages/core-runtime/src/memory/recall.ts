@@ -102,7 +102,7 @@ export async function recall(
         maxTurns: options?.drilldownMaxTurns ?? DEFAULT_DRILLDOWN_MAX_TURNS,
         charBudget: options?.drilldownCharBudget ?? DEFAULT_DRILLDOWN_CHAR_BUDGET
       });
-      const text = excerpt.length > 0 ? excerpt : `相关话题：${topic.topic}`;
+      const text = excerpt.length > 0 ? excerpt : formatTopicOnly(topic);
       return { text, memories: [] };
     }
   } catch (error) {
@@ -184,9 +184,20 @@ async function buildTopicDrilldown(
   return [
     `# 相关话题回顾`,
     `话题：${topic.topic}${when}`,
+    ...(topic.summary ? [`话题概要：${topic.summary}`] : []),
     `当时的对话节选：`,
     ...lines
   ].join('\n');
+}
+
+/**
+ * Title-only fallback when Layer 1 is unavailable; still includes the
+ * index-time recap when one was stored.
+ */
+function formatTopicOnly(topic: TopicIndex): string {
+  return topic.summary
+    ? `相关话题：${topic.topic}\n话题概要：${topic.summary}`
+    : `相关话题：${topic.topic}`;
 }
 
 function countKeywordHits(text: string, lowerKeywords: string[]): number {
