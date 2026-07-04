@@ -33,6 +33,7 @@ describe("Greyfield config", () => {
     expect(defaultGreyfieldConfig.ui.proactivityLevel).toBe(50);
     expect(defaultGreyfieldConfig.memory.llmAtomExtractionEnabled).toBe(false);
     expect(defaultGreyfieldConfig.memory.llmAtomExtractionInterval).toBe(4);
+    expect(defaultGreyfieldConfig.memory.useV2System).toBe(true);
   });
 
   it("deep-merges nested settings without dropping defaults", () => {
@@ -81,6 +82,12 @@ describe("Greyfield config", () => {
     expect(config.ui.proactivityLevel).toBe(80);
     expect(config.memory.llmAtomExtractionEnabled).toBe(true);
     expect(config.memory.llmAtomExtractionInterval).toBe(6);
+    expect(config.memory.useV2System).toBe(true);
+  });
+
+  it("keeps Memory V2 enabled by default while preserving explicit opt-out", () => {
+    expect(mergeConfig({}).memory.useV2System).toBe(true);
+    expect(mergeConfig({ memory: { useV2System: false } }).memory.useV2System).toBe(false);
   });
 
   it("migrates legacy model fields into MaiBot-style task model slots", () => {

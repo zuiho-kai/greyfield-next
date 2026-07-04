@@ -42,7 +42,5 @@ export function initializeMemoryStoresV2(characterId: string): MemoryStoresV2 {
  * This is a feature flag - can be controlled via config
  */
 export function shouldUseNewMemorySystem(config: any): boolean {
-  // For now, default to false (opt-in)
-  // Can be enabled via config.memory.useV2System
-  return config?.memory?.useV2System === true;
+  return config?.memory?.useV2System !== false;
 }

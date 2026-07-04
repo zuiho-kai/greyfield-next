@@ -164,7 +164,7 @@ async function runSimpleTest() {
     console.log("  - Memory Recall: ✅ Working");
     console.log("  - Strength Update: ✅ Working");
     console.log("\n🎉 Memory System V2 is ready for use!");
-    console.log("   To enable: set config.memory.useV2System = true");
+    console.log("   Enabled by default. To opt out: set config.memory.useV2System = false");
 
   } catch (error) {
     console.error("\n❌ Test failed:", error);

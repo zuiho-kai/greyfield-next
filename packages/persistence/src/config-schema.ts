@@ -74,6 +74,7 @@ export interface GreyfieldConfig {
   memory: {
     llmAtomExtractionEnabled: boolean;
     llmAtomExtractionInterval: number;
+    useV2System: boolean;
   };
   characterFile: string;
 }
@@ -142,7 +143,8 @@ export const defaultGreyfieldConfig: GreyfieldConfig = {
   },
   memory: {
     llmAtomExtractionEnabled: false,
-    llmAtomExtractionInterval: 4
+    llmAtomExtractionInterval: 4,
+    useV2System: true
   },
   characterFile: "characters/greyfield.yaml"
 };
