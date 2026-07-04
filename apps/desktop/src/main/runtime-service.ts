@@ -1,15 +1,10 @@
 import {
   GreyfieldRuntime,
   InMemorySessionStore,
-  OpenAICompatibleASRProvider,
-  OpenAICompatibleLLMProvider,
-  OpenAICompatibleTTSProvider,
   LLMBackedMemoryAtomExtractor,
   buildProactiveMemoryDisplayMessage,
   buildProactiveMemoryPolicyForLevel,
-  type ASRProvider,
   type CharacterPersona,
-  type LLMProvider,
   type MemoryAtom,
   type MemoryAtomExtractionMode,
   type MemoryAtomExtractionStatusReason,
@@ -35,7 +30,6 @@ import {
   type ProactiveMemoryDisplayMessage,
   type ProactiveMemoryDisplayResult,
   type ProactiveMemoryTriggerState,
-  type TTSProvider,
   type ChatMessage
 } from "@greyfield/core-runtime";
 import {
@@ -45,6 +39,14 @@ import {
 } from "@greyfield/core-runtime";
 import { createDefaultInteractionProfile, FakeStageDriver } from "@greyfield/stage-live2d";
 import { mergeConfig, type GreyfieldConfig } from "@greyfield/persistence/config-schema";
+import { loadRuntimePersona } from "./runtime-persona";
+import {
+  RuntimeProviderFactory,
+  testLLMProviderConnectivity,
+  testVoiceProviderConnectivity,
+  type LLMTestResult,
+  type VoiceTestResult
+} from "./runtime-providers";
 
 export interface RuntimeServiceOptions {
   fetch?: typeof fetch;
@@ -66,18 +68,7 @@ export interface RuntimeServiceOptions {
   ttsTimeoutMs?: number;
 }
 
-export interface LLMTestResult {
-  ok: boolean;
-  message: string;
-  firstToken?: string;
-}
-
-export interface VoiceTestResult {
-  ok: boolean;
-  message: string;
-  text?: string;
-  data?: Uint8Array;
-}
+export type { LLMTestResult, VoiceTestResult } from "./runtime-providers";
 
 export interface MemoryControlResult {
   ok: boolean;
@@ -156,6 +147,7 @@ export class RuntimeService {
   private lastRecallContext: RecallContext | undefined;
   private proactiveTriggerState: ProactiveMemoryTriggerState = {};
   private activeRuntime: GreyfieldRuntime | undefined;
+  private providerFactory: RuntimeProviderFactory;
   private testingLLM = false;
   private testingVoice = false;
   private lastInterruptedAtMs: number | undefined;
@@ -168,6 +160,7 @@ export class RuntimeService {
     this.summarySegmentStore = options.summarySegmentStore;
     this.memoryAtomStore = options.memoryAtomStore;
     this.deletedMemoryEvidenceStore = options.deletedMemoryEvidenceStore;
+    this.providerFactory = new RuntimeProviderFactory(this.config, this.options);
   }
 
   private get threadId(): string {
@@ -177,6 +170,7 @@ export class RuntimeService {
   updateConfig(config: GreyfieldConfig): void {
     const previousThreadId = this.threadId;
     this.config = mergeConfig(config);
+    this.providerFactory = new RuntimeProviderFactory(this.config, this.options);
     if (this.threadId !== previousThreadId) {
       this.proactiveTriggerState = {};
     }
@@ -425,13 +419,13 @@ export class RuntimeService {
     if (attachments.length === 0) {
       return { displayed: false, reason: "no_screen_context" };
     }
-    if (this.resolveVisualTaskModel().length === 0) {
+    if (this.providerFactory.resolveVisualTaskModel().length === 0) {
       return { displayed: false, reason: "vision_model_missing" };
     }
-    if (this.validateOpenAICompatibleVisionProviderConfig("chatting with screen awareness")) {
+    if (this.providerFactory.validateOpenAICompatibleVisionProviderConfig("chatting with screen awareness")) {
       return { displayed: false, reason: "vision_model_not_ready" };
     }
-    const llm = this.createVisionLLMProvider();
+    const llm = this.providerFactory.createVisionLLMProvider();
     if (!llm) {
       return { displayed: false, reason: "vision_model_not_ready" };
     }
@@ -604,32 +598,14 @@ export class RuntimeService {
         message: "LLM test is already running."
       };
     }
-    const providerConfigError = this.validateOpenAICompatibleProviderConfig("testing");
+    const providerConfigError = this.providerFactory.validateOpenAICompatibleProviderConfig("testing");
     if (providerConfigError) {
       return { ok: false, message: providerConfigError };
     }
 
     this.testingLLM = true;
     try {
-      const provider = this.createLLMProvider();
-      const messages: ChatMessage[] = [
-        { role: "system", content: "You are testing connectivity. Reply with one short token." },
-        { role: "user", content: "ping" }
-      ];
-      for await (const chunk of provider.stream(messages)) {
-        const firstToken = chunk.trim();
-        if (firstToken.length > 0) {
-          return {
-            ok: true,
-            message: `LLM test succeeded: ${firstToken}`,
-            firstToken
-          };
-        }
-      }
-      return {
-        ok: false,
-        message: "LLM test finished without receiving a token."
-      };
+      return await testLLMProviderConnectivity(this.providerFactory.createChatLLMProvider());
     } catch (error) {
       return {
         ok: false,
@@ -653,21 +629,14 @@ export class RuntimeService {
         message: "Voice test is already running."
       };
     }
-    const providerConfigError = this.validateTTSProviderConfig();
+    const providerConfigError = this.providerFactory.validateTTSProviderConfig();
     if (providerConfigError) {
       return { ok: false, message: providerConfigError };
     }
 
     this.testingVoice = true;
-    const text = "你好，这是 Greyfield 的语音测试。";
     try {
-      const data = await this.createTTSProvider().synthesize(text, this.config.voice.id);
-      return {
-        ok: true,
-        message: "Voice test succeeded.",
-        text,
-        data
-      };
+      return await testVoiceProviderConnectivity(this.providerFactory.createTTSProvider(), this.config.voice.id);
     } catch (error) {
       return {
         ok: false,
@@ -682,10 +651,10 @@ export class RuntimeService {
     const persona = await this.loadPersona();
     const atomExtractionPolicy = this.resolveMemoryAtomExtractionPolicy();
     return new GreyfieldRuntime({
-      llm: this.createLLMProvider(),
-      visionLlm: this.createVisionLLMProvider(),
-      asr: this.createASRProvider(),
-      tts: this.createTTSProvider(),
+      llm: this.providerFactory.createChatLLMProvider(),
+      visionLlm: this.providerFactory.createVisionLLMProvider(),
+      asr: this.providerFactory.createASRProvider(),
+      tts: this.providerFactory.createTTSProvider(),
       memoryStore: this.memoryStore,
       summarySegmentStore: this.summarySegmentStore,
       memoryAtomStore: this.memoryAtomStore,
@@ -718,7 +687,7 @@ export class RuntimeService {
     if (!this.config.memory.llmAtomExtractionEnabled) {
       return { mode: "deterministic", unavailableReason: "disabled" };
     }
-    const providerConfigError = this.validateOpenAICompatibleTaskModelConfig("memory", "memory extraction");
+    const providerConfigError = this.providerFactory.validateOpenAICompatibleTaskModelConfig("memory", "memory extraction");
     if (this.config.provider.llm !== "openai-compatible" || providerConfigError) {
       return { mode: "deterministic", unavailableReason: "provider-unavailable" };
     }
@@ -727,7 +696,7 @@ export class RuntimeService {
 
   private createMemoryAtomExtractor(): LLMBackedMemoryAtomExtractor {
     return new LLMBackedMemoryAtomExtractor({
-      llm: this.createTaskLLMProvider("memory"),
+      llm: this.providerFactory.createTaskLLMProvider("memory"),
       mode: "hybrid"
     });
   }
@@ -743,7 +712,11 @@ export class RuntimeService {
   }
 
   private async loadPersona(): Promise<CharacterPersona> {
-    return this.options.loadPersona?.(this.config) ?? this.createDefaultPersona();
+    return loadRuntimePersona({
+      config: this.config,
+      interactionProfile: this.interactionProfile,
+      loadPersona: this.options.loadPersona
+    });
   }
 
   private async getCurrentThreadMemoryAtom(id: string): Promise<MemoryAtom | null> {
@@ -1018,239 +991,6 @@ export class RuntimeService {
 
   private redactSecretText(value: string): string {
     return redactSecretText(value, [this.config.provider.apiKey]);
-  }
-
-  private createDefaultPersona(): CharacterPersona {
-    return {
-      name: "Greyfield",
-      userAddress: "you",
-      background: "A Live2D desktop companion focused on presence, conversation, and continuity.",
-      personality: "Warm, steady, observant, and lightly playful without pretending to control the desktop.",
-      speakingStyle: "Keep replies short enough to speak naturally and prefer concrete progress over vague planning.",
-      greeting: "你好，我在。",
-      tone: "warm, concise, slightly playful",
-      boundaries: ["V1 cannot control the desktop", "V1 cannot browse the web on its own"],
-      expressionMap: Object.fromEntries(
-        Object.entries(this.interactionProfile.emotionReactions).map(([status, reaction]) => [
-          status,
-          reaction.expression ?? "default"
-        ])
-      )
-    };
-  }
-
-  private createLLMProvider(): LLMProvider {
-    return this.createTaskLLMProvider("chat");
-  }
-
-  private createTaskLLMProvider(slot: "chat" | "planner" | "utility" | "memory"): LLMProvider {
-    if (this.config.provider.llm === "openai-compatible") {
-      const providerConfigError =
-        slot === "chat"
-          ? this.validateOpenAICompatibleProviderConfig("chatting")
-          : this.validateOpenAICompatibleTaskModelConfig(slot, "chatting");
-      if (providerConfigError) {
-        throw new Error(providerConfigError);
-      }
-      return new OpenAICompatibleLLMProvider({
-        baseUrl: this.config.provider.baseUrl,
-        apiKey: this.config.provider.apiKey,
-        model: this.resolveTaskModel(slot),
-        fetch: this.options.fetch,
-        timeoutMs: this.options.llmTimeoutMs
-      });
-    }
-    return new MainFakeLLMProvider();
-  }
-
-  private createVisionLLMProvider(): LLMProvider | undefined {
-    const model = this.resolveVisualTaskModel();
-    if (model.length === 0) {
-      return undefined;
-    }
-    if (this.config.provider.llm === "openai-compatible") {
-      const providerConfigError = this.validateOpenAICompatibleVisionProviderConfig("chatting with screen awareness");
-      if (providerConfigError) {
-        return undefined;
-      }
-      return new OpenAICompatibleLLMProvider({
-        baseUrl: this.config.provider.baseUrl,
-        apiKey: this.config.provider.apiKey,
-        model,
-        supportsVision: true,
-        fetch: this.options.fetch,
-        timeoutMs: this.options.llmTimeoutMs
-      });
-    }
-    return new MainFakeVisionLLMProvider();
-  }
-
-  private createASRProvider(): ASRProvider {
-    if (this.config.provider.asr === "openai-compatible") {
-      const providerConfigError = this.validateASRProviderConfig("transcribing");
-      if (providerConfigError) {
-        throw new Error(providerConfigError);
-      }
-      return new OpenAICompatibleASRProvider({
-        baseUrl: this.config.provider.baseUrl,
-        apiKey: this.config.provider.apiKey,
-        model: this.resolveTaskModel("voiceAsr"),
-        fetch: this.options.fetch,
-        timeoutMs: this.options.asrTimeoutMs
-      });
-    }
-    return new MainFakeASRProvider();
-  }
-
-  private createTTSProvider(): TTSProvider {
-    if (this.config.provider.tts === "openai-compatible") {
-      return new OpenAICompatibleTTSProvider({
-        baseUrl: this.config.provider.baseUrl,
-        apiKey: this.config.provider.apiKey,
-        model: this.resolveTaskModel("voiceTts"),
-        fetch: this.options.fetch,
-        timeoutMs: this.options.ttsTimeoutMs
-      });
-    }
-    return new MainFakeTTSProvider();
-  }
-
-  private validateOpenAICompatibleProviderConfig(action: "testing" | "chatting"): string {
-    if (this.config.provider.llm !== "openai-compatible") {
-      return "";
-    }
-    if (this.config.provider.baseUrl.trim().length === 0) {
-      return `OpenAI-compatible provider needs a Base URL before ${action}.`;
-    }
-    if (this.config.provider.apiKey.trim().length === 0) {
-      return `OpenAI-compatible provider needs an API key before ${action}.`;
-    }
-    if (this.resolveTaskModel("chat").length === 0) {
-      return `OpenAI-compatible provider needs a model before ${action}.`;
-    }
-    return "";
-  }
-
-  private validateOpenAICompatibleVisionProviderConfig(action: "chatting with screen awareness"): string {
-    if (this.config.provider.llm !== "openai-compatible") {
-      return "";
-    }
-    if (this.config.provider.baseUrl.trim().length === 0) {
-      return `OpenAI-compatible Vision model needs a Base URL before ${action}.`;
-    }
-    if (this.config.provider.apiKey.trim().length === 0) {
-      return `OpenAI-compatible Vision model needs an API key before ${action}.`;
-    }
-    if (this.resolveVisualTaskModel().length === 0) {
-      return `OpenAI-compatible Vision model needs a model before ${action}.`;
-    }
-    return "";
-  }
-
-  private validateOpenAICompatibleTaskModelConfig(
-    slot: "planner" | "utility" | "memory",
-    action: "chatting" | "memory extraction"
-  ): string {
-    if (this.config.provider.llm !== "openai-compatible") {
-      return "";
-    }
-    if (this.config.provider.baseUrl.trim().length === 0) {
-      return `OpenAI-compatible ${slot} model needs a Base URL before ${action}.`;
-    }
-    if (this.config.provider.apiKey.trim().length === 0) {
-      return `OpenAI-compatible ${slot} model needs an API key before ${action}.`;
-    }
-    if (this.resolveTaskModel(slot).length === 0) {
-      return `OpenAI-compatible ${slot} model needs a model before ${action}.`;
-    }
-    return "";
-  }
-
-  private validateTTSProviderConfig(): string {
-    if (this.config.provider.tts !== "openai-compatible") {
-      return "";
-    }
-    if (this.config.provider.baseUrl.trim().length === 0) {
-      return "OpenAI-compatible TTS needs a Base URL before testing voice.";
-    }
-    if (this.config.provider.apiKey.trim().length === 0) {
-      return "OpenAI-compatible TTS needs an API key before testing voice.";
-    }
-    if (this.resolveTaskModel("voiceTts").length === 0) {
-      return "OpenAI-compatible TTS needs a TTS model before testing voice.";
-    }
-    if (this.config.voice.id.trim().length === 0) {
-      return "OpenAI-compatible TTS needs a voice before testing voice.";
-    }
-    return "";
-  }
-
-  private validateASRProviderConfig(action: "transcribing"): string {
-    if (this.config.provider.asr !== "openai-compatible") {
-      return "";
-    }
-    if (this.config.provider.baseUrl.trim().length === 0) {
-      return `OpenAI-compatible ASR needs a Base URL before ${action}.`;
-    }
-    if (this.config.provider.apiKey.trim().length === 0) {
-      return `OpenAI-compatible ASR needs an API key before ${action}.`;
-    }
-    if (this.resolveTaskModel("voiceAsr").length === 0) {
-      return `OpenAI-compatible ASR needs an ASR model before ${action}.`;
-    }
-    return "";
-  }
-
-  private resolveTaskModel(slot: keyof GreyfieldConfig["provider"]["taskModels"]): string {
-    return this.config.provider.taskModels[slot].trim();
-  }
-
-  private resolveVisualTaskModel(): string {
-    return this.resolveTaskModel("vision") || this.resolveTaskModel("multimodal");
-  }
-}
-
-class MainFakeLLMProvider implements LLMProvider {
-  async *stream(messages: ChatMessage[]): AsyncIterable<string> {
-    yield "你好，我醒着。";
-    yield "现在可以继续做桌宠了。";
-  }
-}
-
-class MainFakeVisionLLMProvider implements LLMProvider {
-  readonly supportsVision = true;
-
-  async *stream(messages: ChatMessage[]): AsyncIterable<string> {
-    const systemText = typeof messages[0]?.content === "string" ? messages[0].content : "";
-    const last = messages.at(-1);
-    const attachmentCount = Array.isArray(last?.content)
-      ? last.content.filter((part) => part.type === "image_url").length
-      : 0;
-    if (systemText.includes("Screen awareness is enabled") && attachmentCount > 0) {
-      yield "我看到桌面上有新的画面，可以陪你一起看。";
-      return;
-    }
-    if (attachmentCount > 0) {
-      yield "我看到了最近的桌面画面。";
-      yield "可以继续问我画面里的细节。";
-      return;
-    }
-    yield "我现在没有新的画面可看。";
-  }
-}
-
-class MainFakeTTSProvider implements TTSProvider {
-  async synthesize(text: string): Promise<Uint8Array> {
-    return new TextEncoder().encode(`fake-audio:${text}`);
-  }
-}
-
-class MainFakeASRProvider implements ASRProvider {
-  async transcribe(audio: Uint8Array): Promise<string> {
-    if (audio.length === 0) {
-      return "";
-    }
-    return "这是麦克风语音输入。";
   }
 }
 
