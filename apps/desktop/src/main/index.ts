@@ -772,8 +772,18 @@ app.whenReady().then(createWindows).catch((error) => {
   app.quit();
 });
 
-app.on("before-quit", () => {
+let memoryShutdownDone = false;
+
+app.on("before-quit", (event) => {
   isQuitting = true;
+  if (!memoryShutdownDone && runtimeService) {
+    // Flush unindexed memory turns before the process exits. Bounded so a
+    // hanging LLM call cannot block quit indefinitely.
+    event.preventDefault();
+    memoryShutdownDone = true;
+    const timeout = new Promise<void>((resolve) => setTimeout(resolve, 10_000));
+    void Promise.race([runtimeService.shutdown(), timeout]).finally(() => app.quit());
+  }
 });
 
 app.on("activate", () => {

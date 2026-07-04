@@ -22,6 +22,12 @@ export interface TopicIndex {
   turnIds: string[];
   mentionCount: number;
   lastMentioned: Date;
+  /**
+   * Set after the topic is successfully promoted to a core memory. Written
+   * only on success, so failed promotions stay retryable and successful
+   * ones stay idempotent.
+   */
+  coreMemoryId?: string;
 }
 
 // Layer 3: Core Memory
