@@ -207,6 +207,78 @@ describe("explicit memory failures", () => {
   });
 });
 
+describe("explicit memory extraction and dedup", () => {
+  it("stores the LLM-distilled fact instead of the raw sentence", async () => {
+    const coreStore = new FakeCoreStore();
+    const { manager } = makeManager({
+      coreStore,
+      batchSize: 50,
+      llmResponse: async function* () {
+        yield "用户对花生过敏";
+      }
+    });
+
+    await manager.onNewTurn(makeTurn(0, "记住我对花生过敏，很重要"));
+
+    expect(coreStore.memories).toHaveLength(1);
+    expect(coreStore.memories[0].text).toBe("用户对花生过敏");
+    expect(coreStore.memories[0].strength).toBe(1.0);
+  });
+
+  it("falls back to the raw sentence when the LLM returns structured output", async () => {
+    const coreStore = new FakeCoreStore();
+    const { manager } = makeManager({
+      coreStore,
+      batchSize: 50,
+      llmResponse: async function* () {
+        yield JSON.stringify([{ topic: "无关话题", keywords: [] }]);
+      }
+    });
+
+    await manager.onNewTurn(makeTurn(0, "记住我对花生过敏"));
+
+    expect(coreStore.memories).toHaveLength(1);
+    expect(coreStore.memories[0].text).toBe("记住我对花生过敏");
+  });
+
+  it("reinforces an existing identical memory instead of duplicating it", async () => {
+    const coreStore = new FakeCoreStore();
+    coreStore.memories.push(makeMemory({ id: "existing", text: "用户对花生过敏", strength: 0.5 }));
+    const { manager } = makeManager({
+      coreStore,
+      batchSize: 50,
+      llmResponse: async function* () {
+        yield "用户对花生过敏";
+      }
+    });
+
+    await manager.onNewTurn(makeTurn(0, "记住我对花生过敏"));
+
+    expect(coreStore.memories).toHaveLength(1);
+    expect(coreStore.memories[0].strength).toBe(1.0);
+    expect(coreStore.memories[0].disabled).toBe(false);
+  });
+
+  it("reinforces a near-duplicate found by vector similarity", async () => {
+    const coreStore = new FakeCoreStore();
+    const existing = makeMemory({ id: "existing", text: "用户吃花生会过敏", strength: 0.6 });
+    coreStore.memories.push(existing);
+    coreStore.searchResults = [{ ...existing, similarity: 0.95 }];
+    const { manager } = makeManager({
+      coreStore,
+      batchSize: 50,
+      llmResponse: async function* () {
+        yield "用户对花生过敏";
+      }
+    });
+
+    await manager.onNewTurn(makeTurn(0, "记住我对花生过敏"));
+
+    expect(coreStore.memories).toHaveLength(1);
+    expect(coreStore.memories[0].strength).toBe(1.0);
+  });
+});
+
 describe("close()", () => {
   it("flushes unindexed turns before closing the store", async () => {
     const { manager, topicStore, coreStore } = makeManager({ batchSize: 50 });

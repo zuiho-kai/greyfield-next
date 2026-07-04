@@ -215,6 +215,10 @@ export type SettingsI18nKey =
   | "memory.action.delete"
   | "memory.action.export"
   | "memory.action.viewSource"
+  | "memory.core.title"
+  | "memory.core.kindExplicit"
+  | "memory.core.kindTopic"
+  | "memory.core.strength"
   | "memory.summaryMemory"
   | "memory.atomMemories"
   | "memory.summaryMemories"
@@ -517,6 +521,10 @@ const enUS: Record<SettingsI18nKey, string> = {
   "memory.action.enable": "Enable",
   "memory.action.disable": "Disable",
   "memory.action.delete": "Delete",
+  "memory.core.title": "Core memories",
+  "memory.core.kindExplicit": "Explicit memory",
+  "memory.core.kindTopic": "Topic memory",
+  "memory.core.strength": "Strength {value}%",
   "memory.action.export": "Export",
   "memory.action.viewSource": "Open details",
   "memory.summaryMemory": "Summary memory",
@@ -822,6 +830,10 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "memory.action.enable": "启用",
   "memory.action.disable": "禁用",
   "memory.action.delete": "删除",
+  "memory.core.title": "核心记忆",
+  "memory.core.kindExplicit": "显式记忆",
+  "memory.core.kindTopic": "话题记忆",
+  "memory.core.strength": "强度 {value}%",
   "memory.action.export": "导出",
   "memory.action.viewSource": "打开详情",
   "memory.summaryMemory": "摘要记忆",

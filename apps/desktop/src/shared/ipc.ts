@@ -31,6 +31,7 @@ export interface DesktopMemoryDebugSnapshot {
   recentTurns: SessionTurn[];
   summarySegments: DesktopMemorySummarySegment[];
   memoryAtoms: DesktopMemoryAtom[];
+  coreMemories?: DesktopMemoryCoreMemory[];
   lastRecallContext?: RecallContext;
   updatedAt: string;
 }
@@ -53,6 +54,16 @@ export type DesktopMemorySummarySegment = SummarySegment & {
 export type DesktopMemoryAtom = MemoryAtom & {
   sourcePassages?: DesktopMemorySourcePassage[];
 };
+
+export interface DesktopMemoryCoreMemory {
+  id: string;
+  text: string;
+  strength: number;
+  kind: "explicit" | "topic";
+  createdAt: string;
+  lastRecalledAt?: string;
+  disabled: boolean;
+}
 
 export interface DesktopMemorySummaryUpdate {
   id: string;
@@ -127,6 +138,8 @@ export interface DesktopIpcRequestMap {
   "memory:atom-delete": { id: string };
   "memory:atom-clear-current-role": {};
   "memory:atom-export": { id: string };
+  "memory:core-toggle": { id: string; disabled: boolean };
+  "memory:core-delete": { id: string };
   "memory:export-request": {};
   "screen-awareness:set-enabled": { enabled: boolean };
   "proactive:check": DesktopProactiveCheckRequest;

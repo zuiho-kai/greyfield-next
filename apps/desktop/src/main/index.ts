@@ -211,6 +211,14 @@ function registerIpc(): void {
     void exportMemoryAtom(event.sender, payload.id);
   });
 
+  ipcMain.on("memory:core-toggle", (_event, payload) => {
+    void toggleCoreMemory(payload.id, payload.disabled);
+  });
+
+  ipcMain.on("memory:core-delete", (_event, payload) => {
+    void deleteCoreMemory(payload.id);
+  });
+
   ipcMain.on("memory:export-request", (event) => {
     void exportMemory(event.sender);
   });
@@ -430,6 +438,30 @@ async function updateMemoryAtom(payload: Parameters<NonNullable<typeof runtimeSe
 
 async function deleteMemoryAtom(id: string): Promise<void> {
   const result = await runtimeService?.deleteMemoryAtom(id);
+  if (!result) {
+    broadcastMemoryActionResult({ ok: false, message: "Memory runtime is not available." });
+    return;
+  }
+  broadcastMemoryActionResult({ ok: result.ok, message: result.message });
+  if (result.snapshot) {
+    broadcastMemoryDebugSnapshotPayload(result.snapshot);
+  }
+}
+
+async function toggleCoreMemory(id: string, disabled: boolean): Promise<void> {
+  const result = await runtimeService?.toggleCoreMemory(id, disabled);
+  if (!result) {
+    broadcastMemoryActionResult({ ok: false, message: "Memory runtime is not available." });
+    return;
+  }
+  broadcastMemoryActionResult({ ok: result.ok, message: result.message });
+  if (result.snapshot) {
+    broadcastMemoryDebugSnapshotPayload(result.snapshot);
+  }
+}
+
+async function deleteCoreMemory(id: string): Promise<void> {
+  const result = await runtimeService?.deleteCoreMemory(id);
   if (!result) {
     broadcastMemoryActionResult({ ok: false, message: "Memory runtime is not available." });
     return;

@@ -19,7 +19,7 @@ export class MemoryManager {
     public readonly coreStore: SqliteCoreMemoryStore,
     private llm: LLMProvider,
     public readonly sessionId: string,
-    private characterId: string,
+    public readonly characterId: string,
     options?: {
       batchSize?: number;
       coreUpgradeThreshold?: number;
@@ -57,11 +57,22 @@ export class MemoryManager {
 
   private async writeExplicit(turn: ConversationTurn): Promise<void> {
     try {
-      // TODO: Extract memory content with LLM
-      // For now, use the text directly
-      const memoryText = getTurnText(turn);
-
+      const rawText = getTurnText(turn);
+      const memoryText = await this.extractExplicitMemory(rawText);
       const embedding = await embed(memoryText);
+
+      // Dedup: repeating "记住X" must reinforce the existing memory, not
+      // pile up duplicates.
+      const duplicate = await this.findDuplicateCoreMemory(memoryText, embedding);
+      if (duplicate) {
+        await this.coreStore.update(duplicate.id, {
+          strength: 1.0,
+          lastRecalledAt: new Date(),
+          disabled: false
+        });
+        console.log(`[Memory] Explicit memory reinforced existing: ${duplicate.id}`);
+        return;
+      }
 
       const memory: CoreMemory = {
         id: createCoreMemoryId(),
@@ -84,6 +95,50 @@ export class MemoryManager {
       // or the batch-index counter in onNewTurn.
       console.error('[Memory] Failed to write explicit memory:', error);
     }
+  }
+
+  /**
+   * Distill an explicit "记住…" request into a standalone fact. Falls back
+   * to the raw text when the LLM is unavailable.
+   */
+  private async extractExplicitMemory(rawText: string): Promise<string> {
+    try {
+      const prompt = `用户说了下面这句话，希望被长期记住。请提取其中需要记住的事实，用一句以「用户」开头的第三人称陈述表述（例如「用户对花生过敏」）。
+
+要求：
+- 只保留事实本身，去掉「记住」「别忘了」等指令词
+- 不要添加原话中没有的信息
+- 只返回这一句话，不要其他解释
+
+原话：${rawText}`;
+
+      const extracted = (await collectLLMText(this.llm, prompt)).trim().replace(/^["'「』『」]+|["'「』『」]+$/g, '');
+      // Guard against the LLM returning nothing, rambling, or structured
+      // output (e.g. JSON) instead of a plain sentence.
+      const looksStructured = extracted.startsWith('[') || extracted.startsWith('{') || extracted.includes('\n');
+      if (extracted.length > 0 && extracted.length <= rawText.length + 40 && !looksStructured) {
+        return extracted;
+      }
+    } catch (error) {
+      console.warn('[Memory] Explicit memory extraction failed, storing raw text:', error);
+    }
+    return rawText;
+  }
+
+  private async findDuplicateCoreMemory(text: string, embedding: number[]): Promise<CoreMemory | null> {
+    const normalized = normalizeMemoryText(text);
+
+    const existing = await this.coreStore.getBySession(this.sessionId);
+    const exact = existing.find(m => normalizeMemoryText(m.text) === normalized);
+    if (exact) {
+      return exact;
+    }
+
+    const [closest] = await this.coreStore.vectorSearch(embedding, 1);
+    if (closest?.similarity !== undefined && closest.similarity >= 0.92) {
+      return closest;
+    }
+    return null;
   }
 
   private async buildTopicIndex(): Promise<void> {
@@ -318,6 +373,10 @@ function mergeKeywords(existing: string[], incoming: string[]): string[] {
 
 function normalizeKeyword(keyword: string): string {
   return keyword.trim().toLowerCase();
+}
+
+function normalizeMemoryText(text: string): string {
+  return text.replace(/\s+/g, '').toLowerCase();
 }
 
 function getTurnText(turn: ConversationTurn): string {

@@ -10,6 +10,8 @@ export function useAppShellActions(params: {
     clearMemorySummaries: () => DesktopRendererState;
     updateMemoryAtom: (payload: { id: string; text?: string; disabled?: boolean }) => DesktopRendererState;
     deleteMemoryAtom: (id: string) => DesktopRendererState;
+    toggleCoreMemory: (payload: { id: string; disabled: boolean }) => DesktopRendererState;
+    deleteCoreMemory: (id: string) => DesktopRendererState;
     clearCurrentRoleMemoryAtoms: () => DesktopRendererState;
     exportMemoryAtom: (id: string) => DesktopRendererState;
     exportMemory: () => DesktopRendererState;
@@ -60,6 +62,14 @@ export function useAppShellActions(params: {
     params.syncState(params.bridge.deleteMemoryAtom(payload.id));
   }
 
+  function toggleCoreMemory(payload: { id: string; disabled: boolean }): void {
+    params.syncState(params.bridge.toggleCoreMemory(payload));
+  }
+
+  function deleteCoreMemory(payload: { id: string }): void {
+    params.syncState(params.bridge.deleteCoreMemory(payload.id));
+  }
+
   function clearCurrentRoleMemoryAtoms(): void {
     params.syncState(params.bridge.clearCurrentRoleMemoryAtoms());
   }
@@ -85,6 +95,8 @@ export function useAppShellActions(params: {
     clearMemorySummaries,
     updateMemoryAtom,
     deleteMemoryAtom,
+    toggleCoreMemory,
+    deleteCoreMemory,
     clearCurrentRoleMemoryAtoms,
     exportMemoryAtom,
     exportMemory

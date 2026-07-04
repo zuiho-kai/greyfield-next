@@ -68,6 +68,8 @@
     @memory-summary-clear="clearMemorySummaries"
     @memory-atom-update="updateMemoryAtom"
     @memory-atom-delete="deleteMemoryAtom"
+    @memory-core-toggle="toggleCoreMemory"
+    @memory-core-delete="deleteCoreMemory"
     @memory-atom-clear-current-role="clearCurrentRoleMemoryAtoms"
     @memory-atom-export="exportMemoryAtom"
     @memory-export="exportMemory"
@@ -191,6 +193,8 @@ const {
   clearMemorySummaries,
   updateMemoryAtom,
   deleteMemoryAtom,
+  toggleCoreMemory,
+  deleteCoreMemory,
   clearCurrentRoleMemoryAtoms,
   exportMemoryAtom,
   exportMemory

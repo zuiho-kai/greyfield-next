@@ -362,10 +362,13 @@ export class GreyfieldRuntime {
       // Record to new memory system (V2)
       if (this.memoryManager && this.options.useNewMemorySystem) {
         try {
+          // Use the manager's characterId so records match the storage
+          // location, instead of the display-facing persona name.
+          const characterId = this.memoryManager.characterId;
           await this.memoryManager.onNewTurn({
             id: userTurn.id,
             sessionId: this.options.sessionStore.sessionId,
-            characterId: this.options.persona.name || "default",
+            characterId,
             role: "user",
             text,
             timestamp: new Date()
@@ -373,7 +376,7 @@ export class GreyfieldRuntime {
           await this.memoryManager.onNewTurn({
             id: assistantTurn.id,
             sessionId: this.options.sessionStore.sessionId,
-            characterId: this.options.persona.name || "default",
+            characterId,
             role: "assistant",
             text: finalText,
             timestamp: new Date()
