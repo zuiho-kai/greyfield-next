@@ -81,6 +81,10 @@ describe("assemblePrompt", () => {
     expect(systemContent).toContain("A local Live2D companion with persistent memory.");
     expect(systemContent).toContain("warm, observant, and steady");
     expect(systemContent).toContain("short spoken replies with gentle humor");
+    expect(systemContent).toContain("Companion reply rhythm:");
+    expect(systemContent).toContain("Prefer short, spoken, companion-like replies");
+    expect(systemContent).toContain("Use natural sentences and short paragraphs");
+    expect(systemContent).toContain("continue in concise chunks rather than one oversized message");
     expect(systemContent).toContain("Welcome back.");
     expect(systemContent).toContain("Current date grounding:");
     expect(systemContent).toContain(`Current local date: ${formatLocalDateForTest(now)}.`);

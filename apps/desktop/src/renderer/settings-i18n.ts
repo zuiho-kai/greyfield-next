@@ -264,6 +264,8 @@ export type SettingsI18nKey =
   | "chat.clearObservation"
   | "chat.justNow"
   | "chat.message"
+  | "chat.message.expand"
+  | "chat.message.collapse"
   | "chat.placeholder"
   | "chat.observationIdle"
   | "chat.screenAwareness.visionMissingNotice"
@@ -566,6 +568,8 @@ const enUS: Record<SettingsI18nKey, string> = {
   "chat.clearObservation": "Clear",
   "chat.justNow": "just now",
   "chat.message": "Message",
+  "chat.message.expand": "See more",
+  "chat.message.collapse": "Collapse",
   "chat.placeholder": "Type your message...",
   "chat.observationIdle": "Screenshots are temporary and only sent after you confirm with a message.",
   "chat.screenAwareness.visionMissingNotice": "Screen awareness needs a ready Vision model. This screenshot stayed temporary and was not sent to the Chat model.",
@@ -869,6 +873,8 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "chat.clearObservation": "清除",
   "chat.justNow": "刚刚",
   "chat.message": "消息",
+  "chat.message.expand": "展开全文",
+  "chat.message.collapse": "收起",
   "chat.placeholder": "输入你想说的话...",
   "chat.observationIdle": "截图是临时的，只会在你发送消息确认后一起发给模型。",
   "chat.screenAwareness.visionMissingNotice": "屏幕感知需要可用的 Vision model。本次截图保持临时，没有发送给 Chat model。",

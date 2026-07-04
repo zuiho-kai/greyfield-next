@@ -3,21 +3,23 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
 
 const workspaceRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const desktopRoot = join(workspaceRoot, "apps", "desktop");
+const chatLongReplyArtifactDir = join(workspaceRoot, ".cache", "greyfield-chat-long-reply", "latest");
 const tempDir = await mkdtemp(join(tmpdir(), "greyfield-bubble-long-reply-"));
 const configPath = join(tempDir, "greyfield.config.json");
 const firstChunk = "首句进入气泡。";
 const finalTail = "这是 Chat 窗口必须保留而宠物气泡不应该完整展示的末尾标记。";
 const longChunks = [
   firstChunk,
-  "这是一段用于测试桌宠气泡的长回复，内容会持续追加，气泡应该保持在稳定的短提示位置。",
-  "它不能跟随模型动画来回移动，也不能因为文字变长就撑爆宠物窗口。",
-  "完整回复仍然应该留在 Chat 历史里，方便用户回看，而桌面上的宠物气泡只承担短提示职责。",
+  "这是一段用于测试桌宠气泡和 Chat 长回复的长回复，内容会持续追加，气泡应该保持在稳定的短提示位置。".repeat(3),
+  "它不能跟随模型动画来回移动，也不能因为文字变长就撑爆宠物窗口；Chat 里也不能把输入区顶出可用范围。".repeat(4),
+  "完整回复仍然应该留在 Chat 历史里，方便用户回看、选择和复制；默认视图需要像常见聊天产品一样先折叠长内容。".repeat(4),
+  "展开以后，滚动应该只发生在消息列表内，底部 composer 必须继续留在窗口里，用户可以马上继续输入下一条消息。".repeat(4),
   finalTail
 ];
 
@@ -29,6 +31,20 @@ interface BubbleState {
   height: number;
   viewportWidth: number;
   viewportHeight: number;
+}
+
+interface ChatLongReplyState {
+  bubbleTexts: string[];
+  bubbleHeights: number[];
+  toggleCount: number;
+  listClientHeight: number;
+  listScrollHeight: number;
+  listCanScroll: boolean;
+  listAboveComposer: boolean;
+  composerInViewport: boolean;
+  inputReachable: boolean;
+  noHorizontalOverflow: boolean;
+  bubbleFitsListWidth: boolean;
 }
 
 let requestCount = 0;
@@ -72,6 +88,9 @@ await writeFile(
   "utf8"
 );
 
+await rm(chatLongReplyArtifactDir, { recursive: true, force: true });
+await mkdir(chatLongReplyArtifactDir, { recursive: true });
+
 try {
   const app = await launchApp();
   try {
@@ -104,6 +123,7 @@ try {
     if (!chatText?.includes(firstChunk) || !chatText.includes(finalTail)) {
       throw new Error(`Chat did not keep full assistant reply: ${JSON.stringify(chatText)}`);
     }
+    const chatLongReply = await assertChatReplySegmentation(chatWindow);
     await petWindow.locator(".speech-bubble").waitFor({ state: "detached", timeout: 10_000 });
 
     console.log(
@@ -116,7 +136,13 @@ try {
           bubbleStable: true,
           bubbleInsideViewport: true,
           bubbleFadedAfterReply: true,
-          chatKeptFullReply: true
+          chatKeptFullReply: true,
+          chatReplySegmentedIntoShortBubbles: chatLongReply.bubbleTexts.length,
+          chatComposerReachableAfterLongReply: true,
+          chatMessageListScrollsAfterLongReply: chatLongReply.listCanScroll,
+          chatLongReplyArtifacts: [
+            join(chatLongReplyArtifactDir, "chat-long-reply-segmented.png")
+          ]
         },
         null,
         2
@@ -241,6 +267,83 @@ function assertBubbleInViewport(bubble: BubbleState): void {
     bubble.y + bubble.height > bubble.viewportHeight
   ) {
     throw new Error(`Speech bubble escaped viewport: ${JSON.stringify(bubble)}`);
+  }
+}
+
+async function assertChatReplySegmentation(page: Page): Promise<ChatLongReplyState> {
+  const assistantMessage = page.locator(".message-list .assistant").last();
+  await assistantMessage.locator(".message-bubble").nth(1).waitFor({ timeout: 5_000 });
+  const segmented = await readChatLongReplyState(page);
+  if (segmented.bubbleTexts.length < 2) {
+    throw new Error(`Long Chat reply did not render as multiple readable bubbles: ${JSON.stringify(segmented)}`);
+  }
+  const joinedText = segmented.bubbleTexts.join("");
+  if (!joinedText.includes(firstChunk) || !joinedText.includes(finalTail)) {
+    throw new Error(`Segmented Chat reply lost text: ${JSON.stringify(segmented)}`);
+  }
+  if (segmented.bubbleTexts.some((text) => text.length > 240)) {
+    throw new Error(`Segmented Chat reply still contains an oversized readable bubble: ${JSON.stringify(segmented)}`);
+  }
+  if (segmented.bubbleHeights.some((height) => height > 180)) {
+    throw new Error(`Segmented Chat reply bubble is too tall: ${JSON.stringify(segmented)}`);
+  }
+  if (segmented.toggleCount !== 0) {
+    throw new Error(`Normal long reply used See more instead of natural segmentation: ${JSON.stringify(segmented)}`);
+  }
+  if (!segmented.listCanScroll) {
+    throw new Error(`Segmented long Chat reply did not make the message list scrollable: ${JSON.stringify(segmented)}`);
+  }
+  assertComposerUsable(segmented, "segmented");
+  await page.waitForTimeout(100);
+  await page.screenshot({ path: join(chatLongReplyArtifactDir, "chat-long-reply-segmented.png") });
+
+  return segmented;
+}
+
+async function readChatLongReplyState(page: Page): Promise<ChatLongReplyState> {
+  return page.evaluate(() => {
+    const list = document.querySelector<HTMLElement>(".message-list");
+    const composer = document.querySelector<HTMLElement>(".message-composer");
+    const input = document.querySelector<HTMLInputElement>('[data-testid="chat-message-input"]');
+    const assistantMessage = Array.from(document.querySelectorAll<HTMLElement>(".message-list .assistant")).at(-1);
+    const bubbles = assistantMessage ? Array.from(assistantMessage.querySelectorAll<HTMLElement>(".message-bubble")) : [];
+    if (!list || !composer || !input || !assistantMessage || bubbles.length === 0) {
+      throw new Error("Chat long reply DOM is incomplete.");
+    }
+
+    const listRect = list.getBoundingClientRect();
+    const composerRect = composer.getBoundingClientRect();
+    const inputRect = input.getBoundingClientRect();
+    const bubbleRects = bubbles.map((bubble) => bubble.getBoundingClientRect());
+    const inputTarget = document.elementFromPoint(inputRect.left + inputRect.width / 2, inputRect.top + inputRect.height / 2);
+
+    return {
+      bubbleTexts: bubbles.map((bubble) => bubble.textContent?.trim() ?? ""),
+      bubbleHeights: bubbleRects.map((rect) => Math.round(rect.height)),
+      toggleCount: assistantMessage.querySelectorAll('[data-testid="chat-message-toggle"]').length,
+      listClientHeight: Math.round(list.clientHeight),
+      listScrollHeight: Math.round(list.scrollHeight),
+      listCanScroll: list.scrollHeight > list.clientHeight + 1,
+      listAboveComposer: listRect.bottom <= composerRect.top + 1,
+      composerInViewport: composerRect.top >= 0 && composerRect.bottom <= window.innerHeight + 1,
+      inputReachable: !input.disabled && (inputTarget === input || input.contains(inputTarget)),
+      noHorizontalOverflow:
+        document.documentElement.scrollWidth <= window.innerWidth + 1 &&
+        document.body.scrollWidth <= window.innerWidth + 1,
+      bubbleFitsListWidth: bubbleRects.every((rect) => rect.left >= listRect.left - 1 && rect.right <= listRect.right + 1)
+    };
+  });
+}
+
+function assertComposerUsable(state: ChatLongReplyState, phase: string): void {
+  if (
+    !state.listAboveComposer ||
+    !state.composerInViewport ||
+    !state.inputReachable ||
+    !state.noHorizontalOverflow ||
+    !state.bubbleFitsListWidth
+  ) {
+    throw new Error(`Chat composer or layout is not usable after ${phase}: ${JSON.stringify(state)}`);
   }
 }
 

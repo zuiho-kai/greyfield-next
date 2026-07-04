@@ -1,3 +1,5 @@
+import { splitAssistantReplyForDisplay } from "./assistant-reply-segments";
+
 export interface SpeechBubbleMessage {
   role: "assistant" | "user" | "system";
   text: string;
@@ -25,7 +27,8 @@ export function resolveSpeechBubbleSourceText(input: {
   ) {
     return "";
   }
-  return input.messages[lastAssistantIndex]?.text ?? "";
+  const assistantText = input.messages[lastAssistantIndex]?.text ?? "";
+  return splitAssistantReplyForDisplay(assistantText).at(-1) ?? "";
 }
 
 function findLastMessageIndex(messages: SpeechBubbleMessage[], role: "assistant" | "user"): number {

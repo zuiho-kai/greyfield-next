@@ -360,6 +360,8 @@ body.settings-window .greyfield-shell {
   box-sizing: border-box;
   height: 100vh;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
   padding: 20px;
   background: linear-gradient(135deg, rgba(240, 250, 255, 0.95) 0%, rgba(250, 245, 255, 0.95) 100%);
 }
@@ -702,8 +704,10 @@ h1 {
   flex-direction: column;
   gap: 8px;
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
   padding-right: 8px;
+  overscroll-behavior: contain;
 }
 
 .message-list-container::-webkit-scrollbar {
@@ -766,7 +770,8 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-width: 70%;
+  min-width: 0;
+  max-width: min(70%, 680px);
 }
 
 .message-item.user .message-content {
@@ -778,12 +783,31 @@ h1 {
 }
 
 .message-bubble {
+  position: relative;
+  max-width: 100%;
   padding: 10px 13px;
   border-radius: 12px;
   line-height: 1.5;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   box-shadow: 0 1px 2px rgba(31, 41, 51, 0.04);
+  user-select: text;
+}
+
+.message-bubble--collapsed {
+  max-height: calc(1.5em * 8 + 20px);
+  overflow: hidden;
+}
+
+.message-bubble--collapsed::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 32px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), #ffffff 82%);
+  content: "";
+  pointer-events: none;
 }
 
 .message-item.user .message-bubble {
@@ -792,11 +816,42 @@ h1 {
   border-radius: 14px 14px 4px 14px;
 }
 
+.message-item.user .message-bubble--collapsed::after {
+  background: linear-gradient(180deg, rgba(0, 115, 230, 0), #0073e6 82%);
+}
+
 .message-item.assistant .message-bubble {
   background: #ffffff;
   color: #1f2933;
   border: 1px solid rgba(31, 41, 51, 0.1);
   border-radius: 14px 14px 14px 4px;
+}
+
+.message-expand-toggle {
+  align-self: flex-start;
+  min-height: 28px;
+  padding: 4px 2px;
+  background: transparent;
+  color: #2f5f8f;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: left;
+}
+
+.message-item.user .message-expand-toggle {
+  align-self: flex-end;
+  color: #1f5f9c;
+  text-align: right;
+}
+
+.message-expand-toggle:hover {
+  text-decoration: underline;
+}
+
+.message-expand-toggle:focus-visible {
+  outline: 2px solid rgba(47, 95, 143, 0.28);
+  outline-offset: 2px;
 }
 
 .message-time {
@@ -810,6 +865,7 @@ h1 {
   flex-direction: column;
   gap: 8px;
   min-height: 0;
+  min-width: 0;
   overflow: auto;
 }
 
@@ -821,6 +877,7 @@ h1 {
   display: grid;
   grid-template-rows: auto auto;
   gap: 10px;
+  min-width: 0;
   border-top: 1px solid rgba(31, 41, 51, 0.08);
   padding-top: 12px;
 }
@@ -829,6 +886,7 @@ h1 {
   position: relative;
   display: flex;
   align-items: center;
+  min-width: 0;
 }
 
 .message-input {
@@ -865,8 +923,9 @@ h1 {
 
 .action-buttons {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+  min-width: 0;
 }
 
 .send-button,
@@ -884,6 +943,8 @@ h1 {
   cursor: pointer;
   transition: all 0.2s;
   height: 36px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .send-button {
