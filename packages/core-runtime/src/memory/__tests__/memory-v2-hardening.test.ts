@@ -142,7 +142,23 @@ describe("topic extraction fallback", () => {
     await manager.onNewTurn(makeTurn(1, "钢琴练习很辛苦但很值得"));
 
     expect(topicStore.topics).toHaveLength(1);
-    expect(topicStore.topics[0].mentionCount).toBe(1);
+    // 0, not 1: fallback batches must never accumulate into core promotion
+    expect(topicStore.topics[0].mentionCount).toBe(0);
+    expect(coreStore.memories).toHaveLength(0);
+  });
+
+  it("never promotes even after many merged fallback batches", async () => {
+    const { manager, coreStore } = makeManager({
+      llmResponse: async function* () {
+        throw new Error("LLM unavailable");
+      }
+    });
+
+    for (let batch = 0; batch < 5; batch++) {
+      await manager.onNewTurn(makeTurn(batch * 2, `我今天弹钢琴了 ${batch}`));
+      await manager.onNewTurn(makeTurn(batch * 2 + 1, `钢琴练习不容易 ${batch}`));
+    }
+
     expect(coreStore.memories).toHaveLength(0);
   });
 
@@ -158,6 +174,9 @@ describe("topic extraction fallback", () => {
 
     expect(topicStore.topics[0].keywords.length).toBeGreaterThan(0);
     expect(topicStore.topics[0].keywords.every(kw => kw.length > 1)).toBe(true);
+    // Whole contiguous Chinese sentences must not appear as keywords —
+    // only 2-4 char n-grams survive for pure-Han text
+    expect(topicStore.topics[0].keywords.every(kw => kw.length <= 4)).toBe(true);
   });
 });
 
@@ -177,6 +196,30 @@ describe("cross-batch topic merging", () => {
     // Upgraded exactly once, when crossing the threshold of 3
     expect(coreStore.memories).toHaveLength(1);
     expect(coreStore.memories[0].strength).toBe(0.7);
+  });
+
+  it("retries a failed promotion on the next batch instead of losing it", async () => {
+    const coreStore = new FakeCoreStore();
+    let remainingFailures = 1;
+    const originalInsert = coreStore.insert.bind(coreStore);
+    coreStore.insert = async (memory) => {
+      if (remainingFailures > 0) {
+        remainingFailures -= 1;
+        throw new Error("embed service down");
+      }
+      return originalInsert(memory);
+    };
+    const { manager, topicStore } = makeManager({ coreStore });
+
+    // Batch 3 crosses the threshold but the insert fails; batch 4 retries
+    for (let batch = 0; batch < 4; batch++) {
+      await manager.onNewTurn(makeTurn(batch * 2, `猫咪今天很粘人 ${batch}`));
+      await manager.onNewTurn(makeTurn(batch * 2 + 1, `是啊猫咪就是这样 ${batch}`));
+    }
+
+    expect(coreStore.memories).toHaveLength(1);
+    // Marker written only after the successful attempt
+    expect(topicStore.topics[0].coreMemoryId).toBeDefined();
   });
 
   it("upgrades immediately when a single batch reports high frequency", async () => {
@@ -246,6 +289,19 @@ describe("recall filtering and decay", () => {
 
     expect(result.memories.map(m => m.id)).toEqual(["relevant"]);
     expect(coreStore.updates.map(u => u.id)).toEqual(["relevant"]);
+  });
+
+  it("still returns recall results when reinforcement writes fail", async () => {
+    const coreStore = new FakeCoreStore();
+    coreStore.searchResults = [makeMemory({ id: "relevant", similarity: 0.9 })];
+    coreStore.update = async () => {
+      throw new Error("db locked");
+    };
+    const { manager } = makeManager({ coreStore, batchSize: 50 });
+
+    const result = await recall("你还记得我喜欢什么吗", manager);
+
+    expect(result.memories.map(m => m.id)).toEqual(["relevant"]);
   });
 
   it("treats decayed-out memories as forgotten", async () => {
