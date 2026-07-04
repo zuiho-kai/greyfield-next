@@ -5,7 +5,9 @@ const stopWords = new Set(['的', '了', '是', '在', '有', '我', '你', '他
 
 export function extractKeywords(text: string): string[] {
   const normalized = text.toLowerCase();
-  const words = normalized.match(/[\p{L}\p{N}]+/gu) ?? [];
+  // Pure-Han runs are covered by the n-grams below; keeping them here would
+  // surface whole contiguous Chinese sentences as "keywords".
+  const words = (normalized.match(/[\p{L}\p{N}]+/gu) ?? []).filter(w => !/^\p{Script=Han}+$/u.test(w));
   const hanChunks = normalized.match(/\p{Script=Han}+/gu) ?? [];
   const hanNgrams = hanChunks.flatMap((chunk) => buildHanNgrams(chunk));
 
