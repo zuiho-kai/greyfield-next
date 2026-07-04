@@ -47,6 +47,8 @@ import {
   type LLMTestResult,
   type VoiceTestResult
 } from "./runtime-providers";
+import { initializeMemoryStoresV2, shouldUseNewMemorySystem, type MemoryStoresV2 } from "./memory-v2-init";
+import type { JsonlTopicIndexStore, SqliteCoreMemoryStore } from "@greyfield/persistence";
 
 export interface RuntimeServiceOptions {
   fetch?: typeof fetch;
@@ -153,6 +155,10 @@ export class RuntimeService {
   private lastInterruptedAtMs: number | undefined;
   private lastScreenAwarenessProactiveAtMs: number | undefined;
 
+  // New memory system (V2)
+  private memoryStoresV2?: MemoryStoresV2;
+  private useNewMemorySystem: boolean;
+
   constructor(config: GreyfieldConfig, private readonly options: RuntimeServiceOptions = {}) {
     this.config = mergeConfig(config);
     this.memoryStore = options.memoryStore ?? new MainFakeMemoryStore();
@@ -161,6 +167,19 @@ export class RuntimeService {
     this.memoryAtomStore = options.memoryAtomStore;
     this.deletedMemoryEvidenceStore = options.deletedMemoryEvidenceStore;
     this.providerFactory = new RuntimeProviderFactory(this.config, this.options);
+
+    // Initialize new memory system if enabled
+    this.useNewMemorySystem = shouldUseNewMemorySystem(this.config);
+    if (this.useNewMemorySystem) {
+      try {
+        const characterId = deriveCharacterId(this.config);
+        this.memoryStoresV2 = initializeMemoryStoresV2(characterId);
+        console.log("[MemoryV2] Initialized new memory system for character:", characterId);
+      } catch (error) {
+        console.error("[MemoryV2] Failed to initialize new memory system:", error);
+        this.useNewMemorySystem = false;
+      }
+    }
   }
 
   private get threadId(): string {
@@ -665,6 +684,12 @@ export class RuntimeService {
       ...(atomExtractionPolicy.unavailableReason
         ? { memoryAtomExtractionUnavailableReason: atomExtractionPolicy.unavailableReason }
         : {}),
+
+      // New memory system (V2)
+      useNewMemorySystem: this.useNewMemorySystem,
+      topicIndexStore: this.memoryStoresV2?.topicStore,
+      coreMemoryStore: this.memoryStoresV2?.coreStore,
+
       sessionStore: this.sessionStore,
       persona,
       voice: this.config.voice.id,
@@ -1012,6 +1037,12 @@ function deriveThreadId(config: GreyfieldConfig): string {
   const source = config.characterFile.trim() || "default-character";
   const slug = source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return `desktop:${slug || "default-character"}`;
+}
+
+function deriveCharacterId(config: GreyfieldConfig): string {
+  const source = config.characterFile.trim() || "default-character";
+  const slug = source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug || "default-character";
 }
 
 function normalizeMemoryAtomPatch(patch: UpdateMemoryAtom): UpdateMemoryAtom {

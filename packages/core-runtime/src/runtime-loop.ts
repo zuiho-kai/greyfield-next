@@ -31,6 +31,12 @@ import type { SessionStore, SessionTurn, SessionTurnLookup } from "./session-sto
 import type { StageDriver } from "./stage-driver";
 import type { RuntimeImageAttachment, RuntimeObservationMetadata } from "./vision-attachments";
 
+// New memory system imports
+import { MemoryManager } from "./memory/memory-manager";
+import { recall as recallV2 } from "./memory/recall";
+import type { RecallResult } from "./memory/recall";
+import type { JsonlTopicIndexStore, SqliteCoreMemoryStore } from "@greyfield/persistence";
+
 export interface GreyfieldRuntimeOptions {
   llm: LLMProvider;
   visionLlm?: LLMProvider;
@@ -45,6 +51,12 @@ export interface GreyfieldRuntimeOptions {
   memoryAtomExtractionMode?: MemoryAtomExtractionMode;
   memoryAtomExtractionUnavailableReason?: Extract<MemoryAtomExtractionStatusReason, "disabled" | "provider-unavailable">;
   memoryAtomWritePolicy?: MemoryAtomWritePolicyOptions;
+
+  // New memory system (V2)
+  topicIndexStore?: JsonlTopicIndexStore;
+  coreMemoryStore?: SqliteCoreMemoryStore;
+  useNewMemorySystem?: boolean;  // Feature flag to enable V2 memory
+
   sessionStore: SessionStore;
   persona: CharacterPersona;
   voice: string;
@@ -73,10 +85,25 @@ export class GreyfieldRuntime {
   private audioInputChunks: Uint8Array[] = [];
   private readonly recentTurnLimit: number;
   private readonly threadId: string;
+  private memoryManager?: MemoryManager;  // New memory system
 
   constructor(private readonly options: GreyfieldRuntimeOptions) {
     this.recentTurnLimit = options.recentTurnLimit ?? 20;
     this.threadId = options.threadId ?? "local-desktop-thread";
+
+    // Initialize new memory system if enabled
+    if (options.useNewMemorySystem && options.topicIndexStore && options.coreMemoryStore) {
+      this.memoryManager = new MemoryManager(
+        options.topicIndexStore,
+        options.coreMemoryStore,
+        options.llm,
+        options.sessionStore.sessionId,
+        options.persona.name || "default",
+        {
+          batchSize: 50
+        }
+      );
+    }
   }
 
   requestInterrupt(): void {
@@ -193,6 +220,19 @@ export class GreyfieldRuntime {
     let memory = "";
     let rawMemoryAtoms: MemoryAtom[] = [];
     let deletedEvidence: DeletedMemoryEvidence[] = [];
+
+    // New memory system (V2) recall
+    let newMemoryContext = "";
+    if (this.memoryManager && this.options.useNewMemorySystem) {
+      try {
+        const recallResult = await recallV2(text, this.memoryManager);
+        newMemoryContext = this.formatNewMemoryRecall(recallResult);
+      } catch (error) {
+        console.error("New memory system recall failed:", error);
+        // Fall back to old system
+      }
+    }
+
     if (memoryEnabled) {
       [memory, rawMemoryAtoms, deletedEvidence] = await Promise.all([
         this.options.memoryStore.load(),
@@ -252,7 +292,9 @@ export class GreyfieldRuntime {
 
     const messages = assemblePrompt({
       persona: this.options.persona,
-      memory: redactPromptPrivateText(memory, this.options.promptRedactionSecrets),
+      memory: this.options.useNewMemorySystem && newMemoryContext
+        ? redactPromptPrivateText(newMemoryContext, this.options.promptRedactionSecrets)
+        : redactPromptPrivateText(memory, this.options.promptRedactionSecrets),
       handoff: handoffSummary,
       recent,
       input: redactPromptPrivateText(text, this.options.promptRedactionSecrets),
@@ -306,7 +348,32 @@ export class GreyfieldRuntime {
         content: text,
         ...(observation ? { meta: { observation } } : {})
       });
-      await this.options.sessionStore.append({ role: "assistant", content: finalText });
+      const assistantTurn = await this.options.sessionStore.append({ role: "assistant", content: finalText });
+
+      // Record to new memory system (V2)
+      if (this.memoryManager && this.options.useNewMemorySystem) {
+        try {
+          await this.memoryManager.onNewTurn({
+            id: userTurn.id,
+            sessionId: this.options.sessionStore.sessionId,
+            characterId: this.options.persona.name || "default",
+            role: "user",
+            text,
+            timestamp: new Date()
+          });
+          await this.memoryManager.onNewTurn({
+            id: assistantTurn.id,
+            sessionId: this.options.sessionStore.sessionId,
+            characterId: this.options.persona.name || "default",
+            role: "assistant",
+            text: finalText,
+            timestamp: new Date()
+          });
+        } catch (error) {
+          console.error("Failed to record turn to new memory system:", error);
+        }
+      }
+
       if (memoryEnabled) {
         const atomExtractionStatus = await this.extractMemoryAtomsForTurn(text, userTurn.id);
         if (atomExtractionStatus) {
@@ -396,6 +463,19 @@ export class GreyfieldRuntime {
       return [];
     }
     return store.list(this.threadId);
+  }
+
+  private formatNewMemoryRecall(recallResult: RecallResult): string {
+    if (recallResult.text.trim().length > 0) {
+      return recallResult.text;
+    }
+    if (recallResult.memories.length === 0) {
+      return "";
+    }
+    return [
+      "# 相关记忆",
+      ...recallResult.memories.map((memory) => `- ${memory.text} (强度: ${(memory.strength * 100).toFixed(0)}%)`)
+    ].join("\n");
   }
 
   private async loadSourceTurnsForAtomRecall(context: ReturnType<typeof buildMemoryAtomRecallContext>): Promise<SessionTurn[] | undefined> {
