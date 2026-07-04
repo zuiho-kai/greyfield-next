@@ -25,6 +25,7 @@ Greyfield Next is a TypeScript monorepo for a Live2D desktop companion. This fil
 - New V1 acceptance must be represented in the feature manifest and proved by a test or harness.
 - Do not add desktop control, browser control, screen reading, long-running task orchestration, multi-agent product behavior, livestream support, Godot/VRM, message gateways, self-generating skills, or plugin marketplace behavior into V1.
 - Keep `apps/desktop` as shell/UI/IPC ownership. Runtime policy, provider orchestration, memory, tools, and audio state machines belong behind package boundaries.
+- Renderer refactors should reduce `App.vue` shell weight by moving behavior into focused hooks/components, not by re-growing a monolith. After splitting a Vue single-file component, explicitly audit every template-exposed handler, prop, and emitted event against the new hook return surface, then prove the ordinary pet/control path with the nearest harness.
 - Real Live2D acceptance requires a `.model3.json` path and non-fallback rendering. `pnpm harness:fallback` is diagnostic only.
 - Native `BrowserWindow.setShape` is not the default Windows V1 path; it is experimental behind `GREYFIELD_ENABLE_NATIVE_SHAPE=1`.
 - New features, checkpoint phases, risky refactors, and multi-agent work use a dedicated git worktree and feature branch when the project is inside a git repo.
