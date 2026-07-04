@@ -9,8 +9,9 @@ export function useWindowRuntimeState(params: {
   isControlsWindow: boolean;
   queryModelPath: string | null;
 }) {
-  const { bridge, microphoneRecorder, state, modelInfo, syncState, dispose } = useWindowRuntimeBridge(params);
+  const { bridge, microphoneRecorder, state, modelInfo, syncState, dispose: disposeBridge } = useWindowRuntimeBridge(params);
   const draft = ref("醒了吗？");
+  const lastSyncedInputDraft = ref(state.value.inputDraft);
   const modelPassThrough = computed(() => state.value.window.modelPassThrough);
   const locked = computed(() => state.value.window.locked);
 
@@ -20,11 +21,14 @@ export function useWindowRuntimeState(params: {
   }
 
   function syncDraft(nextState: DesktopRendererState): void {
-    if (nextState.inputDraft !== state.value.inputDraft) {
+    if (nextState.inputDraft !== lastSyncedInputDraft.value) {
       draft.value = nextState.inputDraft;
+      lastSyncedInputDraft.value = nextState.inputDraft;
     }
     syncState(nextState);
   }
+
+  const detachDraftSync = bridge.onStateChange(syncDraft);
 
   async function sendText(text: string): Promise<DesktopRendererState> {
     return applyState(await bridge.sendText(text));
@@ -105,6 +109,11 @@ export function useWindowRuntimeState(params: {
   function openSettings(): void { window.greyfield?.send("window:open-settings", {}); }
   function openChat(): void { window.greyfield?.send("window:open-chat", {}); }
   function hideControls(): void { window.greyfield?.send("window:hide-controls", {}); }
+
+  function dispose(): void {
+    detachDraftSync();
+    disposeBridge();
+  }
 
   return {
     bridge,
