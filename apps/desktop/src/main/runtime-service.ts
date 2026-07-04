@@ -172,7 +172,7 @@ export class RuntimeService {
     this.useNewMemorySystem = shouldUseNewMemorySystem(this.config);
     if (this.useNewMemorySystem) {
       try {
-        const characterId = this.config.character?.id || "default";
+        const characterId = deriveCharacterId(this.config);
         this.memoryStoresV2 = initializeMemoryStoresV2(characterId);
         console.log("[MemoryV2] Initialized new memory system for character:", characterId);
       } catch (error) {
@@ -1037,6 +1037,12 @@ function deriveThreadId(config: GreyfieldConfig): string {
   const source = config.characterFile.trim() || "default-character";
   const slug = source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return `desktop:${slug || "default-character"}`;
+}
+
+function deriveCharacterId(config: GreyfieldConfig): string {
+  const source = config.characterFile.trim() || "default-character";
+  const slug = source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug || "default-character";
 }
 
 function normalizeMemoryAtomPatch(patch: UpdateMemoryAtom): UpdateMemoryAtom {

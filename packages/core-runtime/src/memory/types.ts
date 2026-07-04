@@ -3,11 +3,12 @@
 // Layer 1: Raw Conversation (reuse existing SessionTurn)
 export interface ConversationTurn {
   id: string;
-  sessionId: string;
-  characterId: string;
+  sessionId?: string;
+  characterId?: string;
   role: 'user' | 'assistant';
-  text: string;
-  timestamp: Date;
+  text?: string;
+  content?: string;
+  timestamp: Date | number;
 }
 
 // Layer 2: Topic Index
@@ -43,6 +44,7 @@ export interface CoreMemory {
     topicIds?: string[];
   };
   disabled: boolean;
+  similarity?: number;
 }
 
 // Store interfaces

@@ -8,9 +8,11 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import { JsonlTopicIndexStore, SqliteCoreMemoryStore } from "@greyfield/persistence";
-import { EmbeddingService, MemoryManager } from "@greyfield/core-runtime";
-import type { ConversationTurn } from "@greyfield/core-runtime";
+import { JsonlTopicIndexStore } from "../../../../persistence/src/memory/jsonl-topic-index-store";
+import { SqliteCoreMemoryStore } from "../../../../persistence/src/memory/sqlite-core-memory-store";
+import { EmbeddingService } from "../embedding";
+import { MemoryManager } from "../memory-manager";
+import type { ConversationTurn } from "../types";
 
 describe("Memory System Integration", () => {
   let tempDir: string;
@@ -30,7 +32,6 @@ describe("Memory System Integration", () => {
     topicStore = new JsonlTopicIndexStore(topicPath);
 
     embeddingService = new EmbeddingService({
-      apiKey: "sk-epghmqrstteavwiemdnryihnsaypdlqygmxqrbyzuspibntl",
       baseURL: "https://api.siliconflow.cn/v1",
       model: "BAAI/bge-m3"
     });
@@ -39,11 +40,11 @@ describe("Memory System Integration", () => {
 
     // Mock LLM provider for topic extraction
     const mockLlm = {
-      generateText: async () => ({
-        text: JSON.stringify([
+      async *stream() {
+        yield JSON.stringify([
           { topic: "测试话题", keywords: ["测试", "关键词"] }
-        ])
-      })
+        ]);
+      }
     };
 
     memoryManager = new MemoryManager(
@@ -58,6 +59,7 @@ describe("Memory System Integration", () => {
 
   afterEach(async () => {
     // Cleanup
+    coreStore.close();
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -99,10 +101,13 @@ describe("Memory System Integration", () => {
     const mockHighFrequencyTopic = {
       id: "topic-1",
       sessionId: "test-session",
+      characterId: "test-character",
       topic: "编程",
       keywords: ["编程", "代码", "开发"],
+      timeRange: [new Date(), new Date()] as [Date, Date],
+      turnIds: ["turn-1"],
       mentionCount: 5,
-      createdAt: Date.now()
+      lastMentioned: new Date()
     };
 
     await topicStore.append(mockHighFrequencyTopic);

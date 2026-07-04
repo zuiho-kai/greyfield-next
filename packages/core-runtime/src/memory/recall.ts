@@ -104,7 +104,7 @@ export async function searchMemoriesByKeyword(
   manager: MemoryManager,
   limit: number = 10
 ): Promise<CoreMemory[]> {
-  const allMemories = await manager.coreStore.getBySession(manager.topicStore['sessionId']);
+  const allMemories = await manager.coreStore.getBySession(manager.sessionId);
 
   const keywordLower = keyword.toLowerCase();
   return allMemories
@@ -124,7 +124,7 @@ export async function getMemoriesByTimeRange(
   startDate: Date,
   endDate: Date
 ): Promise<CoreMemory[]> {
-  const allMemories = await manager.coreStore.getBySession(manager.topicStore['sessionId']);
+  const allMemories = await manager.coreStore.getBySession(manager.sessionId);
 
   return allMemories
     .filter(m =>

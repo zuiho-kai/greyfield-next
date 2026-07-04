@@ -25,7 +25,7 @@ Greyfield Next 是一个 Live2D 桌面伴侣项目，使用 TypeScript + Electro
 ## 已完成的工作
 
 ### 1. 技术方案对齐 ✅
-- 确认使用 SiliconFlow API 做 embedding（API key: `sk-epghmqrstteavwiemdnryihnsaypdlqygmxqrbyzuspibntl`）
+- 确认使用 SiliconFlow API 做 embedding（API key 通过 `SILICONFLOW_API_KEY` 配置，不写入仓库）
 - 确认使用 SQLite + sqlite-vss 做向量检索
 - 不使用 `@xenova/transformers`（本地模型）
 - 不使用 `hnswlib-node`（需要 C++ 编译）
@@ -127,7 +127,7 @@ await this.memoryManager.onNewTurn(turn);
 ```
 
 ### 4. 实现 Memory Library UI ❌
-需要创建 `apps/desktop/src/renderer/SettingsMemory.vue`：
+需要复用现有 `SettingsWindow.vue` Memory Library，或后续设计 V2 专属入口：
 - 显示核心记忆列表（text, strength, lastRecalledAt）
 - 显示话题索引列表（topic, keywords, mentionCount）
 - 删除记忆功能
@@ -241,5 +241,5 @@ docs/plans/v2-memory-refactor-minispec.md  # 技术 minispec
 
 **SiliconFlow Embedding API**:
 - Base URL: `https://api.siliconflow.cn/v1`
-- API Key: `sk-epghmqrstteavwiemdnryihnsaypdlqygmxqrbyzuspibntl`
+- API Key: 通过 `SILICONFLOW_API_KEY` 配置，不写入仓库
 - 支持模型: `BAAI/bge-m3`, `Qwen/Qwen3-Embedding-0.6B`

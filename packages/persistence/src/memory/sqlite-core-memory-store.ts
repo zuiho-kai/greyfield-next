@@ -3,11 +3,19 @@ import type { CoreMemory } from "@greyfield/core-runtime";
 import { dirname } from "node:path";
 import { mkdirSync } from "node:fs";
 
+export interface CoreMemoryEmbeddingService {
+  embed(text: string): Promise<number[]>;
+}
+
+export type CoreMemoryInsertInput = Partial<Pick<CoreMemory, "id" | "createdAt" | "sources" | "disabled" | "embedding">> &
+  Pick<CoreMemory, "sessionId" | "characterId" | "text" | "strength"> &
+  Partial<Pick<CoreMemory, "lastRecalledAt" | "triggers">>;
+
 export class SqliteCoreMemoryStore {
   private db: Database.Database;
   private hasVectorExtension = false;
 
-  constructor(dbPath: string) {
+  constructor(dbPath: string, private readonly embeddingService?: CoreMemoryEmbeddingService) {
     // Ensure directory exists
     mkdirSync(dirname(dbPath), { recursive: true });
 
@@ -58,7 +66,8 @@ export class SqliteCoreMemoryStore {
     }
   }
 
-  async insert(memory: CoreMemory): Promise<void> {
+  async insert(input: CoreMemoryInsertInput): Promise<void> {
+    const memory = await this.normalizeInsert(input);
     const stmt = this.db.prepare(`
       INSERT INTO core_memories
       (id, sessionId, characterId, text, embedding, strength, createdAt, lastRecalledAt, triggers, sources, disabled)
@@ -96,7 +105,7 @@ export class SqliteCoreMemoryStore {
 
   async update(id: string, updates: Partial<CoreMemory>): Promise<void> {
     const fields: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
 
     if (updates.text !== undefined) {
       fields.push('text = ?');
@@ -126,16 +135,17 @@ export class SqliteCoreMemoryStore {
   }
 
   async get(id: string): Promise<CoreMemory | null> {
-    const row = this.db.prepare(`SELECT * FROM core_memories WHERE id = ?`).get(id);
-    return row ? this.rowToMemory(row as any) : null;
+    const row = this.db.prepare(`SELECT * FROM core_memories WHERE id = ?`).get(id) as CoreMemoryRow | undefined;
+    return row ? this.rowToMemory(row) : null;
   }
 
   async getBySession(sessionId: string): Promise<CoreMemory[]> {
-    const rows = this.db.prepare(`SELECT * FROM core_memories WHERE sessionId = ? AND disabled = 0`).all(sessionId);
-    return rows.map(row => this.rowToMemory(row as any));
+    const rows = this.db.prepare(`SELECT * FROM core_memories WHERE sessionId = ? AND disabled = 0`).all(sessionId) as CoreMemoryRow[];
+    return rows.map((row) => this.rowToMemory(row));
   }
 
-  async vectorSearch(queryEmbedding: number[], topK: number): Promise<CoreMemory[]> {
+  async vectorSearch(query: number[] | string, topK: number): Promise<CoreMemory[]> {
+    const queryEmbedding = Array.isArray(query) ? query : await this.embedSearchText(query);
     if (this.hasVectorExtension) {
       try {
         return this.vectorExtensionSearch(queryEmbedding, topK);
@@ -157,16 +167,16 @@ export class SqliteCoreMemoryStore {
       WHERE vss_search(v.embedding, ?)
       AND m.disabled = 0
       LIMIT ?
-    `).all(queryBuffer, topK);
+    `).all(queryBuffer, topK) as CoreMemoryRow[];
 
-    return rows.map(row => this.rowToMemory(row as any));
+    return rows.map((row) => this.rowToMemory(row));
   }
 
   private bruteForceSearch(queryEmbedding: number[], topK: number): CoreMemory[] {
-    const rows = this.db.prepare(`SELECT * FROM core_memories WHERE disabled = 0`).all();
+    const rows = this.db.prepare(`SELECT * FROM core_memories WHERE disabled = 0`).all() as CoreMemoryRow[];
 
-    const scored = rows.map(row => {
-      const memory = this.rowToMemory(row as any);
+    const scored = rows.map((row) => {
+      const memory = this.rowToMemory(row);
       const similarity = this.cosineSimilarity(queryEmbedding, memory.embedding);
       return { memory, similarity };
     });
@@ -174,7 +184,7 @@ export class SqliteCoreMemoryStore {
     return scored
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, topK)
-      .map(item => ({
+      .map((item) => ({
         ...item.memory,
         similarity: item.similarity
       }));
@@ -199,7 +209,7 @@ export class SqliteCoreMemoryStore {
     return denominator === 0 ? 0 : dotProduct / denominator;
   }
 
-  private rowToMemory(row: any): CoreMemory {
+  private rowToMemory(row: CoreMemoryRow): CoreMemory {
     const embeddingBuffer = Buffer.from(row.embedding);
     const embedding = Array.from(new Float32Array(
       embeddingBuffer.buffer,
@@ -222,6 +232,27 @@ export class SqliteCoreMemoryStore {
     };
   }
 
+  private async normalizeInsert(input: CoreMemoryInsertInput): Promise<CoreMemory> {
+    const createdAt = input.createdAt ?? new Date();
+    return {
+      id: input.id ?? `core-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+      sessionId: input.sessionId,
+      characterId: input.characterId,
+      text: input.text,
+      embedding: input.embedding ?? await this.embedSearchText(input.text),
+      strength: input.strength,
+      createdAt,
+      lastRecalledAt: input.lastRecalledAt,
+      triggers: input.triggers,
+      sources: input.sources ?? { turnIds: [] },
+      disabled: input.disabled ?? false
+    };
+  }
+
+  private async embedSearchText(text: string): Promise<number[]> {
+    return this.embeddingService ? this.embeddingService.embed(text) : deterministicEmbedding(text);
+  }
+
   async delete(id: string): Promise<boolean> {
     const result = this.db.prepare(`DELETE FROM core_memories WHERE id = ?`).run(id);
 
@@ -239,4 +270,38 @@ export class SqliteCoreMemoryStore {
   close(): void {
     this.db.close();
   }
+}
+
+interface CoreMemoryRow {
+  id: string;
+  sessionId: string;
+  characterId: string;
+  text: string;
+  embedding: Buffer;
+  strength: number;
+  createdAt: string;
+  lastRecalledAt: string | null;
+  triggers: string | null;
+  sources: string;
+  disabled: number;
+}
+
+function deterministicEmbedding(text: string): number[] {
+  const dimensions = 1024;
+  const vector = new Array<number>(dimensions).fill(0);
+  const tokens = text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [text.toLowerCase()];
+  for (const token of tokens) {
+    vector[stableHash(token) % dimensions] += 1;
+  }
+  const norm = Math.sqrt(vector.reduce((total, value) => total + value * value, 0));
+  return norm === 0 ? vector : vector.map((value) => value / norm);
+}
+
+function stableHash(value: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }

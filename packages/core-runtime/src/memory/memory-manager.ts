@@ -12,7 +12,7 @@ export class MemoryManager {
     public readonly topicStore: JsonlTopicIndexStore,
     public readonly coreStore: SqliteCoreMemoryStore,
     private llm: LLMProvider,
-    private sessionId: string,
+    public readonly sessionId: string,
     private characterId: string,
     options?: {
       batchSize?: number;
@@ -37,7 +37,7 @@ export class MemoryManager {
   }
 
   private async checkExplicitMemory(turn: ConversationTurn): Promise<void> {
-    const text = turn.text.toLowerCase();
+    const text = getTurnText(turn).toLowerCase();
 
     // Detect explicit memory triggers
     if (text.includes('记住') || text.includes('别忘了') || text.includes('以后要')) {
@@ -49,14 +49,14 @@ export class MemoryManager {
     try {
       // TODO: Extract memory content with LLM
       // For now, use the text directly
-      const memoryText = turn.text;
+      const memoryText = getTurnText(turn);
 
       const embedding = await embed(memoryText);
 
       const memory: CoreMemory = {
         id: `core-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
-        sessionId: turn.sessionId,
-        characterId: turn.characterId,
+        sessionId: turn.sessionId ?? this.sessionId,
+        characterId: turn.characterId ?? this.characterId,
         text: memoryText,
         embedding,
         strength: 1.0, // Explicit memories start with max strength
@@ -85,11 +85,11 @@ export class MemoryManager {
       const topics = await this.extractTopics(this.unindexedTurns);
 
       for (const topic of topics) {
-        await this.topicStore.append(topic);
+        const storedTopic = await this.topicStore.append(topic);
 
         // Upgrade high-frequency topics to core memory
-        if (topic.mentionCount >= 3) {
-          await this.upgradeToCoreMemory(topic);
+        if (storedTopic.mentionCount >= 3) {
+          await this.upgradeToCoreMemory(storedTopic);
         }
       }
 
@@ -107,7 +107,7 @@ export class MemoryManager {
     try {
       // Use LLM to extract topics
       const conversationText = turns.map((t, idx) =>
-        `[${idx + 1}] ${t.role}: ${t.text}`
+        `[${idx + 1}] ${t.role}: ${getTurnText(t)}`
       ).join('\n');
 
       const prompt = `请分析以下对话，提取 2-4 个主要话题。每个话题包含：
@@ -129,13 +129,13 @@ ${conversationText}
 
 只返回 JSON，不要其他解释。`;
 
-      const response = await this.llm.generateText(prompt);
+      const responseText = await collectLLMText(this.llm, prompt);
 
       // Try to parse JSON from response
       let topics: Array<{topic: string, keywords: string[], mentionCount: number}> = [];
 
       // Extract JSON from response (might be wrapped in markdown code blocks)
-      const jsonMatch = response.text.match(/\[[\s\S]*\]/);
+      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         topics = JSON.parse(jsonMatch[0]);
       }
@@ -152,10 +152,10 @@ ${conversationText}
         characterId: this.characterId,
         topic: t.topic,
         keywords: t.keywords,
-        timeRange: [firstTurn.timestamp, lastTurn.timestamp] as [Date, Date],
+        timeRange: [toDate(firstTurn.timestamp), toDate(lastTurn.timestamp)] as [Date, Date],
         turnIds: turns.map(turn => turn.id),
         mentionCount: t.mentionCount || 1,
-        lastMentioned: lastTurn.timestamp
+        lastMentioned: toDate(lastTurn.timestamp)
       }));
 
     } catch (error) {
@@ -164,7 +164,7 @@ ${conversationText}
       // Fallback: Simple heuristic-based topic extraction
       const firstTurn = turns[0];
       const lastTurn = turns[turns.length - 1];
-      const allText = turns.map(t => t.text).join(' ');
+      const allText = turns.map(t => getTurnText(t)).join(' ');
       const words = allText.split(/\s+/).filter(w => w.length > 2);
       const uniqueWords = [...new Set(words)].slice(0, 5);
 
@@ -173,10 +173,10 @@ ${conversationText}
         characterId: this.characterId,
         topic: `对话涉及 ${uniqueWords.slice(0, 3).join('、')}`,
         keywords: uniqueWords,
-        timeRange: [firstTurn.timestamp, lastTurn.timestamp] as [Date, Date],
+        timeRange: [toDate(firstTurn.timestamp), toDate(lastTurn.timestamp)] as [Date, Date],
         turnIds: turns.map(t => t.id),
         mentionCount: turns.length,
-        lastMentioned: lastTurn.timestamp
+        lastMentioned: toDate(lastTurn.timestamp)
       }];
     }
   }
@@ -219,4 +219,20 @@ ${conversationText}
   close(): void {
     this.coreStore.close();
   }
+}
+
+function getTurnText(turn: ConversationTurn): string {
+  return turn.text ?? turn.content ?? "";
+}
+
+function toDate(value: Date | number): Date {
+  return value instanceof Date ? value : new Date(value);
+}
+
+async function collectLLMText(llm: LLMProvider, prompt: string): Promise<string> {
+  let text = "";
+  for await (const chunk of llm.stream([{ role: "user", content: prompt }])) {
+    text += chunk;
+  }
+  return text;
 }

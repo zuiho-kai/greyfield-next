@@ -2,13 +2,15 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { TopicIndex } from "@greyfield/core-runtime";
 
+export type AppendTopicIndex = TopicIndex | Omit<TopicIndex, 'id'>;
+
 export class JsonlTopicIndexStore {
   private sequence = 0;
   private mutation = Promise.resolve();
 
   constructor(private readonly path: string) {}
 
-  async append(topic: Omit<TopicIndex, 'id'>): Promise<TopicIndex> {
+  async append(topic: AppendTopicIndex): Promise<TopicIndex> {
     return this.serializeMutation(async () => {
       const current = await this.readTopics();
       this.sequence = Math.max(this.sequence, ...current.map(t => this.parseSequence(t.id)));
@@ -16,7 +18,7 @@ export class JsonlTopicIndexStore {
 
       const stored: TopicIndex = {
         ...topic,
-        id: `topic-${this.sequence}`
+        id: "id" in topic ? topic.id : `topic-${this.sequence}`
       };
 
       await this.writeTopics([...current, stored]);

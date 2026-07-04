@@ -608,7 +608,7 @@ test('高频话题自动升级到核心记忆', async () => {
 - [ ] 初始化 MemoryManager
 
 ### Phase 5: UI (0.5h)
-- [ ] 实现 SettingsMemory.vue
+- [ ] 复用现有 SettingsWindow memory library 或设计 V2 专属入口
 - [ ] 显示核心记忆列表
 - [ ] 显示话题列表
 - [ ] 删除记忆功能
@@ -651,7 +651,7 @@ packages/persistence/src/memory/
 └── core-memory-store.ts  # Layer 3 存储
 
 apps/desktop/src/renderer/
-└── SettingsMemory.vue    # UI
+└── SettingsWindow.vue    # 现有 Memory Library UI；V2 专属入口仍待设计
 
 packages/dev-harness/src/
 └── memory-recall-check.ts # 测试

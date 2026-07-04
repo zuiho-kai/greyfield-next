@@ -248,7 +248,7 @@ async function recall(userMessage: string) {
 ### Phase 5: 简单 UI (0.5h)
 
 **交付物**：
-- `apps/desktop/src/renderer/SettingsMemory.vue` - Memory Library UI
+- 复用 `apps/desktop/src/renderer/SettingsWindow.vue` 里的现有 Memory Library，或后续设计 V2 专属入口
 
 **功能**：
 - 查看核心记忆列表
@@ -338,7 +338,7 @@ packages/persistence/src/memory/
   └── core-memory-store.ts  # Layer 3 存储
 
 apps/desktop/src/renderer/
-  └── SettingsMemory.vue    # Memory Library UI
+  └── SettingsWindow.vue    # 现有 Memory Library UI；V2 专属入口仍待设计
 
 packages/dev-harness/src/
   └── memory-recall-check.ts # 测试用例

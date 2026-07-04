@@ -1,84 +1,128 @@
-// Embedding API Client - SiliconFlow
+// Embedding API Client - SiliconFlow-compatible
 
-const SILICONFLOW_API_KEY = 'sk-epghmqrstteavwiemdnryihnsaypdlqygmxqrbyzuspibntl';
-const SILICONFLOW_BASE_URL = 'https://api.siliconflow.cn/v1';
+const defaultBaseURL = "https://api.siliconflow.cn/v1";
+const defaultModel = "BAAI/bge-m3";
+const fallbackDimensions = 1024;
 
 export interface EmbeddingOptions {
   model?: string;
+  apiKey?: string;
+  baseURL?: string;
+  fetch?: typeof fetch;
+  allowDeterministicFallback?: boolean;
 }
 
-/**
- * Generate embedding vector using SiliconFlow API
- * @param text Text to embed
- * @param options Embedding options (model selection)
- * @returns Embedding vector as number array
- */
-export async function embed(
-  text: string,
-  options: EmbeddingOptions = {}
-): Promise<number[]> {
-  const model = options.model || 'BAAI/bge-m3';
+export class EmbeddingService {
+  private readonly model: string;
+  private readonly apiKey: string | undefined;
+  private readonly baseURL: string;
+  private readonly fetchImpl: typeof fetch;
+  private readonly allowDeterministicFallback: boolean;
 
-  const response = await fetch(`${SILICONFLOW_BASE_URL}/embeddings`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${SILICONFLOW_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model,
-      input: text
-    })
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Embedding API failed (${response.status}): ${errorText}`);
+  constructor(options: EmbeddingOptions = {}) {
+    this.model = options.model ?? defaultModel;
+    this.apiKey = options.apiKey ?? process.env.SILICONFLOW_API_KEY ?? process.env.GREYFIELD_EMBEDDING_API_KEY;
+    this.baseURL = (options.baseURL ?? process.env.SILICONFLOW_BASE_URL ?? defaultBaseURL).replace(/\/$/, "");
+    this.fetchImpl = options.fetch ?? fetch;
+    this.allowDeterministicFallback = options.allowDeterministicFallback ?? true;
   }
 
-  const data = await response.json();
+  async embed(text: string): Promise<number[]> {
+    if (!this.apiKey) {
+      if (this.allowDeterministicFallback) {
+        return deterministicEmbedding(text);
+      }
+      throw new Error("Embedding API key is not configured.");
+    }
 
-  if (!data.data || !data.data[0] || !data.data[0].embedding) {
-    throw new Error('Invalid embedding response format');
+    const response = await this.fetchImpl(`${this.baseURL}/embeddings`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: this.model,
+        input: text
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Embedding API failed (${response.status}): ${errorText}`);
+    }
+
+    const data: EmbeddingResponse = await response.json();
+    const embedding = data.data?.[0]?.embedding;
+    if (!Array.isArray(embedding)) {
+      throw new Error("Invalid embedding response format");
+    }
+    return embedding;
   }
 
-  return data.data[0].embedding;
+  async embedBatch(texts: string[]): Promise<number[][]> {
+    if (!this.apiKey) {
+      if (this.allowDeterministicFallback) {
+        return texts.map(deterministicEmbedding);
+      }
+      throw new Error("Embedding API key is not configured.");
+    }
+
+    const response = await this.fetchImpl(`${this.baseURL}/embeddings`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: this.model,
+        input: texts
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Batch embedding API failed (${response.status}): ${errorText}`);
+    }
+
+    const data: EmbeddingResponse = await response.json();
+    if (!Array.isArray(data.data)) {
+      throw new Error("Invalid batch embedding response format");
+    }
+    return data.data.map((item) => item.embedding);
+  }
 }
 
-/**
- * Batch embed multiple texts
- * @param texts Array of texts to embed
- * @param options Embedding options
- * @returns Array of embedding vectors
- */
-export async function embedBatch(
-  texts: string[],
-  options: EmbeddingOptions = {}
-): Promise<number[][]> {
-  const model = options.model || 'BAAI/bge-m3';
+export async function embed(text: string, options: EmbeddingOptions = {}): Promise<number[]> {
+  return new EmbeddingService(options).embed(text);
+}
 
-  const response = await fetch(`${SILICONFLOW_BASE_URL}/embeddings`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${SILICONFLOW_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model,
-      input: texts
-    })
-  });
+export async function embedBatch(texts: string[], options: EmbeddingOptions = {}): Promise<number[][]> {
+  return new EmbeddingService(options).embedBatch(texts);
+}
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Batch embedding API failed (${response.status}): ${errorText}`);
+interface EmbeddingResponse {
+  data?: Array<{
+    embedding: number[];
+  }>;
+}
+
+function deterministicEmbedding(text: string): number[] {
+  const vector = new Array<number>(fallbackDimensions).fill(0);
+  const tokens = text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [text.toLowerCase()];
+  for (const token of tokens) {
+    const index = stableHash(token) % fallbackDimensions;
+    vector[index] += 1;
   }
+  const norm = Math.sqrt(vector.reduce((total, value) => total + value * value, 0));
+  return norm === 0 ? vector : vector.map((value) => value / norm);
+}
 
-  const data = await response.json();
-
-  if (!data.data || !Array.isArray(data.data)) {
-    throw new Error('Invalid batch embedding response format');
+function stableHash(value: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
   }
-
-  return data.data.map((item: any) => item.embedding);
+  return hash >>> 0;
 }

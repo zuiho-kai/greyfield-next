@@ -11,6 +11,8 @@
 import { tmpdir } from "os";
 import { mkdtemp, rm } from "fs/promises";
 import { join } from "path";
+import { pathToFileURL } from "url";
+import { describe, it } from "vitest";
 import { JsonlTopicIndexStore } from "../../../../persistence/src/memory/jsonl-topic-index-store";
 import { SqliteCoreMemoryStore } from "../../../../persistence/src/memory/sqlite-core-memory-store";
 import { EmbeddingService } from "../embedding";
@@ -22,13 +24,13 @@ async function runAcceptanceTest() {
 
   // Create temp directory
   const tempDir = await mkdtemp(join(tmpdir(), "greyfield-memory-test-"));
+  let coreStore: SqliteCoreMemoryStore | undefined;
   console.log(`\n✓ Created temp directory: ${tempDir}`);
 
   try {
     // Test 1: Embedding API
     console.log("\n[Test 1] Testing Embedding API...");
     const embeddingService = new EmbeddingService({
-      apiKey: "sk-epghmqrstteavwiemdnryihnsaypdlqygmxqrbyzuspibntl",
       baseURL: "https://api.siliconflow.cn/v1",
       model: "BAAI/bge-m3"
     });
@@ -65,7 +67,7 @@ async function runAcceptanceTest() {
     // Test 3: Core Memory Store
     console.log("\n[Test 3] Testing Core Memory Store...");
     const coreStorePath = join(tempDir, "core.db");
-    const coreStore = new SqliteCoreMemoryStore(coreStorePath);
+    coreStore = new SqliteCoreMemoryStore(coreStorePath);
 
     const memoryText = "用户喜欢晴天，觉得阳光让人心情愉悦";
     const memoryEmbedding = await embeddingService.embed(memoryText);
@@ -149,13 +151,19 @@ async function runAcceptanceTest() {
     throw error;
   } finally {
     // Cleanup
+    coreStore?.close();
     await rm(tempDir, { recursive: true, force: true });
     console.log(`\n✓ Cleaned up temp directory`);
   }
 }
 
-// Run the test
-if (require.main === module) {
+describe("Memory System V2 acceptance", () => {
+  it("runs the basic memory workflow", async () => {
+    await runAcceptanceTest();
+  }, 30_000);
+});
+
+if (isDirectRun(import.meta.url)) {
   runAcceptanceTest()
     .then(() => {
       console.log("\n✓ Test completed successfully");
@@ -168,3 +176,7 @@ if (require.main === module) {
 }
 
 export { runAcceptanceTest };
+
+function isDirectRun(moduleUrl: string): boolean {
+  return process.argv[1] ? moduleUrl === pathToFileURL(process.argv[1]).href : false;
+}

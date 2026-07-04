@@ -7,6 +7,7 @@
 import { tmpdir } from "os";
 import { mkdtemp, rm } from "fs/promises";
 import { join } from "path";
+import { pathToFileURL } from "url";
 import { JsonlTopicIndexStore } from "../../../../persistence/src/memory/jsonl-topic-index-store";
 import { SqliteCoreMemoryStore } from "../../../../persistence/src/memory/sqlite-core-memory-store";
 import { embed, embedBatch } from "../embedding";
@@ -174,16 +175,21 @@ async function runSimpleTest() {
   }
 }
 
-// Run the test
-runSimpleTest()
-  .then(() => {
-    console.log("\n✅ Test completed successfully");
-    process.exit(0);
-  })
-  .catch((error) => {
-    console.error("\n❌ Test failed with error:");
-    console.error(error);
-    process.exit(1);
-  });
+if (isDirectRun(import.meta.url)) {
+  runSimpleTest()
+    .then(() => {
+      console.log("\n✅ Test completed successfully");
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error("\n❌ Test failed with error:");
+      console.error(error);
+      process.exit(1);
+    });
+}
 
 export { runSimpleTest };
+
+function isDirectRun(moduleUrl: string): boolean {
+  return process.argv[1] ? moduleUrl === pathToFileURL(process.argv[1]).href : false;
+}
