@@ -460,6 +460,125 @@
           </div>
         </div>
 
+        <!-- User Profile Management UI -->
+        <div class="settings-section user-profile" aria-label="用户画像" data-harness="settings-user-profile">
+          <header class="settings-section__header">
+            <h2>用户画像</h2>
+            <span>{{ profileFacts.length }} 条事实</span>
+          </header>
+
+          <div class="user-profile__overview">
+            <div class="memory-library__block">
+              <strong>关于用户的已知事实</strong>
+              <p>过敏信息、重要日期、身份属性等结构化信息,每轮对话自动注入,不依赖召回、不会遗忘。</p>
+            </div>
+          </div>
+
+          <details class="user-profile__add-form">
+            <summary>添加新事实</summary>
+            <div class="user-profile__form-content">
+              <label>
+                <span>分类</span>
+                <select v-model="newFactCategory">
+                  <option value="allergy">过敏信息</option>
+                  <option value="important-date">重要日期</option>
+                  <option value="identity">身份属性</option>
+                  <option value="preference">偏好</option>
+                  <option value="free-form">其他</option>
+                </select>
+              </label>
+              <label>
+                <span>标签</span>
+                <input v-model="newFactKey" placeholder="例如: 过敏原、生日、职业" />
+              </label>
+              <label>
+                <span>内容</span>
+                <input v-model="newFactValue" placeholder="例如: 花生、2026-01-15、软件工程师" />
+              </label>
+              <button type="button" @click="createProfileFact">创建</button>
+            </div>
+          </details>
+
+          <section v-if="profileFactsByCategory.allergy && profileFactsByCategory.allergy.length > 0" class="user-profile__category">
+            <h3>过敏信息</h3>
+            <article v-for="fact in profileFactsByCategory.allergy" :key="fact.id" class="user-profile__fact" :class="{ 'user-profile__fact--disabled': fact.disabled }">
+              <div class="user-profile__fact-content">
+                <strong>{{ fact.key }}</strong>
+                <span>{{ fact.value }}</span>
+              </div>
+              <div class="memory-library__actions">
+                <button type="button" @click="toggleProfileFact(fact)">
+                  {{ fact.disabled ? '启用' : '禁用' }}
+                </button>
+              </div>
+            </article>
+          </section>
+
+          <section v-if="profileFactsByCategory['important-date'] && profileFactsByCategory['important-date'].length > 0" class="user-profile__category">
+            <h3>重要日期</h3>
+            <article v-for="fact in profileFactsByCategory['important-date']" :key="fact.id" class="user-profile__fact" :class="{ 'user-profile__fact--disabled': fact.disabled }">
+              <div class="user-profile__fact-content">
+                <strong>{{ fact.key }}</strong>
+                <span>{{ fact.value }}</span>
+              </div>
+              <div class="memory-library__actions">
+                <button type="button" @click="toggleProfileFact(fact)">
+                  {{ fact.disabled ? '启用' : '禁用' }}
+                </button>
+              </div>
+            </article>
+          </section>
+
+          <section v-if="profileFactsByCategory.identity && profileFactsByCategory.identity.length > 0" class="user-profile__category">
+            <h3>身份属性</h3>
+            <article v-for="fact in profileFactsByCategory.identity" :key="fact.id" class="user-profile__fact" :class="{ 'user-profile__fact--disabled': fact.disabled }">
+              <div class="user-profile__fact-content">
+                <strong>{{ fact.key }}</strong>
+                <span>{{ fact.value }}</span>
+              </div>
+              <div class="memory-library__actions">
+                <button type="button" @click="toggleProfileFact(fact)">
+                  {{ fact.disabled ? '启用' : '禁用' }}
+                </button>
+              </div>
+            </article>
+          </section>
+
+          <section v-if="profileFactsByCategory.preference && profileFactsByCategory.preference.length > 0" class="user-profile__category">
+            <h3>偏好</h3>
+            <article v-for="fact in profileFactsByCategory.preference" :key="fact.id" class="user-profile__fact" :class="{ 'user-profile__fact--disabled': fact.disabled }">
+              <div class="user-profile__fact-content">
+                <strong>{{ fact.key }}</strong>
+                <span>{{ fact.value }}</span>
+              </div>
+              <div class="memory-library__actions">
+                <button type="button" @click="toggleProfileFact(fact)">
+                  {{ fact.disabled ? '启用' : '禁用' }}
+                </button>
+              </div>
+            </article>
+          </section>
+
+          <section v-if="profileFactsByCategory['free-form'] && profileFactsByCategory['free-form'].length > 0" class="user-profile__category">
+            <h3>其他事实</h3>
+            <article v-for="fact in profileFactsByCategory['free-form']" :key="fact.id" class="user-profile__fact" :class="{ 'user-profile__fact--disabled': fact.disabled }">
+              <div class="user-profile__fact-content">
+                <strong>{{ fact.key }}</strong>
+                <span>{{ fact.value }}</span>
+              </div>
+              <div class="memory-library__actions">
+                <button type="button" @click="toggleProfileFact(fact)">
+                  {{ fact.disabled ? '启用' : '禁用' }}
+                </button>
+              </div>
+            </article>
+          </section>
+
+          <div v-if="profileFacts.length === 0" class="memory-library__empty">
+            暂无用户画像数据,对话中说"记住我对花生过敏"即可自动提取。
+          </div>
+        </div>
+
         <p v-if="state.voiceErrorMessage" class="provider-test-result provider-test-result--error" role="status">
           {{ state.voiceErrorMessage }}
         </p>
@@ -711,6 +830,88 @@ const selectedSourceDrilldown = computed(() => {
     return null;
   }
   if (selectedSource.value.kind === "summary") {
+    const item = memorySegments.value.find((s) => s.id === selectedSource.value?.id);
+    return item ? { kind: "summary" as const, item } : null;
+  }
+  if (selectedSource.value.kind === "atom") {
+    const item = memoryAtoms.value.find((a) => a.id === selectedSource.value?.id);
+    return item ? { kind: "atom" as const, item } : null;
+  }
+  return null;
+});
+
+// Profile facts state
+const profileFacts = ref<Array<{
+  id: string;
+  category: string;
+  key: string;
+  value: string;
+  createdAt: string;
+  disabled: boolean;
+}>>([]);
+
+const newFactCategory = ref<"allergy" | "important-date" | "identity" | "preference" | "free-form">("allergy");
+const newFactKey = ref("");
+const newFactValue = ref("");
+
+const profileFactsByCategory = computed(() => {
+  const byCategory: Record<string, typeof profileFacts.value> = {};
+  for (const fact of profileFacts.value) {
+    if (!byCategory[fact.category]) {
+      byCategory[fact.category] = [];
+    }
+    byCategory[fact.category].push(fact);
+  }
+  return byCategory;
+});
+
+// Profile facts methods
+async function loadProfileFacts() {
+  try {
+    const facts = await window.electron.invoke("profile:get-facts");
+    profileFacts.value = facts;
+  } catch (error) {
+    console.error("Failed to load profile facts:", error);
+  }
+}
+
+async function toggleProfileFact(fact: typeof profileFacts.value[0]) {
+  try {
+    await window.electron.invoke("profile:update-fact", {
+      id: fact.id,
+      disabled: !fact.disabled
+    });
+    await loadProfileFacts();
+    emit("refresh-memory-debug");
+  } catch (error) {
+    console.error("Failed to toggle profile fact:", error);
+  }
+}
+
+async function createProfileFact() {
+  if (!newFactKey.value.trim() || !newFactValue.value.trim()) {
+    return;
+  }
+  try {
+    await window.electron.invoke("profile:create-fact", {
+      category: newFactCategory.value,
+      key: newFactKey.value.trim(),
+      value: newFactValue.value.trim()
+    });
+    newFactKey.value = "";
+    newFactValue.value = "";
+    await loadProfileFacts();
+    emit("refresh-memory-debug");
+  } catch (error) {
+    console.error("Failed to create profile fact:", error);
+  }
+}
+
+const selectedSourceDrilldown = computed(() => {
+  if (!selectedSource.value) {
+    return null;
+  }
+  if (selectedSource.value.kind === "summary") {
     const item = memorySegments.value.find((segment) => segment.id === selectedSource.value?.id);
     return item ? { kind: "summary" as const, item } : null;
   }
@@ -759,6 +960,7 @@ const selectedSourceSummary = computed(() => {
 onMounted(() => {
   emit("request-persona");
   emit("refresh-memory-debug");
+  loadProfileFacts();
   window.addEventListener("resize", updateActiveSection);
   window.addEventListener("scroll", updateActiveSection, { passive: true });
   void nextTick(updateActiveSection);

@@ -10,3 +10,4 @@ export * from "./memory-store";
 
 // New memory system
 export * from "./memory";
+export * from "./sqlite-user-profile-store";

@@ -223,6 +223,27 @@ function registerIpc(): void {
     void exportMemory(event.sender);
   });
 
+  ipcMain.handle("profile:get-facts", async () => {
+    if (!runtimeService) {
+      return [];
+    }
+    return await runtimeService.getProfileFacts();
+  });
+
+  ipcMain.handle("profile:update-fact", async (_event, payload: { id: string; disabled?: boolean }) => {
+    if (!runtimeService) {
+      return { ok: false, message: "Runtime not available" };
+    }
+    return await runtimeService.updateProfileFact(payload.id, { disabled: payload.disabled });
+  });
+
+  ipcMain.handle("profile:create-fact", async (_event, payload: { category: "allergy" | "important-date" | "identity" | "preference" | "free-form"; key: string; value: string }) => {
+    if (!runtimeService) {
+      return { ok: false, message: "Runtime not available" };
+    }
+    return await runtimeService.createProfileFact(payload);
+  });
+
   ipcMain.on("screen-awareness:set-enabled", (_event, payload) => {
     void observationController?.setEnabled(payload.enabled);
   });

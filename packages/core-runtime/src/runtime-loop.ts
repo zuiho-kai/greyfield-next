@@ -239,7 +239,12 @@ export class GreyfieldRuntime {
         // erased must not resurface there.
         deletedEvidence = await this.loadDeletedMemoryEvidence();
         const recallResult = await recallV2(text, this.memoryManager, { deletedEvidence });
-        newMemoryContext = this.formatNewMemoryRecall(recallResult);
+        const profileContext = await this.formatUserProfile();
+        const memoryRecall = this.formatNewMemoryRecall(recallResult);
+
+        // Profile facts come first (always injected), then recall results
+        const parts = [profileContext, memoryRecall].filter(s => s.length > 0);
+        newMemoryContext = parts.join("\n\n");
       } catch (error) {
         console.error("New memory system recall failed:", error);
         // Fall back to old system
@@ -492,6 +497,66 @@ export class GreyfieldRuntime {
       "# 相关记忆",
       ...recallResult.memories.map((memory) => `- ${memory.text} (强度: ${(memory.strength * 100).toFixed(0)}%)`)
     ].join("\n");
+  }
+
+  private async formatUserProfile(): Promise<string> {
+    const profileStore = this.memoryManager?.getProfileStore();
+    if (!profileStore || !this.memoryManager) return "";
+
+    try {
+      const facts = await profileStore.getActiveBySession(
+        this.options.sessionStore.sessionId,
+        this.memoryManager.characterId
+      );
+
+      if (facts.length === 0) return "";
+
+      const lines = ["# 关于用户的已知事实", ""];
+
+      // Group by category
+      const byCategory: Record<string, typeof facts> = {};
+      for (const fact of facts) {
+        if (!byCategory[fact.category]) {
+          byCategory[fact.category] = [];
+        }
+        byCategory[fact.category].push(fact);
+      }
+
+      if (byCategory.allergy) {
+        lines.push("**过敏信息**:");
+        byCategory.allergy.forEach(f => lines.push(`- ${f.value}`));
+        lines.push("");
+      }
+
+      if (byCategory["important-date"]) {
+        lines.push("**重要日期**:");
+        byCategory["important-date"].forEach(f => lines.push(`- ${f.key}: ${f.value}`));
+        lines.push("");
+      }
+
+      if (byCategory.identity) {
+        lines.push("**身份属性**:");
+        byCategory.identity.forEach(f => lines.push(`- ${f.key}: ${f.value}`));
+        lines.push("");
+      }
+
+      if (byCategory.preference) {
+        lines.push("**偏好**:");
+        byCategory.preference.forEach(f => lines.push(`- ${f.key}: ${f.value}`));
+        lines.push("");
+      }
+
+      if (byCategory["free-form"]) {
+        lines.push("**其他事实**:");
+        byCategory["free-form"].forEach(f => lines.push(`- ${f.key}: ${f.value}`));
+        lines.push("");
+      }
+
+      return lines.join("\n").trim();
+    } catch (error) {
+      console.error("Failed to format user profile:", error);
+      return "";
+    }
   }
 
   private async loadSourceTurnsForAtomRecall(context: ReturnType<typeof buildMemoryAtomRecallContext>): Promise<SessionTurn[] | undefined> {

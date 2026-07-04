@@ -65,6 +65,26 @@ export interface DesktopMemoryCoreMemory {
   disabled: boolean;
 }
 
+export interface DesktopProfileFact {
+  id: string;
+  category: "allergy" | "important-date" | "identity" | "preference" | "free-form";
+  key: string;
+  value: string;
+  createdAt: string;
+  disabled: boolean;
+}
+
+export interface DesktopProfileFactUpdate {
+  id: string;
+  disabled?: boolean;
+}
+
+export interface DesktopProfileFactCreate {
+  category: "allergy" | "important-date" | "identity" | "preference" | "free-form";
+  key: string;
+  value: string;
+}
+
 export interface DesktopMemorySummaryUpdate {
   id: string;
   summary?: string;
