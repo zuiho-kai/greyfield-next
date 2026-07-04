@@ -1,26 +1,24 @@
 declare module "better-sqlite3" {
-  interface RunResult {
+  export interface RunResult {
     changes: number;
     lastInsertRowid: number | bigint;
   }
 
-  interface Statement {
+  export interface Statement {
     run(...params: unknown[]): RunResult;
     get(...params: unknown[]): unknown;
     all(...params: unknown[]): unknown[];
   }
 
-  namespace Database {
-    interface Database {
-      exec(sql: string): void;
-      prepare(sql: string): Statement;
-      loadExtension(path: string, entrypoint?: string): void;
-      close(): void;
-    }
+  export interface Database {
+    exec(sql: string): void;
+    prepare(sql: string): Statement;
+    loadExtension(path: string, entrypoint?: string): void;
+    close(): void;
   }
 
   interface DatabaseConstructor {
-    new (path: string): Database.Database;
+    new (path: string): Database;
   }
 
   const Database: DatabaseConstructor;

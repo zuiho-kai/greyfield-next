@@ -1,6 +1,6 @@
-import Database from "better-sqlite3";
+import Database, { type Database as BetterSqliteDatabase } from "better-sqlite3";
 import * as sqliteVss from "sqlite-vss";
-import type { CoreMemory } from "@greyfield/core-runtime";
+import { deterministicEmbedding, type CoreMemory } from "@greyfield/core-runtime";
 import { dirname } from "node:path";
 import { mkdirSync } from "node:fs";
 
@@ -13,7 +13,7 @@ export type CoreMemoryInsertInput = Partial<Pick<CoreMemory, "id" | "createdAt" 
   Partial<Pick<CoreMemory, "lastRecalledAt" | "triggers">>;
 
 export class SqliteCoreMemoryStore {
-  private db: Database.Database;
+  private db: BetterSqliteDatabase;
   private hasVectorExtension = false;
 
   constructor(dbPath: string, private readonly embeddingService?: CoreMemoryEmbeddingService) {
@@ -296,24 +296,4 @@ interface CoreMemoryRow {
   triggers: string | null;
   sources: string;
   disabled: number;
-}
-
-function deterministicEmbedding(text: string): number[] {
-  const dimensions = 1024;
-  const vector = new Array<number>(dimensions).fill(0);
-  const tokens = text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [text.toLowerCase()];
-  for (const token of tokens) {
-    vector[stableHash(token) % dimensions] += 1;
-  }
-  const norm = Math.sqrt(vector.reduce((total, value) => total + value * value, 0));
-  return norm === 0 ? vector : vector.map((value) => value / norm);
-}
-
-function stableHash(value: string): number {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
 }

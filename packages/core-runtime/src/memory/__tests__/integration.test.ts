@@ -82,6 +82,15 @@ describe("Memory System Integration", () => {
     expect(results[0].text).toContain("咖啡");
   });
 
+  it("should reject malformed batch embedding entries", async () => {
+    const service = new EmbeddingService({
+      apiKey: "test-key",
+      fetch: async () => new Response(JSON.stringify({ data: [{}] }), { status: 200 })
+    });
+
+    await expect(service.embedBatch(["hello"])).rejects.toThrow("Invalid embedding entry in batch response");
+  });
+
   it("should build topic index after batch size", async () => {
     // Add 5 turns to trigger batch indexing
     for (let i = 0; i < 5; i++) {

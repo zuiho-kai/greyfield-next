@@ -20,6 +20,7 @@ export class EmbeddingService {
   private readonly fetchImpl: typeof fetch;
   private readonly allowDeterministicFallback: boolean;
   private readonly timeoutMs: number;
+  private hasWarnedDeterministicFallback = false;
 
   constructor(options: EmbeddingOptions = {}) {
     this.model = options.model ?? defaultModel;
@@ -33,7 +34,7 @@ export class EmbeddingService {
   async embed(text: string): Promise<number[]> {
     if (!this.apiKey) {
       if (this.allowDeterministicFallback) {
-        return deterministicEmbedding(text);
+        return this.fallbackEmbedding(text);
       }
       throw new Error("Embedding API key is not configured.");
     }
@@ -56,7 +57,7 @@ export class EmbeddingService {
   async embedBatch(texts: string[]): Promise<number[][]> {
     if (!this.apiKey) {
       if (this.allowDeterministicFallback) {
-        return texts.map(deterministicEmbedding);
+        return texts.map((text) => this.fallbackEmbedding(text));
       }
       throw new Error("Embedding API key is not configured.");
     }
@@ -72,7 +73,20 @@ export class EmbeddingService {
     if (!Array.isArray(data.data)) {
       throw new Error("Invalid batch embedding response format");
     }
-    return data.data.map((item) => item.embedding);
+    return data.data.map((item) => {
+      if (!Array.isArray(item.embedding)) {
+        throw new Error("Invalid embedding entry in batch response");
+      }
+      return item.embedding;
+    });
+  }
+
+  private fallbackEmbedding(text: string): number[] {
+    if (!this.hasWarnedDeterministicFallback) {
+      console.warn("[Memory] No embedding API key configured; using deterministic fallback embedding.");
+      this.hasWarnedDeterministicFallback = true;
+    }
+    return deterministicEmbedding(text);
   }
 
   private async callEmbeddingsApi(input: string | string[]): Promise<Response> {
@@ -116,7 +130,7 @@ interface EmbeddingResponse {
   }>;
 }
 
-function deterministicEmbedding(text: string): number[] {
+export function deterministicEmbedding(text: string): number[] {
   const vector = new Array<number>(fallbackDimensions).fill(0);
   const tokens = text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [text.toLowerCase()];
   for (const token of tokens) {
@@ -127,7 +141,7 @@ function deterministicEmbedding(text: string): number[] {
   return norm === 0 ? vector : vector.map((value) => value / norm);
 }
 
-function stableHash(value: string): number {
+export function stableHash(value: string): number {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index);
