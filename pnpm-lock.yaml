@@ -38,12 +38,18 @@ importers:
       '@greyfield/stage-live2d':
         specifier: workspace:*
         version: link:../../packages/stage-live2d
+      better-sqlite3:
+        specifier: ^12.11.1
+        version: 12.11.1
       live2dcubismcore:
         specifier: 1.0.2
         version: 1.0.2
       lucide-vue-next:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.34(typescript@5.9.3))
+      sqlite-vss:
+        specifier: ^0.1.2
+        version: 0.1.2
       vue:
         specifier: ^3.5.24
         version: 3.5.34(typescript@5.9.3)
