@@ -85,6 +85,7 @@ import { useSpeechBubbleController } from "./use-speech-bubble-controller";
 import { useWindowRuntimeState } from "./use-window-runtime-state";
 import { usePetWindowController } from "./use-pet-window-controller";
 import { useAppShellActions } from "./use-app-shell-actions";
+import { submitChatDraft } from "./chat-submit";
 
 const queryModelPath = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("live2dModel") : null;
 const windowRole = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("window") : null;
@@ -165,12 +166,7 @@ function sendMessage(text: string): Promise<void> {
 }
 
 async function send(): Promise<void> {
-  const text = draft.value.trim();
-  if (!text) {
-    return;
-  }
-  await sendMessage(text);
-  draft.value = "";
+  await submitChatDraft(draft, sendMessage);
 }
 
 const shellActions = useAppShellActions({
