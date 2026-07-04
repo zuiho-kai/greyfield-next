@@ -3,6 +3,7 @@ import { embed } from "./embedding";
 import type { MemoryManager } from "./memory-manager";
 import { extractKeywords } from "./keywords";
 import type { SessionTurn } from "../session-store";
+import { filterDeletedSourceTurnIds, type DeletedMemoryEvidence } from "../memory-erasure";
 
 export interface RecallResult {
   text: string;
@@ -18,8 +19,16 @@ export interface RecallOptions {
   halfLifeDays?: number;
   /** Max raw turns quoted when drilling down from a topic to Layer 1. */
   drilldownMaxTurns?: number;
-  /** Total character budget for the Layer 1 drilldown excerpt. */
+  /**
+   * Strict total character budget for the Layer 1 drilldown excerpt. Turns
+   * that would exceed it are dropped entirely (0 disables the drilldown).
+   */
   drilldownCharBudget?: number;
+  /**
+   * Erased-memory evidence: turns listed here were deleted by the user and
+   * must never be quoted back into the prompt by the drilldown.
+   */
+  deletedEvidence?: DeletedMemoryEvidence[];
 }
 
 const DEFAULT_MIN_SIMILARITY = 0.4;
@@ -105,7 +114,8 @@ export async function recall(
       const topic = topics[0];
       const excerpt = await buildTopicDrilldown(topic, keywords, manager, {
         maxTurns: options?.drilldownMaxTurns ?? DEFAULT_DRILLDOWN_MAX_TURNS,
-        charBudget: options?.drilldownCharBudget ?? DEFAULT_DRILLDOWN_CHAR_BUDGET
+        charBudget: options?.drilldownCharBudget ?? DEFAULT_DRILLDOWN_CHAR_BUDGET,
+        deletedEvidence: options?.deletedEvidence ?? []
       });
       const text = excerpt.length > 0 ? excerpt : `相关话题：${topic.topic}`;
       return { text, memories: [] };
@@ -126,16 +136,19 @@ async function buildTopicDrilldown(
   topic: TopicIndex,
   keywords: string[],
   manager: MemoryManager,
-  limits: { maxTurns: number; charBudget: number }
+  limits: { maxTurns: number; charBudget: number; deletedEvidence: DeletedMemoryEvidence[] }
 ): Promise<string> {
   const lookup = manager.turnLookup;
-  if (!lookup || topic.turnIds.length === 0) {
+  // Erased turns must be dropped before the Layer 1 fetch: quoting them here
+  // would resurface content the user explicitly deleted.
+  const turnIds = filterDeletedSourceTurnIds(topic.turnIds, limits.deletedEvidence, topic.sessionId);
+  if (!lookup || turnIds.length === 0) {
     return '';
   }
 
   let turns: SessionTurn[];
   try {
-    turns = await lookup.getByIds(topic.turnIds);
+    turns = await lookup.getByIds(turnIds);
   } catch (error) {
     console.error('[Memory] Layer 1 drilldown failed:', error);
     return '';
@@ -171,7 +184,9 @@ async function buildTopicDrilldown(
       continue;
     }
     const line = `${turn.role === 'user' ? '用户' : 'AI'}: ${content}`;
-    if (used + line.length > limits.charBudget && lines.length > 0) {
+    // Strict budget: even the first line is dropped when it does not fit,
+    // so charBudget 0 reliably disables the excerpt.
+    if (used + line.length > limits.charBudget) {
       break;
     }
     lines.push(line);

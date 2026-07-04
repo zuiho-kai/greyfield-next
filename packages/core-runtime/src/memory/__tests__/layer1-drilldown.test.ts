@@ -9,6 +9,7 @@ import { MemoryManager } from "../memory-manager";
 import { recall } from "../recall";
 import type { SessionTurn } from "../../session-store";
 import type { TopicIndex } from "../types";
+import type { DeletedMemoryEvidence } from "../../memory-erasure";
 
 class FakeTopicStore {
   constructor(public topics: TopicIndex[] = []) {}
@@ -93,6 +94,18 @@ function makeManager(options: {
   );
 }
 
+function makeDeletedEvidence(turnIds: string[], sourceSessionId = "test-session"): DeletedMemoryEvidence {
+  return {
+    id: `deleted-${turnIds.join("-")}`,
+    threadId: "test-thread",
+    kind: "memory-atom",
+    memoryId: "memory-x",
+    sourceTurnIds: turnIds,
+    sourceSessionId,
+    deletedAt: "2026-06-02T00:00:00.000Z"
+  };
+}
+
 describe("Layer 1 drilldown", () => {
   it("quotes the raw turns behind a matched topic", async () => {
     const manager = makeManager({ turns: makeTurns() });
@@ -156,5 +169,52 @@ describe("Layer 1 drilldown", () => {
     expect(result.text).toContain("相关话题回顾");
     // Header + at most ~budget of quoted lines (each line truncated to 120 chars)
     expect(result.text.length).toBeLessThan(600);
+  });
+
+  it("never quotes turns the user has deleted", async () => {
+    const manager = makeManager({ turns: makeTurns() });
+
+    const result = await recall("我的猫咪生病那事后来怎么样了", manager, {
+      deletedEvidence: [makeDeletedEvidence(["turn-1"])]
+    });
+
+    expect(result.text).not.toContain("我家猫咪最近不吃饭");
+    expect(result.text).toContain("AI: 带它去医院看看吧");
+  });
+
+  it("falls back to the topic title when every source turn is deleted", async () => {
+    const manager = makeManager({ turns: makeTurns() });
+
+    const result = await recall("我的猫咪生病那事后来怎么样了", manager, {
+      deletedEvidence: [makeDeletedEvidence(["turn-1", "turn-2", "turn-3", "turn-4"])]
+    });
+
+    expect(result.text).toBe("相关话题：聊到猫咪生病去医院");
+  });
+
+  it("ignores deleted evidence scoped to a different session", async () => {
+    const manager = makeManager({ turns: makeTurns() });
+
+    const result = await recall("我的猫咪生病那事后来怎么样了", manager, {
+      deletedEvidence: [makeDeletedEvidence(["turn-1"], "other-session")]
+    });
+
+    expect(result.text).toContain("用户: 我家猫咪最近不吃饭");
+  });
+
+  it("treats the char budget as strict: a zero budget disables the excerpt", async () => {
+    const manager = makeManager({ turns: makeTurns() });
+
+    const result = await recall("我的猫咪生病那事后来怎么样了", manager, { drilldownCharBudget: 0 });
+
+    expect(result.text).toBe("相关话题：聊到猫咪生病去医院");
+  });
+
+  it("drops even the first turn when it does not fit the char budget", async () => {
+    const manager = makeManager({ turns: makeTurns() });
+
+    const result = await recall("我的猫咪生病那事后来怎么样了", manager, { drilldownCharBudget: 5 });
+
+    expect(result.text).toBe("相关话题：聊到猫咪生病去医院");
   });
 });
