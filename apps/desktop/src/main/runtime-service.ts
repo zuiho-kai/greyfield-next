@@ -99,12 +99,23 @@ export type MemoryLibraryAtom = MemoryAtom & {
   sourcePassages: MemorySourcePassage[];
 };
 
+export interface MemoryLibraryCoreMemory {
+  id: string;
+  text: string;
+  strength: number;
+  kind: "explicit" | "topic";
+  createdAt: string;
+  lastRecalledAt?: string;
+  disabled: boolean;
+}
+
 export interface MemoryLibrarySnapshot {
   threadId: string;
   sessionId: string;
   recentTurns: Awaited<ReturnType<SessionStore["getRecent"]>>;
   summarySegments: MemoryLibrarySummarySegment[];
   memoryAtoms: MemoryLibraryAtom[];
+  coreMemories: MemoryLibraryCoreMemory[];
   lastRecallContext?: RecallContext;
   updatedAt: string;
 }
@@ -115,6 +126,7 @@ export interface MemoryExportResult {
   recentTurns: Awaited<ReturnType<SessionStore["getRecent"]>>;
   summarySegments: MemoryLibrarySummarySegment[];
   memoryAtoms: MemoryLibraryAtom[];
+  coreMemories: MemoryLibraryCoreMemory[];
   lastRecallContext?: RecallContext;
   exportedAt: string;
 }
@@ -352,9 +364,10 @@ export class RuntimeService {
       deletedEvidence
     );
     const visibleMemoryAtoms = this.filterMemoryAtomsForDeletedEvidence((await this.memoryAtomStore?.list(this.threadId)) ?? [], deletedEvidence);
-    const [summarySegments, memoryAtoms] = await Promise.all([
+    const [summarySegments, memoryAtoms, coreMemories] = await Promise.all([
       this.resolveSummarySegmentSources(visibleSummarySegments, recentTurns, deletedEvidence),
-      this.resolveMemoryAtomSources(visibleMemoryAtoms, recentTurns, deletedEvidence)
+      this.resolveMemoryAtomSources(visibleMemoryAtoms, recentTurns, deletedEvidence),
+      this.loadCoreMemoriesForLibrary()
     ]);
     return this.redactMemoryLibrarySnapshot({
       threadId: this.threadId,
@@ -362,9 +375,65 @@ export class RuntimeService {
       recentTurns,
       summarySegments,
       memoryAtoms,
+      coreMemories,
       ...(this.lastRecallContext ? { lastRecallContext: this.lastRecallContext } : {}),
       updatedAt: new Date().toISOString()
     });
+  }
+
+  private async loadCoreMemoriesForLibrary(): Promise<MemoryLibraryCoreMemory[]> {
+    const store = this.memoryStoresV2?.coreStore;
+    if (!store) {
+      return [];
+    }
+    try {
+      const memories = await store.getBySession(this.sessionStore.sessionId, true);
+      return memories.map((memory) => ({
+        id: memory.id,
+        text: memory.text,
+        strength: memory.strength,
+        kind: memory.sources.topicIds?.length ? "topic" as const : "explicit" as const,
+        createdAt: memory.createdAt.toISOString(),
+        ...(memory.lastRecalledAt ? { lastRecalledAt: memory.lastRecalledAt.toISOString() } : {}),
+        disabled: memory.disabled
+      }));
+    } catch (error) {
+      console.error("[MemoryV2] Failed to load core memories for library:", error);
+      return [];
+    }
+  }
+
+  async toggleCoreMemory(id: string, disabled: boolean): Promise<MemoryControlResult> {
+    const store = this.memoryStoresV2?.coreStore;
+    if (!store) {
+      return { ok: false, message: "Core memory is not available in this runtime." };
+    }
+    const existing = await store.get(id);
+    if (!existing) {
+      return { ok: false, message: `Core memory ${id} was not found.` };
+    }
+    await store.update(id, { disabled });
+    return {
+      ok: true,
+      message: disabled ? "Core memory disabled. It will no longer be recalled." : "Core memory enabled.",
+      snapshot: await this.getMemoryLibrarySnapshot()
+    };
+  }
+
+  async deleteCoreMemory(id: string): Promise<MemoryControlResult> {
+    const store = this.memoryStoresV2?.coreStore;
+    if (!store) {
+      return { ok: false, message: "Core memory is not available in this runtime." };
+    }
+    const deleted = await store.delete(id);
+    if (!deleted) {
+      return { ok: false, message: `Core memory ${id} was not found.` };
+    }
+    return {
+      ok: true,
+      message: "Core memory deleted.",
+      snapshot: await this.getMemoryLibrarySnapshot()
+    };
   }
 
   async updateMemorySummary(id: string, patch: UpdateSummarySegment): Promise<MemoryControlResult> {
@@ -469,6 +538,7 @@ export class RuntimeService {
       recentTurns: snapshot.recentTurns,
       summarySegments: snapshot.summarySegments,
       memoryAtoms: snapshot.memoryAtoms,
+      coreMemories: snapshot.coreMemories,
       ...(snapshot.lastRecallContext ? { lastRecallContext: snapshot.lastRecallContext } : {}),
       exportedAt: new Date().toISOString()
     };
@@ -688,6 +758,7 @@ export class RuntimeService {
       recentTurns: [],
       summarySegments: [],
       memoryAtoms: snapshot.memoryAtoms.filter((snapshotAtom) => snapshotAtom.id === atom.id),
+      coreMemories: [],
       exportedAt: new Date().toISOString()
     };
   }
@@ -1026,6 +1097,7 @@ export class RuntimeService {
       recentTurns: snapshot.recentTurns.map((turn) => this.redactSessionTurn(turn)),
       summarySegments: snapshot.summarySegments.map((segment) => this.redactSummarySegment(segment)),
       memoryAtoms: snapshot.memoryAtoms.map((atom) => this.redactMemoryAtom(atom)),
+      coreMemories: snapshot.coreMemories.map((memory) => ({ ...memory, text: this.redactSecretText(memory.text) })),
       ...(snapshot.lastRecallContext ? { lastRecallContext: this.redactRecallContext(snapshot.lastRecallContext) } : {})
     };
   }

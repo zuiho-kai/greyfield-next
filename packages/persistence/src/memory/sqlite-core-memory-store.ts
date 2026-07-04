@@ -143,8 +143,10 @@ export class SqliteCoreMemoryStore {
     return row ? this.rowToMemory(row) : null;
   }
 
-  async getBySession(sessionId: string): Promise<CoreMemory[]> {
-    const rows = this.db.prepare(`SELECT * FROM core_memories WHERE sessionId = ? AND disabled = 0`).all(sessionId) as CoreMemoryRow[];
+  async getBySession(sessionId: string, includeDisabled = false): Promise<CoreMemory[]> {
+    const rows = includeDisabled
+      ? this.db.prepare(`SELECT * FROM core_memories WHERE sessionId = ? ORDER BY createdAt DESC`).all(sessionId) as CoreMemoryRow[]
+      : this.db.prepare(`SELECT * FROM core_memories WHERE sessionId = ? AND disabled = 0`).all(sessionId) as CoreMemoryRow[];
     return rows.map((row) => this.rowToMemory(row));
   }
 

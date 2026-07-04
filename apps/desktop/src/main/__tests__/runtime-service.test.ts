@@ -1382,12 +1382,15 @@ describe("RuntimeService", () => {
 
     const exported = await service.exportMemory();
     expect(exported.memoryAtoms.map((atom) => atom.id)).toEqual(["atom-current-fact", "atom-current-preference"]);
+    // Export must mirror the library snapshot's core memories (V2 disabled here → empty, not missing)
+    expect(exported.coreMemories).toEqual([]);
     expect(JSON.stringify(exported)).not.toContain(providerSecret);
 
     await expect(service.exportMemoryAtom("atom-current-preference")).resolves.toMatchObject({
       memoryAtoms: [expect.objectContaining({ id: "atom-current-preference" })],
       recentTurns: [],
-      summarySegments: []
+      summarySegments: [],
+      coreMemories: []
     });
     await expect(service.exportMemoryAtom("atom-other-role")).resolves.toBeNull();
 

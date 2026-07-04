@@ -17,6 +17,8 @@ export interface TopicIndex {
   sessionId: string;
   characterId: string;
   topic: string;
+  /** 2-3 sentence recap produced at index time, used by recall drilldown. */
+  summary?: string;
   keywords: string[];
   timeRange: [Date, Date];
   turnIds: string[];

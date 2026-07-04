@@ -785,6 +785,54 @@ export class DesktopRuntimeBridge {
     return this.getState();
   }
 
+  toggleCoreMemory(payload: { id: string; disabled: boolean }): DesktopRendererState {
+    this.state = {
+      ...this.state,
+      memoryDebug: {
+        ...this.state.memoryDebug,
+        actionStatus: "working",
+        actionMessage: payload.disabled ? "Disabling core memory..." : "Enabling core memory...",
+        exportText: ""
+      }
+    };
+    this.host?.send("memory:core-toggle", payload);
+    if (!this.host) {
+      this.state = {
+        ...this.state,
+        memoryDebug: {
+          ...this.state.memoryDebug,
+          actionStatus: "success",
+          actionMessage: "Core memory updated in preview."
+        }
+      };
+    }
+    return this.getState();
+  }
+
+  deleteCoreMemory(id: string): DesktopRendererState {
+    this.state = {
+      ...this.state,
+      memoryDebug: {
+        ...this.state.memoryDebug,
+        actionStatus: "working",
+        actionMessage: "Deleting core memory...",
+        exportText: ""
+      }
+    };
+    this.host?.send("memory:core-delete", { id });
+    if (!this.host) {
+      this.state = {
+        ...this.state,
+        memoryDebug: {
+          ...this.state.memoryDebug,
+          actionStatus: "success",
+          actionMessage: "Core memory deleted in preview."
+        }
+      };
+    }
+    return this.getState();
+  }
+
   clearCurrentRoleMemoryAtoms(): DesktopRendererState {
     this.state = {
       ...this.state,

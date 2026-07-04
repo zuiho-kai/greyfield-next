@@ -350,7 +350,52 @@
               </button>
             </article>
           </div>
-          <div v-if="memorySegments.length === 0 && memoryAtoms.length === 0" class="memory-library__empty">
+          <section
+            v-if="memoryCoreMemories.length > 0"
+            class="memory-library__core"
+            :aria-label="t('memory.core.title')"
+            data-harness="memory-core-section"
+          >
+            <h4>{{ t("memory.core.title") }}</h4>
+            <article
+              v-for="memory in memoryCoreMemories"
+              :key="`core:${memory.id}`"
+              class="memory-library__segment"
+              :class="{ 'memory-library__segment--disabled': memory.disabled }"
+              data-harness="memory-core-card"
+              :data-memory-id="memory.id"
+            >
+              <header class="memory-library__segment-header">
+                <div>
+                  <small>{{ memory.kind === "explicit" ? t("memory.core.kindExplicit") : t("memory.core.kindTopic") }}</small>
+                  <strong>{{ memory.text }}</strong>
+                </div>
+                <span>{{ memoryToggleStateLabel(memory.disabled) + (memory.disabled ? "" : ` · ${t("memory.core.strength", { value: Math.round(memory.strength * 100) })}`) }}</span>
+              </header>
+              <div class="memory-library__actions">
+                <button
+                  type="button"
+                  :aria-label="memoryToggleActionLabel(memory.disabled)"
+                  data-harness="memory-core-toggle"
+                  :data-memory-id="memory.id"
+                  @click="$emit('memory-core-toggle', { id: memory.id, disabled: !memory.disabled })"
+                >
+                  {{ memoryToggleActionLabel(memory.disabled) }}
+                </button>
+                <button
+                  type="button"
+                  class="memory-library__danger"
+                  :aria-label="t('memory.action.delete')"
+                  data-harness="memory-core-delete"
+                  :data-memory-id="memory.id"
+                  @click="$emit('memory-core-delete', { id: memory.id })"
+                >
+                  {{ t("memory.action.delete") }}
+                </button>
+              </div>
+            </article>
+          </section>
+          <div v-if="memorySegments.length === 0 && memoryAtoms.length === 0 && memoryCoreMemories.length === 0" class="memory-library__empty">
             {{ t("memory.empty") }}
           </div>
           <details class="memory-library__advanced" data-harness="memory-advanced-details">
@@ -526,6 +571,8 @@ const emit = defineEmits<{
   "memory-atom-delete": [payload: { id: string }];
   "memory-atom-clear-current-role": [];
   "memory-atom-export": [payload: { id: string }];
+  "memory-core-toggle": [payload: { id: string; disabled: boolean }];
+  "memory-core-delete": [payload: { id: string }];
   "memory-export": [];
   "open-chat": [];
 }>();
@@ -549,17 +596,22 @@ const memoryRawCount = computed(() => memorySnapshot.value?.recentTurns.length ?
 const memorySummaryCount = computed(() => memorySnapshot.value?.summarySegments.length ?? 0);
 const memorySegments = computed(() => memorySnapshot.value?.summarySegments ?? []);
 const memoryAtoms = computed(() => memorySnapshot.value?.memoryAtoms ?? []);
+const memoryCoreMemories = computed(() => memorySnapshot.value?.coreMemories ?? []);
 const memoryEnabledCount = computed(
   () =>
     memorySegments.value.filter((segment) => !segment.disabled).length +
-    memoryAtoms.value.filter((atom) => !atom.disabled).length
+    memoryAtoms.value.filter((atom) => !atom.disabled).length +
+    memoryCoreMemories.value.filter((memory) => !memory.disabled).length
 );
 const memoryDisabledCount = computed(
   () =>
     memorySegments.value.filter((segment) => segment.disabled).length +
-    memoryAtoms.value.filter((atom) => atom.disabled).length
+    memoryAtoms.value.filter((atom) => atom.disabled).length +
+    memoryCoreMemories.value.filter((memory) => memory.disabled).length
 );
-const memoryStoredCount = computed(() => memorySummaryCount.value + memoryAtoms.value.length);
+const memoryStoredCount = computed(
+  () => memorySummaryCount.value + memoryAtoms.value.length + memoryCoreMemories.value.length
+);
 const memoryLibraryStatusLabel = computed(() => {
   if (props.state.memoryDebug.status === "loading") {
     return t("status.refreshing");
