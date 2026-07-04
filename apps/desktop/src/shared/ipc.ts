@@ -89,6 +89,7 @@ export interface DesktopMemoryExport {
   recentTurns: SessionTurn[];
   summarySegments: DesktopMemorySummarySegment[];
   memoryAtoms: DesktopMemoryAtom[];
+  coreMemories?: DesktopMemoryCoreMemory[];
   lastRecallContext?: RecallContext;
   exportedAt: string;
 }

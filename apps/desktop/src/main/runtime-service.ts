@@ -126,6 +126,7 @@ export interface MemoryExportResult {
   recentTurns: Awaited<ReturnType<SessionStore["getRecent"]>>;
   summarySegments: MemoryLibrarySummarySegment[];
   memoryAtoms: MemoryLibraryAtom[];
+  coreMemories: MemoryLibraryCoreMemory[];
   lastRecallContext?: RecallContext;
   exportedAt: string;
 }
@@ -537,6 +538,7 @@ export class RuntimeService {
       recentTurns: snapshot.recentTurns,
       summarySegments: snapshot.summarySegments,
       memoryAtoms: snapshot.memoryAtoms,
+      coreMemories: snapshot.coreMemories,
       ...(snapshot.lastRecallContext ? { lastRecallContext: snapshot.lastRecallContext } : {}),
       exportedAt: new Date().toISOString()
     };
@@ -756,6 +758,7 @@ export class RuntimeService {
       recentTurns: [],
       summarySegments: [],
       memoryAtoms: snapshot.memoryAtoms.filter((snapshotAtom) => snapshotAtom.id === atom.id),
+      coreMemories: [],
       exportedAt: new Date().toISOString()
     };
   }

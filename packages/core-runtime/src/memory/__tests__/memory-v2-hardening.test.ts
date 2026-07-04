@@ -11,6 +11,7 @@
 import { describe, it, expect } from "vitest";
 import { MemoryManager } from "../memory-manager";
 import { recall, decayedStrength } from "../recall";
+import { deterministicEmbedding } from "../embedding";
 import type { ConversationTurn, CoreMemory, TopicIndex } from "../types";
 
 class FakeTopicStore {
@@ -67,8 +68,9 @@ class FakeCoreStore {
     return this.memories.find(m => m.id === id) ?? null;
   }
 
-  async getBySession(sessionId: string): Promise<CoreMemory[]> {
-    return this.memories.filter(m => m.sessionId === sessionId);
+  // Mirrors the real store: disabled rows are hidden unless explicitly asked for
+  async getBySession(sessionId: string, includeDisabled = false): Promise<CoreMemory[]> {
+    return this.memories.filter(m => m.sessionId === sessionId && (includeDisabled || !m.disabled));
   }
 
   async vectorSearch(): Promise<CoreMemory[]> {
@@ -348,11 +350,14 @@ describe("explicit memory extraction and dedup", () => {
     expect(coreStore.memories[0].disabled).toBe(false);
   });
 
-  it("reinforces a near-duplicate found by vector similarity", async () => {
+  it("reinforces a near-duplicate found by embedding similarity", async () => {
     const coreStore = new FakeCoreStore();
-    const existing = makeMemory({ id: "existing", text: "用户吃花生会过敏", strength: 0.6 });
-    coreStore.memories.push(existing);
-    coreStore.searchResults = [{ ...existing, similarity: 0.95 }];
+    coreStore.memories.push(makeMemory({
+      id: "existing",
+      text: "用户吃花生会过敏",
+      strength: 0.6,
+      embedding: deterministicEmbedding("用户对花生过敏")
+    }));
     const { manager } = makeManager({
       coreStore,
       batchSize: 50,
@@ -365,6 +370,55 @@ describe("explicit memory extraction and dedup", () => {
 
     expect(coreStore.memories).toHaveLength(1);
     expect(coreStore.memories[0].strength).toBe(1.0);
+  });
+
+  it("re-enables a disabled duplicate instead of creating an enabled twin", async () => {
+    const coreStore = new FakeCoreStore();
+    coreStore.memories.push(makeMemory({ id: "existing", text: "用户对花生过敏", strength: 0.5, disabled: true }));
+    const { manager } = makeManager({
+      coreStore,
+      batchSize: 50,
+      llmResponse: async function* () {
+        yield "用户对花生过敏";
+      }
+    });
+
+    await manager.onNewTurn(makeTurn(0, "记住我对花生过敏"));
+
+    expect(coreStore.memories).toHaveLength(1);
+    expect(coreStore.memories[0].disabled).toBe(false);
+    expect(coreStore.memories[0].strength).toBe(1.0);
+  });
+
+  it("never dedups against another session's memories", async () => {
+    const coreStore = new FakeCoreStore();
+    const otherSession = makeMemory({
+      id: "other-session-memory",
+      sessionId: "other-session",
+      text: "用户对花生过敏",
+      strength: 0.6,
+      embedding: deterministicEmbedding("用户对花生过敏")
+    });
+    coreStore.memories.push(otherSession);
+    // The old character-global vector path would have surfaced this hit and
+    // reinforced the other session's row instead of remembering anything here
+    coreStore.searchResults = [{ ...otherSession, similarity: 0.97 }];
+    const { manager } = makeManager({
+      coreStore,
+      batchSize: 50,
+      llmResponse: async function* () {
+        yield "用户对花生过敏";
+      }
+    });
+
+    await manager.onNewTurn(makeTurn(0, "记住我对花生过敏"));
+
+    // A fresh memory lands in the current session…
+    const current = coreStore.memories.filter(m => m.sessionId === "test-session");
+    expect(current).toHaveLength(1);
+    expect(current[0].strength).toBe(1.0);
+    // …and the other session's memory is left untouched
+    expect(coreStore.memories.find(m => m.id === "other-session-memory")?.strength).toBe(0.6);
   });
 });
 

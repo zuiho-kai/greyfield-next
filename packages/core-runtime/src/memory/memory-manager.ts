@@ -128,17 +128,29 @@ export class MemoryManager {
   private async findDuplicateCoreMemory(text: string, embedding: number[]): Promise<CoreMemory | null> {
     const normalized = normalizeMemoryText(text);
 
-    const existing = await this.coreStore.getBySession(this.sessionId);
+    // Dedup must see the whole session including disabled rows: repeating
+    // "记住X" after disabling X should re-enable that memory, not create an
+    // enabled twin next to it. The store's vectorSearch is unsuitable here —
+    // it is character-global and filters disabled rows, so it could
+    // reinforce another session's memory while this session's disabled twin
+    // stays invisible. Session memories are few, so scoring them in-process
+    // is cheap.
+    const existing = await this.coreStore.getBySession(this.sessionId, true);
     const exact = existing.find(m => normalizeMemoryText(m.text) === normalized);
     if (exact) {
       return exact;
     }
 
-    const [closest] = await this.coreStore.vectorSearch(embedding, 1);
-    if (closest?.similarity !== undefined && closest.similarity >= 0.92) {
-      return closest;
+    let closest: CoreMemory | null = null;
+    let bestSimilarity = 0;
+    for (const memory of existing) {
+      const similarity = cosineSimilarity(embedding, memory.embedding);
+      if (similarity > bestSimilarity) {
+        bestSimilarity = similarity;
+        closest = memory;
+      }
     }
-    return null;
+    return bestSimilarity >= EXPLICIT_DUPLICATE_SIMILARITY ? closest : null;
   }
 
   private async buildTopicIndex(): Promise<void> {
@@ -409,6 +421,26 @@ function normalizeKeyword(keyword: string): string {
 
 function normalizeMemoryText(text: string): string {
   return text.replace(/\s+/g, '').toLowerCase();
+}
+
+const EXPLICIT_DUPLICATE_SIMILARITY = 0.92;
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  // Mismatched dimensions (e.g. embedding provider changed) simply mean
+  // "not a duplicate" — dedup must never throw over it.
+  if (a.length === 0 || a.length !== b.length) {
+    return 0;
+  }
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dotProduct += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
+  return denominator === 0 ? 0 : dotProduct / denominator;
 }
 
 function getTurnText(turn: ConversationTurn): string {

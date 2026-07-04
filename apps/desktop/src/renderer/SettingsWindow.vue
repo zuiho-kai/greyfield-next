@@ -600,14 +600,18 @@ const memoryCoreMemories = computed(() => memorySnapshot.value?.coreMemories ?? 
 const memoryEnabledCount = computed(
   () =>
     memorySegments.value.filter((segment) => !segment.disabled).length +
-    memoryAtoms.value.filter((atom) => !atom.disabled).length
+    memoryAtoms.value.filter((atom) => !atom.disabled).length +
+    memoryCoreMemories.value.filter((memory) => !memory.disabled).length
 );
 const memoryDisabledCount = computed(
   () =>
     memorySegments.value.filter((segment) => segment.disabled).length +
-    memoryAtoms.value.filter((atom) => atom.disabled).length
+    memoryAtoms.value.filter((atom) => atom.disabled).length +
+    memoryCoreMemories.value.filter((memory) => memory.disabled).length
 );
-const memoryStoredCount = computed(() => memorySummaryCount.value + memoryAtoms.value.length);
+const memoryStoredCount = computed(
+  () => memorySummaryCount.value + memoryAtoms.value.length + memoryCoreMemories.value.length
+);
 const memoryLibraryStatusLabel = computed(() => {
   if (props.state.memoryDebug.status === "loading") {
     return t("status.refreshing");
