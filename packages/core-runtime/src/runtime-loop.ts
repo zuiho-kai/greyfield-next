@@ -107,7 +107,8 @@ export class GreyfieldRuntime {
           options.sessionStore.sessionId,
           options.persona.name || "default",
           {
-            batchSize: 50
+            batchSize: 50,
+            ...(hasSessionTurnLookup(options.sessionStore) ? { turnLookup: options.sessionStore } : {})
           }
         );
       }
@@ -233,7 +234,11 @@ export class GreyfieldRuntime {
     let newMemoryContext = "";
     if (this.memoryManager && this.options.useNewMemorySystem) {
       try {
-        const recallResult = await recallV2(text, this.memoryManager);
+        // Deleted-memory evidence must be known before V2 recall runs: the
+        // Layer 2 → Layer 1 drilldown quotes raw turns, and turns the user
+        // erased must not resurface there.
+        deletedEvidence = await this.loadDeletedMemoryEvidence();
+        const recallResult = await recallV2(text, this.memoryManager, { deletedEvidence });
         newMemoryContext = this.formatNewMemoryRecall(recallResult);
       } catch (error) {
         console.error("New memory system recall failed:", error);

@@ -1,5 +1,6 @@
 import type { ConversationTurn, TopicIndex, CoreMemory } from "./types";
 import type { LLMProvider } from "../providers";
+import type { SessionTurnLookup } from "../session-store";
 import type { JsonlTopicIndexStore } from "@greyfield/persistence";
 import type { SqliteCoreMemoryStore } from "@greyfield/persistence";
 import { embed } from "./embedding";
@@ -10,6 +11,8 @@ export class MemoryManager {
   private batchSize: number;
   private coreUpgradeThreshold: number;
   private closed = false;
+  /** Layer 1 access: lets recall drill down from a topic to the raw turns. */
+  public readonly turnLookup?: SessionTurnLookup;
 
   constructor(
     public readonly topicStore: JsonlTopicIndexStore,
@@ -20,10 +23,12 @@ export class MemoryManager {
     options?: {
       batchSize?: number;
       coreUpgradeThreshold?: number;
+      turnLookup?: SessionTurnLookup;
     }
   ) {
     this.batchSize = options?.batchSize || 50;
     this.coreUpgradeThreshold = options?.coreUpgradeThreshold ?? 3;
+    this.turnLookup = options?.turnLookup;
   }
 
   async onNewTurn(turn: ConversationTurn): Promise<void> {

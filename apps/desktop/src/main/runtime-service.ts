@@ -225,7 +225,11 @@ export class RuntimeService {
         lazyLlm,
         this.sessionStore.sessionId,
         characterId,
-        { batchSize: 50 }
+        {
+          batchSize: 50,
+          // Layer 1 drilldown: recall quotes raw turns when a topic hits
+          ...(hasSessionTurnLookup(this.sessionStore) ? { turnLookup: this.sessionStore } : {})
+        }
       );
       this.memoryV2CharacterId = characterId;
       this.useNewMemorySystem = true;
