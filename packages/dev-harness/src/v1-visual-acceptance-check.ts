@@ -64,6 +64,10 @@ type VisualAcceptanceSummaryInput = {
     memoryExtractionDisabledVisible: boolean;
     memoryExtractionManualCandidateControlsAbsent: boolean;
     settingsShellVisible: boolean;
+    settingsBodyClassApplied: boolean;
+    settingsWheelScrollsDown: boolean;
+    settingsWheelScrollsUp: boolean;
+    settingsScrollContainerBounded: boolean;
     noHorizontalOverflow: boolean;
     narrowNoHorizontalOverflow: boolean;
     windowControlsUsable: boolean;
@@ -224,6 +228,15 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     if (!settingsLayout.noHorizontalOverflow || !settingsLayout.windowControlsUsable) {
       throw new Error(`Settings window has horizontal overflow: ${JSON.stringify(settingsLayout)}`);
     }
+    const settingsScroll = await verifySettingsWheelScroll(settingsWindow);
+    if (
+      !settingsScroll.settingsBodyClassApplied ||
+      !settingsScroll.settingsScrollContainerBounded ||
+      !settingsScroll.settingsWheelScrollsDown ||
+      !settingsScroll.settingsWheelScrollsUp
+    ) {
+      throw new Error(`Settings window does not support ordinary wheel scrolling: ${JSON.stringify(settingsScroll)}`);
+    }
     if (!settingsLayout.navFirstGlanceOrderCorrect) {
       throw new Error(`Settings first-glance navigation order is wrong: ${JSON.stringify(settingsLayout)}`);
     }
@@ -297,6 +310,7 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
       },
       settings: {
         ...finalSettingsLayout,
+        ...settingsScroll,
         ...providerPreviewEvidence,
         ...avatarEvidence
       },
@@ -683,11 +697,98 @@ async function readSettingsLayout(page: Page): Promise<VisualAcceptanceSummaryIn
       })(),
       memoryExtractionManualCandidateControlsAbsent: !/\b(accept|reject|candidate|pending)\b/i.test(memoryText),
       settingsShellVisible: document.querySelector(".greyfield-shell") !== null,
+      settingsBodyClassApplied: document.body.classList.contains("settings-window"),
+      settingsWheelScrollsDown: false,
+      settingsWheelScrollsUp: false,
+      settingsScrollContainerBounded: false,
       viewportWidth: window.innerWidth,
       scrollWidth,
       noHorizontalOverflow: scrollWidth <= window.innerWidth,
       narrowNoHorizontalOverflow: scrollWidth <= window.innerWidth,
       windowControlsUsable
+    };
+  });
+}
+
+async function verifySettingsWheelScroll(
+  page: Page
+): Promise<
+  Pick<
+    VisualAcceptanceSummaryInput["settings"],
+    "settingsBodyClassApplied" | "settingsWheelScrollsDown" | "settingsWheelScrollsUp" | "settingsScrollContainerBounded"
+  > & {
+    beforeTop: number;
+    afterDownTop: number;
+    afterUpTop: number;
+    clientHeight: number;
+    scrollHeight: number;
+    overflowY: string;
+  }
+> {
+  await page.evaluate(() => {
+    const controlSurface = document.querySelector<HTMLElement>(".control-surface");
+    if (controlSurface) {
+      controlSurface.scrollTop = 0;
+    }
+  });
+  const before = await readSettingsScrollState(page);
+  const box = await page.locator(".control-surface").boundingBox();
+  if (!box) {
+    throw new Error("Settings control surface was not measurable");
+  }
+  await page.mouse.move(box.x + box.width / 2, box.y + Math.min(box.height / 2, 240));
+  await page.mouse.wheel(0, 560);
+  await page.waitForTimeout(150);
+  const afterDown = await readSettingsScrollState(page);
+  await page.mouse.wheel(0, -560);
+  await page.waitForTimeout(150);
+  const afterUp = await readSettingsScrollState(page);
+
+  return {
+    settingsBodyClassApplied: before.bodyClassApplied,
+    settingsScrollContainerBounded:
+      before.clientHeight > 0 &&
+      before.scrollHeight > before.clientHeight &&
+      before.clientHeight <= before.viewportHeight &&
+      before.overflowY !== "visible",
+    settingsWheelScrollsDown: afterDown.top > before.top,
+    settingsWheelScrollsUp: afterUp.top < afterDown.top,
+    beforeTop: before.top,
+    afterDownTop: afterDown.top,
+    afterUpTop: afterUp.top,
+    clientHeight: before.clientHeight,
+    scrollHeight: before.scrollHeight,
+    overflowY: before.overflowY
+  };
+}
+
+async function readSettingsScrollState(page: Page): Promise<{
+  bodyClassApplied: boolean;
+  top: number;
+  clientHeight: number;
+  scrollHeight: number;
+  viewportHeight: number;
+  overflowY: string;
+}> {
+  return page.evaluate(() => {
+    const controlSurface = document.querySelector<HTMLElement>(".control-surface");
+    if (!controlSurface) {
+      return {
+        bodyClassApplied: document.body.classList.contains("settings-window"),
+        top: 0,
+        clientHeight: 0,
+        scrollHeight: 0,
+        viewportHeight: window.innerHeight,
+        overflowY: "missing"
+      };
+    }
+    return {
+      bodyClassApplied: document.body.classList.contains("settings-window"),
+      top: controlSurface.scrollTop,
+      clientHeight: controlSurface.clientHeight,
+      scrollHeight: controlSurface.scrollHeight,
+      viewportHeight: window.innerHeight,
+      overflowY: getComputedStyle(controlSurface).overflowY
     };
   });
 }
