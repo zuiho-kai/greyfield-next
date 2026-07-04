@@ -9,6 +9,8 @@ import type { LLMProvider, MemoryStore, TTSProvider } from "../providers";
 import type { RuntimeOutputEvent } from "../events";
 import type { RuntimeImageAttachment } from "../vision-attachments";
 import { filterDistinctObservationFrames } from "../vision-attachments";
+import { MemoryManager } from "../memory/memory-manager";
+import type { TopicIndex } from "../memory/types";
 
 const memoryStore: MemoryStore = {
   load: async () => "- Prefers direct progress over vague planning.",
@@ -799,6 +801,88 @@ describe("GreyfieldRuntime", () => {
     expect(serializedMessages).not.toContain("window:set-hit-test");
     expect(serializedMessages).not.toMatch(/\bsk-[A-Za-z0-9_-]{8,}\b/u);
     expect(serializedMessages).toContain("[redacted-secret]");
+  });
+
+  it("keeps deleted source turns out of the V2 Layer 1 drilldown", async () => {
+    const sessionStore = new InMemorySessionStore("session-v2-erased");
+    const deletedTurn = await sessionStore.append({
+      role: "user",
+      content: "我家猫咪生病去医院花了三千块，心疼死了",
+      createdAt: "2026-06-28T00:00:00.000Z"
+    });
+    const keptTurn = await sessionStore.append({
+      role: "assistant",
+      content: "猫咪现在恢复得怎么样了",
+      createdAt: "2026-06-28T00:00:05.000Z"
+    });
+    const topic: TopicIndex = {
+      id: "topic-v2-erased",
+      sessionId: "session-v2-erased",
+      characterId: "Greyfield",
+      topic: "聊到猫咪生病去医院",
+      keywords: ["猫咪", "生病", "医院"],
+      timeRange: [new Date("2026-06-28"), new Date("2026-06-28")],
+      turnIds: [deletedTurn.id, keptTurn.id],
+      mentionCount: 2,
+      lastMentioned: new Date("2026-06-28")
+    };
+    const memoryManager = new MemoryManager(
+      {
+        append: async (input: Omit<TopicIndex, "id">) => ({ ...input, id: "topic-appended" }),
+        getBySession: async () => [topic],
+        search: async () => [topic],
+        update: async () => null
+      } as any,
+      {
+        insert: async () => undefined,
+        update: async () => undefined,
+        get: async () => null,
+        getBySession: async () => [],
+        vectorSearch: async () => [],
+        close: () => undefined
+      } as any,
+      { stream: async function* () { yield ""; } } as any,
+      "session-v2-erased",
+      "Greyfield",
+      { turnLookup: sessionStore }
+    );
+    let capturedMessages: Parameters<LLMProvider["stream"]>[0] = [];
+    const runtime = new GreyfieldRuntime({
+      llm: {
+        stream: async function* (messages) {
+          capturedMessages = messages;
+          yield "好的。";
+        }
+      },
+      tts: { synthesize: async (text) => new Uint8Array([text.length]) },
+      memoryStore: { load: async () => "", save: async () => undefined, consolidate: async () => "" },
+      deletedMemoryEvidenceStore: new TestDeletedMemoryEvidenceStore([
+        {
+          id: "deleted-evidence-v2-turn",
+          threadId: "thread-v2-erased",
+          kind: "memory-atom",
+          memoryId: "memory-v2-deleted",
+          sourceSessionId: "session-v2-erased",
+          sourceTurnIds: [deletedTurn.id],
+          deletedAt: "2026-06-29T00:00:00.000Z"
+        }
+      ]),
+      sessionStore,
+      persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} },
+      voice: "default",
+      threadId: "thread-v2-erased",
+      memoryManager,
+      useNewMemorySystem: true
+    });
+
+    await runtime.handle({ type: "text.input", text: "还记得猫咪生病的事吗" }, () => undefined);
+
+    const serializedMessages = JSON.stringify(capturedMessages);
+    // Drilldown still quotes the surviving turn of the topic…
+    expect(serializedMessages).toContain("相关话题回顾");
+    expect(serializedMessages).toContain("AI: 猫咪现在恢复得怎么样了");
+    // …but the erased source turn must never resurface anywhere in the prompt.
+    expect(serializedMessages).not.toContain("花了三千块");
   });
 
   it("fails closed before prompt assembly when deleted evidence cannot be loaded", async () => {
