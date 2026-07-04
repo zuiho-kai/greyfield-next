@@ -50,476 +50,56 @@
           </select>
         </label>
 
-        <div
-          id="settings-section-persona"
-          :ref="setSectionRef('persona')"
-          class="settings-section persona-editor"
+        <PersonaSettingsSection
+          :state="state"
+          :locale="locale"
           :aria-label="sectionAriaLabel('persona')"
-          data-settings-section="persona"
-          tabindex="-1"
-        >
-          <header class="settings-section__header">
-            <h2>{{ t("section.persona") }}</h2>
-            <span>{{ personaStatusLabel }}</span>
-          </header>
-          <div class="settings-fields">
-            <label>
-              <span>{{ t("field.name") }}</span>
-              <input
-                aria-label="Greyfield name"
-                :value="personaDraft.name"
-                :disabled="personaFieldsDisabled"
-                autocomplete="off"
-                spellcheck="false"
-                @input="setPersonaDraft('name', valueFrom($event))"
-              />
-            </label>
-            <label>
-              <span>{{ t("field.user") }}</span>
-              <input
-                aria-label="User address"
-                :value="personaDraft.userAddress"
-                :disabled="personaFieldsDisabled"
-                autocomplete="off"
-                spellcheck="false"
-                @input="setPersonaDraft('userAddress', valueFrom($event))"
-              />
-            </label>
-          </div>
-          <div class="settings-fields settings-fields--stacked">
-            <label>
-              <span>{{ t("field.personality") }}</span>
-              <textarea
-                aria-label="Personality"
-                :value="personaDraft.personality"
-                :disabled="personaFieldsDisabled"
-                rows="3"
-                spellcheck="false"
-                @input="setPersonaDraft('personality', valueFrom($event))"
-              />
-            </label>
-            <label>
-              <span>{{ t("field.speakingStyle") }}</span>
-              <textarea
-                aria-label="Speaking style"
-                :value="personaDraft.speakingStyle"
-                :disabled="personaFieldsDisabled"
-                rows="3"
-                spellcheck="false"
-                @input="setPersonaDraft('speakingStyle', valueFrom($event))"
-              />
-            </label>
-            <label>
-              <span>{{ t("field.boundaries") }}</span>
-              <textarea
-                aria-label="Boundaries"
-                :value="personaDraft.boundariesText"
-                :disabled="personaFieldsDisabled"
-                rows="4"
-                spellcheck="false"
-                @input="setPersonaDraft('boundariesText', valueFrom($event))"
-              />
-            </label>
-            <label>
-              <span>{{ t("field.greeting") }}</span>
-              <textarea
-                aria-label="Greeting"
-                :value="personaDraft.greeting"
-                :disabled="personaFieldsDisabled"
-                rows="2"
-                spellcheck="false"
-                @input="setPersonaDraft('greeting', valueFrom($event))"
-              />
-            </label>
-          </div>
-          <div class="settings-actions settings-actions--single">
-            <button
-              type="button"
-              class="persona-save-button"
-              :disabled="personaSaveDisabled"
-              @click="$emit('save-persona', personaDraft)"
-            >
-              {{ state.persona.status === "saving" ? t("button.saving") : t("button.savePersona") }}
-            </button>
-          </div>
-          <p
-            v-if="state.persona.message"
-            class="provider-test-result"
-            :class="`provider-test-result--${personaStatusTone}`"
-            role="status"
-          >
-            {{ state.persona.message }}
-          </p>
-        </div>
+          :section-ref="setSectionRef('persona')"
+          @update-persona-field="forwardPersonaFieldUpdate"
+          @save-persona="forwardPersonaSave"
+        />
 
-        <div
-          id="settings-section-provider"
-          :ref="setSectionRef('provider')"
-          class="settings-section"
+        <ProviderSettingsSection
+          :state="state"
+          :stage-status="stageStatus"
+          :locale="locale"
           :aria-label="sectionAriaLabel('provider')"
-          data-settings-section="provider"
-          tabindex="-1"
-        >
-          <header class="settings-section__header">
-            <h2>{{ t("section.provider") }}</h2>
-            <span>{{ providerStatus.label }}</span>
-          </header>
-          <div class="settings-fields">
-            <label>
-              <span>{{ t("field.provider") }}</span>
-              <select
-                :value="state.settings.providerLLM"
-                autocomplete="off"
-                @change="$emit('update-setting', 'providerLLM', valueFrom($event))"
-              >
-                <option value="fake">{{ t("provider.fakePreview") }}</option>
-                <option value="openai-compatible">{{ t("provider.openaiCompatible") }}</option>
-              </select>
-            </label>
-            <label>
-              <span>{{ t("field.baseUrl") }}</span>
-              <input
-                :value="state.settings.providerBaseUrl"
-                autocomplete="off"
-                spellcheck="false"
-                @input="$emit('update-setting', 'providerBaseUrl', valueFrom($event))"
-              />
-            </label>
-            <label>
-              <span>{{ t("field.apiKey") }}</span>
-              <input
-                :value="state.settings.providerApiKey"
-                autocomplete="off"
-                spellcheck="false"
-                :placeholder="state.settings.providerHasApiKey ? t('provider.savedApiKey') : ''"
-                type="password"
-                @input="$emit('update-setting', 'providerApiKey', valueFrom($event))"
-              />
-            </label>
-          </div>
-          <div class="task-model-slots" :aria-label="t('field.taskModelSlots')">
-            <header class="task-model-slots__header">
-              <strong>{{ t("field.taskModelSlots") }}</strong>
-              <span>{{ t("field.taskModelSlots.detail") }}</span>
-            </header>
-            <label
-              v-for="slot in taskModelSlots"
-              :key="slot.key"
-              class="task-model-slot"
-              :data-task-model-slot="slot.slot"
-            >
-              <span>{{ slot.label }}</span>
-              <input
-                :aria-label="slot.label"
-                :value="slot.value"
-                autocomplete="off"
-                spellcheck="false"
-                @input="$emit('update-setting', slot.key, valueFrom($event))"
-              />
-              <small>{{ slot.detail }}</small>
-            </label>
-          </div>
-          <div class="provider-status" :class="`provider-status--${providerStatus.tone}`" role="status">
-            <strong>{{ providerStatus.label }}</strong>
-            <span>{{ providerStatus.detail }}</span>
-          </div>
-          <div class="settings-actions settings-actions--single">
-            <button
-              type="button"
-              class="test-llm-button"
-              :class="`test-llm-button--${testLlmAction.tone}`"
-              :disabled="testLlmAction.disabled"
-              @click="$emit('test-llm')"
-            >
-              {{ testLlmAction.label }}
-            </button>
-          </div>
-          <p
-            v-if="testLlmAction.disableReason"
-            class="provider-test-result provider-test-result--error"
-            role="status"
-          >
-            {{ testLlmAction.disableReason }}
-          </p>
-          <p
-            v-else-if="providerTestStatus"
-            class="provider-test-result"
-            :class="`provider-test-result--${providerTestStatus.tone}`"
-            role="status"
-          >
-            <strong>{{ providerTestStatus.label }}</strong>
-            <span>{{ providerTestStatus.detail }}</span>
-          </p>
-        </div>
+          :section-ref="setSectionRef('provider')"
+          @update-setting="forwardSettingUpdate"
+          @test-llm="$emit('test-llm')"
+        />
 
-        <div
-          id="settings-section-voice"
-          :ref="setSectionRef('voice')"
-          class="settings-section"
+        <VoiceSettingsSection
+          :state="state"
+          :stage-status="stageStatus"
+          :locale="locale"
           :aria-label="sectionAriaLabel('voice')"
-          data-settings-section="voice"
-          tabindex="-1"
-        >
-          <header class="settings-section__header">
-            <h2>{{ t("section.voice") }}</h2>
-            <span>{{ state.settings.voiceSpeechEnabled ? t("status.on") : t("status.off") }}</span>
-          </header>
-          <div class="settings-fields">
-            <label>
-              <span>{{ t("field.asr") }}</span>
-              <select
-                :value="state.settings.providerASR"
-                autocomplete="off"
-                @change="$emit('update-setting', 'providerASR', valueFrom($event))"
-              >
-                <option value="fake">Fake microphone</option>
-                <option value="openai-compatible">{{ t("provider.openaiCompatible") }}</option>
-              </select>
-            </label>
-            <label>
-              <span>{{ t("field.asrModel") }}</span>
-              <input
-                :value="state.settings.providerASRModel"
-                autocomplete="off"
-                spellcheck="false"
-                @input="$emit('update-setting', 'providerASRModel', valueFrom($event))"
-              />
-            </label>
-            <label>
-              <span>{{ t("field.tts") }}</span>
-              <select
-                :value="state.settings.providerTTS"
-                autocomplete="off"
-                @change="$emit('update-setting', 'providerTTS', valueFrom($event))"
-              >
-                <option value="fake">{{ t("provider.localFallback") }}</option>
-                <option value="openai-compatible">{{ t("provider.openaiCompatible") }}</option>
-              </select>
-            </label>
-            <label>
-              <span>{{ t("field.ttsModel") }}</span>
-              <input
-                :value="state.settings.providerTTSModel"
-                autocomplete="off"
-                spellcheck="false"
-                @input="$emit('update-setting', 'providerTTSModel', valueFrom($event))"
-              />
-            </label>
-            <label>
-              <span>{{ t("field.voice") }}</span>
-              <input
-                :value="state.settings.voiceId"
-                autocomplete="off"
-                spellcheck="false"
-                @input="$emit('update-setting', 'voiceId', valueFrom($event))"
-              />
-            </label>
-            <label>
-              <span>{{ t("field.speak") }}</span>
-              <input
-                :checked="state.settings.voiceSpeechEnabled"
-                aria-label="Speak replies"
-                type="checkbox"
-                @change="$emit('update-boolean-setting', 'voiceSpeechEnabled', checkedFrom($event))"
-              />
-            </label>
-            <label>
-              <span>{{ t("field.volume") }}</span>
-              <input
-                :value="state.settings.voiceVolume"
-                aria-label="Voice volume"
-                type="number"
-                min="0"
-                max="1"
-                step="0.05"
-                @input="$emit('update-numeric-setting', 'voiceVolume', valueFrom($event))"
-              />
-            </label>
-            <label>
-              <span>{{ t("field.mic") }}</span>
-              <input
-                :value="state.settings.microphoneId"
-                autocomplete="off"
-                spellcheck="false"
-                @input="$emit('update-setting', 'microphoneId', valueFrom($event))"
-              />
-            </label>
-          </div>
-          <div class="settings-actions settings-actions--single">
-            <button
-              type="button"
-              class="test-voice-button"
-              :class="`test-voice-button--${testVoiceAction.tone}`"
-              :disabled="testVoiceAction.disabled"
-              @click="$emit('test-voice')"
-            >
-              {{ testVoiceAction.label }}
-            </button>
-          </div>
-          <p
-            v-if="testVoiceAction.disableReason"
-            class="provider-test-result provider-test-result--error"
-            role="status"
-          >
-            {{ testVoiceAction.disableReason }}
-          </p>
-          <p
-            v-else-if="voiceTestStatus"
-            class="provider-test-result"
-            :class="`provider-test-result--${voiceTestStatus.tone}`"
-            role="status"
-          >
-            <strong>{{ voiceTestStatus.label }}</strong>
-            <span>{{ voiceTestStatus.detail }}</span>
-          </p>
-        </div>
+          :section-ref="setSectionRef('voice')"
+          @update-setting="forwardSettingUpdate"
+          @update-numeric-setting="forwardNumericSettingUpdate"
+          @update-boolean-setting="forwardBooleanSettingUpdate"
+          @test-voice="$emit('test-voice')"
+        />
 
-        <div
-          id="settings-section-model"
-          :ref="setSectionRef('model')"
-          class="settings-section"
+        <ModelSettingsSection
+          :state="state"
+          :locale="locale"
           :aria-label="sectionAriaLabel('model')"
-          data-settings-section="model"
-          tabindex="-1"
-        >
-          <header class="settings-section__header">
-            <h2>{{ t("section.model") }}</h2>
-            <span>{{ currentBundledLive2DModel?.label ?? t("status.custom") }}</span>
-          </header>
-          <div class="settings-fields">
-            <label>
-              <span>{{ t("field.character") }}</span>
-              <input
-                :value="state.settings.characterFile"
-                autocomplete="off"
-                spellcheck="false"
-                @input="$emit('update-setting', 'characterFile', valueFrom($event))"
-              />
-            </label>
-            <label>
-              <span>{{ t("field.model") }}</span>
-              <select
-                aria-label="Live2D model"
-                :value="selectedLive2DModel"
-                autocomplete="off"
-                @change="selectLive2DModel(valueFrom($event))"
-              >
-                <option
-                  v-for="model in bundledLive2DModels"
-                  :key="model.id"
-                  :value="model.modelPath"
-                  :disabled="!model.supported"
-                >
-                  {{ model.label }}
-                </option>
-                <option v-if="isCustomLive2DModel" :value="customLive2DModelValue">{{ t("live2d.customModel") }}</option>
-              </select>
-            </label>
-          </div>
-          <p class="live2d-model-note" role="status">
-            {{ live2DModelNote }}
-          </p>
-          <div class="settings-actions">
-            <button type="button" @click="$emit('choose-model')">{{ t("button.importModel") }}</button>
-            <button type="button" @click="$emit('reset-transform')">{{ t("button.resetTransform") }}</button>
-          </div>
-        </div>
+          :section-ref="setSectionRef('model')"
+          @update-setting="forwardSettingUpdate"
+          @choose-model="$emit('choose-model')"
+          @reset-transform="$emit('reset-transform')"
+        />
 
-        <div
-          id="settings-section-window"
-          :ref="setSectionRef('window')"
-          class="settings-section"
+        <WindowSettingsSection
+          :state="state"
+          :locale="locale"
           :aria-label="sectionAriaLabel('window')"
-          data-settings-section="window"
-          tabindex="-1"
-        >
-          <header class="settings-section__header">
-            <h2>{{ t("section.window") }}</h2>
-            <span>{{ t("status.proactivity", { level: state.settings.proactivityLevel }) }}</span>
-          </header>
-          <div class="settings-fields settings-fields--compact">
-            <label>
-              <span>{{ t("field.scale") }}</span>
-              <input
-                :value="state.settings.modelScale"
-                aria-label="Scale"
-                type="number"
-                min="0.2"
-                max="3"
-                step="0.05"
-                @input="$emit('update-numeric-setting', 'modelScale', valueFrom($event))"
-              />
-            </label>
-            <label>
-              <span>X</span>
-              <input
-                :value="state.settings.modelX"
-                aria-label="Model X"
-                type="number"
-                step="1"
-                @input="$emit('update-numeric-setting', 'modelX', valueFrom($event))"
-              />
-            </label>
-            <label>
-              <span>Y</span>
-              <input
-                :value="state.settings.modelY"
-                aria-label="Model Y"
-                type="number"
-                step="1"
-                @input="$emit('update-numeric-setting', 'modelY', valueFrom($event))"
-              />
-            </label>
-            <label>
-              <span>{{ t("field.bubble") }}</span>
-              <input
-                :checked="state.settings.speechBubbleEnabled"
-                aria-label="Speech Bubble"
-                type="checkbox"
-                @change="$emit('update-boolean-setting', 'speechBubbleEnabled', checkedFrom($event))"
-              />
-            </label>
-            <label>
-              <span>{{ t("field.rememberedMoments") }}</span>
-              <input
-                :checked="state.settings.proactiveMemoryEnabled"
-                aria-label="Remembered moments"
-                type="checkbox"
-                @change="$emit('update-boolean-setting', 'proactiveMemoryEnabled', checkedFrom($event))"
-              />
-            </label>
-          </div>
-          <label class="settings-slider-row">
-            <span>{{ t("field.windowLayerMode") }}</span>
-            <div class="settings-slider-row__control">
-              <select
-                :value="state.settings.windowLayerMode"
-                :aria-label="t('field.windowLayerMode')"
-                @change="$emit('update-setting', 'windowLayerMode', valueFrom($event))"
-              >
-                <option value="follow-click">{{ t("windowLayerMode.followClick") }}</option>
-                <option value="controls-front">{{ t("windowLayerMode.controlsFront") }}</option>
-                <option value="pet-front">{{ t("windowLayerMode.petFront") }}</option>
-              </select>
-            </div>
-          </label>
-          <label class="settings-slider-row">
-            <span>{{ t("field.proactivity") }}</span>
-            <div class="settings-slider-row__control">
-              <input
-                :value="state.settings.proactivityLevel"
-                :aria-label="t('field.proactivity')"
-                data-testid="proactivity-level-slider"
-                type="range"
-                min="0"
-                max="100"
-                step="1"
-                @input="$emit('update-numeric-setting', 'proactivityLevel', valueFrom($event))"
-              />
-              <output>{{ state.settings.proactivityLevel }}</output>
-            </div>
-          </label>
-        </div>
+          :section-ref="setSectionRef('window')"
+          @update-setting="forwardSettingUpdate"
+          @update-numeric-setting="forwardNumericSettingUpdate"
+          @update-boolean-setting="forwardBooleanSettingUpdate"
+        />
 
         <div
           id="settings-section-memory"
@@ -889,12 +469,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { DesktopMemoryAtom, DesktopMemorySourcePassage, DesktopMemorySummarySegment } from "../shared/ipc";
 import type { DesktopPersonaFormState, DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
-import {
-  bundledLive2DModels,
-  customLive2DModelValue,
-  findBundledLive2DModel
-} from "./bundled-live2d-models";
 import Live2DStageView from "./Live2DStageView.vue";
+import ModelSettingsSection from "./ModelSettingsSection.vue";
 import {
   describeMemorySourceCount,
   describeRecallReason,
@@ -905,11 +481,14 @@ import {
   formatMemoryTimestamp,
   isSourcePassageShortened
 } from "./memory-source-display";
-import { describeProviderStatus } from "./settings-provider-status";
+import PersonaSettingsSection from "./PersonaSettingsSection.vue";
+import ProviderSettingsSection from "./ProviderSettingsSection.vue";
+import { checkedFrom, valueFrom } from "./settings-dom-events";
 import { describeMemoryExtractionStatus } from "./settings-memory-extraction-status";
-import { describeProviderTestStatus, describeTestLlmAction, describeTestVoiceAction } from "./settings-test-llm";
 import { normalizeSettingsLocale, settingsLocales, settingsT, type SettingsI18nKey } from "./settings-i18n";
 import { resolveActiveSettingsSection, settingsNavSectionIds, type SettingsSectionId } from "./settings-nav";
+import VoiceSettingsSection from "./VoiceSettingsSection.vue";
+import WindowSettingsSection from "./WindowSettingsSection.vue";
 
 type PersonaTextField = Exclude<keyof DesktopPersonaFormState, "expressionMap">;
 
@@ -964,111 +543,6 @@ const localizedStageStatus = computed(() => {
 const settingsNavItems = computed<Array<{ id: SettingsSectionId; label: string }>>(() =>
   settingsNavSectionIds.map((id) => ({ id, label: t(`nav.${id}` as SettingsI18nKey) }))
 );
-const providerStatus = computed(() => describeProviderStatus(props.state, locale.value));
-const taskModelSlots = computed<
-  Array<{
-    slot: string;
-    key: keyof DesktopSettingsState;
-    label: string;
-    detail: string;
-    value: string;
-  }>
->(() => [
-  {
-    slot: "chat",
-    key: "providerModel",
-    label: t("taskModel.chat.label"),
-    detail: t("taskModel.chat.detail"),
-    value: props.state.settings.providerModel
-  },
-  {
-    slot: "planner",
-    key: "providerPlannerModel",
-    label: t("taskModel.planner.label"),
-    detail: t("taskModel.planner.detail"),
-    value: props.state.settings.providerPlannerModel
-  },
-  {
-    slot: "utility",
-    key: "providerUtilityModel",
-    label: t("taskModel.utility.label"),
-    detail: t("taskModel.utility.detail"),
-    value: props.state.settings.providerUtilityModel
-  },
-  {
-    slot: "memory",
-    key: "providerMemoryModel",
-    label: t("taskModel.memory.label"),
-    detail: t("taskModel.memory.detail"),
-    value: props.state.settings.providerMemoryModel
-  },
-  {
-    slot: "vision",
-    key: "providerVisionModel",
-    label: t("taskModel.vision.label"),
-    detail: t("taskModel.vision.detail"),
-    value: props.state.settings.providerVisionModel
-  },
-  {
-    slot: "multimodal",
-    key: "providerMultimodalModel",
-    label: t("taskModel.multimodal.label"),
-    detail: t("taskModel.multimodal.detail"),
-    value: props.state.settings.providerMultimodalModel
-  },
-  {
-    slot: "voiceAsr",
-    key: "providerASRModel",
-    label: t("taskModel.voiceAsr.label"),
-    detail: t("taskModel.voiceAsr.detail"),
-    value: props.state.settings.providerASRModel
-  },
-  {
-    slot: "voiceTts",
-    key: "providerTTSModel",
-    label: t("taskModel.voiceTts.label"),
-    detail: t("taskModel.voiceTts.detail"),
-    value: props.state.settings.providerTTSModel
-  }
-]);
-const testLlmAction = computed(() =>
-  describeTestLlmAction(
-    props.stageStatus,
-    props.state.providerTest.status,
-    providerStatus.value.tone === "blocked" ? providerStatus.value.detail : "",
-    locale.value
-  )
-);
-const providerTestStatus = computed(() => describeProviderTestStatus(props.state.providerTest, locale.value));
-const testVoiceAction = computed(() =>
-  describeTestVoiceAction(
-    props.stageStatus,
-    props.state.voiceTest.status,
-    describeVoiceBlockedReason(props.state),
-    locale.value
-  )
-);
-const voiceTestStatus = computed(() => describeVoiceTestStatus(props.state.voiceTest));
-const personaStatusLabel = computed(() => {
-  if (props.state.persona.status === "loading") {
-    return t("status.loading");
-  }
-  if (props.state.persona.status === "saving") {
-    return t("status.saving");
-  }
-  if (props.state.persona.status === "saved") {
-    return t("status.saved");
-  }
-  if (props.state.persona.status === "error") {
-    return t("status.needsFix");
-  }
-  return t("status.ready");
-});
-const personaStatusTone = computed(() => (props.state.persona.status === "error" ? "error" : "success"));
-const personaSaveDisabled = computed(
-  () => props.state.persona.status === "loading" || props.state.persona.status === "saving"
-);
-const personaFieldsDisabled = computed(() => props.state.persona.status === "loading" || props.state.persona.status === "saving");
 const memorySnapshot = computed(() => props.state.memoryDebug.snapshot);
 const memoryExtractionStatus = computed(() => describeMemoryExtractionStatus(props.state, locale.value));
 const memoryRawCount = computed(() => memorySnapshot.value?.recentTurns.length ?? 0);
@@ -1172,8 +646,6 @@ const memoryActionTone = computed(() => {
   }
   return "success";
 });
-const personaDraft = ref<DesktopPersonaFormState>({ ...props.state.persona.form });
-const personaDraftDirty = ref(false);
 const memorySummaryDrafts = ref<Record<string, string>>({});
 const memoryCueDrafts = ref<Record<string, string>>({});
 const memoryAtomDrafts = ref<Record<string, string>>({});
@@ -1232,21 +704,6 @@ const selectedSourceSummary = computed(() => {
     sourceIds
   }, locale.value);
 });
-const currentBundledLive2DModel = computed(() => findBundledLive2DModel(props.state.settings.modelPath));
-const isCustomLive2DModel = computed(() => currentBundledLive2DModel.value === undefined);
-const selectedLive2DModel = computed(() =>
-  currentBundledLive2DModel.value?.modelPath ?? customLive2DModelValue
-);
-const live2DModelNote = computed(() => {
-  if (currentBundledLive2DModel.value?.note) {
-    return currentBundledLive2DModel.value.note;
-  }
-  if (currentBundledLive2DModel.value) {
-    return t("live2d.usingBundled", { label: currentBundledLive2DModel.value.label });
-  }
-  return t("live2d.usingCustom", { path: props.state.settings.modelPath });
-});
-
 onMounted(() => {
   emit("request-persona");
   emit("refresh-memory-debug");
@@ -1259,27 +716,6 @@ onBeforeUnmount(() => {
   window.removeEventListener("resize", updateActiveSection);
   window.removeEventListener("scroll", updateActiveSection);
 });
-
-watch(
-  () => props.state.persona.form,
-  (form) => {
-    if (props.state.persona.status === "saved") {
-      personaDraftDirty.value = false;
-    }
-    if (props.state.persona.status !== "saving" && (!personaDraftDirty.value || props.state.persona.status === "saved")) {
-      personaDraft.value = { ...form, expressionMap: { ...form.expressionMap } };
-    }
-  },
-  { immediate: true }
-);
-
-watch(
-  () => props.state.persona.path,
-  () => {
-    personaDraftDirty.value = false;
-    personaDraft.value = { ...props.state.persona.form, expressionMap: { ...props.state.persona.form.expressionMap } };
-  }
-);
 
 watch(
   memorySegments,
@@ -1317,18 +753,6 @@ watch(
   },
   { immediate: true }
 );
-
-function valueFrom(event: Event): string {
-  return event.target instanceof HTMLInputElement ||
-    event.target instanceof HTMLSelectElement ||
-    event.target instanceof HTMLTextAreaElement
-    ? event.target.value
-    : "";
-}
-
-function checkedFrom(event: Event): boolean {
-  return event.target instanceof HTMLInputElement ? event.target.checked : false;
-}
 
 function memoryToggleActionLabel(disabled: boolean): string {
   return disabled ? t("memory.action.enable") : t("memory.action.disable");
@@ -1374,24 +798,30 @@ function updateActiveSection(): void {
   activeSectionId.value = nextActiveSection;
 }
 
-function selectLive2DModel(modelPath: string): void {
-  if (!modelPath || modelPath === customLive2DModelValue) {
-    return;
-  }
-  const model = findBundledLive2DModel(modelPath);
-  if (!model?.supported) {
-    return;
-  }
-  emit("update-setting", "modelPath", model.modelPath);
+function forwardSettingUpdate(key: keyof DesktopSettingsState, value: string): void {
+  emit("update-setting", key, value);
 }
 
-function setPersonaDraft(key: PersonaTextField, value: string): void {
-  personaDraftDirty.value = true;
-  personaDraft.value = {
-    ...personaDraft.value,
-    [key]: value
-  };
+function forwardNumericSettingUpdate(
+  key: "modelScale" | "modelX" | "modelY" | "voiceVolume" | "proactivityLevel",
+  value: string
+): void {
+  emit("update-numeric-setting", key, value);
+}
+
+function forwardBooleanSettingUpdate(
+  key: "speechBubbleEnabled" | "voiceSpeechEnabled" | "proactiveMemoryEnabled" | "llmAtomExtractionEnabled",
+  value: boolean
+): void {
+  emit("update-boolean-setting", key, value);
+}
+
+function forwardPersonaFieldUpdate(key: PersonaTextField, value: string): void {
   emit("update-persona-field", key, value);
+}
+
+function forwardPersonaSave(form: DesktopPersonaFormState): void {
+  emit("save-persona", form);
 }
 
 function setMemorySummaryDraft(id: string, event: Event): void {
@@ -1561,41 +991,5 @@ function memoryToggleStateLabel(disabled: boolean): string {
 
 function parseMemoryCues(text: string): string[] {
   return [...new Set(text.split(/[,，\n]/).map((cue) => cue.trim()).filter(Boolean))];
-}
-
-function describeVoiceBlockedReason(state: DesktopRendererState): string {
-  if (state.settings.providerTTS !== "openai-compatible") {
-    return "";
-  }
-  if (state.settings.providerBaseUrl.trim().length === 0) {
-    return t("voice.blocked.baseUrl");
-  }
-  if (!state.settings.providerHasApiKey && state.settings.providerApiKey.trim().length === 0) {
-    return t("voice.blocked.apiKey");
-  }
-  if (state.settings.providerTTSModel.trim().length === 0) {
-    return t("voice.blocked.ttsModel");
-  }
-  if (state.settings.voiceId.trim().length === 0) {
-    return t("voice.blocked.voice");
-  }
-  return "";
-}
-
-function describeVoiceTestStatus(voiceTest: DesktopRendererState["voiceTest"]): {
-  tone: "testing" | "success" | "error";
-  label: string;
-  detail: string;
-} | null {
-  if (voiceTest.status === "idle" || voiceTest.message.trim().length === 0) {
-    return null;
-  }
-  if (voiceTest.status === "testing") {
-    return { tone: "testing", label: t("voice.status.testing"), detail: t("voice.status.testingDetail") };
-  }
-  if (voiceTest.status === "success") {
-    return { tone: "success", label: t("test.voice.succeeded"), detail: voiceTest.message };
-  }
-  return { tone: "error", label: t("test.voice.failed"), detail: voiceTest.message };
 }
 </script>
