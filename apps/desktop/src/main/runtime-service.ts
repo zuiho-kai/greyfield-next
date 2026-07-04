@@ -2,9 +2,11 @@ import {
   GreyfieldRuntime,
   InMemorySessionStore,
   LLMBackedMemoryAtomExtractor,
+  MemoryManager,
   buildProactiveMemoryDisplayMessage,
   buildProactiveMemoryPolicyForLevel,
   type CharacterPersona,
+  type LLMProvider,
   type MemoryAtom,
   type MemoryAtomExtractionMode,
   type MemoryAtomExtractionStatusReason,
@@ -157,6 +159,7 @@ export class RuntimeService {
 
   // New memory system (V2)
   private memoryStoresV2?: MemoryStoresV2;
+  private memoryManagerV2?: MemoryManager;
   private useNewMemorySystem: boolean;
 
   constructor(config: GreyfieldConfig, private readonly options: RuntimeServiceOptions = {}) {
@@ -174,10 +177,42 @@ export class RuntimeService {
       try {
         const characterId = deriveCharacterId(this.config);
         this.memoryStoresV2 = initializeMemoryStoresV2(characterId);
+        // One long-lived manager for the whole service: a GreyfieldRuntime
+        // is created per interaction, so the manager (and its unindexed-turn
+        // buffer) must live here or batch indexing never accumulates.
+        // The LLM wrapper delegates lazily so updateConfig picks up new
+        // provider settings without rebuilding the manager.
+        const lazyLlm: LLMProvider = {
+          stream: (messages, tools, streamOptions) =>
+            this.providerFactory.createChatLLMProvider().stream(messages, tools, streamOptions)
+        };
+        this.memoryManagerV2 = new MemoryManager(
+          this.memoryStoresV2.topicStore,
+          this.memoryStoresV2.coreStore,
+          lazyLlm,
+          this.sessionStore.sessionId,
+          characterId,
+          { batchSize: 50 }
+        );
         console.log("[MemoryV2] Initialized new memory system for character:", characterId);
       } catch (error) {
         console.error("[MemoryV2] Failed to initialize new memory system:", error);
         this.useNewMemorySystem = false;
+        this.memoryStoresV2 = undefined;
+        this.memoryManagerV2 = undefined;
+      }
+    }
+  }
+
+  /**
+   * Flush unindexed turns and close the memory stores. Called on app quit.
+   */
+  async shutdown(): Promise<void> {
+    if (this.memoryManagerV2) {
+      try {
+        await this.memoryManagerV2.close();
+      } catch (error) {
+        console.error("[MemoryV2] Failed to shut down memory system:", error);
       }
     }
   }
@@ -687,6 +722,7 @@ export class RuntimeService {
 
       // New memory system (V2)
       useNewMemorySystem: this.useNewMemorySystem,
+      memoryManager: this.memoryManagerV2,
       topicIndexStore: this.memoryStoresV2?.topicStore,
       coreMemoryStore: this.memoryStoresV2?.coreStore,
 

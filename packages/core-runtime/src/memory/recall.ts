@@ -1,11 +1,26 @@
 import type { CoreMemory } from "./types";
 import { embed } from "./embedding";
 import type { MemoryManager } from "./memory-manager";
+import { extractKeywords } from "./keywords";
 
 export interface RecallResult {
   text: string;
   memories: CoreMemory[];
 }
+
+export interface RecallOptions {
+  /** Minimum cosine similarity for a vector hit to count as relevant. */
+  minSimilarity?: number;
+  /** Effective strength below this is treated as forgotten. */
+  strengthFloor?: number;
+  /** Half-life (in days) for time-based strength decay. */
+  halfLifeDays?: number;
+}
+
+const DEFAULT_MIN_SIMILARITY = 0.4;
+const DEFAULT_STRENGTH_FLOOR = 0.3;
+const DEFAULT_HALF_LIFE_DAYS = 30;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
  * Recall relevant memories for a user message
@@ -16,29 +31,51 @@ export interface RecallResult {
  */
 export async function recall(
   userMessage: string,
-  manager: MemoryManager
+  manager: MemoryManager,
+  options?: RecallOptions
 ): Promise<RecallResult> {
+  const minSimilarity = options?.minSimilarity ?? DEFAULT_MIN_SIMILARITY;
+  const strengthFloor = options?.strengthFloor ?? DEFAULT_STRENGTH_FLOOR;
+  const halfLifeDays = options?.halfLifeDays ?? DEFAULT_HALF_LIFE_DAYS;
+  const now = new Date();
+
   // Step 1: Query core memories with vector search
   try {
     const embedding = await embed(userMessage);
     const coreMemories = await manager.coreStore.vectorSearch(embedding, 10);
 
-    // Filter valid memories (not disabled, sufficient strength)
-    const validCore = coreMemories.filter(m =>
-      !m.disabled && m.strength > 0.3
-    );
+    // Keep only memories that are enabled, actually similar to the query,
+    // and whose time-decayed strength is still above the floor.
+    const validCore = coreMemories
+      .map((memory) => ({
+        memory,
+        effectiveStrength: decayedStrength(memory, now, halfLifeDays)
+      }))
+      .filter(({ memory, effectiveStrength }) =>
+        !memory.disabled &&
+        (memory.similarity === undefined || memory.similarity >= minSimilarity) &&
+        effectiveStrength > strengthFloor
+      );
 
     if (validCore.length > 0) {
-      // Update memory strength (reinforce recalled memories)
-      await Promise.all(validCore.map((mem) =>
-        manager.coreStore.update(mem.id, {
-          strength: Math.min(1.0, mem.strength + 0.1),
-          lastRecalledAt: new Date()
+      // Reinforce only the memories that were actually relevant. Writing
+      // back the decayed value applies forgetting lazily on recall.
+      await Promise.all(validCore.map(({ memory, effectiveStrength }) =>
+        manager.coreStore.update(memory.id, {
+          strength: Math.min(1.0, effectiveStrength + 0.1),
+          lastRecalledAt: now
         })
       ));
 
-      const text = formatMemories(validCore);
-      return { text, memories: validCore };
+      const ranked = validCore
+        .sort((a, b) => b.effectiveStrength - a.effectiveStrength)
+        .map(({ memory, effectiveStrength }) => ({
+          ...memory,
+          strength: effectiveStrength
+        }));
+
+      const text = formatMemories(ranked);
+      return { text, memories: ranked };
     }
   } catch (error) {
     console.error('[Memory] Core memory recall failed:', error);
@@ -63,30 +100,17 @@ export async function recall(
 }
 
 /**
- * Extract keywords from user message for topic search
+ * Strength with exponential time decay applied, measured from the last
+ * recall (or creation when never recalled): strength * 0.5^(age / halfLife)
  */
-function extractKeywords(text: string): string[] {
-  const normalized = text.toLowerCase();
-  const words = normalized.match(/[\p{L}\p{N}]+/gu) ?? [];
-  const hanChunks = normalized.match(/\p{Script=Han}+/gu) ?? [];
-  const hanNgrams = hanChunks.flatMap((chunk) => buildHanNgrams(chunk));
-
-  // Remove common stop words (simplified)
-  const stopWords = new Set(['的', '了', '是', '在', '有', '我', '你', '他', '她', '它']);
-  const keywords = [...words, ...hanNgrams].filter(w => w.length > 1 && !stopWords.has(w));
-
-  // Return unique keywords
-  return [...new Set(keywords)];
-}
-
-function buildHanNgrams(text: string): string[] {
-  const result: string[] = [];
-  for (let size = 2; size <= Math.min(4, text.length); size += 1) {
-    for (let index = 0; index <= text.length - size; index += 1) {
-      result.push(text.slice(index, index + size));
-    }
-  }
-  return result;
+export function decayedStrength(
+  memory: Pick<CoreMemory, 'strength' | 'createdAt' | 'lastRecalledAt'>,
+  now: Date,
+  halfLifeDays: number = DEFAULT_HALF_LIFE_DAYS
+): number {
+  const reference = memory.lastRecalledAt ?? memory.createdAt;
+  const ageDays = Math.max(0, (now.getTime() - reference.getTime()) / MS_PER_DAY);
+  return memory.strength * Math.pow(0.5, ageDays / halfLifeDays);
 }
 
 /**
@@ -98,7 +122,6 @@ function formatMemories(memories: CoreMemory[]): string {
   }
 
   const lines = memories
-    .sort((a, b) => b.strength - a.strength) // Sort by strength
     .map(m => `- ${m.text} (强度: ${(m.strength * 100).toFixed(0)}%)`)
     .join('\n');
 

@@ -55,6 +55,10 @@ export interface GreyfieldRuntimeOptions {
   // New memory system (V2)
   topicIndexStore?: JsonlTopicIndexStore;
   coreMemoryStore?: SqliteCoreMemoryStore;
+  // Shared manager owned by the caller. Prefer this over the stores: a
+  // runtime instance is created per interaction, so a manager constructed
+  // here would lose its unindexed-turn buffer on every message.
+  memoryManager?: MemoryManager;
   useNewMemorySystem?: boolean;  // Feature flag to enable V2 memory
 
   sessionStore: SessionStore;
@@ -92,17 +96,21 @@ export class GreyfieldRuntime {
     this.threadId = options.threadId ?? "local-desktop-thread";
 
     // Initialize new memory system if enabled
-    if (options.useNewMemorySystem && options.topicIndexStore && options.coreMemoryStore) {
-      this.memoryManager = new MemoryManager(
-        options.topicIndexStore,
-        options.coreMemoryStore,
-        options.llm,
-        options.sessionStore.sessionId,
-        options.persona.name || "default",
-        {
-          batchSize: 50
-        }
-      );
+    if (options.useNewMemorySystem) {
+      if (options.memoryManager) {
+        this.memoryManager = options.memoryManager;
+      } else if (options.topicIndexStore && options.coreMemoryStore) {
+        this.memoryManager = new MemoryManager(
+          options.topicIndexStore,
+          options.coreMemoryStore,
+          options.llm,
+          options.sessionStore.sessionId,
+          options.persona.name || "default",
+          {
+            batchSize: 50
+          }
+        );
+      }
     }
   }
 

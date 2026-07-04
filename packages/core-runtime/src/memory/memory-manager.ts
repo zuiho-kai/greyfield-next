@@ -3,10 +3,13 @@ import type { LLMProvider } from "../providers";
 import type { JsonlTopicIndexStore } from "@greyfield/persistence";
 import type { SqliteCoreMemoryStore } from "@greyfield/persistence";
 import { embed } from "./embedding";
+import { extractKeywords } from "./keywords";
 
 export class MemoryManager {
   private unindexedTurns: ConversationTurn[] = [];
   private batchSize: number;
+  private coreUpgradeThreshold: number;
+  private closed = false;
 
   constructor(
     public readonly topicStore: JsonlTopicIndexStore,
@@ -16,9 +19,11 @@ export class MemoryManager {
     private characterId: string,
     options?: {
       batchSize?: number;
+      coreUpgradeThreshold?: number;
     }
   ) {
     this.batchSize = options?.batchSize || 50;
+    this.coreUpgradeThreshold = options?.coreUpgradeThreshold ?? 3;
   }
 
   async onNewTurn(turn: ConversationTurn): Promise<void> {
@@ -70,8 +75,9 @@ export class MemoryManager {
       await this.coreStore.insert(memory);
       console.log(`[Memory] Explicit memory created: ${memory.id}`);
     } catch (error) {
+      // Never rethrow: a failed explicit write must not break turn recording
+      // or the batch-index counter in onNewTurn.
       console.error('[Memory] Failed to write explicit memory:', error);
-      throw error;
     }
   }
 
@@ -84,17 +90,44 @@ export class MemoryManager {
       console.log(`[Memory] Building topic index for ${this.unindexedTurns.length} turns`);
 
       const topics = await this.extractTopics(this.unindexedTurns);
+      const existingTopics = await this.topicStore.getBySession(this.sessionId);
 
       for (const topic of topics) {
-        const storedTopic = await this.topicStore.append(topic);
+        const mergeTarget = findMergeTarget(topic, existingTopics);
 
-        // Upgrade high-frequency topics to core memory
-        if (storedTopic.mentionCount >= 3) {
-          await this.upgradeToCoreMemory(storedTopic);
+        if (mergeTarget) {
+          const previousCount = mergeTarget.mentionCount;
+          const merged = await this.topicStore.update(mergeTarget.id, {
+            mentionCount: previousCount + topic.mentionCount,
+            keywords: mergeKeywords(mergeTarget.keywords, topic.keywords),
+            turnIds: [...new Set([...mergeTarget.turnIds, ...topic.turnIds])],
+            timeRange: [mergeTarget.timeRange[0], topic.timeRange[1]],
+            lastMentioned: topic.lastMentioned
+          });
+
+          if (merged) {
+            // Refresh local view so later topics in this batch merge correctly
+            const index = existingTopics.findIndex(t => t.id === merged.id);
+            if (index >= 0) {
+              existingTopics[index] = merged;
+            }
+            // Upgrade only when crossing the threshold, so a topic is
+            // promoted to core memory exactly once.
+            if (previousCount < this.coreUpgradeThreshold && merged.mentionCount >= this.coreUpgradeThreshold) {
+              await this.upgradeToCoreMemory(merged);
+            }
+          }
+        } else {
+          const storedTopic = await this.topicStore.append(topic);
+          existingTopics.push(storedTopic);
+
+          if (storedTopic.mentionCount >= this.coreUpgradeThreshold) {
+            await this.upgradeToCoreMemory(storedTopic);
+          }
         }
       }
 
-      console.log(`[Memory] Created ${topics.length} topic indices`);
+      console.log(`[Memory] Processed ${topics.length} topic indices`);
     } catch (error) {
       console.error('[Memory] Failed to build topic index:', error);
       throw error;
@@ -115,7 +148,13 @@ export class MemoryManager {
       const prompt = `请分析以下对话，提取 2-4 个主要话题。每个话题包含：
 1. 一句话总结（topic）
 2. 3-5 个关键词（keywords）
-3. 估计的提及次数（mentionCount）
+3. 该话题被独立提起的次数（mentionCount，必须基于对话内容如实统计，不确定时填 1）
+
+提取规则：
+- 只提取用户认真讨论过的内容，忽略寒暄、玩笑、反讽、假设和角色扮演中的虚构设定
+- 不要把代码片段、工具输出、系统提示或引用的第三方内容当作用户自己的话题
+- 用户已否认或纠正过的说法，以最终确认的版本为准，不要保留旧说法
+- 不要推测对话中没有出现的信息
 
 对话内容：
 ${conversationText}
@@ -163,21 +202,27 @@ ${conversationText}
     } catch (error) {
       console.warn('[Memory] LLM topic extraction failed, using fallback:', error);
 
-      // Fallback: Simple heuristic-based topic extraction
+      // Fallback: keyword-only placeholder so the batch still lands in the
+      // topic index. mentionCount is pinned to 1 so a fallback topic can
+      // never be promoted to core memory on its own — promotion must come
+      // from real accumulation across batches.
       const firstTurn = turns[0];
       const lastTurn = turns[turns.length - 1];
       const allText = turns.map(t => getTurnText(t)).join(' ');
-      const words = allText.split(/\s+/).filter(w => w.length > 2);
-      const uniqueWords = [...new Set(words)].slice(0, 5);
+      const keywords = extractKeywords(allText).slice(0, 5);
+
+      if (keywords.length === 0) {
+        return [];
+      }
 
       return [{
         sessionId: this.sessionId,
         characterId: this.characterId,
-        topic: `对话涉及 ${uniqueWords.slice(0, 3).join('、')}`,
-        keywords: uniqueWords,
+        topic: `对话涉及 ${keywords.slice(0, 3).join('、')}`,
+        keywords,
         timeRange: [toDate(firstTurn.timestamp), toDate(lastTurn.timestamp)] as [Date, Date],
         turnIds: turns.map(t => t.id),
-        mentionCount: turns.length,
+        mentionCount: 1,
         lastMentioned: toDate(lastTurn.timestamp)
       }];
     }
@@ -207,8 +252,9 @@ ${conversationText}
       await this.coreStore.insert(memory);
       console.log(`[Memory] Core memory created from topic: ${memory.id}`);
     } catch (error) {
+      // Never rethrow: a failed upgrade must not abort the batch, otherwise
+      // the retry would re-merge topics and double-count mentions.
       console.error('[Memory] Failed to upgrade topic to core memory:', error);
-      throw error;
     }
   }
 
@@ -219,9 +265,54 @@ ${conversationText}
     }
   }
 
-  close(): void {
-    this.coreStore.close();
+  async close(): Promise<void> {
+    if (this.closed) {
+      return;
+    }
+    this.closed = true;
+    try {
+      // Flush turns that have not reached batchSize yet so a restart does
+      // not silently drop up to batchSize-1 turns.
+      await this.forceIndex();
+    } catch (error) {
+      console.error('[Memory] Failed to flush unindexed turns on close:', error);
+    } finally {
+      this.coreStore.close();
+    }
   }
+}
+
+function findMergeTarget(
+  topic: Omit<TopicIndex, 'id'>,
+  existing: TopicIndex[]
+): TopicIndex | undefined {
+  const topicKeywords = new Set(topic.keywords.map(normalizeKeyword));
+  return existing.find(candidate => {
+    if (candidate.characterId !== topic.characterId) {
+      return false;
+    }
+    if (candidate.topic === topic.topic) {
+      return true;
+    }
+    const shared = candidate.keywords.filter(kw => topicKeywords.has(normalizeKeyword(kw)));
+    return shared.length >= 2;
+  });
+}
+
+function mergeKeywords(existing: string[], incoming: string[]): string[] {
+  const seen = new Set(existing.map(normalizeKeyword));
+  const merged = [...existing];
+  for (const keyword of incoming) {
+    if (!seen.has(normalizeKeyword(keyword))) {
+      seen.add(normalizeKeyword(keyword));
+      merged.push(keyword);
+    }
+  }
+  return merged.slice(0, 10);
+}
+
+function normalizeKeyword(keyword: string): string {
+  return keyword.trim().toLowerCase();
 }
 
 function getTurnText(turn: ConversationTurn): string {

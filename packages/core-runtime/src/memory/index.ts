@@ -2,5 +2,6 @@
 
 export * from './types';
 export * from './embedding';
+export * from './keywords';
 export * from './memory-manager';
 export * from './recall';

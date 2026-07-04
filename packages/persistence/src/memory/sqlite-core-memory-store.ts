@@ -173,7 +173,15 @@ export class SqliteCoreMemoryStore {
       LIMIT ?
     `).all(queryBuffer, topK) as CoreMemoryRow[];
 
-    return rows.map((row) => this.rowToMemory(row));
+    // Attach cosine similarity so callers can threshold on relevance,
+    // matching the brute-force path.
+    return rows.map((row) => {
+      const memory = this.rowToMemory(row);
+      return {
+        ...memory,
+        similarity: this.cosineSimilarity(queryEmbedding, memory.embedding)
+      };
+    });
   }
 
   private bruteForceSearch(queryEmbedding: number[], topK: number): CoreMemory[] {
