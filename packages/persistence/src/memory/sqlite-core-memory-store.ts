@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import * as sqliteVss from "sqlite-vss";
 import type { CoreMemory } from "@greyfield/core-runtime";
 import { dirname } from "node:path";
 import { mkdirSync } from "node:fs";
@@ -50,7 +51,7 @@ export class SqliteCoreMemoryStore {
   private tryLoadVectorExtension(): void {
     try {
       // Try to load sqlite-vss extension
-      this.db.loadExtension('vss0');
+      sqliteVss.load(this.db);
 
       // Create vector table
       this.db.exec(`
@@ -76,30 +77,33 @@ export class SqliteCoreMemoryStore {
 
     const embeddingBuffer = Buffer.from(new Float32Array(memory.embedding).buffer);
 
-    stmt.run(
-      memory.id,
-      memory.sessionId,
-      memory.characterId,
-      memory.text,
-      embeddingBuffer,
-      memory.strength,
-      memory.createdAt.toISOString(),
-      memory.lastRecalledAt?.toISOString() || null,
-      memory.triggers ? JSON.stringify(memory.triggers) : null,
-      JSON.stringify(memory.sources),
-      memory.disabled ? 1 : 0
-    );
+    this.db.exec("BEGIN");
+    try {
+      const result = stmt.run(
+        memory.id,
+        memory.sessionId,
+        memory.characterId,
+        memory.text,
+        embeddingBuffer,
+        memory.strength,
+        memory.createdAt.toISOString(),
+        memory.lastRecalledAt?.toISOString() || null,
+        memory.triggers ? JSON.stringify(memory.triggers) : null,
+        JSON.stringify(memory.sources),
+        memory.disabled ? 1 : 0
+      );
 
-    // Try to insert into vector index
-    if (this.hasVectorExtension) {
-      try {
+      if (this.hasVectorExtension) {
         this.db.prepare(`INSERT INTO memory_vectors(rowid, embedding) VALUES (?, ?)`).run(
-          memory.id,
+          Number(result.lastInsertRowid),
           embeddingBuffer
         );
-      } catch (error) {
-        console.warn('[Memory] Failed to insert into vector index:', error);
       }
+
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
     }
   }
 
@@ -163,7 +167,7 @@ export class SqliteCoreMemoryStore {
 
     const rows = this.db.prepare(`
       SELECT m.* FROM core_memories m
-      JOIN memory_vectors v ON m.id = v.rowid
+      JOIN memory_vectors v ON m.rowid = v.rowid
       WHERE vss_search(v.embedding, ?)
       AND m.disabled = 0
       LIMIT ?
@@ -254,17 +258,25 @@ export class SqliteCoreMemoryStore {
   }
 
   async delete(id: string): Promise<boolean> {
-    const result = this.db.prepare(`DELETE FROM core_memories WHERE id = ?`).run(id);
-
-    if (this.hasVectorExtension) {
-      try {
-        this.db.prepare(`DELETE FROM memory_vectors WHERE rowid = ?`).run(id);
-      } catch (error) {
-        console.warn('[Memory] Failed to delete from vector index:', error);
+    this.db.exec("BEGIN");
+    try {
+      const row = this.db.prepare(`SELECT rowid FROM core_memories WHERE id = ?`).get(id) as { rowid: number } | undefined;
+      if (!row) {
+        this.db.exec("COMMIT");
+        return false;
       }
-    }
 
-    return result.changes > 0;
+      if (this.hasVectorExtension) {
+        this.db.prepare(`DELETE FROM memory_vectors WHERE rowid = ?`).run(row.rowid);
+      }
+
+      const result = this.db.prepare(`DELETE FROM core_memories WHERE id = ?`).run(id);
+      this.db.exec("COMMIT");
+      return result.changes > 0;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   close(): void {

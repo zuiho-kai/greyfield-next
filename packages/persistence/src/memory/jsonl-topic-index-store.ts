@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { TopicIndex } from "@greyfield/core-runtime";
 
@@ -27,12 +27,12 @@ export class JsonlTopicIndexStore {
   }
 
   async getBySession(sessionId: string): Promise<TopicIndex[]> {
-    const topics = await this.readTopics();
+    const topics = await this.readConsistentTopics();
     return topics.filter(t => t.sessionId === sessionId);
   }
 
   async search(keywords: string[]): Promise<TopicIndex[]> {
-    const topics = await this.readTopics();
+    const topics = await this.readConsistentTopics();
     const keywordsLower = keywords.map(kw => kw.toLowerCase());
 
     return topics
@@ -111,7 +111,14 @@ export class JsonlTopicIndexStore {
       timeRange: [t.timeRange[0].toISOString(), t.timeRange[1].toISOString()],
       lastMentioned: t.lastMentioned.toISOString()
     })).join('\n');
-    await writeFile(this.path, body.length > 0 ? `${body}\n` : '', 'utf8');
+    const tempPath = `${this.path}.${process.pid}.${Date.now()}.tmp`;
+    await writeFile(tempPath, body.length > 0 ? `${body}\n` : '', 'utf8');
+    await rename(tempPath, this.path);
+  }
+
+  private async readConsistentTopics(): Promise<TopicIndex[]> {
+    await this.mutation;
+    return this.readTopics();
   }
 
   private parseSequence(id: string): number {

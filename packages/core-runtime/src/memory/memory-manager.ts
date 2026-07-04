@@ -54,7 +54,7 @@ export class MemoryManager {
       const embedding = await embed(memoryText);
 
       const memory: CoreMemory = {
-        id: `core-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+        id: createCoreMemoryId(),
         sessionId: turn.sessionId ?? this.sessionId,
         characterId: turn.characterId ?? this.characterId,
         text: memoryText,
@@ -71,6 +71,7 @@ export class MemoryManager {
       console.log(`[Memory] Explicit memory created: ${memory.id}`);
     } catch (error) {
       console.error('[Memory] Failed to write explicit memory:', error);
+      throw error;
     }
   }
 
@@ -96,6 +97,7 @@ export class MemoryManager {
       console.log(`[Memory] Created ${topics.length} topic indices`);
     } catch (error) {
       console.error('[Memory] Failed to build topic index:', error);
+      throw error;
     }
   }
 
@@ -188,7 +190,7 @@ ${conversationText}
       const embedding = await embed(topic.topic);
 
       const memory: CoreMemory = {
-        id: `core-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+        id: createCoreMemoryId(),
         sessionId: topic.sessionId,
         characterId: topic.characterId,
         text: topic.topic,
@@ -206,6 +208,7 @@ ${conversationText}
       console.log(`[Memory] Core memory created from topic: ${memory.id}`);
     } catch (error) {
       console.error('[Memory] Failed to upgrade topic to core memory:', error);
+      throw error;
     }
   }
 
@@ -235,4 +238,9 @@ async function collectLLMText(llm: LLMProvider, prompt: string): Promise<string>
     text += chunk;
   }
   return text;
+}
+
+function createCoreMemoryId(): string {
+  const randomUUID = globalThis.crypto?.randomUUID;
+  return `core-${randomUUID ? randomUUID.call(globalThis.crypto) : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`}`;
 }

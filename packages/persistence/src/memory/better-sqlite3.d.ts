@@ -1,6 +1,11 @@
 declare module "better-sqlite3" {
+  interface RunResult {
+    changes: number;
+    lastInsertRowid: number | bigint;
+  }
+
   interface Statement {
-    run(...params: unknown[]): { changes: number };
+    run(...params: unknown[]): RunResult;
     get(...params: unknown[]): unknown;
     all(...params: unknown[]): unknown[];
   }
@@ -9,7 +14,7 @@ declare module "better-sqlite3" {
     interface Database {
       exec(sql: string): void;
       prepare(sql: string): Statement;
-      loadExtension(path: string): void;
+      loadExtension(path: string, entrypoint?: string): void;
       close(): void;
     }
   }

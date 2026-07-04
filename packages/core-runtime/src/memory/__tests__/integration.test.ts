@@ -12,6 +12,7 @@ import { JsonlTopicIndexStore } from "../../../../persistence/src/memory/jsonl-t
 import { SqliteCoreMemoryStore } from "../../../../persistence/src/memory/sqlite-core-memory-store";
 import { EmbeddingService } from "../embedding";
 import { MemoryManager } from "../memory-manager";
+import { recall } from "../recall";
 import type { ConversationTurn } from "../types";
 
 describe("Memory System Integration", () => {
@@ -66,8 +67,10 @@ describe("Memory System Integration", () => {
   it("should detect explicit memory request", async () => {
     const turn: ConversationTurn = {
       id: "turn-1",
+      sessionId: "test-session",
+      characterId: "test-character",
       role: "user",
-      content: "记住我喜欢喝咖啡",
+      text: "记住我喜欢喝咖啡",
       timestamp: Date.now()
     };
 
@@ -84,8 +87,10 @@ describe("Memory System Integration", () => {
     for (let i = 0; i < 5; i++) {
       const turn: ConversationTurn = {
         id: `turn-${i}`,
+        sessionId: "test-session",
+        characterId: "test-character",
         role: "user",
-        content: `这是第${i}条测试消息`,
+        text: `这是第${i}条测试消息`,
         timestamp: Date.now()
       };
       await memoryManager.onNewTurn(turn);
@@ -130,5 +135,22 @@ describe("Memory System Integration", () => {
     // Verify promotion
     const memories = await coreStore.vectorSearch("编程", 5);
     expect(memories.length).toBeGreaterThan(0);
+  });
+
+  it("should recall Chinese topic index keywords without whitespace", async () => {
+    await topicStore.append({
+      sessionId: "test-session",
+      characterId: "test-character",
+      topic: "用户喜欢咖啡饮料",
+      keywords: ["咖啡", "饮料"],
+      timeRange: [new Date(), new Date()],
+      turnIds: ["turn-1"],
+      mentionCount: 1,
+      lastMentioned: new Date()
+    });
+
+    const result = await recall("用户喜欢什么饮料", memoryManager);
+
+    expect(result.text).toContain("用户喜欢咖啡饮料");
   });
 });

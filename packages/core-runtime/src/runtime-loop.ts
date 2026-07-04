@@ -34,6 +34,7 @@ import type { RuntimeImageAttachment, RuntimeObservationMetadata } from "./visio
 // New memory system imports
 import { MemoryManager } from "./memory/memory-manager";
 import { recall as recallV2 } from "./memory/recall";
+import type { RecallResult } from "./memory/recall";
 import type { JsonlTopicIndexStore, SqliteCoreMemoryStore } from "@greyfield/persistence";
 
 export interface GreyfieldRuntimeOptions {
@@ -292,7 +293,7 @@ export class GreyfieldRuntime {
     const messages = assemblePrompt({
       persona: this.options.persona,
       memory: this.options.useNewMemorySystem && newMemoryContext
-        ? newMemoryContext
+        ? redactPromptPrivateText(newMemoryContext, this.options.promptRedactionSecrets)
         : redactPromptPrivateText(memory, this.options.promptRedactionSecrets),
       handoff: handoffSummary,
       recent,
@@ -354,14 +355,18 @@ export class GreyfieldRuntime {
         try {
           await this.memoryManager.onNewTurn({
             id: userTurn.id,
+            sessionId: this.options.sessionStore.sessionId,
+            characterId: this.options.persona.name || "default",
             role: "user",
-            content: text,
+            text,
             timestamp: new Date()
           });
           await this.memoryManager.onNewTurn({
             id: assistantTurn.id,
+            sessionId: this.options.sessionStore.sessionId,
+            characterId: this.options.persona.name || "default",
             role: "assistant",
-            content: finalText,
+            text: finalText,
             timestamp: new Date()
           });
         } catch (error) {
@@ -460,26 +465,17 @@ export class GreyfieldRuntime {
     return store.list(this.threadId);
   }
 
-  private formatNewMemoryRecall(recallResult: any): string {
-    const parts: string[] = [];
-
-    // Format core memories (Layer 3)
-    if (recallResult.coreMemories && recallResult.coreMemories.length > 0) {
-      const coreItems = recallResult.coreMemories
-        .map((m: any) => `- ${m.text} (强度: ${m.strength.toFixed(1)})`)
-        .join("\n");
-      parts.push(`[核心记忆]\n${coreItems}`);
+  private formatNewMemoryRecall(recallResult: RecallResult): string {
+    if (recallResult.text.trim().length > 0) {
+      return recallResult.text;
     }
-
-    // Format topic indexes (Layer 2)
-    if (recallResult.topicIndexes && recallResult.topicIndexes.length > 0) {
-      const topicItems = recallResult.topicIndexes
-        .map((t: any) => `- ${t.topic}: ${t.keywords.join(", ")} (提及${t.mentionCount}次)`)
-        .join("\n");
-      parts.push(`[话题索引]\n${topicItems}`);
+    if (recallResult.memories.length === 0) {
+      return "";
     }
-
-    return parts.join("\n\n");
+    return [
+      "# 相关记忆",
+      ...recallResult.memories.map((memory) => `- ${memory.text} (强度: ${(memory.strength * 100).toFixed(0)}%)`)
+    ].join("\n");
   }
 
   private async loadSourceTurnsForAtomRecall(context: ReturnType<typeof buildMemoryAtomRecallContext>): Promise<SessionTurn[] | undefined> {

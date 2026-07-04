@@ -30,12 +30,12 @@ export async function recall(
 
     if (validCore.length > 0) {
       // Update memory strength (reinforce recalled memories)
-      for (const mem of validCore) {
-        await manager.coreStore.update(mem.id, {
+      await Promise.all(validCore.map((mem) =>
+        manager.coreStore.update(mem.id, {
           strength: Math.min(1.0, mem.strength + 0.1),
           lastRecalledAt: new Date()
-        });
-      }
+        })
+      ));
 
       const text = formatMemories(validCore);
       return { text, memories: validCore };
@@ -66,18 +66,27 @@ export async function recall(
  * Extract keywords from user message for topic search
  */
 function extractKeywords(text: string): string[] {
-  // Simple tokenization
-  const words = text
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(w => w.length > 1);
+  const normalized = text.toLowerCase();
+  const words = normalized.match(/[\p{L}\p{N}]+/gu) ?? [];
+  const hanChunks = normalized.match(/\p{Script=Han}+/gu) ?? [];
+  const hanNgrams = hanChunks.flatMap((chunk) => buildHanNgrams(chunk));
 
   // Remove common stop words (simplified)
   const stopWords = new Set(['的', '了', '是', '在', '有', '我', '你', '他', '她', '它']);
-  const keywords = words.filter(w => !stopWords.has(w));
+  const keywords = [...words, ...hanNgrams].filter(w => w.length > 1 && !stopWords.has(w));
 
   // Return unique keywords
   return [...new Set(keywords)];
+}
+
+function buildHanNgrams(text: string): string[] {
+  const result: string[] = [];
+  for (let size = 2; size <= Math.min(4, text.length); size += 1) {
+    for (let index = 0; index <= text.length - size; index += 1) {
+      result.push(text.slice(index, index + size));
+    }
+  }
+  return result;
 }
 
 /**

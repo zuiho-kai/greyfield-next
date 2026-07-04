@@ -10,6 +10,7 @@ export interface EmbeddingOptions {
   baseURL?: string;
   fetch?: typeof fetch;
   allowDeterministicFallback?: boolean;
+  timeoutMs?: number;
 }
 
 export class EmbeddingService {
@@ -18,6 +19,7 @@ export class EmbeddingService {
   private readonly baseURL: string;
   private readonly fetchImpl: typeof fetch;
   private readonly allowDeterministicFallback: boolean;
+  private readonly timeoutMs: number;
 
   constructor(options: EmbeddingOptions = {}) {
     this.model = options.model ?? defaultModel;
@@ -25,6 +27,7 @@ export class EmbeddingService {
     this.baseURL = (options.baseURL ?? process.env.SILICONFLOW_BASE_URL ?? defaultBaseURL).replace(/\/$/, "");
     this.fetchImpl = options.fetch ?? fetch;
     this.allowDeterministicFallback = options.allowDeterministicFallback ?? true;
+    this.timeoutMs = options.timeoutMs ?? 15_000;
   }
 
   async embed(text: string): Promise<number[]> {
@@ -35,17 +38,7 @@ export class EmbeddingService {
       throw new Error("Embedding API key is not configured.");
     }
 
-    const response = await this.fetchImpl(`${this.baseURL}/embeddings`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: this.model,
-        input: text
-      })
-    });
+    const response = await this.callEmbeddingsApi(text);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -68,17 +61,7 @@ export class EmbeddingService {
       throw new Error("Embedding API key is not configured.");
     }
 
-    const response = await this.fetchImpl(`${this.baseURL}/embeddings`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: this.model,
-        input: texts
-      })
-    });
+    const response = await this.callEmbeddingsApi(texts);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -90,6 +73,32 @@ export class EmbeddingService {
       throw new Error("Invalid batch embedding response format");
     }
     return data.data.map((item) => item.embedding);
+  }
+
+  private async callEmbeddingsApi(input: string | string[]): Promise<Response> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      return await this.fetchImpl(`${this.baseURL}/embeddings`, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: this.model,
+          input
+        })
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error(`Embedding API timed out after ${this.timeoutMs}ms`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 }
 
