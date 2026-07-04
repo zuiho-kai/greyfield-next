@@ -116,19 +116,12 @@ export class MemoryManager {
             if (index >= 0) {
               existingTopics[index] = merged;
             }
-            // Upgrade only when crossing the threshold, so a topic is
-            // promoted to core memory exactly once.
-            if (previousCount < this.coreUpgradeThreshold && merged.mentionCount >= this.coreUpgradeThreshold) {
-              await this.upgradeToCoreMemory(merged);
-            }
+            await this.maybeUpgradeToCoreMemory(merged, existingTopics);
           }
         } else {
           const storedTopic = await this.topicStore.append(topic);
           existingTopics.push(storedTopic);
-
-          if (storedTopic.mentionCount >= this.coreUpgradeThreshold) {
-            await this.upgradeToCoreMemory(storedTopic);
-          }
+          await this.maybeUpgradeToCoreMemory(storedTopic, existingTopics);
         }
       }
 
@@ -136,6 +129,31 @@ export class MemoryManager {
     } catch (error) {
       console.error('[Memory] Failed to build topic index:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Promote a topic once it has genuinely accumulated enough mentions. The
+   * coreMemoryId marker is written only after a successful insert, which
+   * makes promotion both idempotent (never duplicated) and retryable (a
+   * transient embed/insert failure is retried on the next batch).
+   */
+  private async maybeUpgradeToCoreMemory(topic: TopicIndex, existingTopics: TopicIndex[]): Promise<void> {
+    if (topic.coreMemoryId || topic.mentionCount < this.coreUpgradeThreshold) {
+      return;
+    }
+
+    const coreMemoryId = await this.upgradeToCoreMemory(topic);
+    if (!coreMemoryId) {
+      return;
+    }
+
+    const marked = await this.topicStore.update(topic.id, { coreMemoryId });
+    if (marked) {
+      const index = existingTopics.findIndex(t => t.id === marked.id);
+      if (index >= 0) {
+        existingTopics[index] = marked;
+      }
     }
   }
 
@@ -208,9 +226,9 @@ ${conversationText}
       console.warn('[Memory] LLM topic extraction failed, using fallback:', error);
 
       // Fallback: keyword-only placeholder so the batch still lands in the
-      // topic index. mentionCount is pinned to 1 so a fallback topic can
-      // never be promoted to core memory on its own — promotion must come
-      // from real accumulation across batches.
+      // topic index. mentionCount is 0 so fallback batches can never
+      // accumulate into a core-memory promotion — a degraded extractor must
+      // not decide what becomes permanent.
       const firstTurn = turns[0];
       const lastTurn = turns[turns.length - 1];
       const allText = turns.map(t => getTurnText(t)).join(' ');
@@ -227,13 +245,14 @@ ${conversationText}
         keywords,
         timeRange: [toDate(firstTurn.timestamp), toDate(lastTurn.timestamp)] as [Date, Date],
         turnIds: turns.map(t => t.id),
-        mentionCount: 1,
+        mentionCount: 0,
         lastMentioned: toDate(lastTurn.timestamp)
       }];
     }
   }
 
-  private async upgradeToCoreMemory(topic: TopicIndex): Promise<void> {
+  /** Returns the created core memory id, or null when the promotion failed. */
+  private async upgradeToCoreMemory(topic: TopicIndex): Promise<string | null> {
     try {
       console.log(`[Memory] Upgrading high-frequency topic to core memory: ${topic.topic}`);
 
@@ -256,10 +275,13 @@ ${conversationText}
 
       await this.coreStore.insert(memory);
       console.log(`[Memory] Core memory created from topic: ${memory.id}`);
+      return memory.id;
     } catch (error) {
       // Never rethrow: a failed upgrade must not abort the batch, otherwise
-      // the retry would re-merge topics and double-count mentions.
+      // the retry would re-merge topics and double-count mentions. Returning
+      // null leaves the topic unmarked so the promotion retries next batch.
       console.error('[Memory] Failed to upgrade topic to core memory:', error);
+      return null;
     }
   }
 

@@ -160,6 +160,7 @@ export class RuntimeService {
   // New memory system (V2)
   private memoryStoresV2?: MemoryStoresV2;
   private memoryManagerV2?: MemoryManager;
+  private memoryV2CharacterId?: string;
   private useNewMemorySystem: boolean;
 
   constructor(config: GreyfieldConfig, private readonly options: RuntimeServiceOptions = {}) {
@@ -171,40 +172,87 @@ export class RuntimeService {
     this.deletedMemoryEvidenceStore = options.deletedMemoryEvidenceStore;
     this.providerFactory = new RuntimeProviderFactory(this.config, this.options);
 
-    // Initialize new memory system if enabled
-    this.useNewMemorySystem = shouldUseNewMemorySystem(this.config);
-    if (this.useNewMemorySystem) {
-      try {
-        const characterId = deriveCharacterId(this.config);
-        this.memoryStoresV2 = initializeMemoryStoresV2(characterId);
-        // One long-lived manager for the whole service: a GreyfieldRuntime
-        // is created per interaction, so the manager (and its unindexed-turn
-        // buffer) must live here or batch indexing never accumulates.
-        // The LLM wrapper delegates lazily so updateConfig picks up new
-        // provider settings without rebuilding the manager.
-        const lazyLlm: LLMProvider = {
-          stream: (messages, tools, streamOptions) =>
-            this.providerFactory.createChatLLMProvider().stream(messages, tools, streamOptions)
-        };
-        this.memoryManagerV2 = new MemoryManager(
-          this.memoryStoresV2.topicStore,
-          this.memoryStoresV2.coreStore,
-          lazyLlm,
-          this.sessionStore.sessionId,
-          characterId,
-          {
-            batchSize: 50,
-            // Layer 1 drilldown: recall quotes raw turns when a topic hits
-            ...(hasSessionTurnLookup(this.sessionStore) ? { turnLookup: this.sessionStore } : {})
-          }
-        );
-        console.log("[MemoryV2] Initialized new memory system for character:", characterId);
-      } catch (error) {
-        console.error("[MemoryV2] Failed to initialize new memory system:", error);
-        this.useNewMemorySystem = false;
-        this.memoryStoresV2 = undefined;
-        this.memoryManagerV2 = undefined;
-      }
+    this.useNewMemorySystem = false;
+    this.refreshMemoryV2();
+  }
+
+  /**
+   * (Re)initialize the V2 memory system to match the current config.
+   * Called from the constructor and from updateConfig: switching the
+   * character must move reads and writes to that character's own
+   * memory-v2/<characterId> data instead of silently reusing the old one.
+   */
+  private refreshMemoryV2(): void {
+    const enabled = shouldUseNewMemorySystem(this.config);
+    if (!enabled) {
+      this.teardownMemoryV2();
+      this.useNewMemorySystem = false;
+      return;
+    }
+
+    let characterId: string;
+    try {
+      characterId = deriveCharacterId(this.config);
+    } catch (error) {
+      console.error("[MemoryV2] Failed to derive character id:", error);
+      this.teardownMemoryV2();
+      this.useNewMemorySystem = false;
+      return;
+    }
+
+    if (this.memoryManagerV2 && characterId === this.memoryV2CharacterId) {
+      this.useNewMemorySystem = true;
+      return;
+    }
+
+    // Character changed (or first init): flush and close the previous
+    // manager in the background, then build a fresh stack for the new id.
+    this.teardownMemoryV2();
+    try {
+      this.memoryStoresV2 = initializeMemoryStoresV2(characterId);
+      // One long-lived manager for the whole service: a GreyfieldRuntime
+      // is created per interaction, so the manager (and its unindexed-turn
+      // buffer) must live here or batch indexing never accumulates.
+      // The LLM wrapper delegates lazily so updateConfig picks up new
+      // provider settings without rebuilding the manager.
+      const lazyLlm: LLMProvider = {
+        stream: (messages, tools, streamOptions) =>
+          this.providerFactory.createChatLLMProvider().stream(messages, tools, streamOptions)
+      };
+      this.memoryManagerV2 = new MemoryManager(
+        this.memoryStoresV2.topicStore,
+        this.memoryStoresV2.coreStore,
+        lazyLlm,
+        this.sessionStore.sessionId,
+        characterId,
+        {
+          batchSize: 50,
+          // Layer 1 drilldown: recall quotes raw turns when a topic hits
+          ...(hasSessionTurnLookup(this.sessionStore) ? { turnLookup: this.sessionStore } : {})
+        }
+      );
+      this.memoryV2CharacterId = characterId;
+      this.useNewMemorySystem = true;
+      console.log("[MemoryV2] Initialized new memory system for character:", characterId);
+    } catch (error) {
+      console.error("[MemoryV2] Failed to initialize new memory system:", error);
+      this.teardownMemoryV2();
+      this.useNewMemorySystem = false;
+    }
+  }
+
+  private teardownMemoryV2(): void {
+    const previous = this.memoryManagerV2;
+    this.memoryManagerV2 = undefined;
+    this.memoryStoresV2 = undefined;
+    this.memoryV2CharacterId = undefined;
+    if (previous) {
+      // close() flushes unindexed turns before closing the store; the old
+      // character's data lives in its own directory, so this can run in the
+      // background without racing the new manager.
+      void previous.close().catch((error) => {
+        console.error("[MemoryV2] Failed to close previous memory system:", error);
+      });
     }
   }
 
@@ -232,6 +280,7 @@ export class RuntimeService {
     if (this.threadId !== previousThreadId) {
       this.proactiveTriggerState = {};
     }
+    this.refreshMemoryV2();
   }
 
   async handle(input: RuntimeInputEvent, emit: RuntimeEventHandler): Promise<void> {

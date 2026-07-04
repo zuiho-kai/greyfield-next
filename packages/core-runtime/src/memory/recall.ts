@@ -68,12 +68,17 @@ export async function recall(
     if (validCore.length > 0) {
       // Reinforce only the memories that were actually relevant. Writing
       // back the decayed value applies forgetting lazily on recall.
-      await Promise.all(validCore.map(({ memory, effectiveStrength }) =>
-        manager.coreStore.update(memory.id, {
-          strength: Math.min(1.0, effectiveStrength + 0.1),
-          lastRecalledAt: now
-        })
-      ));
+      // Best-effort: a failed write must not discard the recall results.
+      await Promise.all(validCore.map(async ({ memory, effectiveStrength }) => {
+        try {
+          await manager.coreStore.update(memory.id, {
+            strength: Math.min(1.0, effectiveStrength + 0.1),
+            lastRecalledAt: now
+          });
+        } catch (error) {
+          console.error('[Memory] Failed to reinforce core memory:', error);
+        }
+      }));
 
       const ranked = validCore
         .sort((a, b) => b.effectiveStrength - a.effectiveStrength)
