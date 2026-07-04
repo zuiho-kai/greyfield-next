@@ -1,7 +1,8 @@
-import type { CoreMemory } from "./types";
+import type { CoreMemory, TopicIndex } from "./types";
 import { embed } from "./embedding";
 import type { MemoryManager } from "./memory-manager";
 import { extractKeywords } from "./keywords";
+import type { SessionTurn } from "../session-store";
 
 export interface RecallResult {
   text: string;
@@ -15,11 +16,18 @@ export interface RecallOptions {
   strengthFloor?: number;
   /** Half-life (in days) for time-based strength decay. */
   halfLifeDays?: number;
+  /** Max raw turns quoted when drilling down from a topic to Layer 1. */
+  drilldownMaxTurns?: number;
+  /** Total character budget for the Layer 1 drilldown excerpt. */
+  drilldownCharBudget?: number;
 }
 
 const DEFAULT_MIN_SIMILARITY = 0.4;
 const DEFAULT_STRENGTH_FLOOR = 0.3;
 const DEFAULT_HALF_LIFE_DAYS = 30;
+const DEFAULT_DRILLDOWN_MAX_TURNS = 6;
+const DEFAULT_DRILLDOWN_CHAR_BUDGET = 600;
+const DRILLDOWN_TURN_MAX_CHARS = 120;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
@@ -81,14 +89,20 @@ export async function recall(
     console.error('[Memory] Core memory recall failed:', error);
   }
 
-  // Step 2: Query topic index with keyword search
+  // Step 2: Query topic index with keyword search, then drill down to the
+  // raw turns in Layer 1 so the prompt gets what was actually said, not
+  // just a topic title.
   try {
     const keywords = extractKeywords(userMessage);
     const topics = await manager.topicStore.search(keywords);
 
     if (topics.length > 0) {
-      // TODO: Extract raw turns from Layer 1 and summarize
-      const text = `相关话题：${topics[0].topic}`;
+      const topic = topics[0];
+      const excerpt = await buildTopicDrilldown(topic, keywords, manager, {
+        maxTurns: options?.drilldownMaxTurns ?? DEFAULT_DRILLDOWN_MAX_TURNS,
+        charBudget: options?.drilldownCharBudget ?? DEFAULT_DRILLDOWN_CHAR_BUDGET
+      });
+      const text = excerpt.length > 0 ? excerpt : `相关话题：${topic.topic}`;
       return { text, memories: [] };
     }
   } catch (error) {
@@ -97,6 +111,97 @@ export async function recall(
 
   // No relevant memories found
   return { text: '', memories: [] };
+}
+
+/**
+ * Layer 2 → Layer 1 drilldown: fetch the raw turns a topic points at and
+ * quote the most query-relevant ones within a character budget.
+ */
+async function buildTopicDrilldown(
+  topic: TopicIndex,
+  keywords: string[],
+  manager: MemoryManager,
+  limits: { maxTurns: number; charBudget: number }
+): Promise<string> {
+  const lookup = manager.turnLookup;
+  if (!lookup || topic.turnIds.length === 0) {
+    return '';
+  }
+
+  let turns: SessionTurn[];
+  try {
+    turns = await lookup.getByIds(topic.turnIds);
+  } catch (error) {
+    console.error('[Memory] Layer 1 drilldown failed:', error);
+    return '';
+  }
+
+  const conversational = turns.filter(t => t.role === 'user' || t.role === 'assistant');
+  if (conversational.length === 0) {
+    return '';
+  }
+
+  // Prefer turns that mention the query keywords; when nothing matches
+  // (the topic was found via its own keyword list), fall back to the tail
+  // of the topic's conversation.
+  const lowerKeywords = keywords.map(kw => kw.toLowerCase());
+  const scored = conversational.map((turn, index) => ({
+    turn,
+    index,
+    score: countKeywordHits(turn.content, lowerKeywords)
+  }));
+  const matching = scored.filter(entry => entry.score > 0);
+  const candidates = matching.length > 0 ? matching : scored.slice(-limits.maxTurns);
+
+  const selected = candidates
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, limits.maxTurns)
+    .sort((a, b) => a.index - b.index);
+
+  const lines: string[] = [];
+  let used = 0;
+  for (const { turn } of selected) {
+    const content = truncate(turn.content.replace(/\s+/g, ' ').trim(), DRILLDOWN_TURN_MAX_CHARS);
+    if (content.length === 0) {
+      continue;
+    }
+    const line = `${turn.role === 'user' ? '用户' : 'AI'}: ${content}`;
+    if (used + line.length > limits.charBudget && lines.length > 0) {
+      break;
+    }
+    lines.push(line);
+    used += line.length;
+  }
+
+  if (lines.length === 0) {
+    return '';
+  }
+
+  const when = topic.lastMentioned instanceof Date && !Number.isNaN(topic.lastMentioned.getTime())
+    ? `（最近提到：${topic.lastMentioned.toISOString().slice(0, 10)}）`
+    : '';
+
+  return [
+    `# 相关话题回顾`,
+    `话题：${topic.topic}${when}`,
+    `当时的对话节选：`,
+    ...lines
+  ].join('\n');
+}
+
+function countKeywordHits(text: string, lowerKeywords: string[]): number {
+  const lower = text.toLowerCase();
+  let hits = 0;
+  for (const keyword of lowerKeywords) {
+    if (lower.includes(keyword)) {
+      hits += 1;
+    }
+  }
+  return hits;
+}
+
+function truncate(text: string, maxChars: number): string {
+  return text.length > maxChars ? `${text.slice(0, maxChars)}…` : text;
 }
 
 /**

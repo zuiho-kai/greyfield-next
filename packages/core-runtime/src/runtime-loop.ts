@@ -107,7 +107,8 @@ export class GreyfieldRuntime {
           options.sessionStore.sessionId,
           options.persona.name || "default",
           {
-            batchSize: 50
+            batchSize: 50,
+            ...(hasSessionTurnLookup(options.sessionStore) ? { turnLookup: options.sessionStore } : {})
           }
         );
       }
