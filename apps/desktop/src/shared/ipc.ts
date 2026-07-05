@@ -85,6 +85,10 @@ export interface DesktopProfileFactCreate {
   value: string;
 }
 
+export interface DesktopProfileFactDelete {
+  id: string;
+}
+
 export interface DesktopMemorySummaryUpdate {
   id: string;
   summary?: string;
@@ -165,6 +169,7 @@ export interface DesktopIpcRequestMap {
   "profile:get-facts": {};
   "profile:update-fact": DesktopProfileFactUpdate;
   "profile:create-fact": DesktopProfileFactCreate;
+  "profile:delete-fact": DesktopProfileFactDelete;
   "screen-awareness:set-enabled": { enabled: boolean };
   "proactive:check": DesktopProactiveCheckRequest;
   "persona:load": {};

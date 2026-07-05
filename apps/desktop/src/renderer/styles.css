@@ -1909,7 +1909,7 @@ h1 {
 .user-profile__fact {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+  align-items: start;
   gap: 8px;
   min-width: 0;
 }
@@ -1935,6 +1935,19 @@ h1 {
   line-height: 1.2;
 }
 
+.user-profile__fact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+
+.user-profile__fact-actions .user-profile__danger {
+  background: rgba(143, 49, 80, 0.12);
+  color: #7b2442;
+}
+
 .user-profile__add-form summary {
   cursor: pointer;
   color: #18594f;
@@ -1945,23 +1958,32 @@ h1 {
 
 .user-profile__form-content {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
   gap: 8px;
   min-width: 0;
+  padding-top: 2px;
 }
 
-.user-profile__form-content label {
+.settings-panel .user-profile__form-content label {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 4px;
   min-width: 0;
 }
 
-.user-profile__form-content label span {
+.settings-panel .user-profile__form-content label span {
+  padding-top: 0;
   color: #607080;
   font-size: 11px;
   font-weight: 800;
   line-height: 1.2;
+}
+
+.user-profile__form-content select,
+.user-profile__form-content input {
+  width: 100%;
+  min-width: 0;
 }
 
 .user-profile__form-content button {
@@ -2069,10 +2091,6 @@ h1 {
   }
 
   .task-model-slots {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .user-profile__form-content {
     grid-template-columns: minmax(0, 1fr);
   }
 

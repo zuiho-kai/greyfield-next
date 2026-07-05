@@ -454,9 +454,14 @@
               <ul v-if="section.items.length > 0" class="user-profile__fact-list">
                 <li v-for="fact in section.items" :key="fact.id" class="user-profile__fact-row">
                   <span>{{ profileFactLine(fact) }}</span>
-                  <button type="button" @click="toggleProfileFact(fact)">
-                    {{ t("memory.profile.action.hide") }}
-                  </button>
+                  <div class="user-profile__fact-actions">
+                    <button type="button" @click="toggleProfileFact(fact)">
+                      {{ t("memory.profile.action.hide") }}
+                    </button>
+                    <button type="button" class="user-profile__danger" @click="deleteProfileFact(fact)">
+                      {{ t("memory.profile.action.delete") }}
+                    </button>
+                  </div>
                 </li>
               </ul>
               <p v-else>{{ t("memory.profile.emptySection") }}</p>
@@ -499,7 +504,12 @@
               <div class="user-profile__fact-content">
                 <strong>{{ profileFactLine(fact) }}</strong>
               </div>
-              <button type="button" @click="toggleProfileFact(fact)">{{ t("memory.profile.action.restore") }}</button>
+              <div class="user-profile__fact-actions">
+                <button type="button" @click="toggleProfileFact(fact)">{{ t("memory.profile.action.restore") }}</button>
+                <button type="button" class="user-profile__danger" @click="deleteProfileFact(fact)">
+                  {{ t("memory.profile.action.delete") }}
+                </button>
+              </div>
             </article>
           </section>
         </div>
@@ -798,6 +808,10 @@ async function createProfileFact() {
   });
   newFactKey.value = "";
   newFactValue.value = "";
+}
+
+async function deleteProfileFact(fact: ProfileFactView) {
+  window.greyfield?.send("profile:delete-fact", { id: fact.id });
 }
 
 function findProfileFactValue(keys: string[]): string {

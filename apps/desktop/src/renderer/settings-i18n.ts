@@ -242,6 +242,7 @@ export type SettingsI18nKey =
   | "memory.profile.hidden.title"
   | "memory.profile.action.hide"
   | "memory.profile.action.restore"
+  | "memory.profile.action.delete"
   | "memory.summaryMemory"
   | "memory.atomMemories"
   | "memory.summaryMemories"
@@ -571,6 +572,7 @@ const enUS: Record<SettingsI18nKey, string> = {
   "memory.profile.hidden.title": "Hidden notes",
   "memory.profile.action.hide": "Hide",
   "memory.profile.action.restore": "Restore",
+  "memory.profile.action.delete": "Delete",
   "memory.action.export": "Export",
   "memory.action.viewSource": "Open details",
   "memory.summaryMemory": "Summary memory",
@@ -903,6 +905,7 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "memory.profile.hidden.title": "已隐藏条目",
   "memory.profile.action.hide": "从画像隐藏",
   "memory.profile.action.restore": "恢复",
+  "memory.profile.action.delete": "删除",
   "memory.action.export": "导出",
   "memory.action.viewSource": "打开详情",
   "memory.summaryMemory": "摘要记忆",

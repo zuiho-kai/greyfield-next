@@ -52,6 +52,7 @@ describe("settings i18n", () => {
     expect(settingsT("zh-CN", "memory.profile.maintenance.detail")).toContain("若与当前对话冲突");
     expect(settingsT("zh-CN", "memory.profile.add.summary")).toBe("手动补充画像");
     expect(settingsT("zh-CN", "memory.profile.action.hide")).toBe("从画像隐藏");
+    expect(settingsT("zh-CN", "memory.profile.action.delete")).toBe("删除");
   });
 
   it("maps Chat and desktop control labels in zh-CN", () => {

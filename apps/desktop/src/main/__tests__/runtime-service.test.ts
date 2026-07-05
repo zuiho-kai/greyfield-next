@@ -1444,6 +1444,50 @@ describe("RuntimeService", () => {
     expect(facts[0]?.supersedes ?? []).not.toContain(facts[0]?.id);
   });
 
+  it("deletes profile facts only from the current session and character", async () => {
+    const profileStore = new TestUserProfileStore([
+      {
+        id: "profile-current",
+        sessionId: "profile-session",
+        characterId: "test-character",
+        category: "identity",
+        key: "主称呼",
+        value: "朝歌",
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        sourceTurnIds: [],
+        disabled: false
+      },
+      {
+        id: "profile-other-session",
+        sessionId: "other-session",
+        characterId: "test-character",
+        category: "identity",
+        key: "主称呼",
+        value: "别人",
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        sourceTurnIds: [],
+        disabled: false
+      }
+    ]);
+    const service = new RuntimeService(defaultGreyfieldConfig, {
+      sessionStore: new TestSessionStore("profile-session", [])
+    });
+    (service as any).memoryStoresV2 = { profileStore };
+    (service as any).memoryV2CharacterId = "test-character";
+
+    await expect(service.deleteProfileFact("profile-other-session")).resolves.toMatchObject({
+      ok: false,
+      message: "Profile fact profile-other-session not found in current session."
+    });
+    expect(profileStore.getAll().some((fact) => fact.id === "profile-other-session")).toBe(true);
+
+    await expect(service.deleteProfileFact("profile-current")).resolves.toMatchObject({
+      ok: true,
+      message: "Profile fact profile-current deleted."
+    });
+    expect(profileStore.getAll().some((fact) => fact.id === "profile-current")).toBe(false);
+  });
+
   it("does not toggle or delete core memories from another session", async () => {
     const coreStore = new TestCoreMemoryStore([
       makeCoreMemory({ id: "core-current", sessionId: "current-session", text: "Current session fact" }),
@@ -2813,6 +2857,15 @@ class TestUserProfileStore {
 
   async get(id: string): Promise<UserProfileFact | null> {
     return this.facts.find((fact) => fact.id === id) ?? null;
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const index = this.facts.findIndex((fact) => fact.id === id);
+    if (index < 0) {
+      return false;
+    }
+    this.facts.splice(index, 1);
+    return true;
   }
 
   getAll(): UserProfileFact[] {

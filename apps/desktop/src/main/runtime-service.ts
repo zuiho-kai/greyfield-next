@@ -901,6 +901,29 @@ export class RuntimeService {
     };
   }
 
+  async deleteProfileFact(id: string): Promise<MemoryControlResult> {
+    const profileStore = this.memoryStoresV2?.profileStore;
+    if (!profileStore || !this.memoryV2CharacterId) {
+      return { ok: false, message: "User profile is not available (V2 memory disabled)." };
+    }
+
+    const existing = await profileStore.get(id);
+    if (
+      !existing ||
+      existing.sessionId !== this.sessionStore.sessionId ||
+      existing.characterId !== this.memoryV2CharacterId
+    ) {
+      return { ok: false, message: `Profile fact ${id} not found in current session.` };
+    }
+
+    const deleted = await profileStore.delete(id);
+    return {
+      ok: deleted,
+      message: deleted ? `Profile fact ${id} deleted.` : `Profile fact ${id} was not deleted.`,
+      snapshot: await this.getMemoryLibrarySnapshot()
+    };
+  }
+
   private async createRuntime(): Promise<GreyfieldRuntime> {
     const persona = await this.loadPersona();
     const atomExtractionPolicy = this.resolveMemoryAtomExtractionPolicy();
