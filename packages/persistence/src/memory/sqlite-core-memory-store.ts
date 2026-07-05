@@ -1,6 +1,6 @@
 import Database, { type Database as BetterSqliteDatabase } from "better-sqlite3";
 import * as sqliteVss from "sqlite-vss";
-import { deterministicEmbedding, type CoreMemory } from "@greyfield/core-runtime";
+import { deterministicEmbedding, type CoreMemory, type CoreMemoryVectorSearchOptions } from "@greyfield/core-runtime";
 import { dirname } from "node:path";
 import { mkdirSync } from "node:fs";
 
@@ -150,30 +150,33 @@ export class SqliteCoreMemoryStore {
     return rows.map((row) => this.rowToMemory(row));
   }
 
-  async vectorSearch(query: number[] | string, topK: number): Promise<CoreMemory[]> {
+  async vectorSearch(query: number[] | string, topK: number, options?: CoreMemoryVectorSearchOptions): Promise<CoreMemory[]> {
     const queryEmbedding = Array.isArray(query) ? query : await this.embedSearchText(query);
     if (this.hasVectorExtension) {
       try {
-        return this.vectorExtensionSearch(queryEmbedding, topK);
+        return this.vectorExtensionSearch(queryEmbedding, topK, options);
       } catch (error) {
         console.warn('[Memory] Vector search failed, falling back to brute-force:', error);
       }
     }
 
     // Fallback: brute-force cosine similarity
-    return this.bruteForceSearch(queryEmbedding, topK);
+    return this.bruteForceSearch(queryEmbedding, topK, options);
   }
 
-  private vectorExtensionSearch(queryEmbedding: number[], topK: number): CoreMemory[] {
+  private vectorExtensionSearch(queryEmbedding: number[], topK: number, options?: CoreMemoryVectorSearchOptions): CoreMemory[] {
     const queryBuffer = Buffer.from(new Float32Array(queryEmbedding).buffer);
+    const sessionFilter = options?.sessionId ? "AND m.sessionId = ?" : "";
+    const params: unknown[] = options?.sessionId ? [queryBuffer, options.sessionId, topK] : [queryBuffer, topK];
 
     const rows = this.db.prepare(`
       SELECT m.* FROM core_memories m
       JOIN memory_vectors v ON m.rowid = v.rowid
       WHERE vss_search(v.embedding, ?)
       AND m.disabled = 0
+      ${sessionFilter}
       LIMIT ?
-    `).all(queryBuffer, topK) as CoreMemoryRow[];
+    `).all(...params) as CoreMemoryRow[];
 
     // Attach cosine similarity so callers can threshold on relevance,
     // matching the brute-force path.
@@ -186,8 +189,10 @@ export class SqliteCoreMemoryStore {
     });
   }
 
-  private bruteForceSearch(queryEmbedding: number[], topK: number): CoreMemory[] {
-    const rows = this.db.prepare(`SELECT * FROM core_memories WHERE disabled = 0`).all() as CoreMemoryRow[];
+  private bruteForceSearch(queryEmbedding: number[], topK: number, options?: CoreMemoryVectorSearchOptions): CoreMemory[] {
+    const rows = options?.sessionId
+      ? this.db.prepare(`SELECT * FROM core_memories WHERE disabled = 0 AND sessionId = ?`).all(options.sessionId) as CoreMemoryRow[]
+      : this.db.prepare(`SELECT * FROM core_memories WHERE disabled = 0`).all() as CoreMemoryRow[];
 
     const scored = rows.map((row) => {
       const memory = this.rowToMemory(row);

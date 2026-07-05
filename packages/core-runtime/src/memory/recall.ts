@@ -59,7 +59,7 @@ export async function recall(
   // Step 1: Query core memories with vector search
   try {
     const embedding = await embed(userMessage);
-    const coreMemories = await manager.coreStore.vectorSearch(embedding, 10);
+    const coreMemories = await manager.coreStore.vectorSearch(embedding, 10, { sessionId: manager.sessionId });
 
     // Keep only memories that are enabled, actually similar to the query,
     // and whose time-decayed strength is still above the floor.
@@ -108,7 +108,7 @@ export async function recall(
   // just a topic title.
   try {
     const keywords = extractKeywords(userMessage);
-    const topics = await manager.topicStore.search(keywords);
+    const topics = searchSessionTopics(await manager.topicStore.getBySession(manager.sessionId), keywords);
 
     if (topics.length > 0) {
       const topic = topics[0];
@@ -126,6 +126,16 @@ export async function recall(
 
   // No relevant memories found
   return { text: '', memories: [] };
+}
+
+function searchSessionTopics(topics: TopicIndex[], keywords: string[]): TopicIndex[] {
+  const lower = keywords.map(kw => kw.toLowerCase());
+  if (lower.length === 0) {
+    return [];
+  }
+  return topics
+    .filter(topic => lower.some(kw => topic.keywords.some(topicKeyword => topicKeyword.toLowerCase().includes(kw))))
+    .sort((a, b) => b.mentionCount - a.mentionCount);
 }
 
 /**
