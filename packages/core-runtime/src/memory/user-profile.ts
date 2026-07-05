@@ -5,7 +5,7 @@
  */
 
 // Re-export types from persistence to avoid circular dependency
-import type { ProfileFactCategory } from "@greyfield/persistence";
+import type { ProfileFactCategory, UserProfileFact } from "@greyfield/persistence";
 
 export type { UserProfileFact, ProfileFactCategory } from "@greyfield/persistence";
 
@@ -16,4 +16,101 @@ export interface ExtractedProfileFact {
   value: string;
   /** Keys of previous facts this one replaces (matched by normalized key) */
   supersedes?: string[];
+}
+
+export interface ProfileFactStore {
+  getBySession(sessionId: string, characterId: string, includeDisabled?: boolean): Promise<UserProfileFact[]>;
+  insert(fact: UserProfileFact): Promise<void>;
+  update(id: string, updates: Partial<Pick<UserProfileFact, "disabled" | "supersedes">>): Promise<void>;
+}
+
+export type ProfileFactPersistenceResult =
+  | { action: "created"; fact: UserProfileFact; supersededCount: 0 }
+  | { action: "reinforced"; fact: UserProfileFact; supersededCount: 0 }
+  | { action: "updated"; fact: UserProfileFact; supersededCount: number };
+
+export async function persistProfileFacts(options: {
+  store: ProfileFactStore;
+  facts: ExtractedProfileFact[];
+  sessionId: string;
+  characterId: string;
+  sourceTurnIds: string[];
+  now?: Date;
+}): Promise<ProfileFactPersistenceResult[]> {
+  const existing = await options.store.getBySession(options.sessionId, options.characterId, true);
+  const results: ProfileFactPersistenceResult[] = [];
+
+  for (const extracted of options.facts) {
+    const normalizedKey = normalizeProfileKey(extracted.key);
+    const normalizedValue = normalizeProfileKey(extracted.value);
+    const duplicates = existing.filter(fact =>
+      normalizeProfileKey(fact.key) === normalizedKey &&
+      fact.category === extracted.category
+    );
+    const identical = duplicates.find(fact => normalizeProfileKey(fact.value) === normalizedValue);
+
+    if (identical) {
+      await options.store.update(identical.id, { disabled: false });
+      identical.disabled = false;
+      results.push({ action: "reinforced", fact: identical, supersededCount: 0 });
+      continue;
+    }
+
+    if (duplicates.length > 0) {
+      const retained = duplicates[0];
+      const supersedes = [
+        ...new Set([
+          ...(retained.supersedes ?? []),
+          ...duplicates.map(fact => fact.id),
+          ...(extracted.supersedes ?? [])
+        ])
+      ].filter(id => id !== retained.id);
+      const updated: UserProfileFact = {
+        ...retained,
+        value: extracted.value,
+        createdAt: options.now ?? new Date(),
+        sourceTurnIds: options.sourceTurnIds,
+        supersedes: supersedes.length > 0 ? supersedes : undefined,
+        disabled: false
+      };
+
+      await options.store.insert(updated);
+      Object.assign(retained, updated);
+      for (const duplicate of duplicates) {
+        if (duplicate.id !== retained.id) {
+          duplicate.disabled = true;
+        }
+      }
+      results.push({ action: "updated", fact: updated, supersededCount: duplicates.length - 1 });
+      continue;
+    }
+
+    const fact: UserProfileFact = {
+      id: createProfileFactId(),
+      sessionId: options.sessionId,
+      characterId: options.characterId,
+      category: extracted.category,
+      key: extracted.key,
+      value: extracted.value,
+      createdAt: options.now ?? new Date(),
+      sourceTurnIds: options.sourceTurnIds,
+      ...(extracted.supersedes && extracted.supersedes.length > 0 ? { supersedes: extracted.supersedes } : {}),
+      disabled: false
+    };
+
+    await options.store.insert(fact);
+    existing.push(fact);
+    results.push({ action: "created", fact, supersededCount: 0 });
+  }
+
+  return results;
+}
+
+export function normalizeProfileKey(text: string): string {
+  return text.trim().toLowerCase().replace(/\s+/g, "");
+}
+
+function createProfileFactId(): string {
+  const randomUUID = globalThis.crypto?.randomUUID;
+  return `profile-${randomUUID ? randomUUID.call(globalThis.crypto) : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`}`;
 }

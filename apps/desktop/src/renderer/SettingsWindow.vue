@@ -461,46 +461,46 @@
         </div>
 
         <!-- User Profile Management UI -->
-        <div class="settings-section user-profile" aria-label="用户画像" data-harness="settings-user-profile">
+        <div class="settings-section user-profile" :aria-label="t('memory.profile.title')" data-harness="settings-user-profile">
           <header class="settings-section__header">
-            <h2>用户画像</h2>
-            <span>{{ profileFacts.length }} 条事实</span>
+            <h2>{{ t("memory.profile.title") }}</h2>
+            <span>{{ t("memory.profile.count", { count: profileFacts.length }) }}</span>
           </header>
 
           <div class="user-profile__overview">
             <div class="memory-library__block">
-              <strong>关于用户的已知事实</strong>
-              <p>过敏信息、重要日期、身份属性等结构化信息,每轮对话自动注入,不依赖召回、不会遗忘。</p>
+              <strong>{{ t("memory.profile.about.title") }}</strong>
+              <p>{{ t("memory.profile.about.detail") }}</p>
             </div>
           </div>
 
           <details class="user-profile__add-form">
-            <summary>添加新事实</summary>
+            <summary>{{ t("memory.profile.add.summary") }}</summary>
             <div class="user-profile__form-content">
               <label>
-                <span>分类</span>
+                <span>{{ t("memory.profile.field.category") }}</span>
                 <select v-model="newFactCategory">
-                  <option value="allergy">过敏信息</option>
-                  <option value="important-date">重要日期</option>
-                  <option value="identity">身份属性</option>
-                  <option value="preference">偏好</option>
-                  <option value="free-form">其他</option>
+                  <option value="allergy">{{ t("memory.profile.category.allergy") }}</option>
+                  <option value="important-date">{{ t("memory.profile.category.importantDate") }}</option>
+                  <option value="identity">{{ t("memory.profile.category.identity") }}</option>
+                  <option value="preference">{{ t("memory.profile.category.preference") }}</option>
+                  <option value="free-form">{{ t("memory.profile.category.freeForm") }}</option>
                 </select>
               </label>
               <label>
-                <span>标签</span>
-                <input v-model="newFactKey" placeholder="例如: 过敏原、生日、职业" />
+                <span>{{ t("memory.profile.field.key") }}</span>
+                <input v-model="newFactKey" :placeholder="t('memory.profile.placeholder.key')" />
               </label>
               <label>
-                <span>内容</span>
-                <input v-model="newFactValue" placeholder="例如: 花生、2026-01-15、软件工程师" />
+                <span>{{ t("memory.profile.field.value") }}</span>
+                <input v-model="newFactValue" :placeholder="t('memory.profile.placeholder.value')" />
               </label>
-              <button type="button" @click="createProfileFact">创建</button>
+              <button type="button" @click="createProfileFact">{{ t("memory.profile.action.create") }}</button>
             </div>
           </details>
 
           <section v-if="profileFactsByCategory.allergy && profileFactsByCategory.allergy.length > 0" class="user-profile__category">
-            <h3>过敏信息</h3>
+            <h3>{{ t("memory.profile.category.allergy") }}</h3>
             <article v-for="fact in profileFactsByCategory.allergy" :key="fact.id" class="user-profile__fact" :class="{ 'user-profile__fact--disabled': fact.disabled }">
               <div class="user-profile__fact-content">
                 <strong>{{ fact.key }}</strong>
@@ -508,14 +508,14 @@
               </div>
               <div class="memory-library__actions">
                 <button type="button" @click="toggleProfileFact(fact)">
-                  {{ fact.disabled ? '启用' : '禁用' }}
+                  {{ fact.disabled ? t("memory.action.enable") : t("memory.action.disable") }}
                 </button>
               </div>
             </article>
           </section>
 
           <section v-if="profileFactsByCategory['important-date'] && profileFactsByCategory['important-date'].length > 0" class="user-profile__category">
-            <h3>重要日期</h3>
+            <h3>{{ t("memory.profile.category.importantDate") }}</h3>
             <article v-for="fact in profileFactsByCategory['important-date']" :key="fact.id" class="user-profile__fact" :class="{ 'user-profile__fact--disabled': fact.disabled }">
               <div class="user-profile__fact-content">
                 <strong>{{ fact.key }}</strong>
@@ -523,14 +523,14 @@
               </div>
               <div class="memory-library__actions">
                 <button type="button" @click="toggleProfileFact(fact)">
-                  {{ fact.disabled ? '启用' : '禁用' }}
+                  {{ fact.disabled ? t("memory.action.enable") : t("memory.action.disable") }}
                 </button>
               </div>
             </article>
           </section>
 
           <section v-if="profileFactsByCategory.identity && profileFactsByCategory.identity.length > 0" class="user-profile__category">
-            <h3>身份属性</h3>
+            <h3>{{ t("memory.profile.category.identity") }}</h3>
             <article v-for="fact in profileFactsByCategory.identity" :key="fact.id" class="user-profile__fact" :class="{ 'user-profile__fact--disabled': fact.disabled }">
               <div class="user-profile__fact-content">
                 <strong>{{ fact.key }}</strong>
@@ -538,14 +538,14 @@
               </div>
               <div class="memory-library__actions">
                 <button type="button" @click="toggleProfileFact(fact)">
-                  {{ fact.disabled ? '启用' : '禁用' }}
+                  {{ fact.disabled ? t("memory.action.enable") : t("memory.action.disable") }}
                 </button>
               </div>
             </article>
           </section>
 
           <section v-if="profileFactsByCategory.preference && profileFactsByCategory.preference.length > 0" class="user-profile__category">
-            <h3>偏好</h3>
+            <h3>{{ t("memory.profile.category.preference") }}</h3>
             <article v-for="fact in profileFactsByCategory.preference" :key="fact.id" class="user-profile__fact" :class="{ 'user-profile__fact--disabled': fact.disabled }">
               <div class="user-profile__fact-content">
                 <strong>{{ fact.key }}</strong>
@@ -553,14 +553,14 @@
               </div>
               <div class="memory-library__actions">
                 <button type="button" @click="toggleProfileFact(fact)">
-                  {{ fact.disabled ? '启用' : '禁用' }}
+                  {{ fact.disabled ? t("memory.action.enable") : t("memory.action.disable") }}
                 </button>
               </div>
             </article>
           </section>
 
           <section v-if="profileFactsByCategory['free-form'] && profileFactsByCategory['free-form'].length > 0" class="user-profile__category">
-            <h3>其他事实</h3>
+            <h3>{{ t("memory.profile.category.freeFormFacts") }}</h3>
             <article v-for="fact in profileFactsByCategory['free-form']" :key="fact.id" class="user-profile__fact" :class="{ 'user-profile__fact--disabled': fact.disabled }">
               <div class="user-profile__fact-content">
                 <strong>{{ fact.key }}</strong>
@@ -568,14 +568,14 @@
               </div>
               <div class="memory-library__actions">
                 <button type="button" @click="toggleProfileFact(fact)">
-                  {{ fact.disabled ? '启用' : '禁用' }}
+                  {{ fact.disabled ? t("memory.action.enable") : t("memory.action.disable") }}
                 </button>
               </div>
             </article>
           </section>
 
           <div v-if="profileFacts.length === 0" class="memory-library__empty">
-            暂无用户画像数据,对话中说"记住我对花生过敏"即可自动提取。
+            {{ t("memory.profile.empty") }}
           </div>
         </div>
 

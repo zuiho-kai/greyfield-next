@@ -13,6 +13,7 @@ import { MemoryManager } from "../memory-manager";
 import { recall, decayedStrength } from "../recall";
 import { deterministicEmbedding } from "../embedding";
 import type { ConversationTurn, CoreMemory, TopicIndex } from "../types";
+import type { UserProfileFact } from "../user-profile";
 
 class FakeTopicStore {
   topics: TopicIndex[] = [];
@@ -82,6 +83,41 @@ class FakeCoreStore {
   }
 }
 
+class FakeProfileStore {
+  facts: UserProfileFact[] = [];
+  updates: Array<{ id: string; updates: Partial<UserProfileFact> }> = [];
+
+  async insert(fact: UserProfileFact): Promise<void> {
+    const index = this.facts.findIndex(existing =>
+      existing.sessionId === fact.sessionId &&
+      existing.characterId === fact.characterId &&
+      existing.category === fact.category &&
+      existing.key.toLowerCase() === fact.key.toLowerCase()
+    );
+    if (index >= 0) {
+      this.facts[index] = { ...this.facts[index], ...fact, id: this.facts[index].id };
+      return;
+    }
+    this.facts.push(fact);
+  }
+
+  async update(id: string, updates: Partial<UserProfileFact>): Promise<void> {
+    this.updates.push({ id, updates });
+    const index = this.facts.findIndex(fact => fact.id === id);
+    if (index >= 0) {
+      this.facts[index] = { ...this.facts[index], ...updates };
+    }
+  }
+
+  async getBySession(sessionId: string, characterId: string, includeDisabled = false): Promise<UserProfileFact[]> {
+    return this.facts.filter(fact =>
+      fact.sessionId === sessionId &&
+      fact.characterId === characterId &&
+      (includeDisabled || !fact.disabled)
+    );
+  }
+}
+
 function makeTurn(index: number, text: string): ConversationTurn {
   return {
     id: `turn-${index}`,
@@ -98,6 +134,7 @@ function makeManager(overrides: {
   batchSize?: number;
   topicStore?: FakeTopicStore;
   coreStore?: FakeCoreStore;
+  profileStore?: FakeProfileStore;
 }) {
   const topicStore = overrides.topicStore ?? new FakeTopicStore();
   const coreStore = overrides.coreStore ?? new FakeCoreStore();
@@ -115,9 +152,9 @@ function makeManager(overrides: {
     llm as any,
     "test-session",
     "test-character",
-    { batchSize: overrides.batchSize ?? 2 }
+    { batchSize: overrides.batchSize ?? 2, profileStore: overrides.profileStore as any }
   );
-  return { manager, topicStore, coreStore };
+  return { manager, topicStore, coreStore, profileStore: overrides.profileStore };
 }
 
 function makeMemory(overrides: Partial<CoreMemory>): CoreMemory {
@@ -293,6 +330,36 @@ describe("index-time topic summaries", () => {
 
     expect(topicStore.topics).toHaveLength(1);
     expect(topicStore.topics[0].summary).toBe("第2批概要");
+  });
+});
+
+describe("profile fact extraction", () => {
+  it("stores profile facts even when the LLM returns no topics", async () => {
+    const profileStore = new FakeProfileStore();
+    const { manager } = makeManager({
+      profileStore,
+      llmResponse: async function* () {
+        yield JSON.stringify({
+          profileFacts: [
+            { category: "allergy", key: "过敏原", value: "花生" }
+          ]
+        });
+      }
+    });
+
+    await manager.onNewTurn(makeTurn(0, "我对花生过敏"));
+    await manager.onNewTurn(makeTurn(1, "以后会记得"));
+
+    expect(profileStore.facts).toHaveLength(1);
+    expect(profileStore.facts[0]).toMatchObject({
+      sessionId: "test-session",
+      characterId: "test-character",
+      category: "allergy",
+      key: "过敏原",
+      value: "花生",
+      sourceTurnIds: ["turn-0", "turn-1"],
+      disabled: false
+    });
   });
 });
 

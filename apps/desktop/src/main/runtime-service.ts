@@ -37,6 +37,7 @@ import {
 import {
   filterDeletedSessionTurns,
   hasDeletedMemoryEvidenceSource,
+  persistProfileFacts,
   sourceTurnIdsContainDeletedEvidence
 } from "@greyfield/core-runtime";
 import { createDefaultInteractionProfile, FakeStageDriver } from "@greyfield/stage-live2d";
@@ -880,38 +881,18 @@ export class RuntimeService {
       return { ok: false, message: "User profile is not available (V2 memory disabled)." };
     }
 
-    // Check for existing facts with same key+category to implement supersedes
-    const existing = await profileStore.getBySession(
-      this.sessionStore.sessionId,
-      this.memoryV2CharacterId,
-      true
-    );
-
-    const normalizedKey = fact.key.trim().toLowerCase().replace(/\s+/g, '');
-    const duplicates = existing.filter(e =>
-      e.key.trim().toLowerCase().replace(/\s+/g, '') === normalizedKey &&
-      e.category === fact.category
-    );
-
-    const newFact = {
-      id: `profile-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+    const [result] = await persistProfileFacts({
+      store: profileStore,
+      facts: [fact],
       sessionId: this.sessionStore.sessionId,
       characterId: this.memoryV2CharacterId,
-      category: fact.category,
-      key: fact.key,
-      value: fact.value,
-      createdAt: new Date(),
-      sourceTurnIds: [],
-      supersedes: duplicates.map(d => d.id),
-      disabled: false
-    };
-
-    await profileStore.insert(newFact);
+      sourceTurnIds: []
+    });
     return {
       ok: true,
-      message: duplicates.length > 0
-        ? `Profile fact created (supersedes ${duplicates.length} old fact${duplicates.length > 1 ? 's' : ''}): ${fact.key}`
-        : `Profile fact created: ${fact.key}`,
+      message: result?.action === "created"
+        ? `Profile fact created: ${fact.key}`
+        : `Profile fact updated: ${fact.key}`,
       snapshot: await this.getMemoryLibrarySnapshot()
     };
   }

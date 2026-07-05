@@ -17,7 +17,8 @@ import type {
   SummarySegment,
   SummarySegmentStore,
   RuntimeSceneContext,
-  UpdateMemoryAtom
+  UpdateMemoryAtom,
+  UserProfileFact
 } from "@greyfield/core-runtime";
 import { createDesktopRuntimeStoreOptions } from "../desktop-runtime-stores";
 import { RuntimeService } from "../runtime-service";
@@ -1415,6 +1416,33 @@ describe("RuntimeService", () => {
     expect(memoryAtomStore.getAll().map((atom) => atom.id)).toEqual(["atom-other-role"]);
   });
 
+  it("manual profile facts reuse the normalized upsert policy without hiding themselves", async () => {
+    const profileStore = new TestUserProfileStore([]);
+    const service = new RuntimeService(defaultGreyfieldConfig, {
+      sessionStore: new TestSessionStore("profile-session", [])
+    });
+    (service as any).memoryStoresV2 = { profileStore };
+    (service as any).memoryV2CharacterId = "test-character";
+
+    await expect(
+      service.createProfileFact({ category: "allergy", key: "过 敏 原", value: "花生" })
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      service.createProfileFact({ category: "allergy", key: "过敏原", value: "杏仁" })
+    ).resolves.toMatchObject({ ok: true });
+
+    const facts = profileStore.getAll();
+    expect(facts).toHaveLength(1);
+    expect(facts[0]).toMatchObject({
+      sessionId: "profile-session",
+      characterId: "test-character",
+      category: "allergy",
+      value: "杏仁",
+      disabled: false
+    });
+    expect(facts[0]?.supersedes ?? []).not.toContain(facts[0]?.id);
+  });
+
   it("resolves memory source passages with session-safe turn references for snapshot and export", async () => {
     const currentSessionCollisionText = "CURRENT SESSION COLLISION TEXT SHOULD NOT BE USED";
     const sessionStore = new TestSessionStore("current-session", [
@@ -2719,6 +2747,47 @@ class TestDeletedMemoryEvidenceStore implements DeletedMemoryEvidenceStore {
   }
 }
 
+class TestUserProfileStore {
+  constructor(private readonly facts: UserProfileFact[]) {}
+
+  async insert(fact: UserProfileFact): Promise<void> {
+    const index = this.facts.findIndex((existing) =>
+      existing.sessionId === fact.sessionId &&
+      existing.characterId === fact.characterId &&
+      existing.category === fact.category &&
+      normalizeProfileTestKey(existing.key) === normalizeProfileTestKey(fact.key)
+    );
+    if (index >= 0) {
+      this.facts[index] = { ...this.facts[index], ...fact, id: this.facts[index].id };
+      return;
+    }
+    this.facts.push(fact);
+  }
+
+  async update(id: string, updates: Partial<UserProfileFact>): Promise<void> {
+    const index = this.facts.findIndex((fact) => fact.id === id);
+    if (index >= 0) {
+      this.facts[index] = { ...this.facts[index], ...updates };
+    }
+  }
+
+  async getBySession(sessionId: string, characterId: string, includeDisabled = false): Promise<UserProfileFact[]> {
+    return this.facts.filter((fact) =>
+      fact.sessionId === sessionId &&
+      fact.characterId === characterId &&
+      (includeDisabled || !fact.disabled)
+    );
+  }
+
+  async get(id: string): Promise<UserProfileFact | null> {
+    return this.facts.find((fact) => fact.id === id) ?? null;
+  }
+
+  getAll(): UserProfileFact[] {
+    return this.facts;
+  }
+}
+
 class TestSessionStore implements SessionStore {
   private readonly turns: SessionTurn[];
 
@@ -2780,4 +2849,8 @@ function makeMemoryAtom(overrides: Partial<MemoryAtom> = {}): MemoryAtom {
     disabled: false,
     ...overrides
   };
+}
+
+function normalizeProfileTestKey(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, "");
 }

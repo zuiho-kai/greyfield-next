@@ -2,7 +2,7 @@ import type { ConversationTurn, TopicIndex, CoreMemory } from "./types";
 import type { LLMProvider } from "../providers";
 import type { SessionTurnLookup } from "../session-store";
 import type { JsonlTopicIndexStore, SqliteCoreMemoryStore, SqliteUserProfileStore } from "@greyfield/persistence";
-import type { UserProfileFact, ExtractedProfileFact } from "./user-profile";
+import { persistProfileFacts, type ExtractedProfileFact } from "./user-profile";
 import { embed } from "./embedding";
 import { extractKeywords } from "./keywords";
 
@@ -290,7 +290,7 @@ ${conversationText}
 
       // Try to parse JSON from response
       let result: {
-        topics: Array<{topic: string, summary?: string, keywords: string[], mentionCount: number}>;
+        topics?: Array<{topic: string, summary?: string, keywords: string[], mentionCount: number}>;
         profileFacts?: ExtractedProfileFact[];
       } = { topics: [] };
 
@@ -300,13 +300,14 @@ ${conversationText}
         result = JSON.parse(jsonMatch[0]);
       }
 
-      if (result.topics.length === 0) {
-        throw new Error('No topics extracted from LLM response');
-      }
-
-      // Process profile facts if present
+      // Process profile facts independently of topic extraction so they are
+      // not lost when the LLM returns facts but no usable topics.
       if (result.profileFacts && result.profileFacts.length > 0) {
         await this.storeProfileFacts(result.profileFacts, turns);
+      }
+
+      if (!result.topics || result.topics.length === 0) {
+        throw new Error('No topics extracted from LLM response');
       }
 
       const firstTurn = turns[0];
@@ -470,62 +471,21 @@ ${conversationText}
     if (!this.profileStore) return;
 
     try {
-      const existing = await this.profileStore.getBySession(this.sessionId, this.characterId, true);
+      const results = await persistProfileFacts({
+        store: this.profileStore,
+        facts,
+        sessionId: this.sessionId,
+        characterId: this.characterId,
+        sourceTurnIds: sourceTurns.map(t => t.id)
+      });
 
-      for (const extracted of facts) {
-        const normalizedKey = normalizeProfileKey(extracted.key);
-
-        // Find facts with the same normalized key
-        const duplicates = existing.filter(e =>
-          normalizeProfileKey(e.key) === normalizedKey &&
-          e.category === extracted.category
-        );
-
-        if (duplicates.length > 0) {
-          // Check if value is identical to an existing fact
-          const identical = duplicates.find(d =>
-            normalizeProfileKey(d.value) === normalizeProfileKey(extracted.value)
-          );
-
-          if (identical) {
-            // Reinforce existing fact (re-enable if disabled)
-            await this.profileStore.update(identical.id, { disabled: false });
-            console.log(`[Memory] Profile fact reinforced: ${identical.id}`);
-            continue;
-          }
-
-          // New value supersedes old ones
-          const fact: UserProfileFact = {
-            id: createProfileFactId(),
-            sessionId: this.sessionId,
-            characterId: this.characterId,
-            category: extracted.category,
-            key: extracted.key,
-            value: extracted.value,
-            createdAt: new Date(),
-            sourceTurnIds: sourceTurns.map(t => t.id),
-            supersedes: duplicates.map(d => d.id),
-            disabled: false
-          };
-
-          await this.profileStore.insert(fact);
-          console.log(`[Memory] Profile fact created (supersedes ${duplicates.length}): ${fact.id}`);
+      for (const result of results) {
+        if (result.action === "created") {
+          console.log(`[Memory] Profile fact created: ${result.fact.id}`);
+        } else if (result.action === "updated") {
+          console.log(`[Memory] Profile fact updated: ${result.fact.id}`);
         } else {
-          // Brand new fact
-          const fact: UserProfileFact = {
-            id: createProfileFactId(),
-            sessionId: this.sessionId,
-            characterId: this.characterId,
-            category: extracted.category,
-            key: extracted.key,
-            value: extracted.value,
-            createdAt: new Date(),
-            sourceTurnIds: sourceTurns.map(t => t.id),
-            disabled: false
-          };
-
-          await this.profileStore.insert(fact);
-          console.log(`[Memory] Profile fact created: ${fact.id}`);
+          console.log(`[Memory] Profile fact reinforced: ${result.fact.id}`);
         }
       }
     } catch (error) {
@@ -576,10 +536,6 @@ function normalizeMemoryText(text: string): string {
   return text.replace(/\s+/g, '').toLowerCase();
 }
 
-function normalizeProfileKey(text: string): string {
-  return text.trim().toLowerCase().replace(/\s+/g, '');
-}
-
 const EXPLICIT_DUPLICATE_SIMILARITY = 0.92;
 
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -619,9 +575,4 @@ async function collectLLMText(llm: LLMProvider, prompt: string): Promise<string>
 function createCoreMemoryId(): string {
   const randomUUID = globalThis.crypto?.randomUUID;
   return `core-${randomUUID ? randomUUID.call(globalThis.crypto) : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`}`;
-}
-
-function createProfileFactId(): string {
-  const randomUUID = globalThis.crypto?.randomUUID;
-  return `profile-${randomUUID ? randomUUID.call(globalThis.crypto) : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`}`;
 }
