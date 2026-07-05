@@ -131,8 +131,8 @@ try {
     includes: ["From you", "Saved from conversation", "第一轮：我喜欢 Hiyori。"],
     excludes: ["Unknown role", "desktop-main-session-1", "Turn", summaryBoundedTail]
   });
-  await memoryLibrary.locator(".memory-library__block--recall", { hasText: "Last recalled memory" }).waitFor();
-  await memoryLibrary.locator(".memory-library__block--recall", { hasText: 'Matched recall cue "hiyori"' }).waitFor();
+  await memoryLibrary.locator(".memory-library__block--recall", { hasText: "Last memory used" }).waitFor();
+  await memoryLibrary.locator(".memory-library__block--recall", { hasText: 'Remembered because of "hiyori"' }).waitFor();
   const memoryLibraryText = ((await memoryLibrary.textContent()) ?? "").toLowerCase();
   for (const forbidden of ["pending", "candidate", "approval"]) {
     if (memoryLibraryText.includes(forbidden)) {

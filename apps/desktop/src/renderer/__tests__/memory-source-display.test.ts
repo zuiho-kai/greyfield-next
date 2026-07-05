@@ -46,9 +46,9 @@ describe("memory source display helpers", () => {
   });
 
   it("turns recall reasons into product language", () => {
-    expect(describeRecallReason("cue:hiyori", "en-US")).toBe('Matched recall cue "hiyori"');
-    expect(describeRecallReason("semantic_match", "en-US")).toBe("Semantic match");
-    expect(describeRecallReason("", "en-US")).toBe("Matched this memory");
+    expect(describeRecallReason("cue:hiyori", "en-US")).toBe('Remembered because of "hiyori"');
+    expect(describeRecallReason("semantic_match", "en-US")).toBe("Related to this chat");
+    expect(describeRecallReason("", "en-US")).toBe("Used this memory");
   });
 
   it("labels screen-aware memory sources as desktop visual context plus user confirmation", () => {
@@ -69,7 +69,7 @@ describe("memory source display helpers", () => {
     expect(describeSourcePassageStatus(userPassage)).toBe("已本地保存");
     expect(describeSourcePassageMeta(userPassage)).toBe("保存自 2026-06-28 00:00 的对话");
     expect(describeSourcePassageBody(makePassage({ text: "" }))).toBe("这个来源没有保存消息文本。");
-    expect(describeRecallReason("cue:hiyori")).toBe("命中召回线索「hiyori」");
+    expect(describeRecallReason("cue:hiyori")).toBe("因为「hiyori」想起这条");
   });
 });
 

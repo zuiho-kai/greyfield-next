@@ -1165,11 +1165,11 @@ function recallReasonLabel(reason: string): string {
 
 function recalledSourceLabel(count: number): string {
   if (count <= 0) {
-    return locale.value === "zh-CN" ? "上次召回没有关联来源片段" : "No source passages attached to the last recall";
+    return locale.value === "zh-CN" ? "上次用到的记忆没有来源片段" : "No source passages attached to the last used memory";
   }
   return locale.value === "zh-CN"
-    ? `上次召回关联 ${count} 个来源片段`
-    : `${count} source ${count === 1 ? "passage" : "passages"} attached to the last recall`;
+    ? `上次用到的记忆关联 ${count} 个来源片段`
+    : `${count} source ${count === 1 ? "passage" : "passages"} attached to the last used memory`;
 }
 
 function memoryToggleStateLabel(disabled: boolean): string {

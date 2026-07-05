@@ -61,7 +61,7 @@ type VisualAcceptanceSummaryInput = {
     providerPreviewInViewport: boolean;
     taskModelSlotsVisible: boolean;
     memoryExtractionVisible: boolean;
-    memoryExtractionDisabledVisible: boolean;
+    memoryEnhancementToggleAvailable: boolean;
     memoryExtractionManualCandidateControlsAbsent: boolean;
     settingsShellVisible: boolean;
     settingsBodyClassApplied: boolean;
@@ -97,7 +97,7 @@ export function buildV1VisualAcceptanceSummary(input: VisualAcceptanceSummaryInp
       "Open settings-first-glance-nav.png and confirm the first Settings view shows distinct Live2D/avatar and Model service navigation entries.",
       "Open settings-model-service-task-models.png and confirm clicking Model service shows the task models without manual provider-section scrolling.",
       "Open settings-live2d-avatar.png and confirm clicking Live2D/avatar shows the Live2D appearance/model section, not a generic model section.",
-      "Open settings-memory-extraction.png and confirm Memory system is marked in development, cannot be enabled, and has no Accept/Reject candidate review controls.",
+      "Open settings-memory-extraction.png and confirm local memory is on, the Memory model enhancement switch is understandable, and there are no Accept/Reject candidate review controls.",
       "Open settings-window-controls.png and confirm Window scale/position controls are readable and not collapsed."
     ]
   };
@@ -245,7 +245,7 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     );
     if (
       !settingsLayout.memoryExtractionVisible ||
-      !settingsLayout.memoryExtractionDisabledVisible ||
+      !settingsLayout.memoryEnhancementToggleAvailable ||
       !settingsLayout.memoryExtractionManualCandidateControlsAbsent
     ) {
       throw new Error(`Settings Memory extraction section is incomplete: ${JSON.stringify(settingsLayout)}`);
@@ -683,16 +683,16 @@ async function readSettingsLayout(page: Page): Promise<VisualAcceptanceSummaryIn
       providerPreviewInViewport: false,
       taskModelSlotsVisible: document.querySelector('[data-task-model-slot="chat"]') !== null,
       memoryExtractionVisible: memorySection !== null,
-      memoryExtractionDisabledVisible: (() => {
+      memoryEnhancementToggleAvailable: (() => {
         const input = memorySection?.querySelector<HTMLInputElement>(
-          'input[aria-label="Memory system"], input[aria-label="记忆系统"]'
+          'input[aria-label="Memory model enhancement"], input[aria-label="记忆模型增强"]'
         );
         return (
           input !== undefined &&
           input !== null &&
-          input.disabled &&
+          !input.disabled &&
           !input.checked &&
-          memorySection?.querySelector(".memory-extraction-status--disabled") !== null
+          memorySection?.querySelector(".memory-extraction-status--standard") !== null
         );
       })(),
       memoryExtractionManualCandidateControlsAbsent: !/\b(accept|reject|candidate|pending)\b/i.test(memoryText),
