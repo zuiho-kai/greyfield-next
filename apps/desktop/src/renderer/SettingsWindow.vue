@@ -867,57 +867,41 @@ const profileFactsByCategory = computed(() => {
 
 // Profile facts methods
 async function loadProfileFacts() {
-  try {
-    const facts = await window.electron.invoke("profile:get-facts");
-    profileFacts.value = facts;
-  } catch (error) {
-    console.error("Failed to load profile facts:", error);
-  }
+  window.greyfield.send("profile:get-facts", {});
 }
 
 async function toggleProfileFact(fact: typeof profileFacts.value[0]) {
-  try {
-    await window.electron.invoke("profile:update-fact", {
-      id: fact.id,
-      disabled: !fact.disabled
-    });
-    await loadProfileFacts();
-    emit("refresh-memory-debug");
-  } catch (error) {
-    console.error("Failed to toggle profile fact:", error);
-  }
+  window.greyfield.send("profile:update-fact", {
+    id: fact.id,
+    disabled: !fact.disabled
+  });
 }
 
 async function createProfileFact() {
   if (!newFactKey.value.trim() || !newFactValue.value.trim()) {
     return;
   }
-  try {
-    await window.electron.invoke("profile:create-fact", {
-      category: newFactCategory.value,
-      key: newFactKey.value.trim(),
-      value: newFactValue.value.trim()
-    });
-    newFactKey.value = "";
-    newFactValue.value = "";
-    await loadProfileFacts();
-    emit("refresh-memory-debug");
-  } catch (error) {
-    console.error("Failed to create profile fact:", error);
-  }
+  window.greyfield.send("profile:create-fact", {
+    category: newFactCategory.value,
+    key: newFactKey.value.trim(),
+    value: newFactValue.value.trim()
+  });
+  newFactKey.value = "";
+  newFactValue.value = "";
 }
 
-const selectedSourceDrilldown = computed(() => {
-  if (!selectedSource.value) {
-    return null;
-  }
-  if (selectedSource.value.kind === "summary") {
-    const item = memorySegments.value.find((segment) => segment.id === selectedSource.value?.id);
-    return item ? { kind: "summary" as const, item } : null;
-  }
-  const item = memoryAtoms.value.find((atom) => atom.id === selectedSource.value?.id);
-  return item ? { kind: "atom" as const, item } : null;
+// Listen for profile facts results
+window.greyfield.on("profile:facts-result", (facts) => {
+  profileFacts.value = facts;
 });
+
+window.greyfield.on("profile:action-result", (result) => {
+  if (result.ok) {
+    loadProfileFacts();
+    emit("refresh-memory-debug");
+  }
+});
+
 const selectedSummarySource = computed(() =>
   selectedSourceDrilldown.value?.kind === "summary" ? selectedSourceDrilldown.value.item : null
 );

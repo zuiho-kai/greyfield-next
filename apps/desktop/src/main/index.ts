@@ -223,25 +223,31 @@ function registerIpc(): void {
     void exportMemory(event.sender);
   });
 
-  ipcMain.handle("profile:get-facts", async () => {
+  ipcMain.on("profile:get-facts", async (event) => {
     if (!runtimeService) {
-      return [];
+      event.sender.send("profile:facts-result", []);
+      return;
     }
-    return await runtimeService.getProfileFacts();
+    const facts = await runtimeService.getProfileFacts();
+    event.sender.send("profile:facts-result", facts);
   });
 
-  ipcMain.handle("profile:update-fact", async (_event, payload: { id: string; disabled?: boolean }) => {
+  ipcMain.on("profile:update-fact", async (event, payload: { id: string; disabled?: boolean }) => {
     if (!runtimeService) {
-      return { ok: false, message: "Runtime not available" };
+      event.sender.send("profile:action-result", { ok: false, message: "Runtime not available" });
+      return;
     }
-    return await runtimeService.updateProfileFact(payload.id, { disabled: payload.disabled });
+    const result = await runtimeService.updateProfileFact(payload.id, { disabled: payload.disabled });
+    event.sender.send("profile:action-result", result);
   });
 
-  ipcMain.handle("profile:create-fact", async (_event, payload: { category: "allergy" | "important-date" | "identity" | "preference" | "free-form"; key: string; value: string }) => {
+  ipcMain.on("profile:create-fact", async (event, payload: { category: "allergy" | "important-date" | "identity" | "preference" | "free-form"; key: string; value: string }) => {
     if (!runtimeService) {
-      return { ok: false, message: "Runtime not available" };
+      event.sender.send("profile:action-result", { ok: false, message: "Runtime not available" });
+      return;
     }
-    return await runtimeService.createProfileFact(payload);
+    const result = await runtimeService.createProfileFact(payload);
+    event.sender.send("profile:action-result", result);
   });
 
   ipcMain.on("screen-awareness:set-enabled", (_event, payload) => {

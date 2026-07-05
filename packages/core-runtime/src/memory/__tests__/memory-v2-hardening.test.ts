@@ -103,7 +103,10 @@ function makeManager(overrides: {
   const coreStore = overrides.coreStore ?? new FakeCoreStore();
   const llm = {
     stream: overrides.llmResponse ?? (async function* () {
-      yield JSON.stringify([{ topic: "聊猫咪的日常", keywords: ["猫咪", "宠物", "喂食"], mentionCount: 1 }]);
+      yield JSON.stringify({
+        topics: [{ topic: "聊猫咪的日常", keywords: ["猫咪", "宠物", "喂食"], mentionCount: 1 }],
+        profileFacts: []
+      });
     })
   };
   const manager = new MemoryManager(
@@ -227,7 +230,10 @@ describe("cross-batch topic merging", () => {
   it("upgrades immediately when a single batch reports high frequency", async () => {
     const { manager, coreStore } = makeManager({
       llmResponse: async function* () {
-        yield JSON.stringify([{ topic: "反复聊到工作压力", keywords: ["工作", "压力", "加班"], mentionCount: 5 }]);
+        yield JSON.stringify({
+          topics: [{ topic: "反复聊到工作压力", keywords: ["工作", "压力", "加班"], mentionCount: 5 }],
+          profileFacts: []
+        });
       }
     });
 
@@ -242,12 +248,15 @@ describe("index-time topic summaries", () => {
   it("stores the LLM recap on the topic and uses it for the core memory text", async () => {
     const { manager, topicStore, coreStore } = makeManager({
       llmResponse: async function* () {
-        yield JSON.stringify([{
-          topic: "聊猫咪生病",
-          summary: "用户的猫不吃饭，去医院检查后开始吃药，情况在好转。",
-          keywords: ["猫咪", "生病", "医院"],
-          mentionCount: 5
-        }]);
+        yield JSON.stringify({
+          topics: [{
+            topic: "聊猫咪生病",
+            summary: "用户的猫不吃饭，去医院检查后开始吃药，情况在好转。",
+            keywords: ["猫咪", "生病", "医院"],
+            mentionCount: 5
+          }],
+          profileFacts: []
+        });
       }
     });
 
@@ -265,12 +274,15 @@ describe("index-time topic summaries", () => {
     const { manager, topicStore } = makeManager({
       llmResponse: async function* () {
         batchIndex += 1;
-        yield JSON.stringify([{
-          topic: "聊猫咪生病",
-          summary: `第${batchIndex}批概要`,
-          keywords: ["猫咪", "生病", "医院"],
-          mentionCount: 1
-        }]);
+        yield JSON.stringify({
+          topics: [{
+            topic: "聊猫咪生病",
+            summary: `第${batchIndex}批概要`,
+            keywords: ["猫咪", "生病", "医院"],
+            mentionCount: 1
+          }],
+          profileFacts: []
+        });
       }
     });
 

@@ -886,6 +886,19 @@ export class RuntimeService {
       return { ok: false, message: "User profile is not available (V2 memory disabled)." };
     }
 
+    // Check for existing facts with same key+category to implement supersedes
+    const existing = await profileStore.getBySession(
+      this.sessionStore.sessionId,
+      this.memoryV2CharacterId,
+      true
+    );
+
+    const normalizedKey = fact.key.trim().toLowerCase().replace(/\s+/g, '');
+    const duplicates = existing.filter(e =>
+      e.key.trim().toLowerCase().replace(/\s+/g, '') === normalizedKey &&
+      e.category === fact.category
+    );
+
     const newFact = {
       id: `profile-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
       sessionId: this.sessionStore.sessionId,
@@ -895,13 +908,16 @@ export class RuntimeService {
       value: fact.value,
       createdAt: new Date(),
       sourceTurnIds: [],
+      supersedes: duplicates.map(d => d.id),
       disabled: false
     };
 
     await profileStore.insert(newFact);
     return {
       ok: true,
-      message: `Profile fact created: ${fact.key}`,
+      message: duplicates.length > 0
+        ? `Profile fact created (supersedes ${duplicates.length} old fact${duplicates.length > 1 ? 's' : ''}): ${fact.key}`
+        : `Profile fact created: ${fact.key}`,
       snapshot: await this.getMemoryLibrarySnapshot()
     };
   }
