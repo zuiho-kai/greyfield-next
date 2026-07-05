@@ -232,7 +232,7 @@ function registerIpc(): void {
     event.sender.send("profile:facts-result", facts);
   });
 
-  ipcMain.on("profile:update-fact", async (event, payload: { id: string; disabled?: boolean }) => {
+  ipcMain.on("profile:update-fact", async (event, payload: DesktopProfileFactUpdate) => {
     if (!runtimeService) {
       event.sender.send("profile:action-result", { ok: false, message: "Runtime not available" });
       return;
@@ -241,7 +241,7 @@ function registerIpc(): void {
     event.sender.send("profile:action-result", result);
   });
 
-  ipcMain.on("profile:create-fact", async (event, payload: { category: "allergy" | "important-date" | "identity" | "preference" | "free-form"; key: string; value: string }) => {
+  ipcMain.on("profile:create-fact", async (event, payload: DesktopProfileFactCreate) => {
     if (!runtimeService) {
       event.sender.send("profile:action-result", { ok: false, message: "Runtime not available" });
       return;

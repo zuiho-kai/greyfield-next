@@ -9,7 +9,7 @@ export type { UserProfileFact, ProfileFactCategory } from "@greyfield/persistenc
 
 /** Shape returned by LLM when extracting profile facts from a batch */
 export interface ExtractedProfileFact {
-  category: import("@greyfield/persistence").ProfileFactCategory;
+  category: ProfileFactCategory;
   key: string;
   value: string;
   /** Keys of previous facts this one replaces (matched by normalized key) */

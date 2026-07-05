@@ -40,7 +40,8 @@ export class SqliteUserProfileStore {
         created_at INTEGER NOT NULL,
         source_turn_ids TEXT NOT NULL,
         supersedes TEXT,
-        disabled INTEGER NOT NULL DEFAULT 0
+        disabled INTEGER NOT NULL DEFAULT 0,
+        UNIQUE(session_id, character_id, category, key COLLATE NOCASE)
       );
 
       CREATE INDEX IF NOT EXISTS idx_session_character
@@ -56,6 +57,13 @@ export class SqliteUserProfileStore {
       INSERT INTO user_self_profile
         (id, session_id, character_id, category, key, value, created_at, source_turn_ids, supersedes, disabled)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(session_id, character_id, category, key)
+      DO UPDATE SET
+        value = excluded.value,
+        created_at = excluded.created_at,
+        source_turn_ids = excluded.source_turn_ids,
+        supersedes = excluded.supersedes,
+        disabled = excluded.disabled
     `);
 
     stmt.run(

@@ -828,14 +828,7 @@ export class RuntimeService {
   }
 
   // Profile fact management (V2 memory system)
-  async getProfileFacts(): Promise<Array<{
-    id: string;
-    category: string;
-    key: string;
-    value: string;
-    createdAt: string;
-    disabled: boolean;
-  }>> {
+  async getProfileFacts(): Promise<DesktopProfileFact[]> {
     const profileStore = this.memoryStoresV2?.profileStore;
     if (!profileStore || !this.memoryV2CharacterId) {
       return [];
