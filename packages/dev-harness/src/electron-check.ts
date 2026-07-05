@@ -899,8 +899,8 @@ async function waitForSettingsLocale(path: string, locale: typeof defaultGreyfie
 }
 
 async function verifyMemoryExtractionSettings(settingsWindow: Page): Promise<{
-  developmentStatusVisible: boolean;
-  toggleDisabled: boolean;
+  activeStatusVisible: boolean;
+  toggleEnabled: boolean;
   toggleUnchecked: boolean;
   manualCandidateControlsAbsent: boolean;
 }> {
@@ -908,28 +908,23 @@ async function verifyMemoryExtractionSettings(settingsWindow: Page): Promise<{
   await memorySection.waitFor();
   const toggle = memorySection.getByLabel(/^(Memory system|记忆系统)$/);
   await toggle.waitFor();
-  await expectDisabledMemoryToggle(toggle);
-  await memorySection
-    .locator(".memory-extraction-status--disabled", { hasText: /In development|开发中，暂不可用/ })
-    .waitFor();
-  await memorySection
-    .locator(".memory-extraction-status--disabled", { hasText: /Memory is paused|记忆系统已暂停/ })
-    .waitFor();
+  await expectActiveMemoryToggle(toggle);
+  await memorySection.locator(".memory-extraction-status--standard", { hasText: /Basic memory on|基础记忆开启/ }).waitFor();
   await assertNoManualMemoryCandidateControls(memorySection);
   return {
-    developmentStatusVisible: true,
-    toggleDisabled: true,
+    activeStatusVisible: true,
+    toggleEnabled: true,
     toggleUnchecked: true,
     manualCandidateControlsAbsent: true
   };
 }
 
-async function expectDisabledMemoryToggle(toggle: Locator): Promise<void> {
-  if (!(await toggle.isDisabled())) {
-    throw new Error("Memory system toggle must stay disabled while memory is in development");
+async function expectActiveMemoryToggle(toggle: Locator): Promise<void> {
+  if (await toggle.isDisabled()) {
+    throw new Error("Memory system toggle must be available when local memory is active");
   }
   if (await toggle.isChecked()) {
-    throw new Error("Memory system toggle must stay unchecked while memory is in development");
+    throw new Error("Memory model toggle should stay off by default");
   }
 }
 

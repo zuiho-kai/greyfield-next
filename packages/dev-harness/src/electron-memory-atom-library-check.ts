@@ -189,17 +189,16 @@ async function waitForFileContaining(path: string, needles: string[]): Promise<s
 async function assertPausedMemorySettings(memorySection: Locator): Promise<void> {
   const toggle = memorySection.getByLabel("Memory system");
   await toggle.waitFor();
-  if (!(await toggle.isDisabled())) {
-    throw new Error("Memory system toggle must be disabled while memory is in development");
+  if (await toggle.isDisabled()) {
+    throw new Error("Memory system toggle must be available when local memory is active");
   }
   if (await toggle.isChecked()) {
-    throw new Error("Memory system toggle must stay unchecked while memory is in development");
+    throw new Error("Memory model toggle should stay off by default");
   }
-  await memorySection.locator(".memory-extraction-status--disabled", { hasText: "In development" }).waitFor();
-  await memorySection.locator(".memory-extraction-status--disabled", { hasText: "Memory is paused" }).waitFor();
+  await memorySection.locator(".memory-extraction-status--standard", { hasText: "Basic memory on" }).waitFor();
   const text = (await memorySection.textContent()) ?? "";
   if (/\b(accept|reject|candidate|pending)\b/i.test(text)) {
-    throw new Error(`Paused memory settings exposed manual candidate review language: ${text}`);
+    throw new Error(`Memory settings exposed manual candidate review language: ${text}`);
   }
 }
 

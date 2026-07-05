@@ -1,5 +1,23 @@
 # QA Retro: Desktop Pet Interaction Miss
 
+## 2026-07-05 Regression: Settings Memory UI Claimed The Feature Was Still Paused
+
+Manual QA found that the latest Settings memory page still showed "In development / Memory is paused" even after Memory V2 was enabled and the legacy advanced memory block had been removed.
+
+What happened:
+
+- The fix removed the lower legacy "advanced details" block, but did not audit the full visible Settings memory section.
+- `describeMemoryExtractionStatus()` was still hard-coded to return a disabled development state, and the template still rendered the memory toggle as disabled and unchecked.
+- Local validation checked the git revision, startup logs, unit tests, typecheck, and desktop build, but did not open the ordinary Settings memory surface and inspect the user-visible copy.
+- Existing tests and Electron harnesses were protecting the stale paused copy, so green checks reinforced the wrong behavior.
+
+How we avoid repeating it:
+
+- When a user reports stale or contradictory UI in a section, the fix must audit the whole visible section, not only the exact element mentioned.
+- UI status fixes require a negative text search for the stale user-facing copy in source and relevant harnesses before handoff.
+- Tests that assert old product states must be treated as suspect. Update them to protect the corrected user-visible state in the same PR.
+- Startup logs and initialized backend services do not prove Settings correctness. Settings changes need an ordinary Settings path check or a targeted renderer/Electron assertion for the visible section.
+
 ## 2026-07-03 Regression: Coordinator Confused Process Signals, Task State, And Worker Ownership
 
 During parallel Greyfield follow-up work, the coordinator made three related mistakes:
