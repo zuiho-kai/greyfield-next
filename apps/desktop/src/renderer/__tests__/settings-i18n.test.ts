@@ -37,8 +37,6 @@ describe("settings i18n", () => {
     expect(settingsT("zh-CN", "memory.about.detail")).toContain("先整体关闭");
     expect(settingsT("zh-CN", "memory.about.detail")).toContain("现在不能启动");
     expect(settingsT("zh-CN", "memory.status.saved", { count: 3 })).toBe("已保存 3 条记忆");
-    expect(settingsT("zh-CN", "memory.controls.title")).toBe("高级记忆控制");
-    expect(settingsT("zh-CN", "memory.stats.rawTurns", { count: 2 })).toBe("原始轮次 2");
     expect(settingsT("zh-CN", "memory.field.text")).toBe("记住的内容");
     expect(settingsT("zh-CN", "memory.field.recallCues")).toBe("帮助想起它的词");
     expect(settingsT("zh-CN", "memory.action.viewSource")).toBe("打开详情");

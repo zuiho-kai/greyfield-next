@@ -146,9 +146,6 @@ export type SettingsI18nKey =
   | "memory.status.saved.detail"
   | "memory.manage.title"
   | "memory.manage.detail"
-  | "memory.controls.title"
-  | "memory.controls.detail"
-  | "memory.advanced.summary"
   | "memory.savedMemories"
   | "memory.types.label"
   | "memory.type.summary"
@@ -166,9 +163,6 @@ export type SettingsI18nKey =
   | "memory.type.promise"
   | "memory.type.memory"
   | "memory.stored"
-  | "memory.stats.rawTurns"
-  | "memory.stats.enabled"
-  | "memory.stats.disabled"
   | "memory.state.enabled"
   | "memory.state.disabled"
   | "memory.source.drilldown"
@@ -472,9 +466,6 @@ const enUS: Record<SettingsI18nKey, string> = {
   "memory.status.saved.detail": "Greyfield can reuse these details in later chats. Open any item if you want to review or change it.",
   "memory.manage.title": "What you can do",
   "memory.manage.detail": "Open a memory to review its source, edit it, turn it off, or delete it. Detailed memories can also be exported one by one.",
-  "memory.controls.title": "Advanced memory controls",
-  "memory.controls.detail": "Exports include memory text and related messages. Delete and clear remove this library only, not raw chat history; provider credentials stay out.",
-  "memory.advanced.summary": "Show advanced details",
   "memory.savedMemories": "Saved memories",
   "memory.types.label": "Memory groups",
   "memory.type.summary": "Summary",
@@ -492,9 +483,6 @@ const enUS: Record<SettingsI18nKey, string> = {
   "memory.type.promise": "Promise",
   "memory.type.memory": "Memory",
   "memory.stored": "{count} stored",
-  "memory.stats.rawTurns": "Raw turns {count}",
-  "memory.stats.enabled": "Enabled {count}",
-  "memory.stats.disabled": "Disabled {count}",
   "memory.state.enabled": "Enabled",
   "memory.state.disabled": "Disabled",
   "memory.source.drilldown": "Memory details",
@@ -799,9 +787,6 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "memory.status.saved.detail": "Greyfield 之后聊天时可以继续用这些细节。打开任意一条，就能查看或修改。",
   "memory.manage.title": "你可以做什么",
   "memory.manage.detail": "打开一条记忆后，可以查看它来自哪里、编辑、停用或删除。详细记忆也可以单独导出。",
-  "memory.controls.title": "高级记忆控制",
-  "memory.controls.detail": "导出只包含记忆文本和相关消息。删除和清空只会移除这份记忆库，不删除原始聊天历史；服务凭据不会导出。",
-  "memory.advanced.summary": "查看高级详情",
   "memory.savedMemories": "已保存的记忆",
   "memory.types.label": "记忆分组",
   "memory.type.summary": "摘要",
@@ -819,9 +804,6 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "memory.type.promise": "承诺",
   "memory.type.memory": "记忆",
   "memory.stored": "已保存 {count} 条",
-  "memory.stats.rawTurns": "原始轮次 {count}",
-  "memory.stats.enabled": "已启用 {count}",
-  "memory.stats.disabled": "已禁用 {count}",
   "memory.state.enabled": "已启用",
   "memory.state.disabled": "已禁用",
   "memory.source.drilldown": "记忆详情",

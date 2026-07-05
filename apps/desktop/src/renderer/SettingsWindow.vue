@@ -398,32 +398,6 @@
           <div v-if="memorySegments.length === 0 && memoryAtoms.length === 0 && memoryCoreMemories.length === 0" class="memory-library__empty">
             {{ t("memory.empty") }}
           </div>
-          <details class="memory-library__advanced" data-harness="memory-advanced-details">
-            <summary>{{ t("memory.advanced.summary") }}</summary>
-            <div class="memory-library__advanced-content">
-              <div class="memory-library__privacy" role="note">
-                <strong>{{ t("memory.controls.title") }}</strong>
-                <span>{{ t("memory.controls.detail") }}</span>
-              </div>
-
-              <div class="memory-library__lanes" :aria-label="t('memory.types.label')">
-                <span
-                  v-for="lane in memoryTypeLanes"
-                  :key="lane.label"
-                  class="memory-library__lane"
-                >
-                  <strong>{{ lane.label }}</strong>
-                  <small>{{ lane.detail }}</small>
-                </span>
-              </div>
-
-              <div class="memory-library__stats">
-                <span>{{ t("memory.stats.rawTurns", { count: memoryRawCount }) }}</span>
-                <span>{{ t("memory.stats.enabled", { count: memoryEnabledCount }) }}</span>
-                <span>{{ t("memory.stats.disabled", { count: memoryDisabledCount }) }}</span>
-              </div>
-            </div>
-          </details>
           <p
             v-if="state.memoryDebug.actionMessage"
             class="provider-test-result"
@@ -711,23 +685,10 @@ const settingsNavItems = computed<Array<{ id: SettingsSectionId; label: string }
 );
 const memorySnapshot = computed(() => props.state.memoryDebug.snapshot);
 const memoryExtractionStatus = computed(() => describeMemoryExtractionStatus(props.state, locale.value));
-const memoryRawCount = computed(() => memorySnapshot.value?.recentTurns.length ?? 0);
 const memorySummaryCount = computed(() => memorySnapshot.value?.summarySegments.length ?? 0);
 const memorySegments = computed(() => memorySnapshot.value?.summarySegments ?? []);
 const memoryAtoms = computed(() => memorySnapshot.value?.memoryAtoms ?? []);
 const memoryCoreMemories = computed(() => memorySnapshot.value?.coreMemories ?? []);
-const memoryEnabledCount = computed(
-  () =>
-    memorySegments.value.filter((segment) => !segment.disabled).length +
-    memoryAtoms.value.filter((atom) => !atom.disabled).length +
-    memoryCoreMemories.value.filter((memory) => !memory.disabled).length
-);
-const memoryDisabledCount = computed(
-  () =>
-    memorySegments.value.filter((segment) => segment.disabled).length +
-    memoryAtoms.value.filter((atom) => atom.disabled).length +
-    memoryCoreMemories.value.filter((memory) => memory.disabled).length
-);
 const memoryStoredCount = computed(
   () => memorySummaryCount.value + memoryAtoms.value.length + memoryCoreMemories.value.length
 );
@@ -787,16 +748,6 @@ const memoryAtomTypeConfigs = computed(() =>
     singular: t(config.singularKey)
   }))
 );
-const memoryTypeLanes = computed<Array<{ label: string; detail: string }>>(() => [
-  {
-    label: t("memory.type.summary"),
-    detail: t("memory.stored", { count: memorySummaryCount.value })
-  },
-  ...memoryAtomTypeConfigs.value.map((config) => ({
-    label: config.label,
-    detail: t("memory.stored", { count: memoryAtoms.value.filter((atom) => atom.type === config.type).length })
-  }))
-]);
 type MemoryLibraryItem = { kind: "summary"; item: DesktopMemorySummarySegment } | { kind: "atom"; item: DesktopMemoryAtom };
 const memoryLibraryItems = computed<MemoryLibraryItem[]>(() =>
   [
