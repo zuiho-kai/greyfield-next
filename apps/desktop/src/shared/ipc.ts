@@ -65,6 +65,26 @@ export interface DesktopMemoryCoreMemory {
   disabled: boolean;
 }
 
+export interface DesktopProfileFact {
+  id: string;
+  category: "allergy" | "important-date" | "identity" | "preference" | "free-form";
+  key: string;
+  value: string;
+  createdAt: string;
+  disabled: boolean;
+}
+
+export interface DesktopProfileFactUpdate {
+  id: string;
+  disabled?: boolean;
+}
+
+export interface DesktopProfileFactCreate {
+  category: "allergy" | "important-date" | "identity" | "preference" | "free-form";
+  key: string;
+  value: string;
+}
+
 export interface DesktopMemorySummaryUpdate {
   id: string;
   summary?: string;
@@ -142,6 +162,9 @@ export interface DesktopIpcRequestMap {
   "memory:core-toggle": { id: string; disabled: boolean };
   "memory:core-delete": { id: string };
   "memory:export-request": {};
+  "profile:get-facts": {};
+  "profile:update-fact": DesktopProfileFactUpdate;
+  "profile:create-fact": DesktopProfileFactCreate;
   "screen-awareness:set-enabled": { enabled: boolean };
   "proactive:check": DesktopProactiveCheckRequest;
   "persona:load": {};
@@ -181,6 +204,8 @@ export interface DesktopIpcEventMap {
   "memory:debug-snapshot": DesktopMemoryDebugSnapshot;
   "memory:action-result": DesktopMemoryActionResult;
   "memory:export-result": DesktopMemoryActionResult & { export?: DesktopMemoryExport };
+  "profile:facts-result": DesktopProfileFact[];
+  "profile:action-result": DesktopMemoryActionResult;
   "screen-awareness:state": DesktopScreenAwarenessState;
   "proactive:message": DesktopProactiveMessage;
   "persona:state": DesktopPersonaState;

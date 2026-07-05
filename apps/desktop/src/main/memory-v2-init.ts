@@ -7,11 +7,12 @@
 
 import { app } from "electron";
 import { join } from "path";
-import { JsonlTopicIndexStore, SqliteCoreMemoryStore } from "@greyfield/persistence";
+import { JsonlTopicIndexStore, SqliteCoreMemoryStore, SqliteUserProfileStore } from "@greyfield/persistence";
 
 export interface MemoryStoresV2 {
   topicStore: JsonlTopicIndexStore;
   coreStore: SqliteCoreMemoryStore;
+  profileStore: SqliteUserProfileStore;
 }
 
 /**
@@ -29,7 +30,11 @@ export function initializeMemoryStoresV2(characterId: string): MemoryStoresV2 {
   const coreMemoryPath = join(memoryDir, "core.db");
   const coreStore = new SqliteCoreMemoryStore(coreMemoryPath);
 
-  return { topicStore, coreStore };
+  // Layer 4: User Profile (SQLite, structured facts)
+  const profilePath = join(memoryDir, "profile.db");
+  const profileStore = new SqliteUserProfileStore(profilePath);
+
+  return { topicStore, coreStore, profileStore };
 }
 
 /**

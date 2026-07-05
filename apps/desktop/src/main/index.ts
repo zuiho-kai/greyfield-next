@@ -19,7 +19,14 @@ import { SettingsController } from "./settings-controller";
 import { buildTrayMenuTemplate } from "./tray-menu";
 import { applyWindowLayerMode } from "./window-layer-mode";
 import { getUsableWindow, hideWindowIfUsable, showWindowIfUsable } from "./window-lifecycle";
-import type { DesktopPersonaSaveRequest, DesktopProactiveCheckRequest, DesktopScreenAwarenessState } from "../shared/ipc";
+import type {
+  DesktopMemoryActionResult,
+  DesktopPersonaSaveRequest,
+  DesktopProfileFactCreate,
+  DesktopProfileFactUpdate,
+  DesktopProactiveCheckRequest,
+  DesktopScreenAwarenessState
+} from "../shared/ipc";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 let petWindow: BrowserWindow | undefined;
@@ -44,6 +51,10 @@ let controlsWindowDrag:
       height: number;
     }
   | undefined;
+
+function profileActionFailure(message: string): DesktopMemoryActionResult {
+  return { ok: false, message };
+}
 
 async function createWindows(): Promise<void> {
   const config = await loadGreyfieldConfig(resolveConfigPath());
@@ -221,6 +232,50 @@ function registerIpc(): void {
 
   ipcMain.on("memory:export-request", (event) => {
     void exportMemory(event.sender);
+  });
+
+  ipcMain.on("profile:get-facts", async (event) => {
+    if (!runtimeService) {
+      event.sender.send("profile:facts-result", []);
+      event.sender.send("profile:action-result", profileActionFailure("Runtime not available"));
+      return;
+    }
+    try {
+      const facts = await runtimeService.getProfileFacts();
+      event.sender.send("profile:facts-result", facts);
+    } catch (error) {
+      console.error("[Profile] Failed to load profile facts:", error);
+      event.sender.send("profile:facts-result", []);
+      event.sender.send("profile:action-result", profileActionFailure("Failed to load profile facts"));
+    }
+  });
+
+  ipcMain.on("profile:update-fact", async (event, payload: DesktopProfileFactUpdate) => {
+    if (!runtimeService) {
+      event.sender.send("profile:action-result", profileActionFailure("Runtime not available"));
+      return;
+    }
+    try {
+      const result = await runtimeService.updateProfileFact(payload.id, { disabled: payload.disabled });
+      event.sender.send("profile:action-result", result);
+    } catch (error) {
+      console.error("[Profile] Failed to update profile fact:", error);
+      event.sender.send("profile:action-result", profileActionFailure("Failed to update profile fact"));
+    }
+  });
+
+  ipcMain.on("profile:create-fact", async (event, payload: DesktopProfileFactCreate) => {
+    if (!runtimeService) {
+      event.sender.send("profile:action-result", profileActionFailure("Runtime not available"));
+      return;
+    }
+    try {
+      const result = await runtimeService.createProfileFact(payload);
+      event.sender.send("profile:action-result", result);
+    } catch (error) {
+      console.error("[Profile] Failed to create profile fact:", error);
+      event.sender.send("profile:action-result", profileActionFailure("Failed to create profile fact"));
+    }
   });
 
   ipcMain.on("screen-awareness:set-enabled", (_event, payload) => {

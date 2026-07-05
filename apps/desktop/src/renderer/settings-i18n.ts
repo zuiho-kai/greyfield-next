@@ -219,6 +219,24 @@ export type SettingsI18nKey =
   | "memory.core.kindExplicit"
   | "memory.core.kindTopic"
   | "memory.core.strength"
+  | "memory.profile.title"
+  | "memory.profile.count"
+  | "memory.profile.about.title"
+  | "memory.profile.about.detail"
+  | "memory.profile.add.summary"
+  | "memory.profile.field.category"
+  | "memory.profile.field.key"
+  | "memory.profile.field.value"
+  | "memory.profile.placeholder.key"
+  | "memory.profile.placeholder.value"
+  | "memory.profile.action.create"
+  | "memory.profile.category.allergy"
+  | "memory.profile.category.importantDate"
+  | "memory.profile.category.identity"
+  | "memory.profile.category.preference"
+  | "memory.profile.category.freeForm"
+  | "memory.profile.category.freeFormFacts"
+  | "memory.profile.empty"
   | "memory.summaryMemory"
   | "memory.atomMemories"
   | "memory.summaryMemories"
@@ -525,6 +543,24 @@ const enUS: Record<SettingsI18nKey, string> = {
   "memory.core.kindExplicit": "Explicit memory",
   "memory.core.kindTopic": "Topic memory",
   "memory.core.strength": "Strength {value}%",
+  "memory.profile.title": "User profile",
+  "memory.profile.count": "{count} facts",
+  "memory.profile.about.title": "Known facts about you",
+  "memory.profile.about.detail": "Structured details such as allergies, important dates, and identity facts are injected into every reply without recall or forgetting.",
+  "memory.profile.add.summary": "Add a fact",
+  "memory.profile.field.category": "Category",
+  "memory.profile.field.key": "Label",
+  "memory.profile.field.value": "Value",
+  "memory.profile.placeholder.key": "For example: allergen, birthday, job",
+  "memory.profile.placeholder.value": "For example: peanuts, 2026-01-15, software engineer",
+  "memory.profile.action.create": "Create",
+  "memory.profile.category.allergy": "Allergy",
+  "memory.profile.category.importantDate": "Important date",
+  "memory.profile.category.identity": "Identity",
+  "memory.profile.category.preference": "Preference",
+  "memory.profile.category.freeForm": "Other",
+  "memory.profile.category.freeFormFacts": "Other facts",
+  "memory.profile.empty": "No user profile facts yet. Say \"remember that I am allergic to peanuts\" in chat to extract one automatically.",
   "memory.action.export": "Export",
   "memory.action.viewSource": "Open details",
   "memory.summaryMemory": "Summary memory",
@@ -834,6 +870,24 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "memory.core.kindExplicit": "显式记忆",
   "memory.core.kindTopic": "话题记忆",
   "memory.core.strength": "强度 {value}%",
+  "memory.profile.title": "用户画像",
+  "memory.profile.count": "{count} 条事实",
+  "memory.profile.about.title": "关于用户的已知事实",
+  "memory.profile.about.detail": "过敏信息、重要日期、身份属性等结构化信息会注入每轮对话，不依赖召回，也不会随时间遗忘。",
+  "memory.profile.add.summary": "添加新事实",
+  "memory.profile.field.category": "分类",
+  "memory.profile.field.key": "标签",
+  "memory.profile.field.value": "内容",
+  "memory.profile.placeholder.key": "例如：过敏原、生日、职业",
+  "memory.profile.placeholder.value": "例如：花生、2026-01-15、软件工程师",
+  "memory.profile.action.create": "创建",
+  "memory.profile.category.allergy": "过敏信息",
+  "memory.profile.category.importantDate": "重要日期",
+  "memory.profile.category.identity": "身份属性",
+  "memory.profile.category.preference": "偏好",
+  "memory.profile.category.freeForm": "其他",
+  "memory.profile.category.freeFormFacts": "其他事实",
+  "memory.profile.empty": "暂无用户画像数据。对话中说“记住我对花生过敏”即可自动提取。",
   "memory.action.export": "导出",
   "memory.action.viewSource": "打开详情",
   "memory.summaryMemory": "摘要记忆",

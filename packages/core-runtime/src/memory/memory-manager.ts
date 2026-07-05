@@ -1,8 +1,8 @@
 import type { ConversationTurn, TopicIndex, CoreMemory } from "./types";
 import type { LLMProvider } from "../providers";
 import type { SessionTurnLookup } from "../session-store";
-import type { JsonlTopicIndexStore } from "@greyfield/persistence";
-import type { SqliteCoreMemoryStore } from "@greyfield/persistence";
+import type { JsonlTopicIndexStore, SqliteCoreMemoryStore, SqliteUserProfileStore } from "@greyfield/persistence";
+import { persistProfileFacts, type ExtractedProfileFact } from "./user-profile";
 import { embed } from "./embedding";
 import { extractKeywords } from "./keywords";
 
@@ -13,6 +13,8 @@ export class MemoryManager {
   private closed = false;
   /** Layer 1 access: lets recall drill down from a topic to the raw turns. */
   public readonly turnLookup?: SessionTurnLookup;
+  /** Optional user profile store for structured facts */
+  private profileStore?: SqliteUserProfileStore;
 
   constructor(
     public readonly topicStore: JsonlTopicIndexStore,
@@ -24,11 +26,13 @@ export class MemoryManager {
       batchSize?: number;
       coreUpgradeThreshold?: number;
       turnLookup?: SessionTurnLookup;
+      profileStore?: SqliteUserProfileStore;
     }
   ) {
     this.batchSize = options?.batchSize || 50;
     this.coreUpgradeThreshold = options?.coreUpgradeThreshold ?? 3;
     this.turnLookup = options?.turnLookup;
+    this.profileStore = options?.profileStore;
   }
 
   async onNewTurn(turn: ConversationTurn): Promise<void> {
@@ -52,6 +56,7 @@ export class MemoryManager {
     // Detect explicit memory triggers
     if (text.includes('记住') || text.includes('别忘了') || text.includes('以后要')) {
       await this.writeExplicit(turn);
+      await this.extractProfileFromExplicit(turn);
     }
   }
 
@@ -237,52 +242,78 @@ export class MemoryManager {
         `[${idx + 1}] ${t.role}: ${getTurnText(t)}`
       ).join('\n');
 
-      const prompt = `请分析以下对话，提取 2-4 个主要话题。每个话题包含：
-1. 一句话总结（topic）
-2. 2-3 句概要（summary，概括双方围绕该话题实际说了什么、有什么结论，供日后回忆使用）
-3. 3-5 个关键词（keywords）
-4. 该话题被独立提起的次数（mentionCount，必须基于对话内容如实统计，不确定时填 1）
+      const prompt = `请分析以下对话，提取 2-4 个主要话题，以及用户自述的硬事实。
 
-提取规则：
+话题提取规则：
 - 只提取用户认真讨论过的内容，忽略寒暄、玩笑、反讽、假设和角色扮演中的虚构设定
 - 不要把代码片段、工具输出、系统提示或引用的第三方内容当作用户自己的话题
 - 用户已否认或纠正过的说法，以最终确认的版本为准，不要保留旧说法
 - 不要推测对话中没有出现的信息，summary 只能概括对话里真实出现的内容
 
+用户画像提取规则：
+- 只提取用户明确说的关于自己的硬事实（过敏、重要日期、职业、家庭成员、身份属性等）
+- 忽略假设、玩笑、第三方的事、临时状态（"今天有点累"不算）
+- 分类：allergy(过敏原) / important-date(重要日期) / identity(身份属性如职业、居住地) / preference(偏好) / free-form(其他)
+- 如果用户纠正了之前的说法，在新 fact 的 supersedes 字段填入被覆盖的旧 key（key 相同表示覆盖）
+
 对话内容：
 ${conversationText}
 
-请以 JSON 数组格式返回，例如：
-[
-  {
-    "topic": "讨论天气和心情的关系",
-    "summary": "用户说连续下雨让自己情绪低落，助手建议在室内做些喜欢的事。用户提到打算周末去看电影。",
-    "keywords": ["天气", "心情", "阳光", "下雨"],
-    "mentionCount": 3
-  }
-]
+请以 JSON 格式返回，例如：
+{
+  "topics": [
+    {
+      "topic": "讨论天气和心情的关系",
+      "summary": "用户说连续下雨让自己情绪低落，助手建议在室内做些喜欢的事。用户提到打算周末去看电影。",
+      "keywords": ["天气", "心情", "阳光", "下雨"],
+      "mentionCount": 3
+    }
+  ],
+  "profileFacts": [
+    {
+      "category": "allergy",
+      "key": "过敏原",
+      "value": "花生",
+      "supersedes": []
+    },
+    {
+      "category": "important-date",
+      "key": "认识日期",
+      "value": "2026-07-05"
+    }
+  ]
+}
 
 只返回 JSON，不要其他解释。`;
 
       const responseText = await collectLLMText(this.llm, prompt);
 
       // Try to parse JSON from response
-      let topics: Array<{topic: string, summary?: string, keywords: string[], mentionCount: number}> = [];
+      let result: {
+        topics?: Array<{topic: string, summary?: string, keywords: string[], mentionCount: number}>;
+        profileFacts?: ExtractedProfileFact[];
+      } = { topics: [] };
 
       // Extract JSON from response (might be wrapped in markdown code blocks)
-      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        topics = JSON.parse(jsonMatch[0]);
+        result = JSON.parse(jsonMatch[0]);
       }
 
-      if (topics.length === 0) {
+      // Process profile facts independently of topic extraction so they are
+      // not lost when the LLM returns facts but no usable topics.
+      if (result.profileFacts && result.profileFacts.length > 0) {
+        await this.storeProfileFacts(result.profileFacts, turns);
+      }
+
+      if (!result.topics || result.topics.length === 0) {
         throw new Error('No topics extracted from LLM response');
       }
 
       const firstTurn = turns[0];
       const lastTurn = turns[turns.length - 1];
 
-      return topics.map(t => ({
+      return result.topics.map(t => ({
         sessionId: this.sessionId,
         characterId: this.characterId,
         topic: t.topic,
@@ -383,6 +414,88 @@ ${conversationText}
     } finally {
       this.coreStore.close();
     }
+  }
+
+  /**
+   * Extract profile facts from explicit "记住…" requests.
+   * Runs after writeExplicit so both CoreMemory and ProfileFact are created.
+   */
+  private async extractProfileFromExplicit(turn: ConversationTurn): Promise<void> {
+    if (!this.profileStore) return;
+
+    try {
+      const rawText = getTurnText(turn);
+      const prompt = `用户说了下面这句话，希望被长期记住。请判断这是否包含关于用户自己的硬事实（过敏、重要日期、职业、家庭成员等），如果是，提取为结构化的 profileFact。
+
+分类：
+- allergy: 过敏原
+- important-date: 重要日期（生日、纪念日等）
+- identity: 身份属性（职业、居住地、家庭成员）
+- preference: 偏好（饮食、兴趣）
+- free-form: 其他硬事实
+
+如果不是关于用户自己的硬事实（比如只是希望记住某个对话内容、某个观点），返回空数组。
+
+原话：${rawText}
+
+返回 JSON 格式：
+{
+  "facts": [
+    {
+      "category": "allergy",
+      "key": "过敏原",
+      "value": "花生"
+    }
+  ]
+}
+
+只返回 JSON，不要其他解释。`;
+
+      const responseText = await collectLLMText(this.llm, prompt);
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return;
+
+      const result = JSON.parse(jsonMatch[0]) as { facts: ExtractedProfileFact[] };
+      if (result.facts && result.facts.length > 0) {
+        await this.storeProfileFacts(result.facts, [turn]);
+      }
+    } catch (error) {
+      console.error('[Memory] Failed to extract profile from explicit memory:', error);
+    }
+  }
+
+  /**
+   * Store extracted profile facts, handling dedup and supersedes logic.
+   */
+  private async storeProfileFacts(facts: ExtractedProfileFact[], sourceTurns: ConversationTurn[]): Promise<void> {
+    if (!this.profileStore) return;
+
+    try {
+      const results = await persistProfileFacts({
+        store: this.profileStore,
+        facts,
+        sessionId: this.sessionId,
+        characterId: this.characterId,
+        sourceTurnIds: sourceTurns.map(t => t.id)
+      });
+
+      for (const result of results) {
+        if (result.action === "created") {
+          console.log(`[Memory] Profile fact created: ${result.fact.id}`);
+        } else if (result.action === "updated") {
+          console.log(`[Memory] Profile fact updated: ${result.fact.id}`);
+        } else {
+          console.log(`[Memory] Profile fact reinforced: ${result.fact.id}`);
+        }
+      }
+    } catch (error) {
+      console.error('[Memory] Failed to store profile facts:', error);
+    }
+  }
+
+  /** Expose profile store for runtime-loop to access */
+  getProfileStore(): SqliteUserProfileStore | undefined {
+    return this.profileStore;
   }
 }
 

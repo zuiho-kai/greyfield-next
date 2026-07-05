@@ -13,6 +13,7 @@ import { MemoryManager } from "../memory-manager";
 import { recall, decayedStrength } from "../recall";
 import { deterministicEmbedding } from "../embedding";
 import type { ConversationTurn, CoreMemory, TopicIndex } from "../types";
+import type { UserProfileFact } from "../user-profile";
 
 class FakeTopicStore {
   topics: TopicIndex[] = [];
@@ -82,6 +83,41 @@ class FakeCoreStore {
   }
 }
 
+class FakeProfileStore {
+  facts: UserProfileFact[] = [];
+  updates: Array<{ id: string; updates: Partial<UserProfileFact> }> = [];
+
+  async insert(fact: UserProfileFact): Promise<void> {
+    const index = this.facts.findIndex(existing =>
+      existing.sessionId === fact.sessionId &&
+      existing.characterId === fact.characterId &&
+      existing.category === fact.category &&
+      existing.key.toLowerCase() === fact.key.toLowerCase()
+    );
+    if (index >= 0) {
+      this.facts[index] = { ...this.facts[index], ...fact, id: this.facts[index].id };
+      return;
+    }
+    this.facts.push(fact);
+  }
+
+  async update(id: string, updates: Partial<UserProfileFact>): Promise<void> {
+    this.updates.push({ id, updates });
+    const index = this.facts.findIndex(fact => fact.id === id);
+    if (index >= 0) {
+      this.facts[index] = { ...this.facts[index], ...updates };
+    }
+  }
+
+  async getBySession(sessionId: string, characterId: string, includeDisabled = false): Promise<UserProfileFact[]> {
+    return this.facts.filter(fact =>
+      fact.sessionId === sessionId &&
+      fact.characterId === characterId &&
+      (includeDisabled || !fact.disabled)
+    );
+  }
+}
+
 function makeTurn(index: number, text: string): ConversationTurn {
   return {
     id: `turn-${index}`,
@@ -98,12 +134,16 @@ function makeManager(overrides: {
   batchSize?: number;
   topicStore?: FakeTopicStore;
   coreStore?: FakeCoreStore;
+  profileStore?: FakeProfileStore;
 }) {
   const topicStore = overrides.topicStore ?? new FakeTopicStore();
   const coreStore = overrides.coreStore ?? new FakeCoreStore();
   const llm = {
     stream: overrides.llmResponse ?? (async function* () {
-      yield JSON.stringify([{ topic: "聊猫咪的日常", keywords: ["猫咪", "宠物", "喂食"], mentionCount: 1 }]);
+      yield JSON.stringify({
+        topics: [{ topic: "聊猫咪的日常", keywords: ["猫咪", "宠物", "喂食"], mentionCount: 1 }],
+        profileFacts: []
+      });
     })
   };
   const manager = new MemoryManager(
@@ -112,9 +152,9 @@ function makeManager(overrides: {
     llm as any,
     "test-session",
     "test-character",
-    { batchSize: overrides.batchSize ?? 2 }
+    { batchSize: overrides.batchSize ?? 2, profileStore: overrides.profileStore as any }
   );
-  return { manager, topicStore, coreStore };
+  return { manager, topicStore, coreStore, profileStore: overrides.profileStore };
 }
 
 function makeMemory(overrides: Partial<CoreMemory>): CoreMemory {
@@ -227,7 +267,10 @@ describe("cross-batch topic merging", () => {
   it("upgrades immediately when a single batch reports high frequency", async () => {
     const { manager, coreStore } = makeManager({
       llmResponse: async function* () {
-        yield JSON.stringify([{ topic: "反复聊到工作压力", keywords: ["工作", "压力", "加班"], mentionCount: 5 }]);
+        yield JSON.stringify({
+          topics: [{ topic: "反复聊到工作压力", keywords: ["工作", "压力", "加班"], mentionCount: 5 }],
+          profileFacts: []
+        });
       }
     });
 
@@ -242,12 +285,15 @@ describe("index-time topic summaries", () => {
   it("stores the LLM recap on the topic and uses it for the core memory text", async () => {
     const { manager, topicStore, coreStore } = makeManager({
       llmResponse: async function* () {
-        yield JSON.stringify([{
-          topic: "聊猫咪生病",
-          summary: "用户的猫不吃饭，去医院检查后开始吃药，情况在好转。",
-          keywords: ["猫咪", "生病", "医院"],
-          mentionCount: 5
-        }]);
+        yield JSON.stringify({
+          topics: [{
+            topic: "聊猫咪生病",
+            summary: "用户的猫不吃饭，去医院检查后开始吃药，情况在好转。",
+            keywords: ["猫咪", "生病", "医院"],
+            mentionCount: 5
+          }],
+          profileFacts: []
+        });
       }
     });
 
@@ -265,12 +311,15 @@ describe("index-time topic summaries", () => {
     const { manager, topicStore } = makeManager({
       llmResponse: async function* () {
         batchIndex += 1;
-        yield JSON.stringify([{
-          topic: "聊猫咪生病",
-          summary: `第${batchIndex}批概要`,
-          keywords: ["猫咪", "生病", "医院"],
-          mentionCount: 1
-        }]);
+        yield JSON.stringify({
+          topics: [{
+            topic: "聊猫咪生病",
+            summary: `第${batchIndex}批概要`,
+            keywords: ["猫咪", "生病", "医院"],
+            mentionCount: 1
+          }],
+          profileFacts: []
+        });
       }
     });
 
@@ -281,6 +330,113 @@ describe("index-time topic summaries", () => {
 
     expect(topicStore.topics).toHaveLength(1);
     expect(topicStore.topics[0].summary).toBe("第2批概要");
+  });
+});
+
+describe("profile fact extraction", () => {
+  it("stores profile facts even when the LLM returns no topics", async () => {
+    const profileStore = new FakeProfileStore();
+    const { manager } = makeManager({
+      profileStore,
+      llmResponse: async function* () {
+        yield JSON.stringify({
+          profileFacts: [
+            { category: "allergy", key: "过敏原", value: "花生" }
+          ]
+        });
+      }
+    });
+
+    await manager.onNewTurn(makeTurn(0, "我对花生过敏"));
+    await manager.onNewTurn(makeTurn(1, "以后会记得"));
+
+    expect(profileStore.facts).toHaveLength(1);
+    expect(profileStore.facts[0]).toMatchObject({
+      sessionId: "test-session",
+      characterId: "test-character",
+      category: "allergy",
+      key: "过敏原",
+      value: "花生",
+      sourceTurnIds: ["turn-0", "turn-1"],
+      disabled: false
+    });
+  });
+
+  it("resolves profile supersedes keys to stored fact IDs", async () => {
+    const profileStore = new FakeProfileStore();
+    profileStore.facts.push({
+      id: "old-profile-fact",
+      sessionId: "test-session",
+      characterId: "test-character",
+      category: "identity",
+      key: "称呼",
+      value: "老板",
+      createdAt: new Date("2026-07-01T00:00:00.000Z"),
+      sourceTurnIds: ["turn-old"],
+      disabled: false
+    });
+
+    const { manager } = makeManager({
+      profileStore,
+      llmResponse: async function* () {
+        yield JSON.stringify({
+          profileFacts: [
+            { category: "identity", key: "昵称", value: "阿岚", supersedes: ["称 呼"] }
+          ]
+        });
+      }
+    });
+
+    await manager.onNewTurn(makeTurn(0, "以后叫我阿岚"));
+    await manager.onNewTurn(makeTurn(1, "好的"));
+
+    const newFact = profileStore.facts.find(fact => fact.key === "昵称");
+    expect(newFact?.supersedes).toEqual(["old-profile-fact"]);
+  });
+
+  it("merges resolved supersedes IDs when reinforcing an existing profile fact", async () => {
+    const profileStore = new FakeProfileStore();
+    profileStore.facts.push(
+      {
+        id: "old-profile-fact",
+        sessionId: "test-session",
+        characterId: "test-character",
+        category: "identity",
+        key: "称呼",
+        value: "老板",
+        createdAt: new Date("2026-07-01T00:00:00.000Z"),
+        sourceTurnIds: ["turn-old"],
+        disabled: false
+      },
+      {
+        id: "new-profile-fact",
+        sessionId: "test-session",
+        characterId: "test-character",
+        category: "identity",
+        key: "昵称",
+        value: "阿岚",
+        createdAt: new Date("2026-07-02T00:00:00.000Z"),
+        sourceTurnIds: ["turn-existing"],
+        disabled: false
+      }
+    );
+
+    const { manager } = makeManager({
+      profileStore,
+      llmResponse: async function* () {
+        yield JSON.stringify({
+          profileFacts: [
+            { category: "identity", key: "昵称", value: "阿岚", supersedes: ["称呼"] }
+          ]
+        });
+      }
+    });
+
+    await manager.onNewTurn(makeTurn(0, "以后叫我阿岚"));
+    await manager.onNewTurn(makeTurn(1, "好的"));
+
+    const reinforcedFact = profileStore.facts.find(fact => fact.id === "new-profile-fact");
+    expect(reinforcedFact?.supersedes).toEqual(["old-profile-fact"]);
   });
 });
 

@@ -37,6 +37,7 @@ import {
 import {
   filterDeletedSessionTurns,
   hasDeletedMemoryEvidenceSource,
+  persistProfileFacts,
   sourceTurnIdsContainDeletedEvidence
 } from "@greyfield/core-runtime";
 import { createDefaultInteractionProfile, FakeStageDriver } from "@greyfield/stage-live2d";
@@ -51,6 +52,7 @@ import {
 } from "./runtime-providers";
 import { initializeMemoryStoresV2, shouldUseNewMemorySystem, type MemoryStoresV2 } from "./memory-v2-init";
 import type { JsonlTopicIndexStore, SqliteCoreMemoryStore } from "@greyfield/persistence";
+import type { DesktopProfileFact } from "../shared/ipc";
 
 export interface RuntimeServiceOptions {
   fetch?: typeof fetch;
@@ -240,7 +242,9 @@ export class RuntimeService {
         {
           batchSize: 50,
           // Layer 1 drilldown: recall quotes raw turns when a topic hits
-          ...(hasSessionTurnLookup(this.sessionStore) ? { turnLookup: this.sessionStore } : {})
+          ...(hasSessionTurnLookup(this.sessionStore) ? { turnLookup: this.sessionStore } : {}),
+          // Layer 4: User profile facts
+          profileStore: this.memoryStoresV2.profileStore
         }
       );
       this.memoryV2CharacterId = characterId;
@@ -823,6 +827,74 @@ export class RuntimeService {
     } finally {
       this.testingVoice = false;
     }
+  }
+
+  // Profile fact management (V2 memory system)
+  async getProfileFacts(): Promise<DesktopProfileFact[]> {
+    const profileStore = this.memoryStoresV2?.profileStore;
+    if (!profileStore || !this.memoryV2CharacterId) {
+      return [];
+    }
+
+    const facts = await profileStore.getBySession(
+      this.sessionStore.sessionId,
+      this.memoryV2CharacterId,
+      true
+    );
+
+    return facts.map(f => ({
+      id: f.id,
+      category: f.category,
+      key: f.key,
+      value: f.value,
+      createdAt: f.createdAt.toISOString(),
+      disabled: f.disabled
+    }));
+  }
+
+  async updateProfileFact(id: string, updates: { disabled?: boolean }): Promise<MemoryControlResult> {
+    const profileStore = this.memoryStoresV2?.profileStore;
+    if (!profileStore) {
+      return { ok: false, message: "User profile is not available (V2 memory disabled)." };
+    }
+
+    const existing = await profileStore.get(id);
+    if (!existing || existing.sessionId !== this.sessionStore.sessionId) {
+      return { ok: false, message: `Profile fact ${id} not found in current session.` };
+    }
+
+    await profileStore.update(id, updates);
+    return {
+      ok: true,
+      message: updates.disabled ? `Profile fact ${id} disabled.` : `Profile fact ${id} enabled.`,
+      snapshot: await this.getMemoryLibrarySnapshot()
+    };
+  }
+
+  async createProfileFact(fact: {
+    category: "allergy" | "important-date" | "identity" | "preference" | "free-form";
+    key: string;
+    value: string;
+  }): Promise<MemoryControlResult> {
+    const profileStore = this.memoryStoresV2?.profileStore;
+    if (!profileStore || !this.memoryV2CharacterId) {
+      return { ok: false, message: "User profile is not available (V2 memory disabled)." };
+    }
+
+    const [result] = await persistProfileFacts({
+      store: profileStore,
+      facts: [fact],
+      sessionId: this.sessionStore.sessionId,
+      characterId: this.memoryV2CharacterId,
+      sourceTurnIds: []
+    });
+    return {
+      ok: true,
+      message: result?.action === "created"
+        ? `Profile fact created: ${fact.key}`
+        : `Profile fact updated: ${fact.key}`,
+      snapshot: await this.getMemoryLibrarySnapshot()
+    };
   }
 
   private async createRuntime(): Promise<GreyfieldRuntime> {
