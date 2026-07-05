@@ -361,6 +361,83 @@ describe("profile fact extraction", () => {
       disabled: false
     });
   });
+
+  it("resolves profile supersedes keys to stored fact IDs", async () => {
+    const profileStore = new FakeProfileStore();
+    profileStore.facts.push({
+      id: "old-profile-fact",
+      sessionId: "test-session",
+      characterId: "test-character",
+      category: "identity",
+      key: "称呼",
+      value: "老板",
+      createdAt: new Date("2026-07-01T00:00:00.000Z"),
+      sourceTurnIds: ["turn-old"],
+      disabled: false
+    });
+
+    const { manager } = makeManager({
+      profileStore,
+      llmResponse: async function* () {
+        yield JSON.stringify({
+          profileFacts: [
+            { category: "identity", key: "昵称", value: "阿岚", supersedes: ["称 呼"] }
+          ]
+        });
+      }
+    });
+
+    await manager.onNewTurn(makeTurn(0, "以后叫我阿岚"));
+    await manager.onNewTurn(makeTurn(1, "好的"));
+
+    const newFact = profileStore.facts.find(fact => fact.key === "昵称");
+    expect(newFact?.supersedes).toEqual(["old-profile-fact"]);
+  });
+
+  it("merges resolved supersedes IDs when reinforcing an existing profile fact", async () => {
+    const profileStore = new FakeProfileStore();
+    profileStore.facts.push(
+      {
+        id: "old-profile-fact",
+        sessionId: "test-session",
+        characterId: "test-character",
+        category: "identity",
+        key: "称呼",
+        value: "老板",
+        createdAt: new Date("2026-07-01T00:00:00.000Z"),
+        sourceTurnIds: ["turn-old"],
+        disabled: false
+      },
+      {
+        id: "new-profile-fact",
+        sessionId: "test-session",
+        characterId: "test-character",
+        category: "identity",
+        key: "昵称",
+        value: "阿岚",
+        createdAt: new Date("2026-07-02T00:00:00.000Z"),
+        sourceTurnIds: ["turn-existing"],
+        disabled: false
+      }
+    );
+
+    const { manager } = makeManager({
+      profileStore,
+      llmResponse: async function* () {
+        yield JSON.stringify({
+          profileFacts: [
+            { category: "identity", key: "昵称", value: "阿岚", supersedes: ["称呼"] }
+          ]
+        });
+      }
+    });
+
+    await manager.onNewTurn(makeTurn(0, "以后叫我阿岚"));
+    await manager.onNewTurn(makeTurn(1, "好的"));
+
+    const reinforcedFact = profileStore.facts.find(fact => fact.id === "new-profile-fact");
+    expect(reinforcedFact?.supersedes).toEqual(["old-profile-fact"]);
+  });
 });
 
 describe("explicit memory failures", () => {

@@ -14,7 +14,7 @@ export interface ExtractedProfileFact {
   category: ProfileFactCategory;
   key: string;
   value: string;
-  /** Keys of previous facts this one replaces (matched by normalized key) */
+  /** Keys of previous facts this one replaces; persistence resolves them to fact IDs. */
   supersedes?: string[];
 }
 
@@ -48,10 +48,27 @@ export async function persistProfileFacts(options: {
       fact.category === extracted.category
     );
     const identical = duplicates.find(fact => normalizeProfileKey(fact.value) === normalizedValue);
+    const extractedSupersedes = resolveSupersededFactIds(
+      extracted.supersedes ?? [],
+      existing,
+      extracted.category
+    );
 
     if (identical) {
-      await options.store.update(identical.id, { disabled: false });
+      const supersedes = [
+        ...new Set([
+          ...(identical.supersedes ?? []),
+          ...extractedSupersedes
+        ])
+      ].filter(id => id !== identical.id);
+      await options.store.update(identical.id, {
+        disabled: false,
+        ...(supersedes.length > 0 ? { supersedes } : {})
+      });
       identical.disabled = false;
+      if (supersedes.length > 0) {
+        identical.supersedes = supersedes;
+      }
       results.push({ action: "reinforced", fact: identical, supersededCount: 0 });
       continue;
     }
@@ -62,7 +79,7 @@ export async function persistProfileFacts(options: {
         ...new Set([
           ...(retained.supersedes ?? []),
           ...duplicates.map(fact => fact.id),
-          ...(extracted.supersedes ?? [])
+          ...extractedSupersedes
         ])
       ].filter(id => id !== retained.id);
       const updated: UserProfileFact = {
@@ -94,7 +111,7 @@ export async function persistProfileFacts(options: {
       value: extracted.value,
       createdAt: options.now ?? new Date(),
       sourceTurnIds: options.sourceTurnIds,
-      ...(extracted.supersedes && extracted.supersedes.length > 0 ? { supersedes: extracted.supersedes } : {}),
+      ...(extractedSupersedes.length > 0 ? { supersedes: extractedSupersedes } : {}),
       disabled: false
     };
 
@@ -108,6 +125,25 @@ export async function persistProfileFacts(options: {
 
 export function normalizeProfileKey(text: string): string {
   return text.trim().toLowerCase().replace(/\s+/g, "");
+}
+
+function resolveSupersededFactIds(
+  supersededKeys: string[],
+  existing: UserProfileFact[],
+  category: ProfileFactCategory
+): string[] {
+  if (supersededKeys.length === 0) {
+    return [];
+  }
+
+  const normalizedKeys = new Set(supersededKeys.map(normalizeProfileKey).filter(Boolean));
+  return [
+    ...new Set(
+      existing
+        .filter(fact => fact.category === category && normalizedKeys.has(normalizeProfileKey(fact.key)))
+        .map(fact => fact.id)
+    )
+  ];
 }
 
 function createProfileFactId(): string {
