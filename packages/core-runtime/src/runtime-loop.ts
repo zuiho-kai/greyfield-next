@@ -511,52 +511,72 @@ export class GreyfieldRuntime {
 
       if (facts.length === 0) return "";
 
-      const lines = ["# 关于用户的已知事实", ""];
-
-      // Group by category
-      const byCategory: Record<string, typeof facts> = {};
+      const lines = ["# 人物画像", ""];
+      const bySection: Record<"identity" | "relationship" | "stable" | "preference" | "recent" | "uncertain", typeof facts> = {
+        identity: [],
+        relationship: [],
+        stable: [],
+        preference: [],
+        recent: [],
+        uncertain: []
+      };
       for (const fact of facts) {
-        if (!byCategory[fact.category]) {
-          byCategory[fact.category] = [];
+        bySection[this.profileSectionForFact(fact)].push(fact);
+      }
+
+      const sections: Array<{ id: keyof typeof bySection; title: string }> = [
+        { id: "identity", title: "身份设定" },
+        { id: "relationship", title: "关系设定" },
+        { id: "stable", title: "稳定了解" },
+        { id: "preference", title: "相处偏好" },
+        { id: "recent", title: "近期互动" },
+        { id: "uncertain", title: "不确定信息" }
+      ];
+
+      for (const section of sections) {
+        if (bySection[section.id].length === 0) {
+          continue;
         }
-        byCategory[fact.category].push(fact);
-      }
-
-      if (byCategory.allergy) {
-        lines.push("**过敏信息**:");
-        byCategory.allergy.forEach(f => lines.push(`- ${f.value}`));
+        lines.push(`## ${section.title}`);
+        bySection[section.id].forEach(fact => lines.push(`- ${this.formatProfileFactLine(fact)}`));
         lines.push("");
       }
-
-      if (byCategory["important-date"]) {
-        lines.push("**重要日期**:");
-        byCategory["important-date"].forEach(f => lines.push(`- ${f.key}: ${f.value}`));
-        lines.push("");
-      }
-
-      if (byCategory.identity) {
-        lines.push("**身份属性**:");
-        byCategory.identity.forEach(f => lines.push(`- ${f.key}: ${f.value}`));
-        lines.push("");
-      }
-
-      if (byCategory.preference) {
-        lines.push("**偏好**:");
-        byCategory.preference.forEach(f => lines.push(`- ${f.key}: ${f.value}`));
-        lines.push("");
-      }
-
-      if (byCategory["free-form"]) {
-        lines.push("**其他事实**:");
-        byCategory["free-form"].forEach(f => lines.push(`- ${f.key}: ${f.value}`));
-        lines.push("");
-      }
+      lines.push("## 维护备注");
+      lines.push("- 自动画像仅供内部参考；若与当前对话冲突，以当前对话为准。");
 
       return lines.join("\n").trim();
     } catch (error) {
       console.error("Failed to format user profile:", error);
       return "";
     }
+  }
+
+  private formatProfileFactLine(fact: { key: string; value: string }): string {
+    const key = fact.key.trim();
+    const value = fact.value.trim();
+    if (!key) return value;
+    if (!value) return key;
+    return `${key}: ${value}`;
+  }
+
+  private profileSectionForFact(fact: { category: string; key: string; value: string }): "identity" | "relationship" | "stable" | "preference" | "recent" | "uncertain" {
+    const text = `${fact.key} ${fact.value}`.trim().toLowerCase();
+    if (/关系|朋友|家人|伴侣|同事|relationship|friend|family|partner|coworker/u.test(text)) {
+      return "relationship";
+    }
+    if (/最近|近期|刚刚|上次|recent|last time|today|yesterday/u.test(text)) {
+      return "recent";
+    }
+    if (/可能|也许|不确定|疑似|maybe|possibly|uncertain/u.test(text)) {
+      return "uncertain";
+    }
+    if (fact.category === "identity") {
+      return "identity";
+    }
+    if (fact.category === "preference") {
+      return "preference";
+    }
+    return "stable";
   }
 
   private async loadSourceTurnsForAtomRecall(context: ReturnType<typeof buildMemoryAtomRecallContext>): Promise<SessionTurn[] | undefined> {

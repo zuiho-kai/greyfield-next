@@ -213,8 +213,18 @@ export type SettingsI18nKey =
   | "memory.core.strength"
   | "memory.profile.title"
   | "memory.profile.count"
-  | "memory.profile.about.title"
-  | "memory.profile.about.detail"
+  | "memory.profile.meta.id"
+  | "memory.profile.meta.primaryName"
+  | "memory.profile.meta.aliases"
+  | "memory.profile.meta.localId"
+  | "memory.profile.section.identity"
+  | "memory.profile.section.relationship"
+  | "memory.profile.section.stable"
+  | "memory.profile.section.preference"
+  | "memory.profile.section.recent"
+  | "memory.profile.section.uncertain"
+  | "memory.profile.maintenance.title"
+  | "memory.profile.maintenance.detail"
   | "memory.profile.add.summary"
   | "memory.profile.field.category"
   | "memory.profile.field.key"
@@ -228,7 +238,10 @@ export type SettingsI18nKey =
   | "memory.profile.category.preference"
   | "memory.profile.category.freeForm"
   | "memory.profile.category.freeFormFacts"
-  | "memory.profile.empty"
+  | "memory.profile.emptySection"
+  | "memory.profile.hidden.title"
+  | "memory.profile.action.hide"
+  | "memory.profile.action.restore"
   | "memory.summaryMemory"
   | "memory.atomMemories"
   | "memory.summaryMemories"
@@ -527,24 +540,37 @@ const enUS: Record<SettingsI18nKey, string> = {
   "memory.core.kindExplicit": "Saved directly",
   "memory.core.kindTopic": "Organized from chats",
   "memory.core.strength": "Strength {value}%",
-  "memory.profile.title": "User profile",
-  "memory.profile.count": "{count} facts",
-  "memory.profile.about.title": "Known facts about you",
-  "memory.profile.about.detail": "Structured details such as allergies, important dates, and identity facts are injected into every reply without recall or forgetting.",
-  "memory.profile.add.summary": "Add a fact",
-  "memory.profile.field.category": "Category",
-  "memory.profile.field.key": "Label",
-  "memory.profile.field.value": "Value",
-  "memory.profile.placeholder.key": "For example: allergen, birthday, job",
-  "memory.profile.placeholder.value": "For example: peanuts, 2026-01-15, software engineer",
-  "memory.profile.action.create": "Create",
-  "memory.profile.category.allergy": "Allergy",
+  "memory.profile.title": "Profile",
+  "memory.profile.count": "{count} active notes",
+  "memory.profile.meta.id": "Profile ID",
+  "memory.profile.meta.primaryName": "Preferred name",
+  "memory.profile.meta.aliases": "Aliases",
+  "memory.profile.meta.localId": "local profile",
+  "memory.profile.section.identity": "Identity",
+  "memory.profile.section.relationship": "Relationships",
+  "memory.profile.section.stable": "Stable facts",
+  "memory.profile.section.preference": "Preferences",
+  "memory.profile.section.recent": "Recent interactions",
+  "memory.profile.section.uncertain": "Uncertain notes",
+  "memory.profile.maintenance.title": "Maintenance note",
+  "memory.profile.maintenance.detail": "This profile is a working memory for Greyfield. If it conflicts with the current chat, the current chat wins.",
+  "memory.profile.add.summary": "Add to profile",
+  "memory.profile.field.category": "Profile section",
+  "memory.profile.field.key": "Item",
+  "memory.profile.field.value": "Detail",
+  "memory.profile.placeholder.key": "For example: preferred name, job, birthday",
+  "memory.profile.placeholder.value": "For example: Chaoge, software engineer, 2026-01-15",
+  "memory.profile.action.create": "Add",
+  "memory.profile.category.allergy": "Health / allergy",
   "memory.profile.category.importantDate": "Important date",
   "memory.profile.category.identity": "Identity",
   "memory.profile.category.preference": "Preference",
-  "memory.profile.category.freeForm": "Other",
-  "memory.profile.category.freeFormFacts": "Other facts",
-  "memory.profile.empty": "No user profile facts yet. Say \"remember that I am allergic to peanuts\" in chat to extract one automatically.",
+  "memory.profile.category.freeForm": "Stable fact",
+  "memory.profile.category.freeFormFacts": "Stable facts",
+  "memory.profile.emptySection": "None yet",
+  "memory.profile.hidden.title": "Hidden notes",
+  "memory.profile.action.hide": "Hide",
+  "memory.profile.action.restore": "Restore",
   "memory.action.export": "Export",
   "memory.action.viewSource": "Open details",
   "memory.summaryMemory": "Summary memory",
@@ -846,24 +872,37 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "memory.core.kindExplicit": "直接记下",
   "memory.core.kindTopic": "从聊天整理",
   "memory.core.strength": "强度 {value}%",
-  "memory.profile.title": "用户画像",
-  "memory.profile.count": "{count} 条事实",
-  "memory.profile.about.title": "关于用户的已知事实",
-  "memory.profile.about.detail": "过敏信息、重要日期、身份属性等结构化信息会注入每轮对话，不依赖召回，也不会随时间遗忘。",
-  "memory.profile.add.summary": "添加新事实",
-  "memory.profile.field.category": "分类",
-  "memory.profile.field.key": "标签",
+  "memory.profile.title": "人物画像",
+  "memory.profile.count": "已启用 {count} 条",
+  "memory.profile.meta.id": "人物ID",
+  "memory.profile.meta.primaryName": "主称呼",
+  "memory.profile.meta.aliases": "别名",
+  "memory.profile.meta.localId": "本地画像",
+  "memory.profile.section.identity": "身份设定",
+  "memory.profile.section.relationship": "关系设定",
+  "memory.profile.section.stable": "稳定了解",
+  "memory.profile.section.preference": "相处偏好",
+  "memory.profile.section.recent": "近期互动",
+  "memory.profile.section.uncertain": "不确定信息",
+  "memory.profile.maintenance.title": "维护备注",
+  "memory.profile.maintenance.detail": "自动画像仅供内部参考；若与当前对话冲突，以当前对话为准。",
+  "memory.profile.add.summary": "手动补充画像",
+  "memory.profile.field.category": "写入段落",
+  "memory.profile.field.key": "条目",
   "memory.profile.field.value": "内容",
-  "memory.profile.placeholder.key": "例如：过敏原、生日、职业",
-  "memory.profile.placeholder.value": "例如：花生、2026-01-15、软件工程师",
-  "memory.profile.action.create": "创建",
-  "memory.profile.category.allergy": "过敏信息",
+  "memory.profile.placeholder.key": "例如：主称呼、职业、生日",
+  "memory.profile.placeholder.value": "例如：朝歌、软件工程师、2026-01-15",
+  "memory.profile.action.create": "添加到画像",
+  "memory.profile.category.allergy": "健康/过敏",
   "memory.profile.category.importantDate": "重要日期",
-  "memory.profile.category.identity": "身份属性",
-  "memory.profile.category.preference": "偏好",
-  "memory.profile.category.freeForm": "其他",
-  "memory.profile.category.freeFormFacts": "其他事实",
-  "memory.profile.empty": "暂无用户画像数据。对话中说“记住我对花生过敏”即可自动提取。",
+  "memory.profile.category.identity": "身份设定",
+  "memory.profile.category.preference": "相处偏好",
+  "memory.profile.category.freeForm": "稳定了解",
+  "memory.profile.category.freeFormFacts": "稳定了解",
+  "memory.profile.emptySection": "暂无",
+  "memory.profile.hidden.title": "已隐藏条目",
+  "memory.profile.action.hide": "从画像隐藏",
+  "memory.profile.action.restore": "恢复",
   "memory.action.export": "导出",
   "memory.action.viewSource": "打开详情",
   "memory.summaryMemory": "摘要记忆",
