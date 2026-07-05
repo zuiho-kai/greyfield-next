@@ -104,9 +104,8 @@
         <div
           id="settings-section-memory"
           :ref="setSectionRef('memory')"
-          class="settings-section settings-section--disabled"
+          class="settings-section"
           :aria-label="t('section.memoryExtraction')"
-          aria-disabled="true"
           data-settings-section="memory"
           tabindex="-1"
         >
@@ -121,10 +120,9 @@
           <label class="memory-extraction-toggle">
             <span>{{ t("field.betterMemory") }}</span>
             <input
-              :checked="false"
+              :checked="state.settings.llmAtomExtractionEnabled"
               :aria-label="t('field.betterMemory')"
               type="checkbox"
-              disabled
               @change="$emit('update-boolean-setting', 'llmAtomExtractionEnabled', checkedFrom($event))"
             />
           </label>

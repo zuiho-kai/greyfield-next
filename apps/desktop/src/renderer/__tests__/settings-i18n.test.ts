@@ -34,8 +34,8 @@ describe("settings i18n", () => {
 
   it("maps Memory Library control labels in zh-CN", () => {
     expect(settingsT("zh-CN", "memory.about.title")).toBe("记忆怎么被使用");
-    expect(settingsT("zh-CN", "memory.about.detail")).toContain("先整体关闭");
-    expect(settingsT("zh-CN", "memory.about.detail")).toContain("现在不能启动");
+    expect(settingsT("zh-CN", "memory.about.detail")).toContain("默认把记忆保存在本地");
+    expect(settingsT("zh-CN", "memory.about.detail")).toContain("回复前召回匹配的已保存细节");
     expect(settingsT("zh-CN", "memory.status.saved", { count: 3 })).toBe("已保存 3 条记忆");
     expect(settingsT("zh-CN", "memory.field.text")).toBe("记住的内容");
     expect(settingsT("zh-CN", "memory.field.recallCues")).toBe("帮助想起它的词");

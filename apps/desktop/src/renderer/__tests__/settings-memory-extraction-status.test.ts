@@ -3,15 +3,24 @@ import { createInitialDesktopRendererState } from "../desktop-runtime-bridge";
 import { describeMemoryExtractionStatus } from "../settings-memory-extraction-status";
 
 describe("describeMemoryExtractionStatus", () => {
-  it("marks the memory system as in development regardless of the saved toggle", () => {
+  it("shows the local memory system as active when the memory model is off", () => {
+    const state = createInitialDesktopRendererState();
+
+    expect(describeMemoryExtractionStatus(state, "en-US")).toEqual({
+      tone: "standard",
+      label: "Basic memory on",
+      detail:
+        "Basic memory saves explicit facts from local chat, such as names, dates, and preferences. Recall itself does not use a model: before each reply, Greyfield locally scores memory items by cues and keywords, then inserts the matching text into the prompt context."
+    });
+  });
+
+  it("shows enhanced memory as ready when the memory model toggle is on", () => {
     const state = createInitialDesktopRendererState();
     state.settings.llmAtomExtractionEnabled = true;
 
-    expect(describeMemoryExtractionStatus(state, "en-US")).toEqual({
-      tone: "disabled",
-      label: "In development",
-      detail:
-        "Memory is paused while recall is redesigned. Greyfield will not recall saved memory, write new memory, create summaries, or call the Memory model."
+    expect(describeMemoryExtractionStatus(state)).toMatchObject({
+      tone: "ready",
+      label: "已准备好记住更多细节"
     });
   });
 
@@ -19,8 +28,8 @@ describe("describeMemoryExtractionStatus", () => {
     const status = describeMemoryExtractionStatus(createInitialDesktopRendererState());
 
     expect(status).toMatchObject({
-      tone: "disabled",
-      label: "开发中，暂不可用"
+      tone: "standard",
+      label: "基础记忆开启"
     });
   });
 });
