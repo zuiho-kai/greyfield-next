@@ -104,6 +104,8 @@ For frontend-visible PRs, also required:
 - For desktop launch, pet-window visibility, tray recovery, or "the app is running" claims, process/port checks are not acceptance. Verify the Electron windows the user actually needs are on a visible display, inspect a screenshot or harness artifact, and prove the model canvas is non-empty when the claim includes Live2D visibility.
 - For navigation, Settings, onboarding, feature entry points, or renamed controls, verify the first-glance path before any forced scroll: open the default surface, confirm the entry is visible and named in user language, click it, confirm the intended section becomes active, and inspect a screenshot of that clicked state.
 - Do not accept `scrollIntoView`, direct URL/query params, test-only selectors, or DOM existence as evidence that a user can discover the feature. Those can supplement diagnostics, but they cannot be the primary acceptance for discoverability.
+- For user-managed data, review the feature as a CRUD/lifecycle matrix before calling it complete. If users can create a record, the UI and backend must provide a clear way to remove it, or the PR must explicitly justify why removal is unavailable. Soft delete, disable, hide, archive, and restore are separate states from hard delete and must use distinct labels and method/channel names.
+- For Settings forms or narrow side panels, inspect the touched subsection at the actual panel width. Confirm local control geometry, not only page-level overflow: labels, selects, inputs, buttons, and action rows must have stable widths, readable text, and no overlap or squeezed controls.
 - Current screenshots were opened and inspected by the author before asking for user verification.
 - The PR body names the visual/harness evidence used for Settings, Chat, Pet, speech bubble, Stop, or provider UI changes.
 - Product-shape regressions are treated as blockers even if DOM-level assertions pass.
@@ -115,6 +117,7 @@ For frontend-visible PRs, also required:
 For privacy-sensitive or temporary-data PRs, also required:
 
 - Verify the full lifecycle: create/capture, use/send, stop, delete/clear, reload/replay, in-flight cancellation, source display, recall/export, and provider handoff.
+- For manually created user profile, memory, source, credential, or capture records, include a same-owner deletion test and a cross-session/cross-character negative deletion test when those boundaries exist.
 - Raw screenshots, audio, credentials, secret-like text, and other temporary inputs must not persist in session history, memory atoms, summaries, source fragments, exports, or replayed renderer/main-process state unless the issue explicitly says they should.
 - Deletion and consume paths must invalidate in-flight async work. A pending capture/request must not recreate data after the user stopped, deleted, or sent it once.
 - The harness or tests must include at least one negative assertion for raw-data non-persistence and one replay/reload assertion when main-process or renderer state can retain data.

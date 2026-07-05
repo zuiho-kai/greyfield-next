@@ -1,5 +1,23 @@
 # QA Retro: Desktop Pet Interaction Miss
 
+## 2026-07-05 Regression: Profile Management Had Create Without Delete And A Collapsed Form
+
+Manual QA found that the Settings memory profile panel let users add profile facts but only offered hide/restore, not true deletion. The same panel's manual add form collapsed into narrow select/input controls in the actual Settings side panel width.
+
+What happened:
+
+- The implementation treated disable/restore as enough management surface and did not review the profile panel as a full CRUD lifecycle.
+- The UI copy was improved, but the underlying user action matrix was not expanded from "view and hide" to "create, view, hide, restore, delete".
+- Validation checked text and DOM presence, but did not inspect the subsection's local form geometry in the real narrow Settings panel.
+- The global `.settings-panel label` two-column layout overrode the profile form's intended layout, squeezing controls even though document-level overflow and text checks looked fine.
+
+How we avoid repeating it:
+
+- Any user-created persistent record must get a lifecycle review before handoff: create, display, update/disable when applicable, restore when disabled, and true delete.
+- Soft-delete words and hard-delete behavior must stay separate. Hide, disable, archive, and restore cannot stand in for delete in UI labels, IPC channels, runtime methods, store methods, or tests.
+- Settings subsection fixes must validate local control geometry at the actual panel width. Inspect a screenshot or bounding boxes for the exact section the user reported; DOM text and page-level overflow checks are not enough.
+- For profile/memory user data, add same-owner deletion coverage and cross-session/cross-character negative deletion coverage when those boundaries exist.
+
 ## 2026-07-05 Regression: Settings Memory UI Claimed The Feature Was Still Paused
 
 Manual QA found that the latest Settings memory page still showed "In development / Memory is paused" even after Memory V2 was enabled and the legacy advanced memory block had been removed.
