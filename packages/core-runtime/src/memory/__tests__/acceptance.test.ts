@@ -144,7 +144,7 @@ async function runAcceptanceTest() {
     console.log("✅ All tests passed!");
     console.log("=".repeat(60));
     console.log("\nMemory System V2 is ready for use.");
-    console.log("To enable in the app, set config.memory.useV2System = true");
+    console.log("Memory System V2 is enabled by default. Set config.memory.useV2System = false to opt out.");
 
   } catch (error) {
     console.error("\n❌ Test failed:", error);
