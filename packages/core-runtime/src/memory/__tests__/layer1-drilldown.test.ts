@@ -154,6 +154,25 @@ describe("Layer 1 drilldown", () => {
     expect(result.text).toBe("相关话题：聊到猫咪生病去医院");
   });
 
+  it("never falls back to a topic from another session", async () => {
+    const manager = makeManager({
+      topics: [
+        makeTopic({
+          id: "other-topic",
+          sessionId: "other-session",
+          topic: "Other session private topic",
+          summary: "Other session private summary"
+        })
+      ],
+      noLookup: true
+    });
+
+    const result = await recall("我的猫咪生病那事后来怎么样了", manager);
+
+    expect(result.text).toBe("");
+    expect(result.memories).toHaveLength(0);
+  });
+
   it("falls back to the topic title when Layer 1 lookup fails", async () => {
     const manager = makeManager({ lookupError: true });
 

@@ -413,7 +413,7 @@ export class RuntimeService {
       return { ok: false, message: "Core memory is not available in this runtime." };
     }
     const existing = await store.get(id);
-    if (!existing) {
+    if (!existing || existing.sessionId !== this.sessionStore.sessionId) {
       return { ok: false, message: `Core memory ${id} was not found.` };
     }
     await store.update(id, { disabled });
@@ -428,6 +428,10 @@ export class RuntimeService {
     const store = this.memoryStoresV2?.coreStore;
     if (!store) {
       return { ok: false, message: "Core memory is not available in this runtime." };
+    }
+    const existing = await store.get(id);
+    if (!existing || existing.sessionId !== this.sessionStore.sessionId) {
+      return { ok: false, message: `Core memory ${id} was not found.` };
     }
     const deleted = await store.delete(id);
     if (!deleted) {

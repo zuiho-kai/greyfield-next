@@ -9,6 +9,7 @@ import type {
   DeletedMemoryEvidence,
   DeletedMemoryEvidenceStore,
   AppendSessionTurn,
+  CoreMemory,
   MemoryAtom,
   MemoryAtomStore,
   SessionHandoff,
@@ -1443,6 +1444,37 @@ describe("RuntimeService", () => {
     expect(facts[0]?.supersedes ?? []).not.toContain(facts[0]?.id);
   });
 
+  it("does not toggle or delete core memories from another session", async () => {
+    const coreStore = new TestCoreMemoryStore([
+      makeCoreMemory({ id: "core-current", sessionId: "current-session", text: "Current session fact" }),
+      makeCoreMemory({ id: "core-other", sessionId: "other-session", text: "Other session fact" })
+    ]);
+    const service = new RuntimeService(defaultGreyfieldConfig, {
+      sessionStore: new TestSessionStore("current-session", [])
+    });
+    (service as any).memoryStoresV2 = { coreStore };
+
+    await expect(service.toggleCoreMemory("core-other", true)).resolves.toMatchObject({
+      ok: false,
+      message: "Core memory core-other was not found."
+    });
+    expect(coreStore.getAll().find((memory) => memory.id === "core-other")?.disabled).toBe(false);
+
+    await expect(service.deleteCoreMemory("core-other")).resolves.toMatchObject({
+      ok: false,
+      message: "Core memory core-other was not found."
+    });
+    expect(coreStore.getAll().some((memory) => memory.id === "core-other")).toBe(true);
+
+    await expect(service.toggleCoreMemory("core-current", true)).resolves.toMatchObject({
+      ok: true,
+      snapshot: {
+        coreMemories: [expect.objectContaining({ id: "core-current", disabled: true })]
+      }
+    });
+    expect(coreStore.getAll().find((memory) => memory.id === "core-current")?.disabled).toBe(true);
+  });
+
   it("resolves memory source passages with session-safe turn references for snapshot and export", async () => {
     const currentSessionCollisionText = "CURRENT SESSION COLLISION TEXT SHOULD NOT BE USED";
     const sessionStore = new TestSessionStore("current-session", [
@@ -2788,6 +2820,48 @@ class TestUserProfileStore {
   }
 }
 
+class TestCoreMemoryStore {
+  constructor(private readonly memories: CoreMemory[]) {}
+
+  async insert(memory: CoreMemory): Promise<void> {
+    this.memories.push(memory);
+  }
+
+  async update(id: string, updates: Partial<CoreMemory>): Promise<void> {
+    const index = this.memories.findIndex((memory) => memory.id === id);
+    if (index >= 0) {
+      this.memories[index] = { ...this.memories[index], ...updates };
+    }
+  }
+
+  async get(id: string): Promise<CoreMemory | null> {
+    return this.memories.find((memory) => memory.id === id) ?? null;
+  }
+
+  async getBySession(sessionId: string, includeDisabled = false): Promise<CoreMemory[]> {
+    return this.memories.filter((memory) => memory.sessionId === sessionId && (includeDisabled || !memory.disabled));
+  }
+
+  async vectorSearch(): Promise<CoreMemory[]> {
+    return [];
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const index = this.memories.findIndex((memory) => memory.id === id);
+    if (index < 0) {
+      return false;
+    }
+    this.memories.splice(index, 1);
+    return true;
+  }
+
+  close(): void {}
+
+  getAll(): CoreMemory[] {
+    return this.memories;
+  }
+}
+
 class TestSessionStore implements SessionStore {
   private readonly turns: SessionTurn[];
 
@@ -2853,4 +2927,19 @@ function makeMemoryAtom(overrides: Partial<MemoryAtom> = {}): MemoryAtom {
 
 function normalizeProfileTestKey(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, "");
+}
+
+function makeCoreMemory(overrides: Partial<CoreMemory> = {}): CoreMemory {
+  return {
+    id: "core-memory",
+    sessionId: "current-session",
+    characterId: "test-character",
+    text: "Core memory fact",
+    embedding: [],
+    strength: 0.8,
+    createdAt: new Date("2026-06-29T00:00:00.000Z"),
+    sources: { turnIds: [] },
+    disabled: false,
+    ...overrides
+  };
 }

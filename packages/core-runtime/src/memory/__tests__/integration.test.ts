@@ -10,7 +10,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { JsonlTopicIndexStore } from "../../../../persistence/src/memory/jsonl-topic-index-store";
 import { SqliteCoreMemoryStore } from "../../../../persistence/src/memory/sqlite-core-memory-store";
-import { EmbeddingService } from "../embedding";
+import { deterministicEmbedding, EmbeddingService } from "../embedding";
 import { MemoryManager } from "../memory-manager";
 import { recall } from "../recall";
 import type { ConversationTurn } from "../types";
@@ -161,5 +161,35 @@ describe("Memory System Integration", () => {
     const result = await recall("用户喜欢什么饮料", memoryManager);
 
     expect(result.text).toContain("用户喜欢咖啡饮料");
+  });
+
+  it("should keep vector search scoped to the requested session in sqlite store", async () => {
+    const query = deterministicEmbedding("你还记得我喜欢什么吗");
+    await coreStore.insert({
+      id: "current-session-memory",
+      sessionId: "test-session",
+      characterId: "test-character",
+      text: "Current session private preference",
+      embedding: query,
+      strength: 1.0,
+      createdAt: new Date("2026-07-05T00:00:00.000Z"),
+      sources: { turnIds: ["turn-current"] },
+      disabled: false
+    });
+    await coreStore.insert({
+      id: "other-session-memory",
+      sessionId: "other-session",
+      characterId: "test-character",
+      text: "Other session private preference",
+      embedding: query,
+      strength: 1.0,
+      createdAt: new Date("2026-07-05T00:00:00.000Z"),
+      sources: { turnIds: ["turn-other"] },
+      disabled: false
+    });
+
+    const scoped = await coreStore.vectorSearch(query, 10, { sessionId: "test-session" });
+
+    expect(scoped.map(memory => memory.id)).toEqual(["current-session-memory"]);
   });
 });

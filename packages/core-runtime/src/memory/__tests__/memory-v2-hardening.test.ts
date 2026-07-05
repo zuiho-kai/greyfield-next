@@ -12,7 +12,7 @@ import { describe, it, expect } from "vitest";
 import { MemoryManager } from "../memory-manager";
 import { recall, decayedStrength } from "../recall";
 import { deterministicEmbedding } from "../embedding";
-import type { ConversationTurn, CoreMemory, TopicIndex } from "../types";
+import type { ConversationTurn, CoreMemory, CoreMemoryVectorSearchOptions, TopicIndex } from "../types";
 import type { UserProfileFact } from "../user-profile";
 
 class FakeTopicStore {
@@ -74,8 +74,19 @@ class FakeCoreStore {
     return this.memories.filter(m => m.sessionId === sessionId && (includeDisabled || !m.disabled));
   }
 
-  async vectorSearch(): Promise<CoreMemory[]> {
-    return this.searchResults;
+  async vectorSearch(query: number[], topK: number, options?: CoreMemoryVectorSearchOptions): Promise<CoreMemory[]> {
+    const candidates = this.searchResults.length > 0 ? this.searchResults : this.memories;
+    return candidates
+      .filter(memory =>
+        !memory.disabled &&
+        (!options?.sessionId || memory.sessionId === options.sessionId)
+      )
+      .map(memory => ({
+        ...memory,
+        similarity: memory.similarity ?? cosineSimilarity(query, memory.embedding)
+      }))
+      .sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0))
+      .slice(0, topK);
   }
 
   close(): void {
@@ -127,6 +138,28 @@ function makeTurn(index: number, text: string): ConversationTurn {
     text,
     timestamp: Date.now()
   };
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length === 0 || a.length !== b.length) {
+    return 0;
+  }
+
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let index = 0; index < a.length; index += 1) {
+    const av = a[index] ?? 0;
+    const bv = b[index] ?? 0;
+    dot += av * bv;
+    normA += av * av;
+    normB += bv * bv;
+  }
+
+  if (normA === 0 || normB === 0) {
+    return 0;
+  }
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
 function makeManager(overrides: {
@@ -605,11 +638,30 @@ describe("close()", () => {
 });
 
 describe("recall filtering and decay", () => {
+  it("never recalls or reinforces core memories from another session", async () => {
+    const coreStore = new FakeCoreStore();
+    coreStore.memories = [
+      makeMemory({
+        id: "other-session-memory",
+        sessionId: "other-session",
+        text: "Other session private preference",
+        embedding: deterministicEmbedding("你还记得我喜欢什么吗")
+      })
+    ];
+    const { manager } = makeManager({ coreStore, batchSize: 50 });
+
+    const result = await recall("你还记得我喜欢什么吗", manager);
+
+    expect(result.text).toBe("");
+    expect(result.memories).toHaveLength(0);
+    expect(coreStore.updates).toHaveLength(0);
+  });
+
   it("filters low-similarity hits and reinforces only relevant memories", async () => {
     const coreStore = new FakeCoreStore();
-    coreStore.searchResults = [
-      makeMemory({ id: "relevant", similarity: 0.9 }),
-      makeMemory({ id: "irrelevant", text: "完全无关的记忆", similarity: 0.05 })
+    coreStore.memories = [
+      makeMemory({ id: "relevant", embedding: deterministicEmbedding("你还记得我喜欢什么吗") }),
+      makeMemory({ id: "irrelevant", text: "完全无关的记忆", embedding: deterministicEmbedding("完全无关的记忆") })
     ];
     const { manager } = makeManager({ coreStore, batchSize: 50 });
 
@@ -621,7 +673,7 @@ describe("recall filtering and decay", () => {
 
   it("still returns recall results when reinforcement writes fail", async () => {
     const coreStore = new FakeCoreStore();
-    coreStore.searchResults = [makeMemory({ id: "relevant", similarity: 0.9 })];
+    coreStore.memories = [makeMemory({ id: "relevant", embedding: deterministicEmbedding("你还记得我喜欢什么吗") })];
     coreStore.update = async () => {
       throw new Error("db locked");
     };
@@ -635,8 +687,8 @@ describe("recall filtering and decay", () => {
   it("treats decayed-out memories as forgotten", async () => {
     const coreStore = new FakeCoreStore();
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-    coreStore.searchResults = [
-      makeMemory({ id: "stale", strength: 0.5, createdAt: ninetyDaysAgo, similarity: 0.9 })
+    coreStore.memories = [
+      makeMemory({ id: "stale", strength: 0.5, createdAt: ninetyDaysAgo, embedding: deterministicEmbedding("你还记得吗") })
     ];
     const { manager } = makeManager({ coreStore, batchSize: 50 });
 

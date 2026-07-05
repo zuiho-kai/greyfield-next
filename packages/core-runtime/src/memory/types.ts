@@ -55,6 +55,10 @@ export interface CoreMemory {
   similarity?: number;
 }
 
+export interface CoreMemoryVectorSearchOptions {
+  sessionId?: string;
+}
+
 // Store interfaces
 export interface TopicIndexStore {
   append(topic: Omit<TopicIndex, "id">): Promise<TopicIndex>;
@@ -68,6 +72,6 @@ export interface CoreMemoryStore {
   update(id: string, updates: Partial<CoreMemory>): Promise<void>;
   get(id: string): Promise<CoreMemory | null>;
   getBySession(sessionId: string): Promise<CoreMemory[]>;
-  vectorSearch(query: number[] | string, topK: number): Promise<CoreMemory[]>;
+  vectorSearch(query: number[] | string, topK: number, options?: CoreMemoryVectorSearchOptions): Promise<CoreMemory[]>;
   close(): void;
 }
