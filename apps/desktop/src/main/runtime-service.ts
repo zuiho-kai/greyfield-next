@@ -51,6 +51,7 @@ import {
 } from "./runtime-providers";
 import { initializeMemoryStoresV2, shouldUseNewMemorySystem, type MemoryStoresV2 } from "./memory-v2-init";
 import type { JsonlTopicIndexStore, SqliteCoreMemoryStore } from "@greyfield/persistence";
+import type { DesktopProfileFact } from "../shared/ipc";
 
 export interface RuntimeServiceOptions {
   fetch?: typeof fetch;

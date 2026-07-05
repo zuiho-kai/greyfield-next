@@ -19,7 +19,13 @@ import { SettingsController } from "./settings-controller";
 import { buildTrayMenuTemplate } from "./tray-menu";
 import { applyWindowLayerMode } from "./window-layer-mode";
 import { getUsableWindow, hideWindowIfUsable, showWindowIfUsable } from "./window-lifecycle";
-import type { DesktopPersonaSaveRequest, DesktopProactiveCheckRequest, DesktopScreenAwarenessState } from "../shared/ipc";
+import type {
+  DesktopPersonaSaveRequest,
+  DesktopProfileFactCreate,
+  DesktopProfileFactUpdate,
+  DesktopProactiveCheckRequest,
+  DesktopScreenAwarenessState
+} from "../shared/ipc";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 let petWindow: BrowserWindow | undefined;

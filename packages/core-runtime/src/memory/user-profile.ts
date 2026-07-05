@@ -5,6 +5,8 @@
  */
 
 // Re-export types from persistence to avoid circular dependency
+import type { ProfileFactCategory } from "@greyfield/persistence";
+
 export type { UserProfileFact, ProfileFactCategory } from "@greyfield/persistence";
 
 /** Shape returned by LLM when extracting profile facts from a batch */
