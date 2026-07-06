@@ -565,6 +565,12 @@
 </template>
 
 <script setup lang="ts">
+import {
+  formatProfileFactLine as profileFactLine,
+  normalizeProfileText,
+  profilePortraitSectionId,
+  type ProfilePortraitSectionId
+} from "@greyfield/core-runtime";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { DesktopMemoryAtom, DesktopMemorySourcePassage, DesktopMemorySummarySegment } from "../shared/ipc";
 import type { DesktopPersonaFormState, DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
@@ -767,7 +773,6 @@ const newFactKey = ref("");
 const newFactValue = ref("");
 
 type ProfileFactView = (typeof profileFacts.value)[number];
-type ProfilePortraitSectionId = "identity" | "relationship" | "stable" | "preference" | "recent" | "uncertain";
 
 const profileActiveFacts = computed(() => profileFacts.value.filter((fact) => !fact.disabled));
 const profileDisabledFacts = computed(() => profileFacts.value.filter((fact) => fact.disabled));
@@ -818,44 +823,6 @@ function findProfileFactValue(keys: string[]): string {
   const normalizedKeys = keys.map((key) => normalizeProfileText(key));
   const fact = profileActiveFacts.value.find((item) => normalizedKeys.includes(normalizeProfileText(item.key)));
   return fact?.value.trim() || t("memory.profile.emptySection");
-}
-
-function profileFactLine(fact: ProfileFactView): string {
-  const key = fact.key.trim();
-  const value = fact.value.trim();
-  if (!key) {
-    return value;
-  }
-  if (!value) {
-    return key;
-  }
-  return `${key}: ${value}`;
-}
-
-function profilePortraitSectionId(fact: ProfileFactView): ProfilePortraitSectionId {
-  const key = normalizeProfileText(fact.key);
-  const value = normalizeProfileText(fact.value);
-  const text = `${key} ${value}`;
-  if (fact.category === "identity") {
-    return "identity";
-  }
-  if (fact.category === "preference") {
-    return "preference";
-  }
-  if (text.match(/关系|朋友|家人|伴侣|同事|relationship|friend|family|partner|coworker/u)) {
-    return "relationship";
-  }
-  if (text.match(/最近|近期|刚刚|上次|recent|last time|today|yesterday/u)) {
-    return "recent";
-  }
-  if (text.match(/可能|也许|不确定|疑似|maybe|possibly|uncertain/u)) {
-    return "uncertain";
-  }
-  return "stable";
-}
-
-function normalizeProfileText(value: string): string {
-  return value.trim().toLowerCase();
 }
 
 // Listen for profile facts results

@@ -27,6 +27,7 @@ import {
 import { assemblePrompt } from "./prompt-assembler";
 import type { ASRProvider, LLMProvider, MemoryStore, TTSProvider } from "./providers";
 import type { CharacterPersona } from "./persona";
+import { formatProfileFactLine, profilePortraitSectionId, type ProfilePortraitSectionId } from "./profile-view";
 import type { SessionStore, SessionTurn, SessionTurnLookup } from "./session-store";
 import type { StageDriver } from "./stage-driver";
 import type { RuntimeImageAttachment, RuntimeObservationMetadata } from "./vision-attachments";
@@ -512,7 +513,7 @@ export class GreyfieldRuntime {
       if (facts.length === 0) return "";
 
       const lines = ["# 人物画像", ""];
-      const bySection: Record<"identity" | "relationship" | "stable" | "preference" | "recent" | "uncertain", typeof facts> = {
+      const bySection: Record<ProfilePortraitSectionId, typeof facts> = {
         identity: [],
         relationship: [],
         stable: [],
@@ -521,7 +522,7 @@ export class GreyfieldRuntime {
         uncertain: []
       };
       for (const fact of facts) {
-        bySection[this.profileSectionForFact(fact)].push(fact);
+        bySection[profilePortraitSectionId(fact)].push(fact);
       }
 
       const sections: Array<{ id: keyof typeof bySection; title: string }> = [
@@ -538,7 +539,7 @@ export class GreyfieldRuntime {
           continue;
         }
         lines.push(`## ${section.title}`);
-        bySection[section.id].forEach(fact => lines.push(`- ${this.formatProfileFactLine(fact)}`));
+        bySection[section.id].forEach(fact => lines.push(`- ${formatProfileFactLine(fact)}`));
         lines.push("");
       }
       lines.push("## 维护备注");
@@ -549,34 +550,6 @@ export class GreyfieldRuntime {
       console.error("Failed to format user profile:", error);
       return "";
     }
-  }
-
-  private formatProfileFactLine(fact: { key: string; value: string }): string {
-    const key = fact.key.trim();
-    const value = fact.value.trim();
-    if (!key) return value;
-    if (!value) return key;
-    return `${key}: ${value}`;
-  }
-
-  private profileSectionForFact(fact: { category: string; key: string; value: string }): "identity" | "relationship" | "stable" | "preference" | "recent" | "uncertain" {
-    const text = `${fact.key} ${fact.value}`.trim().toLowerCase();
-    if (/关系|朋友|家人|伴侣|同事|relationship|friend|family|partner|coworker/u.test(text)) {
-      return "relationship";
-    }
-    if (/最近|近期|刚刚|上次|recent|last time|today|yesterday/u.test(text)) {
-      return "recent";
-    }
-    if (/可能|也许|不确定|疑似|maybe|possibly|uncertain/u.test(text)) {
-      return "uncertain";
-    }
-    if (fact.category === "identity") {
-      return "identity";
-    }
-    if (fact.category === "preference") {
-      return "preference";
-    }
-    return "stable";
   }
 
   private async loadSourceTurnsForAtomRecall(context: ReturnType<typeof buildMemoryAtomRecallContext>): Promise<SessionTurn[] | undefined> {

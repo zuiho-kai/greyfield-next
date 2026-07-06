@@ -13,6 +13,7 @@ export * from "./openai-compatible-provider";
 export * from "./openai-compatible-tts-provider";
 export * from "./openai-compatible-asr-provider";
 export * from "./persona";
+export * from "./profile-view";
 export * from "./prompt-assembler";
 export * from "./providers";
 export * from "./runtime-loop";
