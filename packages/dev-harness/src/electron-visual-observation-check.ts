@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import type { RuntimeOutputEvent, RuntimeSceneContext } from "@greyfield/core-runtime";
+import type { RuntimeOutputEvent } from "@greyfield/core-runtime";
 import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
 import { getElectronExecutablePath } from "./electron-install";
 
@@ -22,13 +22,6 @@ const chatScreenshotPath = join(artifactDir, "chat-without-look-panel.png");
 const proactiveScreenshotPath = join(artifactDir, "pet-proactive-screen-awareness.png");
 const failureScreenshotPath = join(artifactDir, "failure-screen-awareness.png");
 const summaryPath = join(artifactDir, "summary.json");
-const sceneContext: RuntimeSceneContext = {
-  currentTime: "2026-06-30T08:00:00.000Z",
-  rain: false,
-  place: "home",
-  virtualHome: { windowOpen: false },
-  absenceDays: 7
-};
 const summary: Record<string, unknown> = {
   ok: false,
   artifacts: {
@@ -114,18 +107,16 @@ try {
   );
   summary.userMessageUsedScreenAwareness = true;
 
-  await triggerProactiveCheck(pet, sceneContext);
   await waitForProactiveMessage(pet, "桌面上有新的画面");
   await pet.screenshot({ path: proactiveScreenshotPath });
-  summary.proactiveUsesScreenAwarenessWhenLevelPositive = true;
+  summary.autoProactiveUsesScreenAwarenessWhenLevelPositive = true;
 
   await pet.evaluate(() => {
     window.greyfield?.send("settings:update", { ui: { proactivityLevel: 0 } });
   });
   await delay(500);
   const proactiveCount = await proactiveEventCount(pet);
-  await triggerProactiveCheck(pet, sceneContext);
-  await assertProactiveEventCountStays(pet, proactiveCount, "proactivityLevel=0 allowed proactive screen-aware speech");
+  await assertProactiveEventCountStays(pet, proactiveCount, "proactivityLevel=0 allowed proactive screen-aware speech", 1_700);
   summary.proactivityZeroBlocksScreenAwareSpeech = true;
 
   await controls.getByRole("button", { name: /^(Turn Screen awareness off|关闭屏幕感知)$/ }).click();
@@ -194,7 +185,8 @@ async function launchApp(): Promise<ElectronApplication> {
       GREYFIELD_CONFIG_PATH: configPath,
       GREYFIELD_PROJECT_ROOT: workspaceRoot,
       GREYFIELD_USER_DATA_PATH: tempDir,
-      GREYFIELD_FAKE_SCREENSHOT_DATA_URL: fakeScreenshotDataUrl
+      GREYFIELD_FAKE_SCREENSHOT_DATA_URL: fakeScreenshotDataUrl,
+      GREYFIELD_SCREEN_AWARENESS_TICK_MS: "1000"
     }
   });
   launched.process().stdout?.on("data", (chunk) => output.push(String(chunk)));
@@ -446,12 +438,6 @@ async function assertRuntimeEventCountStays(
   }
 }
 
-async function triggerProactiveCheck(page: Page, context: RuntimeSceneContext): Promise<void> {
-  await page.evaluate((sceneContext) => {
-    window.greyfield?.send("proactive:check", { sceneContext });
-  }, context);
-}
-
 async function waitForProactiveMessage(page: Page, textFragment: string): Promise<void> {
   const started = Date.now();
   while (Date.now() - started < 10_000) {
@@ -477,8 +463,8 @@ async function proactiveEventCount(page: Page): Promise<number> {
   );
 }
 
-async function assertProactiveEventCountStays(page: Page, expectedCount: number, message: string): Promise<void> {
-  await delay(700);
+async function assertProactiveEventCountStays(page: Page, expectedCount: number, message: string, waitMs = 700): Promise<void> {
+  await delay(waitMs);
   const actualCount = await proactiveEventCount(page);
   if (actualCount !== expectedCount) {
     throw new Error(`${message}; expected ${expectedCount}, got ${actualCount}`);

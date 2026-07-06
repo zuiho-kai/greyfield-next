@@ -8,7 +8,7 @@ import { createDesktopRuntimeStoreOptions, resolveCharacterPath } from "./deskto
 import { createChatWindowOptions, createControlsWindowOptions, createPetWindowOptions, createSettingsWindowOptions, resolvePreloadPath, resolveRendererHtmlPath } from "./electron-window-options";
 import { Live2DModelController, type Live2DModelInfo } from "./live2d-model-controller";
 import { resolveLive2DModelSelection } from "./live2d-model-selection";
-import { ObservationController } from "./observation-controller";
+import { ObservationController, type ObservationRuntimePayload } from "./observation-controller";
 import { toWindowMenuPoint } from "./pet-menu";
 import { PetWindowController } from "./pet-window-controller";
 import { RuntimeIpcController } from "./runtime-ipc-controller";
@@ -75,7 +75,11 @@ async function createWindows(): Promise<void> {
   });
   observationController = new ObservationController({
     captureSource: new ElectronScreenCaptureSource(),
-    broadcast: broadcastScreenAwarenessState
+    broadcast: broadcastScreenAwarenessState,
+    onContextUpdated: (payload) => {
+      void checkProactiveScreenAwareness(payload);
+    },
+    tickIntervalMs: resolvePositiveIntegerEnv("GREYFIELD_SCREEN_AWARENESS_TICK_MS")
   });
   settingsController = new SettingsController(
     config,
@@ -589,10 +593,7 @@ async function checkProactiveMemory(payload: DesktopProactiveCheckRequest): Prom
   }
   if (observationController?.isEnabled()) {
     const visualContext = await observationController.ensureFreshContext();
-    const screenAwareResult = await runtimeService?.checkProactiveScreenAwareness(visualContext);
-    const window = getUsableWindow(petWindow);
-    if (screenAwareResult?.message && window) {
-      window.webContents.send("proactive:message", screenAwareResult.message);
+    if (await checkProactiveScreenAwareness(visualContext)) {
       return;
     }
   }
@@ -602,6 +603,24 @@ async function checkProactiveMemory(payload: DesktopProactiveCheckRequest): Prom
     return;
   }
   window.webContents.send("proactive:message", result.message);
+}
+
+async function checkProactiveScreenAwareness(visualContext: ObservationRuntimePayload): Promise<boolean> {
+  if (getUsableWindow(settingsWindow)?.isVisible()) {
+    return false;
+  }
+  try {
+    const screenAwareResult = await runtimeService?.checkProactiveScreenAwareness(visualContext);
+    const window = getUsableWindow(petWindow);
+    if (!screenAwareResult?.message || !window) {
+      return false;
+    }
+    window.webContents.send("proactive:message", screenAwareResult.message);
+    return true;
+  } catch (error) {
+    console.warn("[ScreenAwareness] Proactive screen-awareness check failed:", error);
+    return false;
+  }
 }
 
 function broadcastMemoryActionResult(result: { ok: boolean; message: string }): void {
@@ -878,6 +897,7 @@ let memoryShutdownDone = false;
 
 app.on("before-quit", (event) => {
   isQuitting = true;
+  observationController?.stop();
   if (!memoryShutdownDone && runtimeService) {
     // Flush unindexed memory turns before the process exits. Bounded so a
     // hanging LLM call cannot block quit indefinitely.
