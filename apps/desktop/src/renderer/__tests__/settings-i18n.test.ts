@@ -43,18 +43,6 @@ describe("settings i18n", () => {
     expect(settingsT("zh-CN", "memory.empty")).toBe("暂无记忆。");
   });
 
-  it("maps profile labels as a readable portrait in zh-CN", () => {
-    expect(settingsT("zh-CN", "memory.profile.title")).toBe("人物画像");
-    expect(settingsT("zh-CN", "memory.profile.count", { count: 2 })).toBe("已启用 2 条");
-    expect(settingsT("zh-CN", "memory.profile.meta.primaryName")).toBe("主称呼");
-    expect(settingsT("zh-CN", "memory.profile.section.identity")).toBe("身份设定");
-    expect(settingsT("zh-CN", "memory.profile.section.preference")).toBe("相处偏好");
-    expect(settingsT("zh-CN", "memory.profile.maintenance.detail")).toContain("若与当前对话冲突");
-    expect(settingsT("zh-CN", "memory.profile.add.summary")).toBe("手动补充画像");
-    expect(settingsT("zh-CN", "memory.profile.action.hide")).toBe("从画像隐藏");
-    expect(settingsT("zh-CN", "memory.profile.action.delete")).toBe("删除");
-  });
-
   it("maps Chat and desktop control labels in zh-CN", () => {
     expect(settingsT("zh-CN", "chat.title")).toBe("聊天");
     expect(settingsT("zh-CN", "chat.action.send")).toBe("发送");

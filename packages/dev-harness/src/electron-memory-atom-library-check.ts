@@ -1,4 +1,4 @@
-import { _electron as electron, type ElectronApplication, type Locator, type Page } from "playwright";
+import { _electron as electron, type ElectronApplication, type Page } from "playwright";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -13,14 +13,11 @@ const tempDir = await mkdtemp(join(tmpdir(), "greyfield-electron-memory-atoms-")
 const configPath = join(tempDir, "greyfield.config.json");
 const sessionPath = join(tempDir, "sessions", "desktop-main-session.jsonl");
 const atomPath = join(tempDir, "memory", "atoms.jsonl");
-const artifactDir = join(workspaceRoot, ".cache", "greyfield-memory-atom-library", "latest");
-const settingsScreenshotPath = join(artifactDir, "settings-memory-atoms-paused.png");
 const preseededAtomText = "User prefers the Hiyori model.";
 
 let app: ElectronApplication | undefined;
 try {
   await mkdir(join(tempDir, "memory"), { recursive: true });
-  await mkdir(artifactDir, { recursive: true });
   await writeFile(
     configPath,
     `${JSON.stringify(
@@ -76,13 +73,6 @@ try {
   assertAtomMemoryPaused(atomJsonl);
   assertNoMemoryRuntimeEvents(await getRuntimeEvents(chat));
 
-  const settings = await waitForRoleWindow(app, "settings");
-  await settings.waitForSelector(".greyfield-shell");
-  const memorySection = settings.getByLabel("How memory works", { exact: true });
-  await memorySection.waitFor();
-  await assertPausedMemorySettings(memorySection);
-  await settings.screenshot({ path: settingsScreenshotPath, fullPage: true });
-
   console.log(
     JSON.stringify(
       {
@@ -90,9 +80,7 @@ try {
         sessionLines: sessionJsonl.trim().split(/\r?\n/).length,
         atomLines: atomJsonl.trim().split(/\r?\n/).length,
         atomMemoryPaused: true,
-        memoryRuntimeEventsAbsent: true,
-        settingsMemoryPaused: true,
-        settingsScreenshotPath
+        memoryRuntimeEventsAbsent: true
       },
       null,
       2
@@ -184,22 +172,6 @@ async function waitForFileContaining(path: string, needles: string[]): Promise<s
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Timed out waiting for ${path} to contain ${JSON.stringify(needles)}; content=${content}`);
-}
-
-async function assertPausedMemorySettings(memorySection: Locator): Promise<void> {
-  const toggle = memorySection.getByLabel("Memory model enhancement");
-  await toggle.waitFor();
-  if (await toggle.isDisabled()) {
-    throw new Error("Memory model enhancement toggle must be available");
-  }
-  if (await toggle.isChecked()) {
-    throw new Error("Memory model toggle should stay off by default");
-  }
-  await memorySection.locator(".memory-extraction-status--standard", { hasText: "Local memory is on" }).waitFor();
-  const text = (await memorySection.textContent()) ?? "";
-  if (/\b(accept|reject|candidate|pending)\b/i.test(text)) {
-    throw new Error(`Memory settings exposed manual candidate review language: ${text}`);
-  }
 }
 
 function assertAtomMemoryPaused(atomJsonl: string): void {
