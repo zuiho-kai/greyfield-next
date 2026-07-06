@@ -164,6 +164,42 @@ describe("ObservationController screen awareness", () => {
       })
     });
   });
+
+  it("uses the configured change threshold before publishing background updates", async () => {
+    vi.useFakeTimers();
+    const updates: unknown[] = [];
+    const captureSource = new ScoredCaptureSource([
+      { marker: "A", changeScore: 0 },
+      { marker: "B", changeScore: 4 },
+      { marker: "C", changeScore: 9 }
+    ]);
+    const controller = new ObservationController({
+      captureSource,
+      broadcast: () => undefined,
+      onContextUpdated: (payload) => {
+        updates.push(payload);
+      },
+      tickIntervalMs: 1_000,
+      changeThreshold: 5,
+      now: () => new Date("2026-06-30T00:00:00.000Z")
+    });
+
+    await controller.setEnabled(true);
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(updates).toHaveLength(0);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(updates).toHaveLength(1);
+    expect(updates[0]).toMatchObject({
+      attachments: [expect.objectContaining({ hash: "C", changeScore: 9 })],
+      screenContext: expect.objectContaining({
+        changeScore: 9,
+        changeThreshold: 5
+      })
+    });
+  });
 });
 
 class TestCaptureSource implements ObservationCaptureSource {
@@ -232,6 +268,23 @@ class QueuedDeferredCaptureSource implements ObservationCaptureSource {
       mimeType: "image/png",
       hash: marker
     });
+  }
+}
+
+class ScoredCaptureSource implements ObservationCaptureSource {
+  private index = 0;
+
+  constructor(private readonly frames: Array<{ marker: string; changeScore: number }>) {}
+
+  async capture() {
+    const frame = this.frames[Math.min(this.index, this.frames.length - 1)] ?? { marker: "A", changeScore: 0 };
+    this.index += 1;
+    return {
+      dataUrl: `data:image/png;base64,${Buffer.from(frame.marker).toString("base64")}`,
+      mimeType: "image/png",
+      hash: frame.marker,
+      changeScore: frame.changeScore
+    };
   }
 }
 

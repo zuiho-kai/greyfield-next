@@ -58,7 +58,15 @@ export function useWindowRuntimeState(params: {
   }
 
   function updateNumericSetting(
-    key: "modelScale" | "modelX" | "modelY" | "voiceVolume" | "proactivityLevel",
+    key:
+      | "modelScale"
+      | "modelX"
+      | "modelY"
+      | "voiceVolume"
+      | "proactivityLevel"
+      | "screenAwarenessRefreshIntervalSeconds"
+      | "screenAwarenessStaleAfterSeconds"
+      | "screenAwarenessChangeThreshold",
     value: string
   ): Promise<DesktopRendererState> | undefined {
     const parsed = Number(value);

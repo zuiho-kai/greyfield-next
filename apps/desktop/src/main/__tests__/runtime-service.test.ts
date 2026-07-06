@@ -2396,6 +2396,49 @@ describe("RuntimeService", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("uses configured screen awareness stale seconds for proactive checks", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-30T00:01:10.000Z"));
+    const visualContext = {
+      attachments: [
+        {
+          id: "screen-frame-1",
+          dataUrl: `data:image/png;base64,${Buffer.from("screen").toString("base64")}`,
+          mimeType: "image/png",
+          createdAt: "2026-06-30T00:00:00.000Z",
+          source: "observation-frame" as const
+        }
+      ],
+      observation: {
+        id: "screen-1",
+        mode: "normal" as const,
+        frameCount: 1,
+        dedupedFrameCount: 1,
+        source: "desktop-screen-awareness" as const
+      }
+    };
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          visionModel: "fake-vision-model"
+        },
+        ui: {
+          ...defaultGreyfieldConfig.ui,
+          proactivityLevel: 100,
+          screenAwarenessStaleAfterSeconds: 60
+        }
+      },
+      { fetch: vi.fn() }
+    );
+
+    await expect(service.checkProactiveScreenAwareness(visualContext)).resolves.toEqual({
+      displayed: false,
+      reason: "stale_screen_context"
+    });
+  });
+
   it("degrades proactive screen awareness when the Vision provider stream fails", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-30T00:00:30.000Z"));

@@ -8,6 +8,7 @@ export interface CapturedObservationFrame {
   width?: number;
   height?: number;
   hash?: string;
+  changeScore?: number;
 }
 
 export interface ObservationCaptureSource {
@@ -26,6 +27,8 @@ export interface ObservationScreenContext {
   reason: ObservationRefreshReason;
   changed: boolean;
   updatedAt: string;
+  changeScore: number;
+  changeThreshold: number;
   hash?: string;
   previousHash?: string;
 }
@@ -35,6 +38,7 @@ export interface ObservationControllerOptions {
   broadcast(state: DesktopScreenAwarenessState): void;
   onContextUpdated?: (payload: ObservationRuntimePayload) => void | Promise<void>;
   tickIntervalMs?: number;
+  changeThreshold?: number;
   now?: () => Date;
 }
 
@@ -50,11 +54,15 @@ export class ObservationController {
   private lastFrameSignature: string | undefined;
   private lastFrameHash: string | undefined;
   private tickTimer: ReturnType<typeof setInterval> | undefined;
+  private tickIntervalMs: number | undefined;
+  private changeThreshold: number;
   private refreshInFlight: Promise<void> | undefined;
   private readonly now: () => Date;
 
   constructor(private readonly options: ObservationControllerOptions) {
     this.now = options.now ?? (() => new Date());
+    this.tickIntervalMs = options.tickIntervalMs;
+    this.changeThreshold = this.normalizeChangeThreshold(options.changeThreshold);
   }
 
   getState(): DesktopScreenAwarenessState {
@@ -115,6 +123,16 @@ export class ObservationController {
     this.clearRawFrames();
   }
 
+  configure(options: { tickIntervalMs?: number; changeThreshold?: number }): void {
+    const previousTickIntervalMs = this.tickIntervalMs;
+    this.tickIntervalMs = options.tickIntervalMs;
+    this.changeThreshold = this.normalizeChangeThreshold(options.changeThreshold);
+    if (this.state.enabled && previousTickIntervalMs !== this.tickIntervalMs) {
+      this.stopTicker();
+      this.startTicker();
+    }
+  }
+
   private async doRefresh(reason: ObservationRefreshReason): Promise<void> {
     const generation = this.nextGeneration();
     const observationId = createObservationId(this.now());
@@ -131,7 +149,8 @@ export class ObservationController {
       }
       const previousSignature = this.lastFrameSignature;
       const previousHash = this.lastFrameHash;
-      const change = detectObservationFrameChange(previousSignature, frame);
+      const changeThreshold = this.resolveChangeThreshold();
+      const change = detectObservationFrameChange(previousSignature, frame, { threshold: changeThreshold });
       const filtered = filterDistinctObservationFrames([frame], { maxFrames: maxScreenAwarenessFrames });
       this.frames = filtered.frames;
       this.duplicateCount = filtered.duplicateCount;
@@ -150,6 +169,8 @@ export class ObservationController {
             reason,
             changed: change.changed,
             updatedAt: frame.createdAt,
+            changeScore: change.score,
+            changeThreshold,
             ...(frame.hash ? { hash: frame.hash } : {}),
             ...(previousHash ? { previousHash } : {})
           })
@@ -205,7 +226,8 @@ export class ObservationController {
       source: "observation-frame",
       ...(captured.width ? { width: captured.width } : {}),
       ...(captured.height ? { height: captured.height } : {}),
-      ...(captured.hash ? { hash: captured.hash } : {})
+      ...(captured.hash ? { hash: captured.hash } : {}),
+      ...(captured.changeScore !== undefined ? { changeScore: captured.changeScore } : {})
     };
   }
 
@@ -227,13 +249,21 @@ export class ObservationController {
     if (this.tickTimer || !this.state.enabled) {
       return;
     }
-    const tickIntervalMs = this.options.tickIntervalMs ?? defaultTickIntervalMs;
+    const tickIntervalMs = this.tickIntervalMs ?? defaultTickIntervalMs;
     if (!Number.isFinite(tickIntervalMs) || tickIntervalMs <= 0) {
       return;
     }
     this.tickTimer = setInterval(() => {
       void this.refresh("tick");
     }, tickIntervalMs);
+  }
+
+  private resolveChangeThreshold(): number {
+    return this.changeThreshold;
+  }
+
+  private normalizeChangeThreshold(threshold: number | undefined): number {
+    return typeof threshold === "number" && Number.isFinite(threshold) ? Math.min(100, Math.max(0, threshold)) : 0;
   }
 
   private stopTicker(): void {

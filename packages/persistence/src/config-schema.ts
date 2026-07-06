@@ -70,6 +70,9 @@ export interface GreyfieldConfig {
     proactiveMemoryEnabled: boolean;
     locale: GreyfieldLocale;
     proactivityLevel: number;
+    screenAwarenessRefreshIntervalSeconds: number;
+    screenAwarenessStaleAfterSeconds: number;
+    screenAwarenessChangeThreshold: number;
   };
   memory: {
     llmAtomExtractionEnabled: boolean;
@@ -139,7 +142,10 @@ export const defaultGreyfieldConfig: GreyfieldConfig = {
     speechBubbleEnabled: true,
     proactiveMemoryEnabled: true,
     locale: "zh-CN",
-    proactivityLevel: 50
+    proactivityLevel: 50,
+    screenAwarenessRefreshIntervalSeconds: 30,
+    screenAwarenessStaleAfterSeconds: 120,
+    screenAwarenessChangeThreshold: 5
   },
   memory: {
     llmAtomExtractionEnabled: false,
@@ -164,7 +170,12 @@ export function mergeConfig(partial: GreyfieldConfigPatch): GreyfieldConfig {
     ui: {
       ...ui,
       locale: normalizeGreyfieldLocale(ui.locale),
-      proactivityLevel: normalizeProactivityLevel(ui.proactivityLevel)
+      proactivityLevel: normalizeProactivityLevel(ui.proactivityLevel),
+      screenAwarenessRefreshIntervalSeconds: normalizeScreenAwarenessRefreshIntervalSeconds(
+        ui.screenAwarenessRefreshIntervalSeconds
+      ),
+      screenAwarenessStaleAfterSeconds: normalizeScreenAwarenessStaleAfterSeconds(ui.screenAwarenessStaleAfterSeconds),
+      screenAwarenessChangeThreshold: normalizeScreenAwarenessChangeThreshold(ui.screenAwarenessChangeThreshold)
     },
     memory: {
       ...defaultGreyfieldConfig.memory,
@@ -262,6 +273,27 @@ function modelFieldOverridesDefault(value: string | undefined, defaultValue: str
 function normalizeProactivityLevel(value: number): number {
   if (!Number.isFinite(value)) {
     return defaultGreyfieldConfig.ui.proactivityLevel;
+  }
+  return Math.min(100, Math.max(0, Math.round(value)));
+}
+
+function normalizeScreenAwarenessRefreshIntervalSeconds(value: number): number {
+  if (!Number.isFinite(value)) {
+    return defaultGreyfieldConfig.ui.screenAwarenessRefreshIntervalSeconds;
+  }
+  return Math.min(120, Math.max(5, Math.round(value)));
+}
+
+function normalizeScreenAwarenessStaleAfterSeconds(value: number): number {
+  if (!Number.isFinite(value)) {
+    return defaultGreyfieldConfig.ui.screenAwarenessStaleAfterSeconds;
+  }
+  return Math.min(600, Math.max(30, Math.round(value)));
+}
+
+function normalizeScreenAwarenessChangeThreshold(value: number): number {
+  if (!Number.isFinite(value)) {
+    return defaultGreyfieldConfig.ui.screenAwarenessChangeThreshold;
   }
   return Math.min(100, Math.max(0, Math.round(value)));
 }

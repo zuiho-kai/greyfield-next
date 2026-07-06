@@ -79,13 +79,18 @@ async function createWindows(): Promise<void> {
     onContextUpdated: (payload) => {
       void checkProactiveScreenAwareness(payload);
     },
-    tickIntervalMs: resolvePositiveIntegerEnv("GREYFIELD_SCREEN_AWARENESS_TICK_MS")
+    tickIntervalMs: resolveScreenAwarenessTickMs(config),
+    changeThreshold: config.ui.screenAwarenessChangeThreshold
   });
   settingsController = new SettingsController(
     config,
     (nextConfig) => saveGreyfieldConfig(resolveConfigPath(), nextConfig),
     (nextConfig) => {
       runtimeService?.updateConfig(nextConfig);
+      observationController?.configure({
+        tickIntervalMs: resolveScreenAwarenessTickMs(nextConfig),
+        changeThreshold: nextConfig.ui.screenAwarenessChangeThreshold
+      });
       broadcastSettings(nextConfig);
     }
   );
@@ -886,6 +891,10 @@ function resolvePositiveIntegerEnv(name: string): number | undefined {
   }
   const parsed = Number(raw);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function resolveScreenAwarenessTickMs(config: GreyfieldConfig): number {
+  return resolvePositiveIntegerEnv("GREYFIELD_SCREEN_AWARENESS_TICK_MS") ?? config.ui.screenAwarenessRefreshIntervalSeconds * 1000;
 }
 
 app.whenReady().then(createWindows).catch((error) => {

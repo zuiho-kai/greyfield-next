@@ -156,7 +156,6 @@ export interface ProactiveDesktopCheckResult {
 
 const proactiveInterruptCooldownMs = 60 * 1000;
 const screenAwarenessProactiveCooldownMs = 5 * 60 * 1000;
-const maxScreenAwarenessProactiveContextAgeMs = 2 * 60 * 1000;
 
 export class RuntimeService {
   private config: GreyfieldConfig;
@@ -632,7 +631,7 @@ export class RuntimeService {
     if (attachments.length === 0) {
       return { displayed: false, reason: "no_screen_context" };
     }
-    if (!hasFreshScreenAwarenessAttachment(attachments, Date.now())) {
+    if (!hasFreshScreenAwarenessAttachment(attachments, Date.now(), this.config.ui.screenAwarenessStaleAfterSeconds * 1000)) {
       return { displayed: false, reason: "stale_screen_context" };
     }
     if (this.providerFactory.resolveVisualTaskModel().length === 0) {
@@ -1424,10 +1423,10 @@ function isObservationSourceTurn(turn: SessionTurn): boolean {
   );
 }
 
-function hasFreshScreenAwarenessAttachment(attachments: RuntimeImageAttachment[], nowMs: number): boolean {
+function hasFreshScreenAwarenessAttachment(attachments: RuntimeImageAttachment[], nowMs: number, maxAgeMs: number): boolean {
   return attachments.some((attachment) => {
     const createdAtMs = Date.parse(attachment.createdAt);
-    return Number.isFinite(createdAtMs) && nowMs - createdAtMs <= maxScreenAwarenessProactiveContextAgeMs;
+    return Number.isFinite(createdAtMs) && nowMs - createdAtMs <= maxAgeMs;
   });
 }
 

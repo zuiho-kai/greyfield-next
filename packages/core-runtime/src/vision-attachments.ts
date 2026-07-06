@@ -10,6 +10,7 @@ export interface RuntimeImageAttachment {
   width?: number;
   height?: number;
   hash?: string;
+  changeScore?: number;
 }
 
 export interface RuntimeObservationInput {
@@ -33,12 +34,14 @@ export interface FrameFilterFrame {
   id: string;
   dataUrl: string;
   hash?: string;
+  changeScore?: number;
   createdAt?: string;
 }
 
 export interface FrameChangeResult {
   changed: boolean;
   signature: string;
+  score: number;
 }
 
 export interface FrameFilterResult<Frame extends FrameFilterFrame> {
@@ -75,17 +78,36 @@ export function filterDistinctObservationFrames<Frame extends FrameFilterFrame>(
 
 export function detectObservationFrameChange(
   previousSignature: string | undefined,
-  frame: FrameFilterFrame
+  frame: FrameFilterFrame,
+  options: { threshold?: number } = {}
 ): FrameChangeResult {
   const signature = getObservationFrameSignature(frame);
+  const signatureChanged = previousSignature === undefined || signature !== previousSignature;
+  const score = resolveFrameChangeScore(frame.changeScore, signatureChanged);
+  const threshold = normalizeFrameChangeThreshold(options.threshold);
   return {
-    changed: previousSignature === undefined || signature !== previousSignature,
-    signature
+    changed: signatureChanged && score >= threshold,
+    signature,
+    score
   };
 }
 
 function getObservationFrameSignature(frame: FrameFilterFrame): string {
   return frame.hash?.trim() || frame.dataUrl;
+}
+
+function resolveFrameChangeScore(score: number | undefined, signatureChanged: boolean): number {
+  if (typeof score === "number" && Number.isFinite(score)) {
+    return Math.min(100, Math.max(0, score));
+  }
+  return signatureChanged ? 100 : 0;
+}
+
+function normalizeFrameChangeThreshold(threshold: number | undefined): number {
+  if (typeof threshold !== "number" || !Number.isFinite(threshold)) {
+    return 0;
+  }
+  return Math.min(100, Math.max(0, threshold));
 }
 
 export function summarizeObservationForTranscript(metadata: RuntimeObservationMetadata): string {

@@ -607,7 +607,18 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "update-setting": [key: keyof DesktopSettingsState, value: string];
-  "update-numeric-setting": [key: "modelScale" | "modelX" | "modelY" | "voiceVolume" | "proactivityLevel", value: string];
+  "update-numeric-setting": [
+    key:
+      | "modelScale"
+      | "modelX"
+      | "modelY"
+      | "voiceVolume"
+      | "proactivityLevel"
+      | "screenAwarenessRefreshIntervalSeconds"
+      | "screenAwarenessStaleAfterSeconds"
+      | "screenAwarenessChangeThreshold",
+    value: string
+  ];
   "update-boolean-setting": [
     key: "speechBubbleEnabled" | "voiceSpeechEnabled" | "proactiveMemoryEnabled" | "llmAtomExtractionEnabled",
     value: boolean
@@ -976,7 +987,15 @@ function forwardSettingUpdate(key: keyof DesktopSettingsState, value: string): v
 }
 
 function forwardNumericSettingUpdate(
-  key: "modelScale" | "modelX" | "modelY" | "voiceVolume" | "proactivityLevel",
+  key:
+    | "modelScale"
+    | "modelX"
+    | "modelY"
+    | "voiceVolume"
+    | "proactivityLevel"
+    | "screenAwarenessRefreshIntervalSeconds"
+    | "screenAwarenessStaleAfterSeconds"
+    | "screenAwarenessChangeThreshold",
   value: string
 ): void {
   emit("update-numeric-setting", key, value);

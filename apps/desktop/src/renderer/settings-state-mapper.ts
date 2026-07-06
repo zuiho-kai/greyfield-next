@@ -35,6 +35,9 @@ export function settingsFromConfig(config: RendererGreyfieldConfig | GreyfieldCo
     proactiveMemoryEnabled: config.ui.proactiveMemoryEnabled,
     settingsLocale: config.ui.locale,
     proactivityLevel: config.ui.proactivityLevel,
+    screenAwarenessRefreshIntervalSeconds: config.ui.screenAwarenessRefreshIntervalSeconds,
+    screenAwarenessStaleAfterSeconds: config.ui.screenAwarenessStaleAfterSeconds,
+    screenAwarenessChangeThreshold: config.ui.screenAwarenessChangeThreshold,
     llmAtomExtractionEnabled: config.memory.llmAtomExtractionEnabled,
     llmAtomExtractionInterval: config.memory.llmAtomExtractionInterval
   };
@@ -91,7 +94,10 @@ export function configFromSettings(settings: DesktopSettingsState): GreyfieldCon
       speechBubbleEnabled: settings.speechBubbleEnabled,
       proactiveMemoryEnabled: settings.proactiveMemoryEnabled,
       locale: settings.settingsLocale,
-      proactivityLevel: settings.proactivityLevel
+      proactivityLevel: settings.proactivityLevel,
+      screenAwarenessRefreshIntervalSeconds: settings.screenAwarenessRefreshIntervalSeconds,
+      screenAwarenessStaleAfterSeconds: settings.screenAwarenessStaleAfterSeconds,
+      screenAwarenessChangeThreshold: settings.screenAwarenessChangeThreshold
     },
     memory: {
       ...defaultGreyfieldConfig.memory,
@@ -213,6 +219,18 @@ export function settingsPatchToConfigPatch(patch: DesktopSettingsPatch): Greyfie
   }
   if (patch.proactivityLevel !== undefined) {
     configPatch.ui = { ...configPatch.ui, proactivityLevel: patch.proactivityLevel };
+  }
+  if (patch.screenAwarenessRefreshIntervalSeconds !== undefined) {
+    configPatch.ui = {
+      ...configPatch.ui,
+      screenAwarenessRefreshIntervalSeconds: patch.screenAwarenessRefreshIntervalSeconds
+    };
+  }
+  if (patch.screenAwarenessStaleAfterSeconds !== undefined) {
+    configPatch.ui = { ...configPatch.ui, screenAwarenessStaleAfterSeconds: patch.screenAwarenessStaleAfterSeconds };
+  }
+  if (patch.screenAwarenessChangeThreshold !== undefined) {
+    configPatch.ui = { ...configPatch.ui, screenAwarenessChangeThreshold: patch.screenAwarenessChangeThreshold };
   }
   if (patch.llmAtomExtractionEnabled !== undefined) {
     configPatch.memory = { ...configPatch.memory, llmAtomExtractionEnabled: patch.llmAtomExtractionEnabled };
