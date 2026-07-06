@@ -1422,7 +1422,7 @@ describe("RuntimeService", () => {
     const service = new RuntimeService(defaultGreyfieldConfig, {
       sessionStore: new TestSessionStore("profile-session", [])
     });
-    (service as any).memoryStoresV2 = { profileStore };
+    (service as any).profileStoreV2 = profileStore;
     (service as any).memoryV2CharacterId = "test-character";
 
     await expect(
@@ -1472,7 +1472,7 @@ describe("RuntimeService", () => {
     const service = new RuntimeService(defaultGreyfieldConfig, {
       sessionStore: new TestSessionStore("profile-session", [])
     });
-    (service as any).memoryStoresV2 = { profileStore };
+    (service as any).profileStoreV2 = profileStore;
     (service as any).memoryV2CharacterId = "test-character";
 
     await expect(service.deleteProfileFact("profile-other-session")).resolves.toMatchObject({

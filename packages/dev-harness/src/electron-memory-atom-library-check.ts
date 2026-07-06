@@ -1,4 +1,4 @@
-import { _electron as electron, type ElectronApplication, type Page } from "playwright";
+import { _electron as electron, type ElectronApplication, type Locator, type Page } from "playwright";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -13,11 +13,16 @@ const tempDir = await mkdtemp(join(tmpdir(), "greyfield-electron-memory-atoms-")
 const configPath = join(tempDir, "greyfield.config.json");
 const sessionPath = join(tempDir, "sessions", "desktop-main-session.jsonl");
 const atomPath = join(tempDir, "memory", "atoms.jsonl");
+const artifactDir = join(workspaceRoot, ".cache", "greyfield-memory-atom-library", "latest");
+const settingsScreenshotPath = join(artifactDir, "settings-memory-atoms-paused.png");
+const profileScreenshotPath = join(artifactDir, "settings-user-profile-controls.png");
 const preseededAtomText = "User prefers the Hiyori model.";
 
 let app: ElectronApplication | undefined;
+const launchOutput: string[] = [];
 try {
   await mkdir(join(tempDir, "memory"), { recursive: true });
+  await mkdir(artifactDir, { recursive: true });
   await writeFile(
     configPath,
     `${JSON.stringify(
@@ -26,10 +31,6 @@ try {
         ui: {
           ...defaultGreyfieldConfig.ui,
           locale: "en-US"
-        },
-        memory: {
-          ...defaultGreyfieldConfig.memory,
-          llmAtomExtractionEnabled: true
         }
       },
       null,
@@ -73,6 +74,14 @@ try {
   assertAtomMemoryPaused(atomJsonl);
   assertNoMemoryRuntimeEvents(await getRuntimeEvents(chat));
 
+  const settings = await waitForRoleWindow(app, "settings");
+  await settings.waitForSelector(".greyfield-shell");
+  const memorySection = settings.getByLabel("How memory works", { exact: true });
+  await memorySection.waitFor();
+  await assertPausedMemorySettings(memorySection);
+  await settings.screenshot({ path: settingsScreenshotPath, fullPage: true });
+  await verifyUserProfileControls(settings);
+
   console.log(
     JSON.stringify(
       {
@@ -80,7 +89,11 @@ try {
         sessionLines: sessionJsonl.trim().split(/\r?\n/).length,
         atomLines: atomJsonl.trim().split(/\r?\n/).length,
         atomMemoryPaused: true,
-        memoryRuntimeEventsAbsent: true
+        memoryRuntimeEventsAbsent: true,
+        settingsMemoryPaused: true,
+        profileControlsWorked: true,
+        settingsScreenshotPath,
+        profileScreenshotPath
       },
       null,
       2
@@ -92,7 +105,6 @@ try {
 }
 
 async function launchApp(): Promise<ElectronApplication> {
-  const output: string[] = [];
   const launched = await electron.launch({
     executablePath,
     cwd: desktopRoot,
@@ -104,8 +116,8 @@ async function launchApp(): Promise<ElectronApplication> {
       GREYFIELD_USER_DATA_PATH: tempDir
     }
   });
-  launched.process().stdout?.on("data", (chunk) => output.push(String(chunk)));
-  launched.process().stderr?.on("data", (chunk) => output.push(String(chunk)));
+  launched.process().stdout?.on("data", (chunk) => launchOutput.push(String(chunk)));
+  launched.process().stderr?.on("data", (chunk) => launchOutput.push(String(chunk)));
   try {
     await launched.firstWindow({ timeout: 10_000 });
     return launched;
@@ -114,7 +126,7 @@ async function launchApp(): Promise<ElectronApplication> {
     const spawnargs = launched.process().spawnargs;
     await launched.close().catch(() => undefined);
     throw new Error(
-      `Timed out waiting for first Electron window; spawnargs=${JSON.stringify(spawnargs)}; urls=${JSON.stringify(urls)}; output=${output.join("").slice(-4000)}; cause=${String(error)}`
+      `Timed out waiting for first Electron window; spawnargs=${JSON.stringify(spawnargs)}; urls=${JSON.stringify(urls)}; output=${launchOutput.join("").slice(-4000)}; cause=${String(error)}`
     );
   }
 }
@@ -172,6 +184,74 @@ async function waitForFileContaining(path: string, needles: string[]): Promise<s
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Timed out waiting for ${path} to contain ${JSON.stringify(needles)}; content=${content}`);
+}
+
+async function assertPausedMemorySettings(memorySection: Locator): Promise<void> {
+  const toggle = memorySection.getByLabel("Memory model enhancement");
+  await toggle.waitFor();
+  if (await toggle.isDisabled()) {
+    throw new Error("Memory model enhancement toggle must be available");
+  }
+  if (await toggle.isChecked()) {
+    throw new Error("Memory model toggle should stay off by default");
+  }
+  await memorySection.locator(".memory-extraction-status--standard", { hasText: "Local memory is on" }).waitFor();
+  const text = (await memorySection.textContent()) ?? "";
+  if (/\b(accept|reject|candidate|pending)\b/i.test(text)) {
+    throw new Error(`Memory settings exposed manual candidate review language: ${text}`);
+  }
+}
+
+async function verifyUserProfileControls(settings: Page): Promise<void> {
+  const profileSection = settings.locator('[data-harness="settings-user-profile"]');
+  await profileSection.scrollIntoViewIfNeeded();
+  await profileSection.waitFor();
+
+  await profileSection.getByText("Add to profile").click();
+  await profileSection.getByLabel("Profile section").selectOption("identity");
+  await profileSection.getByLabel("Item").fill("Preferred name");
+  await profileSection.getByLabel("Detail").fill("Captain");
+  const createResult = waitForProfileAction(settings);
+  await profileSection.getByRole("button", { name: "Add", exact: true }).click();
+  await assertProfileActionOk(createResult, "create profile fact");
+
+  const activeFact = profileSection.locator(".user-profile__fact-row", { hasText: "Preferred name: Captain" });
+  await activeFact.waitFor({ timeout: 8_000 });
+  await activeFact.getByRole("button", { name: "Hide", exact: true }).click();
+
+  const hiddenFact = profileSection.locator(".user-profile__fact--disabled", { hasText: "Preferred name: Captain" });
+  await hiddenFact.waitFor({ timeout: 8_000 });
+  await hiddenFact.getByRole("button", { name: "Restore", exact: true }).click();
+
+  await activeFact.waitFor({ timeout: 8_000 });
+  await activeFact.getByRole("button", { name: "Delete", exact: true }).click();
+  await activeFact.waitFor({ state: "detached", timeout: 8_000 });
+
+  const profileText = (await profileSection.textContent()) ?? "";
+  if (profileText.includes("Preferred name: Captain")) {
+    throw new Error(`Deleted profile fact is still visible in Settings: ${profileText}`);
+  }
+  await settings.screenshot({ path: profileScreenshotPath, fullPage: true });
+}
+
+async function waitForProfileAction(settings: Page): Promise<unknown> {
+  return settings.evaluate(() => {
+    return new Promise((resolve) => {
+      window.greyfield?.on("profile:action-result", (result) => resolve(result));
+    });
+  });
+}
+
+async function assertProfileActionOk(resultPromise: Promise<unknown>, action: string): Promise<void> {
+  const result = await resultPromise;
+  if (
+    typeof result !== "object" ||
+    result === null ||
+    !("ok" in result) ||
+    (result as { ok: unknown }).ok !== true
+  ) {
+    throw new Error(`Failed to ${action}: ${JSON.stringify(result)}; output=${launchOutput.join("").slice(-4000)}`);
+  }
 }
 
 function assertAtomMemoryPaused(atomJsonl: string): void {

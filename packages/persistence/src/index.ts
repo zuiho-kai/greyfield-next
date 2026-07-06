@@ -6,6 +6,7 @@ export * from "./jsonl-session-store";
 export * from "./jsonl-summary-segment-store";
 export * from "./jsonl-memory-atom-store";
 export * from "./jsonl-deleted-memory-evidence-store";
+export * from "./jsonl-user-profile-store";
 export * from "./memory-store";
 
 // New memory system
