@@ -750,7 +750,7 @@ async function assertNoEnglishMemoryLibraryLabels(settingsWindow: Page): Promise
     "Source",
     "Updated",
     "Last used",
-    "Last recalled memory",
+    "Last memory used",
     "Memory library export"
   ];
   const result = await settingsWindow.evaluate((labels) => {
@@ -906,10 +906,10 @@ async function verifyMemoryExtractionSettings(settingsWindow: Page): Promise<{
 }> {
   const memorySection = settingsWindow.getByLabel(/^(How memory works|记忆方式)$/, { exact: true });
   await memorySection.waitFor();
-  const toggle = memorySection.getByLabel(/^(Memory system|记忆系统)$/);
+  const toggle = memorySection.getByLabel(/^(Memory model enhancement|记忆模型增强)$/);
   await toggle.waitFor();
   await expectActiveMemoryToggle(toggle);
-  await memorySection.locator(".memory-extraction-status--standard", { hasText: /Basic memory on|基础记忆开启/ }).waitFor();
+  await memorySection.locator(".memory-extraction-status--standard", { hasText: /Local memory is on|本地记忆已开启/ }).waitFor();
   await assertNoManualMemoryCandidateControls(memorySection);
   return {
     activeStatusVisible: true,
@@ -921,7 +921,7 @@ async function verifyMemoryExtractionSettings(settingsWindow: Page): Promise<{
 
 async function expectActiveMemoryToggle(toggle: Locator): Promise<void> {
   if (await toggle.isDisabled()) {
-    throw new Error("Memory system toggle must be available when local memory is active");
+    throw new Error("Memory model enhancement toggle must be available");
   }
   if (await toggle.isChecked()) {
     throw new Error("Memory model toggle should stay off by default");

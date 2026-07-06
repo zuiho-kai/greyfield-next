@@ -23,6 +23,7 @@ import type {
   DesktopMemoryActionResult,
   DesktopPersonaSaveRequest,
   DesktopProfileFactCreate,
+  DesktopProfileFactDelete,
   DesktopProfileFactUpdate,
   DesktopProactiveCheckRequest,
   DesktopScreenAwarenessState
@@ -275,6 +276,20 @@ function registerIpc(): void {
     } catch (error) {
       console.error("[Profile] Failed to create profile fact:", error);
       event.sender.send("profile:action-result", profileActionFailure("Failed to create profile fact"));
+    }
+  });
+
+  ipcMain.on("profile:delete-fact", async (event, payload: DesktopProfileFactDelete) => {
+    if (!runtimeService) {
+      event.sender.send("profile:action-result", profileActionFailure("Runtime not available"));
+      return;
+    }
+    try {
+      const result = await runtimeService.deleteProfileFact(payload.id);
+      event.sender.send("profile:action-result", result);
+    } catch (error) {
+      console.error("[Profile] Failed to delete profile fact:", error);
+      event.sender.send("profile:action-result", profileActionFailure("Failed to delete profile fact"));
     }
   });
 

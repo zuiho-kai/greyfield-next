@@ -432,18 +432,45 @@
           </div>
         </div>
 
-        <!-- User Profile Management UI -->
+        <!-- User profile controls -->
         <div class="settings-section user-profile" :aria-label="t('memory.profile.title')" data-harness="settings-user-profile">
           <header class="settings-section__header">
             <h2>{{ t("memory.profile.title") }}</h2>
-            <span>{{ t("memory.profile.count", { count: profileFacts.length }) }}</span>
+            <span>{{ t("memory.profile.count", { count: profileActiveFacts.length }) }}</span>
           </header>
 
-          <div class="user-profile__overview">
-            <div class="memory-library__block">
-              <strong>{{ t("memory.profile.about.title") }}</strong>
-              <p>{{ t("memory.profile.about.detail") }}</p>
+          <div class="user-profile__sheet">
+            <div class="user-profile__identity-strip">
+              <span>{{ t("memory.profile.meta.id") }}</span>
+              <strong>{{ profileDisplayId }}</strong>
+              <span>{{ t("memory.profile.meta.primaryName") }}</span>
+              <strong>{{ profilePrimaryName }}</strong>
+              <span>{{ t("memory.profile.meta.aliases") }}</span>
+              <strong>{{ profileAliases }}</strong>
             </div>
+
+            <section v-for="section in profilePortraitSections" :key="section.id" class="user-profile__portrait-section">
+              <h3>{{ section.title }}</h3>
+              <ul v-if="section.items.length > 0" class="user-profile__fact-list">
+                <li v-for="fact in section.items" :key="fact.id" class="user-profile__fact-row">
+                  <span>{{ profileFactLine(fact) }}</span>
+                  <div class="user-profile__fact-actions">
+                    <button type="button" @click="toggleProfileFact(fact)">
+                      {{ t("memory.profile.action.hide") }}
+                    </button>
+                    <button type="button" class="user-profile__danger" @click="deleteProfileFact(fact)">
+                      {{ t("memory.profile.action.delete") }}
+                    </button>
+                  </div>
+                </li>
+              </ul>
+              <p v-else>{{ t("memory.profile.emptySection") }}</p>
+            </section>
+
+            <section class="user-profile__portrait-section user-profile__portrait-section--note">
+              <h3>{{ t("memory.profile.maintenance.title") }}</h3>
+              <p>{{ t("memory.profile.maintenance.detail") }}</p>
+            </section>
           </div>
 
           <details class="user-profile__add-form">
@@ -452,10 +479,10 @@
               <label>
                 <span>{{ t("memory.profile.field.category") }}</span>
                 <select v-model="newFactCategory">
-                  <option value="allergy">{{ t("memory.profile.category.allergy") }}</option>
-                  <option value="important-date">{{ t("memory.profile.category.importantDate") }}</option>
                   <option value="identity">{{ t("memory.profile.category.identity") }}</option>
                   <option value="preference">{{ t("memory.profile.category.preference") }}</option>
+                  <option value="allergy">{{ t("memory.profile.category.allergy") }}</option>
+                  <option value="important-date">{{ t("memory.profile.category.importantDate") }}</option>
                   <option value="free-form">{{ t("memory.profile.category.freeForm") }}</option>
                 </select>
               </label>
@@ -471,84 +498,20 @@
             </div>
           </details>
 
-          <section v-if="profileFactsByCategory.allergy && profileFactsByCategory.allergy.length > 0" class="user-profile__category">
-            <h3>{{ t("memory.profile.category.allergy") }}</h3>
-            <article v-for="fact in profileFactsByCategory.allergy" :key="fact.id" class="user-profile__fact" :class="{ 'user-profile__fact--disabled': fact.disabled }">
+          <section v-if="profileDisabledFacts.length > 0" class="user-profile__hidden">
+            <h3>{{ t("memory.profile.hidden.title") }}</h3>
+            <article v-for="fact in profileDisabledFacts" :key="fact.id" class="user-profile__fact user-profile__fact--disabled">
               <div class="user-profile__fact-content">
-                <strong>{{ fact.key }}</strong>
-                <span>{{ fact.value }}</span>
+                <strong>{{ profileFactLine(fact) }}</strong>
               </div>
-              <div class="memory-library__actions">
-                <button type="button" @click="toggleProfileFact(fact)">
-                  {{ fact.disabled ? t("memory.action.enable") : t("memory.action.disable") }}
+              <div class="user-profile__fact-actions">
+                <button type="button" @click="toggleProfileFact(fact)">{{ t("memory.profile.action.restore") }}</button>
+                <button type="button" class="user-profile__danger" @click="deleteProfileFact(fact)">
+                  {{ t("memory.profile.action.delete") }}
                 </button>
               </div>
             </article>
           </section>
-
-          <section v-if="profileFactsByCategory['important-date'] && profileFactsByCategory['important-date'].length > 0" class="user-profile__category">
-            <h3>{{ t("memory.profile.category.importantDate") }}</h3>
-            <article v-for="fact in profileFactsByCategory['important-date']" :key="fact.id" class="user-profile__fact" :class="{ 'user-profile__fact--disabled': fact.disabled }">
-              <div class="user-profile__fact-content">
-                <strong>{{ fact.key }}</strong>
-                <span>{{ fact.value }}</span>
-              </div>
-              <div class="memory-library__actions">
-                <button type="button" @click="toggleProfileFact(fact)">
-                  {{ fact.disabled ? t("memory.action.enable") : t("memory.action.disable") }}
-                </button>
-              </div>
-            </article>
-          </section>
-
-          <section v-if="profileFactsByCategory.identity && profileFactsByCategory.identity.length > 0" class="user-profile__category">
-            <h3>{{ t("memory.profile.category.identity") }}</h3>
-            <article v-for="fact in profileFactsByCategory.identity" :key="fact.id" class="user-profile__fact" :class="{ 'user-profile__fact--disabled': fact.disabled }">
-              <div class="user-profile__fact-content">
-                <strong>{{ fact.key }}</strong>
-                <span>{{ fact.value }}</span>
-              </div>
-              <div class="memory-library__actions">
-                <button type="button" @click="toggleProfileFact(fact)">
-                  {{ fact.disabled ? t("memory.action.enable") : t("memory.action.disable") }}
-                </button>
-              </div>
-            </article>
-          </section>
-
-          <section v-if="profileFactsByCategory.preference && profileFactsByCategory.preference.length > 0" class="user-profile__category">
-            <h3>{{ t("memory.profile.category.preference") }}</h3>
-            <article v-for="fact in profileFactsByCategory.preference" :key="fact.id" class="user-profile__fact" :class="{ 'user-profile__fact--disabled': fact.disabled }">
-              <div class="user-profile__fact-content">
-                <strong>{{ fact.key }}</strong>
-                <span>{{ fact.value }}</span>
-              </div>
-              <div class="memory-library__actions">
-                <button type="button" @click="toggleProfileFact(fact)">
-                  {{ fact.disabled ? t("memory.action.enable") : t("memory.action.disable") }}
-                </button>
-              </div>
-            </article>
-          </section>
-
-          <section v-if="profileFactsByCategory['free-form'] && profileFactsByCategory['free-form'].length > 0" class="user-profile__category">
-            <h3>{{ t("memory.profile.category.freeFormFacts") }}</h3>
-            <article v-for="fact in profileFactsByCategory['free-form']" :key="fact.id" class="user-profile__fact" :class="{ 'user-profile__fact--disabled': fact.disabled }">
-              <div class="user-profile__fact-content">
-                <strong>{{ fact.key }}</strong>
-                <span>{{ fact.value }}</span>
-              </div>
-              <div class="memory-library__actions">
-                <button type="button" @click="toggleProfileFact(fact)">
-                  {{ fact.disabled ? t("memory.action.enable") : t("memory.action.disable") }}
-                </button>
-              </div>
-            </article>
-          </section>
-
-          <div v-if="profileFacts.length === 0" class="memory-library__empty">
-            {{ t("memory.profile.empty") }}
-          </div>
         </div>
 
         <p v-if="state.voiceErrorMessage" class="provider-test-result provider-test-result--error" role="status">
@@ -602,6 +565,12 @@
 </template>
 
 <script setup lang="ts">
+import {
+  formatProfileFactLine as profileFactLine,
+  normalizeProfileText,
+  profilePortraitSectionId,
+  type ProfilePortraitSectionId
+} from "@greyfield/core-runtime";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { DesktopMemoryAtom, DesktopMemorySourcePassage, DesktopMemorySummarySegment } from "../shared/ipc";
 import type { DesktopPersonaFormState, DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
@@ -799,28 +768,35 @@ const profileFacts = ref<Array<{
   disabled: boolean;
 }>>([]);
 
-const newFactCategory = ref<"allergy" | "important-date" | "identity" | "preference" | "free-form">("allergy");
+const newFactCategory = ref<"allergy" | "important-date" | "identity" | "preference" | "free-form">("identity");
 const newFactKey = ref("");
 const newFactValue = ref("");
 
-const profileFactsByCategory = computed(() => {
-  const byCategory: Record<string, typeof profileFacts.value> = {};
-  for (const fact of profileFacts.value) {
-    if (!byCategory[fact.category]) {
-      byCategory[fact.category] = [];
-    }
-    byCategory[fact.category].push(fact);
-  }
-  return byCategory;
+type ProfileFactView = (typeof profileFacts.value)[number];
+
+const profileActiveFacts = computed(() => profileFacts.value.filter((fact) => !fact.disabled));
+const profileDisabledFacts = computed(() => profileFacts.value.filter((fact) => fact.disabled));
+const profileDisplayId = computed(() => {
+  return t("memory.profile.meta.localId");
+});
+const profilePrimaryName = computed(() => findProfileFactValue(["主称呼", "昵称", "名字", "称呼", "name", "nickname"]));
+const profileAliases = computed(() => findProfileFactValue(["别名", "alias", "aliases"]));
+const profilePortraitSections = computed<Array<{ id: ProfilePortraitSectionId; title: string; items: ProfileFactView[] }>>(() => {
+  const sectionIds: ProfilePortraitSectionId[] = ["identity", "relationship", "stable", "preference", "recent", "uncertain"];
+  return sectionIds.map((id) => ({
+    id,
+    title: t(`memory.profile.section.${id}` as SettingsI18nKey),
+    items: profileActiveFacts.value.filter((fact) => profilePortraitSectionId(fact) === id)
+  }));
 });
 
 // Profile facts methods
 async function loadProfileFacts() {
-  window.greyfield.send("profile:get-facts", {});
+  window.greyfield?.send("profile:get-facts", {});
 }
 
 async function toggleProfileFact(fact: typeof profileFacts.value[0]) {
-  window.greyfield.send("profile:update-fact", {
+  window.greyfield?.send("profile:update-fact", {
     id: fact.id,
     disabled: !fact.disabled
   });
@@ -830,7 +806,7 @@ async function createProfileFact() {
   if (!newFactKey.value.trim() || !newFactValue.value.trim()) {
     return;
   }
-  window.greyfield.send("profile:create-fact", {
+  window.greyfield?.send("profile:create-fact", {
     category: newFactCategory.value,
     key: newFactKey.value.trim(),
     value: newFactValue.value.trim()
@@ -839,12 +815,22 @@ async function createProfileFact() {
   newFactValue.value = "";
 }
 
+async function deleteProfileFact(fact: ProfileFactView) {
+  window.greyfield?.send("profile:delete-fact", { id: fact.id });
+}
+
+function findProfileFactValue(keys: string[]): string {
+  const normalizedKeys = keys.map((key) => normalizeProfileText(key));
+  const fact = profileActiveFacts.value.find((item) => normalizedKeys.includes(normalizeProfileText(item.key)));
+  return fact?.value.trim() || t("memory.profile.emptySection");
+}
+
 // Listen for profile facts results
-window.greyfield.on("profile:facts-result", (facts) => {
+window.greyfield?.on("profile:facts-result", (facts) => {
   profileFacts.value = facts;
 });
 
-window.greyfield.on("profile:action-result", (result) => {
+window.greyfield?.on("profile:action-result", (result) => {
   if (result.ok) {
     loadProfileFacts();
     emit("refresh-memory-debug");
@@ -1165,11 +1151,11 @@ function recallReasonLabel(reason: string): string {
 
 function recalledSourceLabel(count: number): string {
   if (count <= 0) {
-    return locale.value === "zh-CN" ? "上次召回没有关联来源片段" : "No source passages attached to the last recall";
+    return locale.value === "zh-CN" ? "上次用到的记忆没有来源片段" : "No source passages attached to the last used memory";
   }
   return locale.value === "zh-CN"
-    ? `上次召回关联 ${count} 个来源片段`
-    : `${count} source ${count === 1 ? "passage" : "passages"} attached to the last recall`;
+    ? `上次用到的记忆关联 ${count} 个来源片段`
+    : `${count} source ${count === 1 ? "passage" : "passages"} attached to the last used memory`;
 }
 
 function memoryToggleStateLabel(disabled: boolean): string {

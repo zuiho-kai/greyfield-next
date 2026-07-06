@@ -101,6 +101,12 @@ export class SqliteUserProfileStore {
     stmt.run(...values);
   }
 
+  async delete(id: string): Promise<boolean> {
+    const stmt = this.db.prepare("DELETE FROM user_self_profile WHERE id = ?");
+    const result = stmt.run(id);
+    return result.changes > 0;
+  }
+
   async getBySession(sessionId: string, characterId: string, includeDisabled = false): Promise<UserProfileFact[]> {
     const stmt = this.db.prepare(`
       SELECT * FROM user_self_profile

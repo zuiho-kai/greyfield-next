@@ -8,9 +8,9 @@ describe("describeMemoryExtractionStatus", () => {
 
     expect(describeMemoryExtractionStatus(state, "en-US")).toEqual({
       tone: "standard",
-      label: "Basic memory on",
+      label: "Local memory is on",
       detail:
-        "Basic memory saves explicit facts from local chat, such as names, dates, and preferences. Recall itself does not use a model: before each reply, Greyfield locally scores memory items by cues and keywords, then inserts the matching text into the prompt context."
+        "Greyfield can save and reuse useful details from your chats. The Memory model enhancement is off, so it will not call an extra model to tidy new memories."
     });
   });
 
@@ -20,7 +20,7 @@ describe("describeMemoryExtractionStatus", () => {
 
     expect(describeMemoryExtractionStatus(state)).toMatchObject({
       tone: "ready",
-      label: "已准备好记住更多细节"
+      label: "记忆模型增强已开启"
     });
   });
 
@@ -29,7 +29,7 @@ describe("describeMemoryExtractionStatus", () => {
 
     expect(status).toMatchObject({
       tone: "standard",
-      label: "基础记忆开启"
+      label: "本地记忆已开启"
     });
   });
 });

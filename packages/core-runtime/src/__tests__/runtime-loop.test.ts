@@ -7,6 +7,7 @@ import type { AppendDeletedMemoryEvidence, DeletedMemoryEvidence, DeletedMemoryE
 import type { MemoryAtom, MemoryAtomStore, UpdateMemoryAtom } from "../memory-atoms";
 import type { LLMProvider, MemoryStore, TTSProvider } from "../providers";
 import type { RuntimeOutputEvent } from "../events";
+import { profilePortraitSectionId } from "../profile-view";
 import type { RuntimeImageAttachment } from "../vision-attachments";
 import { filterDistinctObservationFrames } from "../vision-attachments";
 import { MemoryManager } from "../memory/memory-manager";
@@ -19,6 +20,12 @@ const memoryStore: MemoryStore = {
 };
 
 describe("GreyfieldRuntime", () => {
+  it("keeps profile section classification aligned with explicit user-facing categories", () => {
+    expect(profilePortraitSectionId({ category: "identity", key: "家人称呼", value: "姐姐" })).toBe("identity");
+    expect(profilePortraitSectionId({ category: "preference", key: "family topic", value: "likes brief replies" })).toBe("preference");
+    expect(profilePortraitSectionId({ category: "free-form", key: "家人", value: "姐姐" })).toBe("relationship");
+  });
+
   it("streams text deltas, synthesizes complete sentences, and records the turn", async () => {
     const synthesized: string[] = [];
     const llm: LLMProvider = {
