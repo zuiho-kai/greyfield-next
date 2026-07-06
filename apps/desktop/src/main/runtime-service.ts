@@ -38,6 +38,7 @@ import {
   filterDeletedSessionTurns,
   hasDeletedMemoryEvidenceSource,
   persistProfileFacts,
+  type ProfileFactStore,
   sourceTurnIdsContainDeletedEvidence
 } from "@greyfield/core-runtime";
 import { createDefaultInteractionProfile, FakeStageDriver } from "@greyfield/stage-live2d";
@@ -62,6 +63,8 @@ export interface RuntimeServiceOptions {
   summarySegmentStore?: SummarySegmentStore;
   memoryAtomStore?: MemoryAtomStore;
   deletedMemoryEvidenceStore?: DeletedMemoryEvidenceStore;
+  profileStore?: ProfileFactStore;
+  memoryV2UserDataPath?: string;
   memoryEnabled?: boolean;
   threadId?: string;
   recentTurnLimit?: number;
@@ -174,7 +177,9 @@ export class RuntimeService {
   // New memory system (V2)
   private memoryStoresV2?: MemoryStoresV2;
   private memoryManagerV2?: MemoryManager;
+  private profileStoreV2?: ProfileFactStore;
   private memoryV2CharacterId?: string;
+  private memoryV2InitializationError?: string;
   private useNewMemorySystem: boolean;
 
   constructor(config: GreyfieldConfig, private readonly options: RuntimeServiceOptions = {}) {
@@ -184,6 +189,7 @@ export class RuntimeService {
     this.summarySegmentStore = options.summarySegmentStore;
     this.memoryAtomStore = options.memoryAtomStore;
     this.deletedMemoryEvidenceStore = options.deletedMemoryEvidenceStore;
+    this.profileStoreV2 = options.profileStore;
     this.providerFactory = new RuntimeProviderFactory(this.config, this.options);
 
     this.useNewMemorySystem = false;
@@ -197,9 +203,10 @@ export class RuntimeService {
    * memory-v2/<characterId> data instead of silently reusing the old one.
    */
   private refreshMemoryV2(): void {
-    const enabled = shouldUseNewMemorySystem(this.config);
-    if (!enabled) {
+    const configEnabled = shouldUseNewMemorySystem(this.config);
+    if (!configEnabled) {
       this.teardownMemoryV2();
+      this.memoryV2InitializationError = "V2 memory disabled by config.";
       this.useNewMemorySystem = false;
       return;
     }
@@ -210,6 +217,17 @@ export class RuntimeService {
     } catch (error) {
       console.error("[MemoryV2] Failed to derive character id:", error);
       this.teardownMemoryV2();
+      this.memoryV2InitializationError = error instanceof Error ? error.message : String(error);
+      this.useNewMemorySystem = false;
+      return;
+    }
+
+    const nativeManagerEnabled = this.options.memoryEnabled !== false && this.options.memoryV2UserDataPath !== undefined;
+    if (!nativeManagerEnabled) {
+      this.teardownMemoryV2();
+      this.memoryV2CharacterId = characterId;
+      this.profileStoreV2 = this.options.profileStore;
+      this.memoryV2InitializationError = undefined;
       this.useNewMemorySystem = false;
       return;
     }
@@ -222,8 +240,11 @@ export class RuntimeService {
     // Character changed (or first init): flush and close the previous
     // manager in the background, then build a fresh stack for the new id.
     this.teardownMemoryV2();
+    this.memoryV2CharacterId = characterId;
+    this.profileStoreV2 = this.options.profileStore;
     try {
-      this.memoryStoresV2 = initializeMemoryStoresV2(characterId);
+      this.memoryStoresV2 = initializeMemoryStoresV2(characterId, this.options.memoryV2UserDataPath);
+      this.profileStoreV2 = this.options.profileStore ?? this.memoryStoresV2.profileStore;
       // One long-lived manager for the whole service: a GreyfieldRuntime
       // is created per interaction, so the manager (and its unindexed-turn
       // buffer) must live here or batch indexing never accumulates.
@@ -248,11 +269,15 @@ export class RuntimeService {
         }
       );
       this.memoryV2CharacterId = characterId;
+      this.memoryV2InitializationError = undefined;
       this.useNewMemorySystem = true;
       console.log("[MemoryV2] Initialized new memory system for character:", characterId);
     } catch (error) {
       console.error("[MemoryV2] Failed to initialize new memory system:", error);
       this.teardownMemoryV2();
+      this.memoryV2CharacterId = characterId;
+      this.profileStoreV2 = this.options.profileStore;
+      this.memoryV2InitializationError = error instanceof Error ? error.message : String(error);
       this.useNewMemorySystem = false;
     }
   }
@@ -261,6 +286,7 @@ export class RuntimeService {
     const previous = this.memoryManagerV2;
     this.memoryManagerV2 = undefined;
     this.memoryStoresV2 = undefined;
+    this.profileStoreV2 = this.options.profileStore;
     this.memoryV2CharacterId = undefined;
     if (previous) {
       // close() flushes unindexed turns before closing the store; the old
@@ -834,8 +860,15 @@ export class RuntimeService {
   }
 
   // Profile fact management (V2 memory system)
+  private profileUnavailableResult(): MemoryControlResult {
+    return {
+      ok: false,
+      message: `User profile is not available (${this.memoryV2InitializationError ?? "V2 memory disabled"}).`
+    };
+  }
+
   async getProfileFacts(): Promise<DesktopProfileFact[]> {
-    const profileStore = this.memoryStoresV2?.profileStore;
+    const profileStore = this.profileStoreV2;
     if (!profileStore || !this.memoryV2CharacterId) {
       return [];
     }
@@ -857,9 +890,9 @@ export class RuntimeService {
   }
 
   async updateProfileFact(id: string, updates: { disabled?: boolean }): Promise<MemoryControlResult> {
-    const profileStore = this.memoryStoresV2?.profileStore;
+    const profileStore = this.profileStoreV2;
     if (!profileStore) {
-      return { ok: false, message: "User profile is not available (V2 memory disabled)." };
+      return this.profileUnavailableResult();
     }
 
     const existing = await profileStore.get(id);
@@ -880,9 +913,9 @@ export class RuntimeService {
     key: string;
     value: string;
   }): Promise<MemoryControlResult> {
-    const profileStore = this.memoryStoresV2?.profileStore;
+    const profileStore = this.profileStoreV2;
     if (!profileStore || !this.memoryV2CharacterId) {
-      return { ok: false, message: "User profile is not available (V2 memory disabled)." };
+      return this.profileUnavailableResult();
     }
 
     const [result] = await persistProfileFacts({
@@ -902,9 +935,9 @@ export class RuntimeService {
   }
 
   async deleteProfileFact(id: string): Promise<MemoryControlResult> {
-    const profileStore = this.memoryStoresV2?.profileStore;
+    const profileStore = this.profileStoreV2;
     if (!profileStore || !this.memoryV2CharacterId) {
-      return { ok: false, message: "User profile is not available (V2 memory disabled)." };
+      return this.profileUnavailableResult();
     }
 
     const existing = await profileStore.get(id);
@@ -948,6 +981,8 @@ export class RuntimeService {
       memoryManager: this.memoryManagerV2,
       topicIndexStore: this.memoryStoresV2?.topicStore,
       coreMemoryStore: this.memoryStoresV2?.coreStore,
+      profileFactStore: this.profileStoreV2,
+      profileCharacterId: this.memoryV2CharacterId,
 
       sessionStore: this.sessionStore,
       persona,

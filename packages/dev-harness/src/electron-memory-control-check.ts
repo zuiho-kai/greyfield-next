@@ -26,10 +26,6 @@ try {
         ui: {
           ...defaultGreyfieldConfig.ui,
           locale: "en-US"
-        },
-        memory: {
-          ...defaultGreyfieldConfig.memory,
-          llmAtomExtractionEnabled: true
         }
       },
       null,

@@ -36,6 +36,7 @@ import type { RuntimeImageAttachment, RuntimeObservationMetadata } from "./visio
 import { MemoryManager } from "./memory/memory-manager";
 import { recall as recallV2 } from "./memory/recall";
 import type { RecallResult } from "./memory/recall";
+import type { ProfileFactStore } from "./memory/user-profile";
 import type { JsonlTopicIndexStore, SqliteCoreMemoryStore } from "@greyfield/persistence";
 
 export interface GreyfieldRuntimeOptions {
@@ -61,6 +62,8 @@ export interface GreyfieldRuntimeOptions {
   // here would lose its unindexed-turn buffer on every message.
   memoryManager?: MemoryManager;
   useNewMemorySystem?: boolean;  // Feature flag to enable V2 memory
+  profileFactStore?: ProfileFactStore;
+  profileCharacterId?: string;
 
   sessionStore: SessionStore;
   persona: CharacterPersona;
@@ -501,13 +504,14 @@ export class GreyfieldRuntime {
   }
 
   private async formatUserProfile(): Promise<string> {
-    const profileStore = this.memoryManager?.getProfileStore();
-    if (!profileStore || !this.memoryManager) return "";
+    const profileStore = this.options.profileFactStore ?? this.memoryManager?.getProfileStore();
+    const characterId = this.options.profileCharacterId ?? this.memoryManager?.characterId;
+    if (!profileStore || !characterId) return "";
 
     try {
       const facts = await profileStore.getActiveBySession(
         this.options.sessionStore.sessionId,
-        this.memoryManager.characterId
+        characterId
       );
 
       if (facts.length === 0) return "";

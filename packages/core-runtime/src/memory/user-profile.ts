@@ -18,10 +18,16 @@ export interface ExtractedProfileFact {
   supersedes?: string[];
 }
 
-export interface ProfileFactStore {
+export interface ProfileFactPersistenceStore {
   getBySession(sessionId: string, characterId: string, includeDisabled?: boolean): Promise<UserProfileFact[]>;
   insert(fact: UserProfileFact): Promise<void>;
   update(id: string, updates: Partial<Pick<UserProfileFact, "disabled" | "supersedes">>): Promise<void>;
+}
+
+export interface ProfileFactStore extends ProfileFactPersistenceStore {
+  get(id: string): Promise<UserProfileFact | null>;
+  getActiveBySession(sessionId: string, characterId: string): Promise<UserProfileFact[]>;
+  delete(id: string): Promise<boolean>;
 }
 
 export type ProfileFactPersistenceResult =
@@ -30,7 +36,7 @@ export type ProfileFactPersistenceResult =
   | { action: "updated"; fact: UserProfileFact; supersededCount: number };
 
 export async function persistProfileFacts(options: {
-  store: ProfileFactStore;
+  store: ProfileFactPersistenceStore;
   facts: ExtractedProfileFact[];
   sessionId: string;
   characterId: string;

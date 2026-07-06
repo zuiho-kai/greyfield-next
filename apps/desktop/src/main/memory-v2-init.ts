@@ -18,8 +18,7 @@ export interface MemoryStoresV2 {
 /**
  * Initialize new memory stores (V2) for a character
  */
-export function initializeMemoryStoresV2(characterId: string): MemoryStoresV2 {
-  const userDataPath = app.getPath("userData");
+export function initializeMemoryStoresV2(characterId: string, userDataPath = app.getPath("userData")): MemoryStoresV2 {
   const memoryDir = join(userDataPath, "memory-v2", characterId);
 
   // Layer 2: Topic Index (JSONL)
