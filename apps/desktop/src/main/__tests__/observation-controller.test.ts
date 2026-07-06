@@ -104,6 +104,41 @@ describe("ObservationController screen awareness", () => {
     await vi.advanceTimersByTimeAsync(2_000);
     expect(captureSource.captureCount).toBe(2);
   });
+
+  it("does not publish background updates for unchanged frames", async () => {
+    vi.useFakeTimers();
+    const updates: unknown[] = [];
+    const captureSource = new TestCaptureSource(["A", "A", "B"]);
+    const controller = new ObservationController({
+      captureSource,
+      broadcast: () => undefined,
+      onContextUpdated: (payload) => {
+        updates.push(payload);
+      },
+      tickIntervalMs: 1_000,
+      now: () => new Date("2026-06-30T00:00:00.000Z")
+    });
+
+    await controller.setEnabled(true);
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(captureSource.captureCount).toBe(2);
+    expect(updates).toHaveLength(0);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(captureSource.captureCount).toBe(3);
+    expect(updates).toHaveLength(1);
+    expect(updates[0]).toMatchObject({
+      attachments: [expect.objectContaining({ hash: "B" })],
+      screenContext: expect.objectContaining({
+        changed: true,
+        previousHash: "A",
+        hash: "B",
+        reason: "tick"
+      })
+    });
+  });
 });
 
 class TestCaptureSource implements ObservationCaptureSource {

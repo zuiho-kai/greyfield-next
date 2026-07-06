@@ -147,6 +147,7 @@ export interface ProactiveDesktopCheckResult {
     | "active_runtime"
     | "recent_interrupt"
     | "no_screen_context"
+    | "stale_screen_context"
     | "vision_model_missing"
     | "vision_model_not_ready"
     | "screen_awareness_cooldown"
@@ -155,6 +156,7 @@ export interface ProactiveDesktopCheckResult {
 
 const proactiveInterruptCooldownMs = 60 * 1000;
 const screenAwarenessProactiveCooldownMs = 5 * 60 * 1000;
+const maxScreenAwarenessProactiveContextAgeMs = 2 * 60 * 1000;
 
 export class RuntimeService {
   private config: GreyfieldConfig;
@@ -629,6 +631,9 @@ export class RuntimeService {
     const attachments = input.attachments.filter((attachment) => attachment.dataUrl.startsWith(`data:${attachment.mimeType};base64,`));
     if (attachments.length === 0) {
       return { displayed: false, reason: "no_screen_context" };
+    }
+    if (!hasFreshScreenAwarenessAttachment(attachments, Date.now())) {
+      return { displayed: false, reason: "stale_screen_context" };
     }
     if (this.providerFactory.resolveVisualTaskModel().length === 0) {
       return { displayed: false, reason: "vision_model_missing" };
@@ -1417,6 +1422,13 @@ function isObservationSourceTurn(turn: SessionTurn): boolean {
     "kind" in observation &&
     observation.kind === "visual-observation"
   );
+}
+
+function hasFreshScreenAwarenessAttachment(attachments: RuntimeImageAttachment[], nowMs: number): boolean {
+  return attachments.some((attachment) => {
+    const createdAtMs = Date.parse(attachment.createdAt);
+    return Number.isFinite(createdAtMs) && nowMs - createdAtMs <= maxScreenAwarenessProactiveContextAgeMs;
+  });
 }
 
 const redactedSecretPlaceholder = "[redacted-secret]";

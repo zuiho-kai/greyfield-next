@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
 import type {
   AppendSummarySegment,
@@ -56,6 +56,10 @@ function expectNoSecrets(value: unknown, secrets: string[]): void {
 }
 
 describe("RuntimeService", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("runs text input in the main-process runtime and emits fake provider events", async () => {
     const service = new RuntimeService(defaultGreyfieldConfig);
     const emit = vi.fn();
@@ -2199,6 +2203,8 @@ describe("RuntimeService", () => {
   });
 
   it("uses screen awareness for proactive speech only when proactivity and vision are available", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-30T00:00:30.000Z"));
     const visualContext = {
       attachments: [
         {
@@ -2277,6 +2283,8 @@ describe("RuntimeService", () => {
   });
 
   it("does not call the provider for proactive screen awareness when Vision model settings are incomplete", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-30T00:00:30.000Z"));
     const visualContext = {
       attachments: [
         {
@@ -2344,7 +2352,53 @@ describe("RuntimeService", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("skips stale proactive screen awareness context before calling Vision", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-30T00:10:00.000Z"));
+    const fetch = vi.fn();
+    const staleVisualContext = {
+      attachments: [
+        {
+          id: "screen-frame-1",
+          dataUrl: `data:image/png;base64,${Buffer.from("screen").toString("base64")}`,
+          mimeType: "image/png",
+          createdAt: "2026-06-30T00:00:00.000Z",
+          source: "observation-frame" as const
+        }
+      ],
+      observation: {
+        id: "screen-1",
+        mode: "normal" as const,
+        frameCount: 1,
+        dedupedFrameCount: 1,
+        source: "desktop-screen-awareness" as const
+      }
+    };
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          visionModel: "fake-vision-model"
+        },
+        ui: {
+          ...defaultGreyfieldConfig.ui,
+          proactivityLevel: 100
+        }
+      },
+      { fetch }
+    );
+
+    await expect(service.checkProactiveScreenAwareness(staleVisualContext)).resolves.toEqual({
+      displayed: false,
+      reason: "stale_screen_context"
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("degrades proactive screen awareness when the Vision provider stream fails", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-30T00:00:30.000Z"));
     const visualContext = {
       attachments: [
         {

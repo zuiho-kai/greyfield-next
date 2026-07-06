@@ -17,9 +17,18 @@ export interface ObservationCaptureSource {
 export interface ObservationRuntimePayload {
   attachments: RuntimeImageAttachment[];
   observation?: RuntimeObservationInput;
+  screenContext?: ObservationScreenContext;
 }
 
 export type ObservationRefreshReason = "enable" | "manual" | "tick";
+
+export interface ObservationScreenContext {
+  reason: ObservationRefreshReason;
+  changed: boolean;
+  updatedAt: string;
+  hash?: string;
+  previousHash?: string;
+}
 
 export interface ObservationControllerOptions {
   captureSource: ObservationCaptureSource;
@@ -37,6 +46,8 @@ export class ObservationController {
   private frames: DesktopObservationFrame[] = [];
   private duplicateCount = 0;
   private generation = 0;
+  private lastFrameSignature: string | undefined;
+  private lastFrameHash: string | undefined;
   private tickTimer: ReturnType<typeof setInterval> | undefined;
   private refreshInFlight: Promise<void> | undefined;
   private readonly now: () => Date;
@@ -108,9 +119,15 @@ export class ObservationController {
       if (!this.isCurrentGeneration(generation)) {
         return;
       }
+      const previousSignature = this.lastFrameSignature;
+      const previousHash = this.lastFrameHash;
+      const signature = getFrameSignature(frame);
+      const changed = previousSignature === undefined || signature !== previousSignature;
       const filtered = filterDistinctObservationFrames([frame], { maxFrames: maxScreenAwarenessFrames });
       this.frames = filtered.frames;
       this.duplicateCount = filtered.duplicateCount;
+      this.lastFrameSignature = signature;
+      this.lastFrameHash = frame.hash;
       this.update({
         enabled: true,
         status: "ready",
@@ -118,8 +135,16 @@ export class ObservationController {
         message: "Screen awareness is on.",
         updatedAt: frame.createdAt
       });
-      if (reason === "tick") {
-        await this.options.onContextUpdated?.(this.getRuntimePayload());
+      if (reason === "tick" && changed) {
+        await this.options.onContextUpdated?.(
+          this.getRuntimePayload({
+            reason,
+            changed,
+            updatedAt: frame.createdAt,
+            ...(frame.hash ? { hash: frame.hash } : {}),
+            ...(previousHash ? { previousHash } : {})
+          })
+        );
       }
     } catch (error) {
       if (!this.isCurrentGeneration(generation)) {
@@ -139,9 +164,11 @@ export class ObservationController {
     this.generation += 1;
     this.frames = [];
     this.duplicateCount = 0;
+    this.lastFrameSignature = undefined;
+    this.lastFrameHash = undefined;
   }
 
-  private getRuntimePayload(): ObservationRuntimePayload {
+  private getRuntimePayload(screenContext?: ObservationScreenContext): ObservationRuntimePayload {
     if (!this.state.enabled || this.frames.length === 0) {
       return { attachments: [] };
     }
@@ -153,7 +180,8 @@ export class ObservationController {
         frameCount: this.frames.length + this.duplicateCount,
         dedupedFrameCount: this.frames.length,
         source: "desktop-screen-awareness"
-      }
+      },
+      ...(screenContext ? { screenContext } : {})
     };
   }
 
@@ -223,4 +251,8 @@ function createObservationId(now: Date): string {
 
 function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function getFrameSignature(frame: DesktopObservationFrame): string {
+  return frame.hash?.trim() || frame.dataUrl;
 }
