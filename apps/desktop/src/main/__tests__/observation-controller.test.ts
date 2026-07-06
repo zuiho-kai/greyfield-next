@@ -74,6 +74,31 @@ describe("ObservationController screen awareness", () => {
     expect((await controller.ensureFreshContext()).attachments).toEqual([]);
   });
 
+  it("honors a second enable request after disable cancels an in-flight capture", async () => {
+    const captureSource = new QueuedDeferredCaptureSource();
+    const controller = new ObservationController({
+      captureSource,
+      broadcast: () => undefined,
+      now: () => new Date("2026-06-30T00:00:00.000Z")
+    });
+
+    const firstEnable = controller.setEnabled(true);
+    await waitForPendingCapture(captureSource, 1);
+
+    await controller.setEnabled(false);
+    const secondEnable = controller.setEnabled(true);
+
+    captureSource.resolveNext("A");
+    await waitForPendingCapture(captureSource, 1);
+    captureSource.resolveNext("B");
+    await Promise.all([firstEnable, secondEnable]);
+
+    expect(controller.getState()).toMatchObject({ enabled: true, status: "ready" });
+    expect((await controller.ensureFreshContext()).attachments).toEqual([
+      expect.objectContaining({ dataUrl: "data:image/png;base64,Qg==", hash: "B" })
+    ]);
+  });
+
   it("ticks while enabled and stops ticking when disabled", async () => {
     vi.useFakeTimers();
     const updates: unknown[] = [];
@@ -182,4 +207,41 @@ class DeferredCaptureSource implements ObservationCaptureSource {
       hash: marker
     });
   }
+}
+
+class QueuedDeferredCaptureSource implements ObservationCaptureSource {
+  private pendingResolves: Array<(frame: CapturedObservationFrame) => void> = [];
+
+  get pendingCount(): number {
+    return this.pendingResolves.length;
+  }
+
+  async capture() {
+    return new Promise<CapturedObservationFrame>((resolve) => {
+      this.pendingResolves.push(resolve);
+    });
+  }
+
+  resolveNext(marker: string): void {
+    const resolve = this.pendingResolves.shift();
+    if (!resolve) {
+      throw new Error("No pending capture to resolve.");
+    }
+    resolve({
+      dataUrl: `data:image/png;base64,${Buffer.from(marker).toString("base64")}`,
+      mimeType: "image/png",
+      hash: marker
+    });
+  }
+}
+
+async function waitForPendingCapture(captureSource: QueuedDeferredCaptureSource, pendingCount: number): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < 1_000) {
+    if (captureSource.pendingCount === pendingCount) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error(`Timed out waiting for ${pendingCount} pending capture(s); got ${captureSource.pendingCount}.`);
 }

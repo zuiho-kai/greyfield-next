@@ -36,6 +36,11 @@ export interface FrameFilterFrame {
   createdAt?: string;
 }
 
+export interface FrameChangeResult {
+  changed: boolean;
+  signature: string;
+}
+
 export interface FrameFilterResult<Frame extends FrameFilterFrame> {
   frames: Frame[];
   duplicateCount: number;
@@ -66,6 +71,21 @@ export function filterDistinctObservationFrames<Frame extends FrameFilterFrame>(
     duplicateCount,
     truncated: frames.length - duplicateCount > filtered.length
   };
+}
+
+export function detectObservationFrameChange(
+  previousSignature: string | undefined,
+  frame: FrameFilterFrame
+): FrameChangeResult {
+  const signature = getObservationFrameSignature(frame);
+  return {
+    changed: previousSignature === undefined || signature !== previousSignature,
+    signature
+  };
+}
+
+function getObservationFrameSignature(frame: FrameFilterFrame): string {
+  return frame.hash?.trim() || frame.dataUrl;
 }
 
 export function summarizeObservationForTranscript(metadata: RuntimeObservationMetadata): string {

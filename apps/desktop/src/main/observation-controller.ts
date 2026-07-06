@@ -1,5 +1,5 @@
 import type { RuntimeImageAttachment, RuntimeObservationInput } from "@greyfield/core-runtime";
-import { filterDistinctObservationFrames } from "@greyfield/core-runtime";
+import { detectObservationFrameChange, filterDistinctObservationFrames } from "@greyfield/core-runtime";
 import type { DesktopObservationFrame, DesktopScreenAwarenessState } from "../shared/ipc";
 
 export interface CapturedObservationFrame {
@@ -46,6 +46,7 @@ export class ObservationController {
   private frames: DesktopObservationFrame[] = [];
   private duplicateCount = 0;
   private generation = 0;
+  private desiredEnabled = false;
   private lastFrameSignature: string | undefined;
   private lastFrameHash: string | undefined;
   private tickTimer: ReturnType<typeof setInterval> | undefined;
@@ -65,6 +66,7 @@ export class ObservationController {
   }
 
   async setEnabled(enabled: boolean): Promise<void> {
+    this.desiredEnabled = enabled;
     if (!enabled) {
       this.stopTicker();
       this.clearRawFrames();
@@ -75,8 +77,16 @@ export class ObservationController {
       this.startTicker();
       return;
     }
-    await this.refresh("enable");
-    this.startTicker();
+    while (this.desiredEnabled) {
+      await this.refresh("enable");
+      if (!this.desiredEnabled) {
+        return;
+      }
+      if (this.state.enabled) {
+        this.startTicker();
+        return;
+      }
+    }
   }
 
   async ensureFreshContext(): Promise<ObservationRuntimePayload> {
@@ -121,12 +131,11 @@ export class ObservationController {
       }
       const previousSignature = this.lastFrameSignature;
       const previousHash = this.lastFrameHash;
-      const signature = getFrameSignature(frame);
-      const changed = previousSignature === undefined || signature !== previousSignature;
+      const change = detectObservationFrameChange(previousSignature, frame);
       const filtered = filterDistinctObservationFrames([frame], { maxFrames: maxScreenAwarenessFrames });
       this.frames = filtered.frames;
       this.duplicateCount = filtered.duplicateCount;
-      this.lastFrameSignature = signature;
+      this.lastFrameSignature = change.signature;
       this.lastFrameHash = frame.hash;
       this.update({
         enabled: true,
@@ -135,11 +144,11 @@ export class ObservationController {
         message: "Screen awareness is on.",
         updatedAt: frame.createdAt
       });
-      if (reason === "tick" && changed) {
+      if (reason === "tick" && change.changed) {
         await this.options.onContextUpdated?.(
           this.getRuntimePayload({
             reason,
-            changed,
+            changed: change.changed,
             updatedAt: frame.createdAt,
             ...(frame.hash ? { hash: frame.hash } : {}),
             ...(previousHash ? { previousHash } : {})
@@ -251,8 +260,4 @@ function createObservationId(now: Date): string {
 
 function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function getFrameSignature(frame: DesktopObservationFrame): string {
-  return frame.hash?.trim() || frame.dataUrl;
 }
