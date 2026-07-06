@@ -19,19 +19,26 @@ export interface ObservationRuntimePayload {
   observation?: RuntimeObservationInput;
 }
 
+export type ObservationRefreshReason = "enable" | "manual" | "tick";
+
 export interface ObservationControllerOptions {
   captureSource: ObservationCaptureSource;
   broadcast(state: DesktopScreenAwarenessState): void;
+  onContextUpdated?: (payload: ObservationRuntimePayload) => void | Promise<void>;
+  tickIntervalMs?: number;
   now?: () => Date;
 }
 
 const maxScreenAwarenessFrames = 1;
+const defaultTickIntervalMs = 30_000;
 
 export class ObservationController {
   private state: DesktopScreenAwarenessState = createInitialScreenAwarenessState();
   private frames: DesktopObservationFrame[] = [];
   private duplicateCount = 0;
   private generation = 0;
+  private tickTimer: ReturnType<typeof setInterval> | undefined;
+  private refreshInFlight: Promise<void> | undefined;
   private readonly now: () => Date;
 
   constructor(private readonly options: ObservationControllerOptions) {
@@ -48,14 +55,17 @@ export class ObservationController {
 
   async setEnabled(enabled: boolean): Promise<void> {
     if (!enabled) {
+      this.stopTicker();
       this.clearRawFrames();
       this.update(createInitialScreenAwarenessState());
       return;
     }
     if (this.state.enabled && this.state.status === "ready") {
+      this.startTicker();
       return;
     }
-    await this.refresh();
+    await this.refresh("enable");
+    this.startTicker();
   }
 
   async ensureFreshContext(): Promise<ObservationRuntimePayload> {
@@ -68,9 +78,25 @@ export class ObservationController {
     return this.getRuntimePayload();
   }
 
-  async refresh(): Promise<void> {
+  async refresh(reason: ObservationRefreshReason = "manual"): Promise<void> {
+    if (this.refreshInFlight) {
+      await this.refreshInFlight;
+      return;
+    }
+    this.refreshInFlight = this.doRefresh(reason).finally(() => {
+      this.refreshInFlight = undefined;
+    });
+    await this.refreshInFlight;
+  }
+
+  stop(): void {
+    this.stopTicker();
+    this.clearRawFrames();
+  }
+
+  private async doRefresh(reason: ObservationRefreshReason): Promise<void> {
     const generation = this.nextGeneration();
-    const observationId = this.state.observationId || createObservationId(this.now());
+    const observationId = createObservationId(this.now());
     this.update({
       enabled: true,
       status: "warming",
@@ -92,6 +118,9 @@ export class ObservationController {
         message: "Screen awareness is on.",
         updatedAt: frame.createdAt
       });
+      if (reason === "tick") {
+        await this.options.onContextUpdated?.(this.getRuntimePayload());
+      }
     } catch (error) {
       if (!this.isCurrentGeneration(generation)) {
         return;
@@ -155,6 +184,27 @@ export class ObservationController {
 
   private isCurrentGeneration(generation: number): boolean {
     return this.generation === generation && this.state.enabled;
+  }
+
+  private startTicker(): void {
+    if (this.tickTimer || !this.state.enabled) {
+      return;
+    }
+    const tickIntervalMs = this.options.tickIntervalMs ?? defaultTickIntervalMs;
+    if (!Number.isFinite(tickIntervalMs) || tickIntervalMs <= 0) {
+      return;
+    }
+    this.tickTimer = setInterval(() => {
+      void this.refresh("tick");
+    }, tickIntervalMs);
+  }
+
+  private stopTicker(): void {
+    if (!this.tickTimer) {
+      return;
+    }
+    clearInterval(this.tickTimer);
+    this.tickTimer = undefined;
   }
 }
 
