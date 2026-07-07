@@ -70,6 +70,9 @@ export type SettingsI18nKey =
   | "field.bubble"
   | "field.rememberedMoments"
   | "field.proactivity"
+  | "field.screenAwarenessRefresh"
+  | "field.screenAwarenessStale"
+  | "field.screenAwarenessChangeThreshold"
   | "field.betterMemory"
   | "windowLayerMode.followClick"
   | "windowLayerMode.controlsFront"
@@ -89,6 +92,8 @@ export type SettingsI18nKey =
   | "status.bubbleOn"
   | "status.bubbleOff"
   | "status.proactivity"
+  | "status.seconds"
+  | "status.percent"
   | "status.custom"
   | "status.loading"
   | "status.saving"
@@ -402,6 +407,9 @@ const enUS: Record<SettingsI18nKey, string> = {
   "field.bubble": "Bubble",
   "field.rememberedMoments": "Remembered moments",
   "field.proactivity": "Proactivity",
+  "field.screenAwarenessRefresh": "Screen refresh",
+  "field.screenAwarenessStale": "Screen context expires",
+  "field.screenAwarenessChangeThreshold": "Screen change threshold",
   "field.betterMemory": "Memory model enhancement",
   "windowLayerMode.followClick": "By click (default)",
   "windowLayerMode.controlsFront": "Input box stays in front",
@@ -421,6 +429,8 @@ const enUS: Record<SettingsI18nKey, string> = {
   "status.bubbleOn": "Bubble on",
   "status.bubbleOff": "Bubble off",
   "status.proactivity": "Proactivity {level}/100",
+  "status.seconds": "{value}s",
+  "status.percent": "{value}%",
   "status.custom": "Custom",
   "status.loading": "Loading",
   "status.saving": "Saving",
@@ -735,6 +745,9 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "field.bubble": "气泡",
   "field.rememberedMoments": "主动记忆提醒",
   "field.proactivity": "主动程度",
+  "field.screenAwarenessRefresh": "屏幕感知刷新",
+  "field.screenAwarenessStale": "画面过期",
+  "field.screenAwarenessChangeThreshold": "变化阈值",
   "field.betterMemory": "记忆模型增强",
   "windowLayerMode.followClick": "按点击决定（默认）",
   "windowLayerMode.controlsFront": "输入框永远在前",
@@ -754,6 +767,8 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "status.bubbleOn": "气泡开启",
   "status.bubbleOff": "气泡关闭",
   "status.proactivity": "主动 {level}/100",
+  "status.seconds": "{value} 秒",
+  "status.percent": "{value}%",
   "status.custom": "自定义",
   "status.loading": "加载中",
   "status.saving": "保存中",

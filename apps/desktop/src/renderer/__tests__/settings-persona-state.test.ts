@@ -92,6 +92,45 @@ describe("Settings persona state", () => {
     });
   });
 
+  it("maps screen awareness tuning between persisted config, renderer state, and patches", () => {
+    const settings = settingsFromConfig({
+      ...defaultGreyfieldConfig,
+      ui: {
+        ...defaultGreyfieldConfig.ui,
+        screenAwarenessRefreshIntervalSeconds: 12,
+        screenAwarenessStaleAfterSeconds: 90,
+        screenAwarenessChangeThreshold: 18
+      }
+    });
+
+    expect(settings).toMatchObject({
+      screenAwarenessRefreshIntervalSeconds: 12,
+      screenAwarenessStaleAfterSeconds: 90,
+      screenAwarenessChangeThreshold: 18
+    });
+    expect(configFromSettings({
+      ...settings,
+      screenAwarenessRefreshIntervalSeconds: 20,
+      screenAwarenessStaleAfterSeconds: 180,
+      screenAwarenessChangeThreshold: 25
+    }).ui).toMatchObject({
+      screenAwarenessRefreshIntervalSeconds: 20,
+      screenAwarenessStaleAfterSeconds: 180,
+      screenAwarenessChangeThreshold: 25
+    });
+    expect(settingsPatchToConfigPatch({
+      screenAwarenessRefreshIntervalSeconds: 15,
+      screenAwarenessStaleAfterSeconds: 150,
+      screenAwarenessChangeThreshold: 30
+    })).toEqual({
+      ui: {
+        screenAwarenessRefreshIntervalSeconds: 15,
+        screenAwarenessStaleAfterSeconds: 150,
+        screenAwarenessChangeThreshold: 30
+      }
+    });
+  });
+
   it("maps enhanced memory extraction interval through renderer settings", () => {
     const settings = settingsFromConfig({
       ...defaultGreyfieldConfig,

@@ -186,6 +186,7 @@ async function launchApp(): Promise<ElectronApplication> {
       GREYFIELD_PROJECT_ROOT: workspaceRoot,
       GREYFIELD_USER_DATA_PATH: tempDir,
       GREYFIELD_FAKE_SCREENSHOT_DATA_URL: fakeScreenshotDataUrl,
+      GREYFIELD_FAKE_SCREENSHOT_CHANGE_EACH_CAPTURE: "1",
       GREYFIELD_SCREEN_AWARENESS_TICK_MS: "1000"
     }
   });

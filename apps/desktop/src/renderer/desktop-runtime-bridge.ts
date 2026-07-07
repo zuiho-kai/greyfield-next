@@ -110,6 +110,9 @@ export interface DesktopSettingsState {
   proactiveMemoryEnabled: boolean;
   settingsLocale: GreyfieldConfig["ui"]["locale"];
   proactivityLevel: number;
+  screenAwarenessRefreshIntervalSeconds: number;
+  screenAwarenessStaleAfterSeconds: number;
+  screenAwarenessChangeThreshold: number;
   llmAtomExtractionEnabled: boolean;
   llmAtomExtractionInterval: number;
 }
@@ -1149,6 +1152,9 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       proactiveMemoryEnabled: defaultGreyfieldConfig.ui.proactiveMemoryEnabled,
       settingsLocale: defaultGreyfieldConfig.ui.locale,
       proactivityLevel: defaultGreyfieldConfig.ui.proactivityLevel,
+      screenAwarenessRefreshIntervalSeconds: defaultGreyfieldConfig.ui.screenAwarenessRefreshIntervalSeconds,
+      screenAwarenessStaleAfterSeconds: defaultGreyfieldConfig.ui.screenAwarenessStaleAfterSeconds,
+      screenAwarenessChangeThreshold: defaultGreyfieldConfig.ui.screenAwarenessChangeThreshold,
       llmAtomExtractionEnabled: defaultGreyfieldConfig.memory.llmAtomExtractionEnabled,
       llmAtomExtractionInterval: defaultGreyfieldConfig.memory.llmAtomExtractionInterval
     },

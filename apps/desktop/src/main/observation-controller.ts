@@ -1,5 +1,5 @@
 import type { RuntimeImageAttachment, RuntimeObservationInput } from "@greyfield/core-runtime";
-import { filterDistinctObservationFrames } from "@greyfield/core-runtime";
+import { detectObservationFrameChange, filterDistinctObservationFrames } from "@greyfield/core-runtime";
 import type { DesktopObservationFrame, DesktopScreenAwarenessState } from "../shared/ipc";
 
 export interface CapturedObservationFrame {
@@ -8,6 +8,7 @@ export interface CapturedObservationFrame {
   width?: number;
   height?: number;
   hash?: string;
+  changeScore?: number;
 }
 
 export interface ObservationCaptureSource {
@@ -17,15 +18,27 @@ export interface ObservationCaptureSource {
 export interface ObservationRuntimePayload {
   attachments: RuntimeImageAttachment[];
   observation?: RuntimeObservationInput;
+  screenContext?: ObservationScreenContext;
 }
 
 export type ObservationRefreshReason = "enable" | "manual" | "tick";
+
+export interface ObservationScreenContext {
+  reason: ObservationRefreshReason;
+  changed: boolean;
+  updatedAt: string;
+  changeScore: number;
+  changeThreshold: number;
+  hash?: string;
+  previousHash?: string;
+}
 
 export interface ObservationControllerOptions {
   captureSource: ObservationCaptureSource;
   broadcast(state: DesktopScreenAwarenessState): void;
   onContextUpdated?: (payload: ObservationRuntimePayload) => void | Promise<void>;
   tickIntervalMs?: number;
+  changeThreshold?: number;
   now?: () => Date;
 }
 
@@ -37,12 +50,19 @@ export class ObservationController {
   private frames: DesktopObservationFrame[] = [];
   private duplicateCount = 0;
   private generation = 0;
+  private desiredEnabled = false;
+  private lastFrameSignature: string | undefined;
+  private lastFrameHash: string | undefined;
   private tickTimer: ReturnType<typeof setInterval> | undefined;
+  private tickIntervalMs: number | undefined;
+  private changeThreshold: number;
   private refreshInFlight: Promise<void> | undefined;
   private readonly now: () => Date;
 
   constructor(private readonly options: ObservationControllerOptions) {
     this.now = options.now ?? (() => new Date());
+    this.tickIntervalMs = options.tickIntervalMs;
+    this.changeThreshold = this.normalizeChangeThreshold(options.changeThreshold);
   }
 
   getState(): DesktopScreenAwarenessState {
@@ -54,6 +74,7 @@ export class ObservationController {
   }
 
   async setEnabled(enabled: boolean): Promise<void> {
+    this.desiredEnabled = enabled;
     if (!enabled) {
       this.stopTicker();
       this.clearRawFrames();
@@ -64,8 +85,16 @@ export class ObservationController {
       this.startTicker();
       return;
     }
-    await this.refresh("enable");
-    this.startTicker();
+    while (this.desiredEnabled) {
+      await this.refresh("enable");
+      if (!this.desiredEnabled) {
+        return;
+      }
+      if (this.state.enabled) {
+        this.startTicker();
+        return;
+      }
+    }
   }
 
   async ensureFreshContext(): Promise<ObservationRuntimePayload> {
@@ -94,6 +123,16 @@ export class ObservationController {
     this.clearRawFrames();
   }
 
+  configure(options: { tickIntervalMs?: number; changeThreshold?: number }): void {
+    const previousTickIntervalMs = this.tickIntervalMs;
+    this.tickIntervalMs = options.tickIntervalMs;
+    this.changeThreshold = this.normalizeChangeThreshold(options.changeThreshold);
+    if (this.state.enabled && previousTickIntervalMs !== this.tickIntervalMs) {
+      this.stopTicker();
+      this.startTicker();
+    }
+  }
+
   private async doRefresh(reason: ObservationRefreshReason): Promise<void> {
     const generation = this.nextGeneration();
     const observationId = createObservationId(this.now());
@@ -108,9 +147,15 @@ export class ObservationController {
       if (!this.isCurrentGeneration(generation)) {
         return;
       }
+      const previousSignature = this.lastFrameSignature;
+      const previousHash = this.lastFrameHash;
+      const changeThreshold = this.resolveChangeThreshold();
+      const change = detectObservationFrameChange(previousSignature, frame, { threshold: changeThreshold });
       const filtered = filterDistinctObservationFrames([frame], { maxFrames: maxScreenAwarenessFrames });
       this.frames = filtered.frames;
       this.duplicateCount = filtered.duplicateCount;
+      this.lastFrameSignature = change.signature;
+      this.lastFrameHash = frame.hash;
       this.update({
         enabled: true,
         status: "ready",
@@ -118,8 +163,18 @@ export class ObservationController {
         message: "Screen awareness is on.",
         updatedAt: frame.createdAt
       });
-      if (reason === "tick") {
-        await this.options.onContextUpdated?.(this.getRuntimePayload());
+      if (reason === "tick" && change.changed) {
+        await this.options.onContextUpdated?.(
+          this.getRuntimePayload({
+            reason,
+            changed: change.changed,
+            updatedAt: frame.createdAt,
+            changeScore: change.score,
+            changeThreshold,
+            ...(frame.hash ? { hash: frame.hash } : {}),
+            ...(previousHash ? { previousHash } : {})
+          })
+        );
       }
     } catch (error) {
       if (!this.isCurrentGeneration(generation)) {
@@ -139,9 +194,11 @@ export class ObservationController {
     this.generation += 1;
     this.frames = [];
     this.duplicateCount = 0;
+    this.lastFrameSignature = undefined;
+    this.lastFrameHash = undefined;
   }
 
-  private getRuntimePayload(): ObservationRuntimePayload {
+  private getRuntimePayload(screenContext?: ObservationScreenContext): ObservationRuntimePayload {
     if (!this.state.enabled || this.frames.length === 0) {
       return { attachments: [] };
     }
@@ -153,7 +210,8 @@ export class ObservationController {
         frameCount: this.frames.length + this.duplicateCount,
         dedupedFrameCount: this.frames.length,
         source: "desktop-screen-awareness"
-      }
+      },
+      ...(screenContext ? { screenContext } : {})
     };
   }
 
@@ -168,7 +226,8 @@ export class ObservationController {
       source: "observation-frame",
       ...(captured.width ? { width: captured.width } : {}),
       ...(captured.height ? { height: captured.height } : {}),
-      ...(captured.hash ? { hash: captured.hash } : {})
+      ...(captured.hash ? { hash: captured.hash } : {}),
+      ...(captured.changeScore !== undefined ? { changeScore: captured.changeScore } : {})
     };
   }
 
@@ -190,13 +249,21 @@ export class ObservationController {
     if (this.tickTimer || !this.state.enabled) {
       return;
     }
-    const tickIntervalMs = this.options.tickIntervalMs ?? defaultTickIntervalMs;
+    const tickIntervalMs = this.tickIntervalMs ?? defaultTickIntervalMs;
     if (!Number.isFinite(tickIntervalMs) || tickIntervalMs <= 0) {
       return;
     }
     this.tickTimer = setInterval(() => {
       void this.refresh("tick");
     }, tickIntervalMs);
+  }
+
+  private resolveChangeThreshold(): number {
+    return this.changeThreshold;
+  }
+
+  private normalizeChangeThreshold(threshold: number | undefined): number {
+    return typeof threshold === "number" && Number.isFinite(threshold) ? Math.min(100, Math.max(0, threshold)) : 0;
   }
 
   private stopTicker(): void {

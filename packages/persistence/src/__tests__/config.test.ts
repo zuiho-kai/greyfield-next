@@ -31,6 +31,9 @@ describe("Greyfield config", () => {
     expect(defaultGreyfieldConfig.ui.proactiveMemoryEnabled).toBe(true);
     expect(defaultGreyfieldConfig.ui.locale).toBe("zh-CN");
     expect(defaultGreyfieldConfig.ui.proactivityLevel).toBe(50);
+    expect(defaultGreyfieldConfig.ui.screenAwarenessRefreshIntervalSeconds).toBe(30);
+    expect(defaultGreyfieldConfig.ui.screenAwarenessStaleAfterSeconds).toBe(120);
+    expect(defaultGreyfieldConfig.ui.screenAwarenessChangeThreshold).toBe(5);
     expect(defaultGreyfieldConfig.memory.llmAtomExtractionEnabled).toBe(false);
     expect(defaultGreyfieldConfig.memory.llmAtomExtractionInterval).toBe(4);
     expect(defaultGreyfieldConfig.memory.useV2System).toBe(true);
@@ -43,7 +46,14 @@ describe("Greyfield config", () => {
       audio: { microphoneId: "mic-2" },
       window: { layerMode: "controls-front" },
       live2d: { scale: 1.25 },
-      ui: { speechBubbleEnabled: false, proactiveMemoryEnabled: false, proactivityLevel: 80 },
+      ui: {
+        speechBubbleEnabled: false,
+        proactiveMemoryEnabled: false,
+        proactivityLevel: 80,
+        screenAwarenessRefreshIntervalSeconds: 12,
+        screenAwarenessStaleAfterSeconds: 90,
+        screenAwarenessChangeThreshold: 18
+      },
       memory: { llmAtomExtractionEnabled: true, llmAtomExtractionInterval: 6 }
     });
 
@@ -80,6 +90,9 @@ describe("Greyfield config", () => {
     expect(config.ui.proactiveMemoryEnabled).toBe(false);
     expect(config.ui.locale).toBe("zh-CN");
     expect(config.ui.proactivityLevel).toBe(80);
+    expect(config.ui.screenAwarenessRefreshIntervalSeconds).toBe(12);
+    expect(config.ui.screenAwarenessStaleAfterSeconds).toBe(90);
+    expect(config.ui.screenAwarenessChangeThreshold).toBe(18);
     expect(config.memory.llmAtomExtractionEnabled).toBe(true);
     expect(config.memory.llmAtomExtractionInterval).toBe(6);
     expect(config.memory.useV2System).toBe(true);
@@ -222,6 +235,20 @@ describe("Greyfield config", () => {
     expect(mergeConfig({ ui: { proactivityLevel: -1 } }).ui.proactivityLevel).toBe(0);
     expect(mergeConfig({ ui: { proactivityLevel: 100.6 } }).ui.proactivityLevel).toBe(100);
     expect(mergeConfig({ ui: { proactivityLevel: Number.NaN } }).ui.proactivityLevel).toBe(50);
+  });
+
+  it("keeps screen awareness tuning within safe Settings ranges", () => {
+    expect(mergeConfig({ ui: { screenAwarenessRefreshIntervalSeconds: 1 } }).ui.screenAwarenessRefreshIntervalSeconds).toBe(5);
+    expect(mergeConfig({ ui: { screenAwarenessRefreshIntervalSeconds: 121 } }).ui.screenAwarenessRefreshIntervalSeconds).toBe(120);
+    expect(mergeConfig({ ui: { screenAwarenessRefreshIntervalSeconds: Number.NaN } }).ui.screenAwarenessRefreshIntervalSeconds).toBe(30);
+
+    expect(mergeConfig({ ui: { screenAwarenessStaleAfterSeconds: 10 } }).ui.screenAwarenessStaleAfterSeconds).toBe(30);
+    expect(mergeConfig({ ui: { screenAwarenessStaleAfterSeconds: 700 } }).ui.screenAwarenessStaleAfterSeconds).toBe(600);
+    expect(mergeConfig({ ui: { screenAwarenessStaleAfterSeconds: Number.NaN } }).ui.screenAwarenessStaleAfterSeconds).toBe(120);
+
+    expect(mergeConfig({ ui: { screenAwarenessChangeThreshold: -1 } }).ui.screenAwarenessChangeThreshold).toBe(0);
+    expect(mergeConfig({ ui: { screenAwarenessChangeThreshold: 101 } }).ui.screenAwarenessChangeThreshold).toBe(100);
+    expect(mergeConfig({ ui: { screenAwarenessChangeThreshold: Number.NaN } }).ui.screenAwarenessChangeThreshold).toBe(5);
   });
 
   it("keeps enhanced memory extraction interval within the Settings range", () => {

@@ -93,6 +93,54 @@
         <output>{{ state.settings.proactivityLevel }}</output>
       </div>
     </label>
+    <label class="settings-slider-row">
+      <span>{{ t("field.screenAwarenessRefresh") }}</span>
+      <div class="settings-slider-row__control">
+        <input
+          :value="state.settings.screenAwarenessRefreshIntervalSeconds"
+          :aria-label="t('field.screenAwarenessRefresh')"
+          data-testid="screen-awareness-refresh-slider"
+          type="range"
+          min="5"
+          max="120"
+          step="5"
+          @input="emit('update-numeric-setting', 'screenAwarenessRefreshIntervalSeconds', valueFrom($event))"
+        />
+        <output>{{ t("status.seconds", { value: state.settings.screenAwarenessRefreshIntervalSeconds }) }}</output>
+      </div>
+    </label>
+    <label class="settings-slider-row">
+      <span>{{ t("field.screenAwarenessStale") }}</span>
+      <div class="settings-slider-row__control">
+        <input
+          :value="state.settings.screenAwarenessStaleAfterSeconds"
+          :aria-label="t('field.screenAwarenessStale')"
+          data-testid="screen-awareness-stale-slider"
+          type="range"
+          min="30"
+          max="600"
+          step="30"
+          @input="emit('update-numeric-setting', 'screenAwarenessStaleAfterSeconds', valueFrom($event))"
+        />
+        <output>{{ t("status.seconds", { value: state.settings.screenAwarenessStaleAfterSeconds }) }}</output>
+      </div>
+    </label>
+    <label class="settings-slider-row">
+      <span>{{ t("field.screenAwarenessChangeThreshold") }}</span>
+      <div class="settings-slider-row__control">
+        <input
+          :value="state.settings.screenAwarenessChangeThreshold"
+          :aria-label="t('field.screenAwarenessChangeThreshold')"
+          data-testid="screen-awareness-change-threshold-slider"
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          @input="emit('update-numeric-setting', 'screenAwarenessChangeThreshold', valueFrom($event))"
+        />
+        <output>{{ t("status.percent", { value: state.settings.screenAwarenessChangeThreshold }) }}</output>
+      </div>
+    </label>
   </div>
 </template>
 
@@ -110,7 +158,17 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "update-setting": [key: keyof DesktopSettingsState, value: string];
-  "update-numeric-setting": [key: "modelScale" | "modelX" | "modelY" | "proactivityLevel", value: string];
+  "update-numeric-setting": [
+    key:
+      | "modelScale"
+      | "modelX"
+      | "modelY"
+      | "proactivityLevel"
+      | "screenAwarenessRefreshIntervalSeconds"
+      | "screenAwarenessStaleAfterSeconds"
+      | "screenAwarenessChangeThreshold",
+    value: string
+  ];
   "update-boolean-setting": [key: "speechBubbleEnabled" | "proactiveMemoryEnabled", value: boolean];
 }>();
 
