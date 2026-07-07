@@ -148,6 +148,7 @@ export interface ProactiveDesktopCheckResult {
     | "recent_interrupt"
     | "no_screen_context"
     | "stale_screen_context"
+    | "screen_awareness_in_flight"
     | "vision_model_missing"
     | "vision_model_not_ready"
     | "screen_awareness_cooldown"
@@ -174,6 +175,7 @@ export class RuntimeService {
   private testingVoice = false;
   private lastInterruptedAtMs: number | undefined;
   private lastScreenAwarenessProactiveAtMs: number | undefined;
+  private screenAwarenessProactiveInFlight = false;
 
   // New memory system (V2)
   private memoryStoresV2?: MemoryStoresV2;
@@ -624,6 +626,9 @@ export class RuntimeService {
     if (this.lastInterruptedAtMs !== undefined && Date.now() - this.lastInterruptedAtMs < proactiveInterruptCooldownMs) {
       return { displayed: false, reason: "recent_interrupt" };
     }
+    if (this.screenAwarenessProactiveInFlight) {
+      return { displayed: false, reason: "screen_awareness_in_flight" };
+    }
     if (this.lastScreenAwarenessProactiveAtMs !== undefined && Date.now() - this.lastScreenAwarenessProactiveAtMs < screenAwarenessProactiveCooldownMs) {
       return { displayed: false, reason: "screen_awareness_cooldown" };
     }
@@ -645,54 +650,58 @@ export class RuntimeService {
       return { displayed: false, reason: "vision_model_not_ready" };
     }
 
-    const messages: ChatMessage[] = [
-      {
-        role: "system",
-        content: [
-          "You are Greyfield, a visible Live2D desktop companion.",
-          "Screen awareness is enabled and the user has not spoken first.",
-          "If the recent desktop visual context gives a natural, low-disturbance reason to speak, say one short sentence.",
-          "Do not mention raw screenshots, frame counts, files, or hidden monitoring.",
-          "Do not claim control of the desktop."
-        ].join("\n")
-      },
-      {
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text: "Use this temporary desktop visual context only if it naturally supports one proactive desktop-pet remark."
-          },
-          ...attachments.map((attachment) => ({
-            type: "image_url" as const,
-            image_url: { url: attachment.dataUrl, detail: "low" as const }
-          }))
-        ]
-      }
-    ];
-    let text = "";
+    this.screenAwarenessProactiveInFlight = true;
+    this.lastScreenAwarenessProactiveAtMs = Date.now();
     try {
+      const messages: ChatMessage[] = [
+        {
+          role: "system",
+          content: [
+            "You are Greyfield, a visible Live2D desktop companion.",
+            "Screen awareness is enabled and the user has not spoken first.",
+            "If the recent desktop visual context gives a natural, low-disturbance reason to speak, say one short sentence.",
+            "Do not mention raw screenshots, frame counts, files, or hidden monitoring.",
+            "Do not claim control of the desktop."
+          ].join("\n")
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Use this temporary desktop visual context only if it naturally supports one proactive desktop-pet remark."
+            },
+            ...attachments.map((attachment) => ({
+              type: "image_url" as const,
+              image_url: { url: attachment.dataUrl, detail: "low" as const }
+            }))
+          ]
+        }
+      ];
+      let text = "";
       for await (const chunk of llm.stream(messages)) {
         text += chunk;
         if (text.length > 240) {
           break;
         }
       }
+      const normalized = text.replace(/\s+/g, " ").trim();
+      if (normalized.length === 0) {
+        return { displayed: false, reason: "no_screen_context" };
+      }
+      this.lastScreenAwarenessProactiveAtMs = Date.now();
+      return {
+        displayed: true,
+        message: {
+          text: normalized,
+          createdAt: new Date().toISOString()
+        }
+      };
     } catch {
       return { displayed: false, reason: "vision_model_not_ready" };
+    } finally {
+      this.screenAwarenessProactiveInFlight = false;
     }
-    const normalized = text.replace(/\s+/g, " ").trim();
-    if (normalized.length === 0) {
-      return { displayed: false, reason: "no_screen_context" };
-    }
-    this.lastScreenAwarenessProactiveAtMs = Date.now();
-    return {
-      displayed: true,
-      message: {
-        text: normalized,
-        createdAt: new Date().toISOString()
-      }
-    };
   }
 
   async updateMemoryAtom(id: string, patch: UpdateMemoryAtom): Promise<MemoryControlResult> {
@@ -1426,7 +1435,8 @@ function isObservationSourceTurn(turn: SessionTurn): boolean {
 function hasFreshScreenAwarenessAttachment(attachments: RuntimeImageAttachment[], nowMs: number, maxAgeMs: number): boolean {
   return attachments.some((attachment) => {
     const createdAtMs = Date.parse(attachment.createdAt);
-    return Number.isFinite(createdAtMs) && nowMs - createdAtMs <= maxAgeMs;
+    const ageMs = nowMs - createdAtMs;
+    return Number.isFinite(createdAtMs) && ageMs >= 0 && ageMs <= maxAgeMs;
   });
 }
 

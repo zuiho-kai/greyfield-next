@@ -2439,6 +2439,112 @@ describe("RuntimeService", () => {
     });
   });
 
+  it("rejects future-dated proactive screen awareness context as stale", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-30T00:00:00.000Z"));
+    const visualContext = {
+      attachments: [
+        {
+          id: "screen-frame-1",
+          dataUrl: `data:image/png;base64,${Buffer.from("screen").toString("base64")}`,
+          mimeType: "image/png",
+          createdAt: "2026-06-30T00:05:00.000Z",
+          source: "observation-frame" as const
+        }
+      ],
+      observation: {
+        id: "screen-1",
+        mode: "normal" as const,
+        frameCount: 1,
+        dedupedFrameCount: 1,
+        source: "desktop-screen-awareness" as const
+      }
+    };
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          visionModel: "fake-vision-model"
+        },
+        ui: {
+          ...defaultGreyfieldConfig.ui,
+          proactivityLevel: 100
+        }
+      },
+      { fetch: vi.fn() }
+    );
+
+    await expect(service.checkProactiveScreenAwareness(visualContext)).resolves.toEqual({
+      displayed: false,
+      reason: "stale_screen_context"
+    });
+  });
+
+  it("skips overlapping proactive screen awareness Vision checks while one is already running", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-30T00:00:30.000Z"));
+    const visualContext = {
+      attachments: [
+        {
+          id: "screen-frame-1",
+          dataUrl: `data:image/png;base64,${Buffer.from("screen").toString("base64")}`,
+          mimeType: "image/png",
+          createdAt: "2026-06-30T00:00:00.000Z",
+          source: "observation-frame" as const
+        }
+      ],
+      observation: {
+        id: "screen-1",
+        mode: "normal" as const,
+        frameCount: 1,
+        dedupedFrameCount: 1,
+        source: "desktop-screen-awareness" as const
+      }
+    };
+    let releaseFetch: ((response: Response) => void) | undefined;
+    let fetchCalls = 0;
+    const fetch = vi.fn(() => {
+      fetchCalls += 1;
+      if (fetchCalls > 1) {
+        return Promise.resolve(createSseResponse("second call should not reach Vision"));
+      }
+      return new Promise<Response>((resolve) => {
+        releaseFetch = resolve;
+      });
+    }) as typeof globalThis.fetch;
+    const service = new RuntimeService(
+      {
+        ...defaultGreyfieldConfig,
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://llm.example/v1",
+          apiKey: "secret",
+          model: "chat-model",
+          visionModel: "vision-model"
+        },
+        ui: {
+          ...defaultGreyfieldConfig.ui,
+          proactivityLevel: 100
+        }
+      },
+      { fetch }
+    );
+
+    const first = service.checkProactiveScreenAwareness(visualContext);
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    await expect(service.checkProactiveScreenAwareness(visualContext)).resolves.toEqual({
+      displayed: false,
+      reason: "screen_awareness_in_flight"
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    releaseFetch?.(createSseResponse("I can see a fresh desktop context."));
+    await expect(first).resolves.toMatchObject({ displayed: true });
+  });
+
   it("degrades proactive screen awareness when the Vision provider stream fails", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-30T00:00:30.000Z"));
@@ -2483,6 +2589,11 @@ describe("RuntimeService", () => {
     await expect(service.checkProactiveScreenAwareness(visualContext)).resolves.toEqual({
       displayed: false,
       reason: "vision_model_not_ready"
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await expect(service.checkProactiveScreenAwareness(visualContext)).resolves.toEqual({
+      displayed: false,
+      reason: "screen_awareness_cooldown"
     });
     expect(fetch).toHaveBeenCalledTimes(1);
   });

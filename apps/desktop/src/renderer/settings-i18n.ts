@@ -745,7 +745,7 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "field.bubble": "气泡",
   "field.rememberedMoments": "主动记忆提醒",
   "field.proactivity": "主动程度",
-  "field.screenAwarenessRefresh": "读屏刷新",
+  "field.screenAwarenessRefresh": "屏幕感知刷新",
   "field.screenAwarenessStale": "画面过期",
   "field.screenAwarenessChangeThreshold": "变化阈值",
   "field.betterMemory": "记忆模型增强",
