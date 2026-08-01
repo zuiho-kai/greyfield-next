@@ -30,6 +30,9 @@ Greyfield Next is a TypeScript monorepo for a Live2D desktop companion. This fil
 - Native `BrowserWindow.setShape` is not the default Windows V1 path; it is experimental behind `GREYFIELD_ENABLE_NATIVE_SHAPE=1`.
 - New features, checkpoint phases, risky refactors, and multi-agent work use a dedicated git worktree and feature branch when the project is inside a git repo.
 - New feature work should end as a pull request, not an untracked local patch. Do not push directly to `main`.
+- Distinguish draft, issue, PR, and main. Local docs are drafts; issues are discussion records; PRs are reviewable change proposals; only merged `main` is project truth. Do not push, open PRs, or merge meeting/product docs before the user has confirmed the content.
+- Before starting V1 work, map it to a `GFN-V1-*` manifest item. If no manifest item applies, pause and classify whether it is V1 work, follow-up polish, or out of scope.
+- Split teammate work by user-visible outcomes, not by file lists. Each task handoff must state goal, non-goals, deliverables, acceptance, dependencies, and risks.
 - Never use vague "code check this" review framing. Use module-owner and project-owner review levels plus explicit audit dimensions.
 - Frontend-visible PRs are not mergeable on green tests alone. The agent must exercise the ordinary user path, inspect current screenshots, and run the relevant harness gate before asking the user to verify manually.
 - Desktop launch, pet-window, or recovery claims are not proven by a Vite port, process list, generated URL, DOM node, or Electron PID. They require real desktop evidence: pet/controls/chat window bounds on a visible display, a screenshot or harness artifact showing the ordinary surface, and non-empty model pixels when Live2D visibility is the claim.
@@ -76,6 +79,7 @@ Project state:
 - `README.md`: V1 goal, command list, workspace map.
 - `docs/progress.md`: current status and QA bar.
 - `docs/plans/v1-product-plan.md`: Chinese product-facing V1 plan, current capability, and remaining work.
+- `docs/v1-from-zero-retro.md`: from-zero V1 retro, repeated failure causes, and prevention rules.
 - `packages/dev-harness/v1-features.json`: feature status, acceptance, package owner, QA script.
 
 Product and QA guardrails:
@@ -95,6 +99,7 @@ Agent rule details:
 
 - `docs/agent-rules/README.md`: detailed rule index.
 - `docs/agent-rules/worktree-pr.md`: multi-agent, worktree, branch, and PR rules.
+- `docs/agent-rules/v1-execution-flow.md`: V1 task classification, doc states, teammate handoff, and validation flow.
 - `docs/agent-rules/code-check-owners.md`: module-owner/project-owner code check levels.
 - `docs/agent-rules/debugging-knowledge.md`: bug locating discipline and knowledge-base maintenance.
 - `docs/agent-rules/framework-practices.md`: useful practices absorbed from surveyed frameworks.

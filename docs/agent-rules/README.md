@@ -5,6 +5,7 @@ This directory holds detailed agent rules. `AGENTS.md` stays compact and links h
 ## Files
 
 - `worktree-pr.md`: multi-agent coordination, git worktrees, branches, pull requests, and cleanup.
+- `v1-execution-flow.md`: V1 task classification, user-visible task splitting, doc state discipline, and acceptance flow.
 - `code-check-owners.md`: code check levels, module owner review, project owner review, and reviewer-lens audits.
 - `debugging-knowledge.md`: bug locating discipline, common Greyfield traps, and knowledge-base maintenance.
 - `framework-practices.md`: useful practices absorbed from `growth-vibe-framework`, `claude-workflow-starter`, `everything-claude-code`, `BMAD-METHOD`, and `SuperClaude`, including the product-language-first planning rule.
