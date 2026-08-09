@@ -51,6 +51,16 @@ describe("V1 visual acceptance summary", () => {
         unexpectedProactiveMessageAbsent: true
       },
       settings: {
+        startChatNavVisible: true,
+        chatNavVisible: true,
+        advancedToggleVisible: true,
+        advancedDefaultClosed: true,
+        providerFourFieldsVisible: true,
+        providerTestVisible: true,
+        providerCardFitsViewport: true,
+        advancedTaskModelsDefaultClosed: true,
+        advancedNavVisibleAfterOpen: true,
+        advancedTaskModelsVisibleAfterOpen: true,
         avatarNavVisible: true,
         modelServiceNavVisible: true,
         genericModelNavAbsent: true,
@@ -85,14 +95,14 @@ describe("V1 visual acceptance summary", () => {
         { name: "controls-active-state.png", path: "artifact-root/controls-active-state.png", review: "Controls active" },
         { name: "chat-after-reply.png", path: "artifact-root/chat-after-reply.png", review: "Chat reply" },
         {
-          name: "settings-first-glance-nav.png",
-          path: "artifact-root/settings-first-glance-nav.png",
-          review: "First-glance Settings nav"
+          name: "settings-provider-first.png",
+          path: "artifact-root/settings-provider-first.png",
+          review: "Provider-first Settings"
         },
         {
-          name: "settings-model-service-task-models.png",
-          path: "artifact-root/settings-model-service-task-models.png",
-          review: "Model service task models"
+          name: "settings-advanced.png",
+          path: "artifact-root/settings-advanced.png",
+          review: "Expanded advanced settings"
         },
         {
           name: "settings-live2d-avatar.png",
@@ -117,19 +127,19 @@ describe("V1 visual acceptance summary", () => {
       expect.arrayContaining([
         "pet-initial.png",
         "chat-after-reply.png",
-        "settings-first-glance-nav.png",
-        "settings-model-service-task-models.png",
+        "settings-provider-first.png",
+        "settings-advanced.png",
         "settings-live2d-avatar.png"
       ])
     );
     expect(summary.visualReviewRequired.join("\n")).toContain("pet-initial.png");
     expect(summary.visualReviewRequired.join("\n")).toContain("controls-initial.png");
     expect(summary.visualReviewRequired.join("\n")).toContain("controls-active-state.png");
-    expect(summary.visualReviewRequired.join("\n")).toContain("settings-first-glance-nav.png");
-    expect(summary.visualReviewRequired.join("\n")).toContain("settings-model-service-task-models.png");
+    expect(summary.visualReviewRequired.join("\n")).toContain("settings-provider-first.png");
+    expect(summary.visualReviewRequired.join("\n")).toContain("settings-advanced.png");
     expect(summary.visualReviewRequired.join("\n")).toContain("settings-live2d-avatar.png");
-    expect(summary.visualReviewRequired.join("\n")).toContain("distinct Live2D/avatar");
-    expect(summary.visualReviewRequired.join("\n")).toContain("task models");
+    expect(summary.visualReviewRequired.join("\n")).toContain("four chat fields");
+    expect(summary.visualReviewRequired.join("\n")).toContain("advanced navigation");
     expect(summary.visualReviewRequired.join("\n")).toContain("settings-memory-extraction.png");
     expect(summary.visualReviewRequired.join("\n")).toContain("settings-window-controls.png");
     expect(summary.visualReviewRequired.join("\n")).toContain("试玩模式");

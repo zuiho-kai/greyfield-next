@@ -5,6 +5,10 @@ describe("settings i18n", () => {
   it("maps Settings labels in zh-CN", () => {
     expect(settingsT("zh-CN", "nav.model")).toBe("形象");
     expect(settingsT("zh-CN", "nav.provider")).toBe("模型服务");
+    expect(settingsT("zh-CN", "nav.startChat")).toBe("开始聊天");
+    expect(settingsT("zh-CN", "nav.advanced")).toBe("高级设置");
+    expect(settingsT("zh-CN", "advanced.taskModels")).toBe("高级任务模型");
+    expect(settingsT("zh-CN", "advanced.settings")).toBe("展开高级设置");
     expect(settingsT("zh-CN", "section.model")).toBe("形象（Live2D）");
     expect(settingsT("zh-CN", "field.model")).toBe("Live2D 模型");
     expect(settingsT("zh-CN", "nav.window")).toBe("窗口");
@@ -14,6 +18,8 @@ describe("settings i18n", () => {
     expect(settingsT("zh-CN", "field.taskModelSlots.detail")).toContain("聊天回复、画面理解、语音相关任务");
     expect(settingsT("en-US", "nav.model")).toBe("Live2D");
     expect(settingsT("en-US", "nav.provider")).toBe("Model service");
+    expect(settingsT("en-US", "nav.startChat")).toBe("Start chatting");
+    expect(settingsT("en-US", "nav.advanced")).toBe("Advanced settings");
     expect(settingsT("en-US", "section.model")).toBe("Live2D avatar");
     expect(settingsT("en-US", "field.taskModelSlots.detail")).toContain("chat replies, visual understanding");
     expect(settingsT("zh-CN", "status.proactivity", { level: 80 })).toBe("主动 80/100");

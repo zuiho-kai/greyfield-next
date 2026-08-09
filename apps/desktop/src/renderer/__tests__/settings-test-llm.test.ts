@@ -77,9 +77,40 @@ describe("describeTestLlmAction", () => {
     expect(describeProviderTestStatus({ status: "error", message: "bad key" }, "en-US")).toEqual({
       tone: "error",
       label: "Test failed",
-      detail: "bad key"
+      detail: "Connection test failed. Check the four chat settings and retry."
     });
     expect(describeProviderTestStatus({ status: "idle", message: "" }, "en-US")).toBeNull();
+  });
+
+  it.each([
+    ["OpenAI-compatible LLM request failed: 401 Unauthorized", "Credentials were rejected. Check the API key and retry."],
+    ["OpenAI-compatible LLM request failed: 403 Forbidden", "These credentials do not have access. Check permissions and retry."],
+    ["OpenAI-compatible LLM request failed: 404 Not Found", "The Base URL or chat model was not found. Check both and retry."],
+    ["OpenAI-compatible LLM request timed out after 250ms", "Connection timed out. Check the Base URL and network, then retry."],
+    ["OpenAI-compatible LLM stream returned malformed SSE data", "The provider returned an invalid stream. Retry, then check the Base URL if it continues."],
+    ["LLM test finished without receiving a token.", "The provider disconnected before the first reply token. Retry the test."]
+  ])("turns provider failures into short retry guidance", (message, detail) => {
+    expect(describeProviderTestStatus({ status: "error", message }, "en-US")).toEqual({
+      tone: "error",
+      label: "Test failed",
+      detail
+    });
+  });
+
+  it("never renders unknown provider bodies, stack traces, or API keys", () => {
+    const secret = "sk-first-chat-secret";
+    const status = describeProviderTestStatus(
+      {
+        status: "error",
+        message: `provider body={\"api_key\":\"${secret}\"}\nError: failed\n    at unsafe.ts:12:3`
+      },
+      "en-US"
+    );
+
+    expect(status?.detail).toBe("Connection test failed. Check the four chat settings and retry.");
+    expect(JSON.stringify(status)).not.toContain(secret);
+    expect(JSON.stringify(status)).not.toContain("unsafe.ts");
+    expect(JSON.stringify(status)).not.toContain("api_key");
   });
 });
 

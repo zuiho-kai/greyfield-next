@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { resolveActiveSettingsSection, settingsNavSectionIds } from "../settings-nav";
+import {
+  resolveActiveSettingsSection,
+  settingsAdvancedSectionIds,
+  settingsNavSectionIds,
+  settingsPrimarySectionIds
+} from "../settings-nav";
 
 describe("settings nav", () => {
   it("chooses the section closest to the control surface top", () => {
@@ -15,8 +20,10 @@ describe("settings nav", () => {
     ).toBe("voice");
   });
 
-  it("includes the provider model-service section in navigation", () => {
-    expect(settingsNavSectionIds).toEqual(["model", "provider", "voice", "window", "persona", "memory"]);
+  it("keeps real chat setup primary and all low-frequency sections behind advanced settings", () => {
+    expect(settingsPrimarySectionIds).toEqual(["provider"]);
+    expect(settingsAdvancedSectionIds).toEqual(["persona", "voice", "model", "window", "memory"]);
+    expect(settingsNavSectionIds).toEqual(["provider", "persona", "voice", "model", "window", "memory"]);
     expect(
       resolveActiveSettingsSection(
         [
