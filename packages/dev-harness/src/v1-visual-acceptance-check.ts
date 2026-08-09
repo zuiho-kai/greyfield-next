@@ -36,6 +36,12 @@ type VisualAcceptanceSummaryInput = {
     panelWithinViewport: boolean;
     draggable: boolean;
     activeButtonContrastOk: boolean;
+    providerPreviewVisible: boolean;
+    providerActionVisible: boolean;
+    providerTruthWithinViewport: boolean;
+    providerActionOpensSettings: boolean;
+    fakeAsrDisclosureVisible: boolean;
+    screenAwarenessDefaultOff: boolean;
   };
   stage: {
     modelPoint: { x: number; y: number };
@@ -48,6 +54,11 @@ type VisualAcceptanceSummaryInput = {
     speechBubbleVisible: boolean;
     speechBubbleAvoidsModel: boolean;
     bubbleText: string;
+    providerPreviewVisible: boolean;
+    providerActionVisible: boolean;
+    providerTruthWithinViewport: boolean;
+    fakeAsrDisclosureVisible: boolean;
+    unexpectedProactiveMessageAbsent: boolean;
   };
   settings: {
     avatarNavVisible: boolean;
@@ -61,8 +72,12 @@ type VisualAcceptanceSummaryInput = {
     providerPreviewInViewport: boolean;
     taskModelSlotsVisible: boolean;
     memoryExtractionVisible: boolean;
-    memoryEnhancementToggleAvailable: boolean;
+    memoryPausedVisible: boolean;
+    memoryPausedInViewportAfterNav: boolean;
+    memoryEnhancementToggleDisabled: boolean;
     memoryExtractionManualCandidateControlsAbsent: boolean;
+    proactiveSpeechDefaultOff: boolean;
+    screenAwarenessDefaultOff: boolean;
     settingsShellVisible: boolean;
     settingsBodyClassApplied: boolean;
     settingsWheelScrollsDown: boolean;
@@ -90,14 +105,14 @@ export function buildV1VisualAcceptanceSummary(input: VisualAcceptanceSummaryInp
     ...input,
     visualReviewRequired: [
       "Open pet-initial.png and confirm the pet surface is transparent, unframed, and separate from the controls window.",
-      "Open controls-initial.png and confirm the desktop input bar is compact, draggable, and not a row of bulky text buttons.",
+      "Open controls-initial.png and confirm 试玩模式 and 配置真实聊天 are visible in the compact draggable controls.",
       "Open controls-active-state.png and confirm clicked controls keep visible icons instead of white-on-white blocks.",
       "Open pet-after-chat.png and confirm the speech bubble reads like a short subtitle and does not cover the model.",
-      "Open chat-after-reply.png and confirm the full assistant reply stays in the Chat window.",
+      "Open chat-after-reply.png and confirm the 试玩模式 banner, real-chat action, fake-ASR disclosure, and full assistant reply stay visible.",
       "Open settings-first-glance-nav.png and confirm the first Settings view shows distinct Live2D/avatar and Model service navigation entries.",
       "Open settings-model-service-task-models.png and confirm clicking Model service shows the task models without manual provider-section scrolling.",
       "Open settings-live2d-avatar.png and confirm clicking Live2D/avatar shows the Live2D appearance/model section, not a generic model section.",
-      "Open settings-memory-extraction.png and confirm local memory is on, the Memory model enhancement switch is understandable, and there are no Accept/Reject candidate review controls.",
+      "Open settings-memory-extraction.png and confirm 长期记忆当前暂停 is visible after ordinary Memory navigation, the extraction switch is disabled, and there are no Accept/Reject candidate review controls.",
       "Open settings-window-controls.png and confirm Window scale/position controls are readable and not collapsed."
     ]
   };
@@ -135,6 +150,10 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
         live2d: {
           ...defaultGreyfieldConfig.live2d,
           modelPath: pathToFileURL(resolveLive2DFixturePath()).href
+        },
+        memory: {
+          ...defaultGreyfieldConfig.memory,
+          llmAtomExtractionEnabled: true
         }
       },
       null,
@@ -176,13 +195,28 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     await controlsWindow.waitForSelector(".desktop-control-panel");
     const controls = await readControlsSnapshot(controlsWindow);
     controls.draggable = await dragDesktopControls(app, controlsWindow);
-    if (controls.role !== "controls" || !controls.hasPanel || !controls.panelWithinViewport || !controls.draggable) {
+    if (
+      controls.role !== "controls" ||
+      !controls.hasPanel ||
+      !controls.panelWithinViewport ||
+      !controls.draggable ||
+      !controls.providerPreviewVisible ||
+      !controls.providerActionVisible ||
+      !controls.providerTruthWithinViewport ||
+      !controls.fakeAsrDisclosureVisible ||
+      !controls.screenAwarenessDefaultOff
+    ) {
       throw new Error(`Desktop controls did not render the expected draggable panel: ${JSON.stringify(controls)}`);
     }
 
     const artifacts: Artifact[] = [];
     artifacts.push(await screenshot(petWindow, artifactDir, "pet-initial.png", "Transparent pet shell and model surface."));
     artifacts.push(await screenshot(controlsWindow, artifactDir, "controls-initial.png", "Draggable desktop input controls."));
+    await controlsWindow.getByTestId("provider-experience-action").click();
+    controls.providerActionOpensSettings = await waitForRoleWindowVisible(app, "settings");
+    if (!controls.providerActionOpensSettings) {
+      throw new Error(`Controls real-chat action did not open Settings: ${JSON.stringify(controls)}`);
+    }
     const activeButtonProbe = await verifyActiveControlContrast(controlsWindow);
     controls.activeButtonContrastOk = activeButtonProbe.ok;
     if (!controls.activeButtonContrastOk) {
@@ -198,6 +232,18 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
 
     const chatWindow = await waitForRoleWindow(app, "chat");
     await chatWindow.waitForSelector(".chat-shell");
+    const chatTruth = await readChatTruthSnapshot(chatWindow);
+    await petWindow.waitForTimeout(250);
+    chatTruth.unexpectedProactiveMessageAbsent = !(await petWindow.locator(".speech-bubble").isVisible().catch(() => false));
+    if (
+      !chatTruth.providerPreviewVisible ||
+      !chatTruth.providerActionVisible ||
+      !chatTruth.providerTruthWithinViewport ||
+      !chatTruth.fakeAsrDisclosureVisible ||
+      !chatTruth.unexpectedProactiveMessageAbsent
+    ) {
+      throw new Error(`Chat did not expose truthful fresh/default capability state: ${JSON.stringify(chatTruth)}`);
+    }
     await chatWindow.getByTestId("chat-message-input").fill("验收一下桌宠前端。");
     await chatWindow.getByTestId("chat-send-button").click();
     await chatWindow.locator(".message-list .assistant", { hasText: "你好，我醒着。现在可以继续做桌宠了。" }).waitFor();
@@ -245,7 +291,9 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     );
     if (
       !settingsLayout.memoryExtractionVisible ||
-      !settingsLayout.memoryEnhancementToggleAvailable ||
+      !settingsLayout.memoryPausedVisible ||
+      !settingsLayout.memoryEnhancementToggleDisabled ||
+      !settingsLayout.proactiveSpeechDefaultOff ||
       !settingsLayout.memoryExtractionManualCandidateControlsAbsent
     ) {
       throw new Error(`Settings Memory extraction section is incomplete: ${JSON.stringify(settingsLayout)}`);
@@ -283,7 +331,12 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     artifacts.push(
       await screenshot(settingsWindow, artifactDir, "settings-live2d-avatar.png", "Settings Live2D avatar section.")
     );
-    await settingsWindow.getByLabel(/^(How memory works|记忆方式)$/, { exact: true }).scrollIntoViewIfNeeded();
+    await clickSettingsNavButton(settingsWindow, /^(Memory|记忆)$/);
+    await waitForSettingsSectionActive(settingsWindow, "memory");
+    const memoryPausedEvidence = await readMemoryPausedEvidence(settingsWindow);
+    if (!memoryPausedEvidence.memoryPausedVisible || !memoryPausedEvidence.memoryPausedInViewportAfterNav) {
+      throw new Error(`Settings did not show paused long-term memory after ordinary navigation: ${JSON.stringify(memoryPausedEvidence)}`);
+    }
     artifacts.push(
       await screenshot(settingsWindow, artifactDir, "settings-memory-extraction.png", "Settings Memory extraction section.")
     );
@@ -306,13 +359,16 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
         assistantReplyVisible: true,
         speechBubbleVisible: true,
         speechBubbleAvoidsModel: !bubbleProbe.overlapsModel,
-        bubbleText: bubbleText?.trim() ?? ""
+        bubbleText: bubbleText?.trim() ?? "",
+        ...chatTruth
       },
       settings: {
         ...finalSettingsLayout,
         ...settingsScroll,
         ...providerPreviewEvidence,
-        ...avatarEvidence
+        ...avatarEvidence,
+        ...memoryPausedEvidence,
+        screenAwarenessDefaultOff: controls.screenAwarenessDefaultOff
       },
       artifacts
     });
@@ -510,6 +566,12 @@ async function readControlsSnapshot(page: Page): Promise<VisualAcceptanceSummary
   return page.evaluate(() => {
     const panel = document.querySelector(".desktop-control-panel");
     const rect = panel?.getBoundingClientRect();
+    const providerStatus = document.querySelector<HTMLElement>('[data-testid="provider-experience"]');
+    const providerAction = document.querySelector<HTMLElement>('[data-testid="provider-experience-action"]');
+    const fakeAsrDisclosure = document.querySelector<HTMLElement>('[data-testid="controls-fake-asr-disclosure"]');
+    const screenAwarenessButton = document.querySelector<HTMLElement>('button[aria-label="Turn Screen awareness on"], button[aria-label="开启屏幕感知"]');
+    const providerRect = providerStatus?.getBoundingClientRect();
+    const actionRect = providerAction?.getBoundingClientRect();
     return {
       role: new URLSearchParams(window.location.search).get("window"),
       viewport: {
@@ -521,7 +583,67 @@ async function readControlsSnapshot(page: Page): Promise<VisualAcceptanceSummary
         ? rect.left >= 0 && rect.top >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight
         : false,
       draggable: false,
-      activeButtonContrastOk: false
+      activeButtonContrastOk: false,
+      providerPreviewVisible: /试玩模式|Preview mode/u.test(providerStatus?.textContent ?? ""),
+      providerActionVisible: /配置真实聊天|Configure real chat/u.test(providerAction?.textContent ?? ""),
+      providerTruthWithinViewport: Boolean(
+        providerRect &&
+          actionRect &&
+          providerRect.width > 0 &&
+          providerRect.height > 0 &&
+          providerRect.left >= 0 &&
+          providerRect.top >= 0 &&
+          providerRect.right <= window.innerWidth &&
+          providerRect.bottom <= window.innerHeight &&
+          actionRect.width > 0 &&
+          actionRect.height > 0 &&
+          actionRect.left >= 0 &&
+          actionRect.top >= 0 &&
+          actionRect.right <= window.innerWidth &&
+          actionRect.bottom <= window.innerHeight
+      ),
+      providerActionOpensSettings: false,
+      fakeAsrDisclosureVisible: /固定转写(?:试玩)?|Fixed(?:-transcript preview| text)/u.test(
+        fakeAsrDisclosure?.textContent ?? ""
+      ),
+      screenAwarenessDefaultOff: screenAwarenessButton !== null
+    };
+  });
+}
+
+async function readChatTruthSnapshot(
+  page: Page
+): Promise<Pick<VisualAcceptanceSummaryInput["chat"],
+  "providerPreviewVisible" | "providerActionVisible" | "providerTruthWithinViewport" | "fakeAsrDisclosureVisible" | "unexpectedProactiveMessageAbsent">> {
+  return page.evaluate(() => {
+    const providerBanner = document.querySelector<HTMLElement>('[data-testid="chat-provider-experience"]');
+    const providerAction = document.querySelector<HTMLElement>('[data-testid="chat-provider-experience-action"]');
+    const voiceButton = document.querySelector<HTMLElement>('[data-testid="chat-voice-input-button"]');
+    const bannerRect = providerBanner?.getBoundingClientRect();
+    const actionRect = providerAction?.getBoundingClientRect();
+    return {
+      providerPreviewVisible: /试玩模式|Preview mode/u.test(providerBanner?.textContent ?? ""),
+      providerActionVisible: /配置真实聊天|Configure real chat/u.test(providerAction?.textContent ?? ""),
+      providerTruthWithinViewport: Boolean(
+        bannerRect &&
+          actionRect &&
+          bannerRect.width > 0 &&
+          bannerRect.height > 0 &&
+          bannerRect.left >= 0 &&
+          bannerRect.top >= 0 &&
+          bannerRect.right <= window.innerWidth &&
+          bannerRect.bottom <= window.innerHeight &&
+          actionRect.width > 0 &&
+          actionRect.height > 0 &&
+          actionRect.left >= 0 &&
+          actionRect.top >= 0 &&
+          actionRect.right <= window.innerWidth &&
+          actionRect.bottom <= window.innerHeight
+      ),
+      fakeAsrDisclosureVisible: /固定转写试玩|Fixed-transcript preview/u.test(
+        voiceButton?.textContent ?? ""
+      ),
+      unexpectedProactiveMessageAbsent: false
     };
   });
 }
@@ -683,19 +805,18 @@ async function readSettingsLayout(page: Page): Promise<VisualAcceptanceSummaryIn
       providerPreviewInViewport: false,
       taskModelSlotsVisible: document.querySelector('[data-task-model-slot="chat"]') !== null,
       memoryExtractionVisible: memorySection !== null,
-      memoryEnhancementToggleAvailable: (() => {
+      memoryPausedVisible: /长期记忆当前暂停|Long-term memory is paused/u.test(memoryText),
+      memoryPausedInViewportAfterNav: false,
+      memoryEnhancementToggleDisabled: (() => {
         const input = memorySection?.querySelector<HTMLInputElement>(
           'input[aria-label="Memory model enhancement"], input[aria-label="记忆模型增强"]'
         );
-        return (
-          input !== undefined &&
-          input !== null &&
-          !input.disabled &&
-          !input.checked &&
-          memorySection?.querySelector(".memory-extraction-status--standard") !== null
-        );
+        return input !== undefined && input !== null && input.disabled && !input.checked;
       })(),
       memoryExtractionManualCandidateControlsAbsent: !/\b(accept|reject|candidate|pending)\b/i.test(memoryText),
+      proactiveSpeechDefaultOff:
+        document.querySelector<HTMLInputElement>('input[aria-label="Remembered moments"]')?.checked === false,
+      screenAwarenessDefaultOff: false,
       settingsShellVisible: document.querySelector(".greyfield-shell") !== null,
       settingsBodyClassApplied: document.body.classList.contains("settings-window"),
       settingsWheelScrollsDown: false,
@@ -797,7 +918,7 @@ async function clickSettingsNavButton(page: Page, name: RegExp): Promise<void> {
   await page.getByRole("button", { name }).click();
 }
 
-async function waitForSettingsSectionActive(page: Page, sectionId: "model" | "provider"): Promise<void> {
+async function waitForSettingsSectionActive(page: Page, sectionId: "model" | "provider" | "memory"): Promise<void> {
   await page.waitForFunction(
     (targetSectionId) => {
       const section = document.querySelector<HTMLElement>(`[data-settings-section="${targetSectionId}"]`);
@@ -806,7 +927,11 @@ async function waitForSettingsSectionActive(page: Page, sectionId: "model" | "pr
         return false;
       }
       const expectedLabels =
-        targetSectionId === "provider" ? ["Model service", "模型服务"] : ["Live2D", "形象"];
+        targetSectionId === "provider"
+          ? ["Model service", "模型服务"]
+          : targetSectionId === "memory"
+            ? ["Memory", "记忆"]
+            : ["Live2D", "形象"];
       if (!expectedLabels.includes(activeButton.textContent?.trim() ?? "")) {
         return false;
       }
@@ -816,6 +941,46 @@ async function waitForSettingsSectionActive(page: Page, sectionId: "model" | "pr
     sectionId
   );
   await page.waitForTimeout(100);
+}
+
+async function readMemoryPausedEvidence(
+  page: Page
+): Promise<Pick<VisualAcceptanceSummaryInput["settings"], "memoryPausedVisible" | "memoryPausedInViewportAfterNav">> {
+  return page.evaluate(() => {
+    const section = document.querySelector<HTMLElement>('[data-settings-section="memory"]');
+    const status = section?.querySelector<HTMLElement>(".memory-extraction-status--disabled") ?? null;
+    const activeButton = document.querySelector<HTMLButtonElement>(".settings-nav__button--active");
+    const rect = section?.getBoundingClientRect();
+    const text = section?.textContent ?? "";
+    return {
+      memoryPausedVisible: /长期记忆当前暂停|Long-term memory is paused/u.test(text) && status !== null,
+      memoryPausedInViewportAfterNav:
+        activeButton?.getAttribute("aria-current") === "true" &&
+        ["Memory", "记忆"].includes(activeButton.textContent?.trim() ?? "") &&
+        Boolean(rect && rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.bottom <= window.innerHeight)
+    };
+  });
+}
+
+async function waitForRoleWindowVisible(
+  app: ElectronApplication,
+  roleName: "settings"
+): Promise<boolean> {
+  const started = Date.now();
+  while (Date.now() - started < 3_000) {
+    const visible = await app.evaluate(
+      ({ BrowserWindow }, targetRole) =>
+        BrowserWindow.getAllWindows().some(
+          (browserWindow) => browserWindow.webContents.getURL().includes(`window=${targetRole}`) && browserWindow.isVisible()
+        ),
+      roleName
+    );
+    if (visible) {
+      return true;
+    }
+    await delay(100);
+  }
+  return false;
 }
 
 async function readProviderPreviewEvidence(

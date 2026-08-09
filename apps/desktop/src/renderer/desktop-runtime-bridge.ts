@@ -52,6 +52,7 @@ export interface DesktopRendererState {
     snapshot: DesktopMemoryDebugSnapshot | null;
   };
   memoryExtraction: MemoryAtomExtractionStatus | null;
+  sessionContinuity: DesktopIpcEventMap["session:continuity"];
   inputDraft: string;
   messages: DesktopMessage[];
   screenAwareness: DesktopScreenAwarenessState;
@@ -186,6 +187,13 @@ export class DesktopRuntimeBridge {
       }
       this.emitStateChange();
     });
+    this.host?.on("session:continuity", (sessionContinuity) => {
+      this.state = {
+        ...this.state,
+        sessionContinuity
+      };
+      this.emitStateChange();
+    });
     this.host?.on("window:state", (windowState) => {
       this.state = {
         ...this.state,
@@ -244,6 +252,16 @@ export class DesktopRuntimeBridge {
           status: result.ok ? "success" : "error",
           message: formatProviderTestMessage(result.message, result.ok),
           ...(result.firstToken ? { firstToken: result.firstToken } : {})
+        }
+      };
+      this.emitStateChange();
+    });
+    this.host?.on("provider:test-reset", () => {
+      this.state = {
+        ...this.state,
+        providerTest: {
+          status: "idle",
+          message: ""
         }
       };
       this.emitStateChange();
@@ -494,8 +512,14 @@ export class DesktopRuntimeBridge {
   }
 
   updateSettings(patch: DesktopSettingsPatch): DesktopRendererState {
+    const providerConnectionChanged =
+      patch.providerLLM !== undefined ||
+      patch.providerBaseUrl !== undefined ||
+      patch.providerApiKey !== undefined ||
+      patch.providerModel !== undefined;
     this.state = {
       ...this.state,
+      providerTest: providerConnectionChanged ? { status: "idle", message: "" } : this.state.providerTest,
       settings: {
         ...this.state.settings,
         ...patch,
@@ -1107,6 +1131,10 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       snapshot: null
     },
     memoryExtraction: null,
+    sessionContinuity: {
+      restoredRecentMessageCount: 0,
+      longTermMemoryEnabled: false
+    },
     screenAwareness: createInitialScreenAwarenessState(),
     voiceInput: {
       status: "idle",

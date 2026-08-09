@@ -30,6 +30,7 @@ import type {
 } from "../shared/ipc";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
+const desktopLongTermMemoryEnabled = false;
 let petWindow: BrowserWindow | undefined;
 let settingsWindow: BrowserWindow | undefined;
 let chatWindow: BrowserWindow | undefined;
@@ -67,7 +68,7 @@ async function createWindows(): Promise<void> {
     recallMaxCharacters: resolvePositiveIntegerEnv("GREYFIELD_RECALL_MAX_CHARACTERS"),
     summaryBatchTurnLimit: resolvePositiveIntegerEnv("GREYFIELD_SUMMARY_BATCH_TURN_LIMIT"),
     summaryMinTurns: resolvePositiveIntegerEnv("GREYFIELD_SUMMARY_MIN_TURNS"),
-    memoryEnabled: false
+    memoryEnabled: desktopLongTermMemoryEnabled
   });
   runtimeIpcController = new RuntimeIpcController({
     service: runtimeService,
@@ -134,6 +135,7 @@ async function createWindows(): Promise<void> {
   await loadRenderer(chatWindow, "chat");
   await loadRenderer(controlsWindow, "controls");
   broadcastSettings(config);
+  await broadcastSessionContinuity();
   broadcastWindowState();
   applyHitTest({ passthrough: true, reason: "transparent-area" });
   createTray();
@@ -339,7 +341,14 @@ function registerIpc(): void {
   });
 
   ipcMain.on("settings:update", async (_event, patch: GreyfieldConfigPatch) => {
-    const nextConfig = await settingsController?.update(patch);
+    if (providerPatchInvalidatesTest(patch.provider)) {
+      runtimeService?.invalidateProviderTest();
+      broadcastProviderTestReset();
+    }
+    const nextConfig = await settingsController?.update(patch).catch((error) => {
+      console.warn("Greyfield could not save settings:", error);
+      return undefined;
+    });
     if (nextConfig?.window.modelPassThrough !== undefined) {
       petWindowController?.setModelPassThrough(nextConfig.window.modelPassThrough);
       if (petWindowController?.isModelPassThrough()) {
@@ -444,6 +453,15 @@ function handleRuntimeInput(payload: Parameters<NonNullable<typeof runtimeServic
 }
 
 async function testLLMProvider(): Promise<void> {
+  try {
+    await settingsController?.awaitPendingUpdates();
+  } catch {
+    broadcastProviderTestResult({
+      ok: false,
+      message: "Provider settings could not be saved. Fix the settings save error and test again."
+    });
+    return;
+  }
   const result = await runtimeService?.testLLM();
   if (result) {
     broadcastProviderTestResult(result);
@@ -767,10 +785,27 @@ function broadcastSpeechPlayback(payload: { type: "finished" | "error"; text: st
   }
 }
 
-function broadcastProviderTestResult(result: Awaited<ReturnType<RuntimeService["testLLM"]>>): void {
+function broadcastProviderTestResult(result: NonNullable<Awaited<ReturnType<RuntimeService["testLLM"]>>>): void {
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send("provider:test-llm-result", result);
   }
+}
+
+function broadcastProviderTestReset(): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send("provider:test-reset", {});
+  }
+}
+
+function providerPatchInvalidatesTest(provider: GreyfieldConfigPatch["provider"]): boolean {
+  return Boolean(
+    provider &&
+      (provider.llm !== undefined ||
+        provider.baseUrl !== undefined ||
+        provider.apiKey !== undefined ||
+        provider.model !== undefined ||
+        provider.taskModels?.chat !== undefined)
+  );
 }
 
 function broadcastVoiceTestResult(sender: Electron.WebContents, result: Awaited<ReturnType<RuntimeService["testVoice"]>>): void {
@@ -792,6 +827,21 @@ function broadcastSettings(config: GreyfieldConfig): void {
   }
 }
 
+async function broadcastSessionContinuity(windows = BrowserWindow.getAllWindows()): Promise<void> {
+  const continuity = await runtimeService?.getSessionContinuity();
+  if (!continuity) {
+    return;
+  }
+  for (const window of windows) {
+    if (!window.isDestroyed()) {
+      window.webContents.send("session:continuity", {
+        ...continuity,
+        longTermMemoryEnabled: desktopLongTermMemoryEnabled
+      });
+    }
+  }
+}
+
 function attachSettingsReplayOnLoad(window: BrowserWindow): void {
   window.webContents.on("did-finish-load", () => {
     const config = settingsController?.getCurrent();
@@ -803,6 +853,9 @@ function attachSettingsReplayOnLoad(window: BrowserWindow): void {
     if (screenAwarenessState) {
       window.webContents.send("screen-awareness:state", screenAwarenessState);
     }
+    void broadcastSessionContinuity([window]).catch((error) => {
+      console.warn("Greyfield could not replay recent-message continuity:", error);
+    });
   });
 }
 

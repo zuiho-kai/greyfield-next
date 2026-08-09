@@ -171,7 +171,8 @@ export class RuntimeService {
   private proactiveTriggerState: ProactiveMemoryTriggerState = {};
   private activeRuntime: GreyfieldRuntime | undefined;
   private providerFactory: RuntimeProviderFactory;
-  private testingLLM = false;
+  private testingLLMGeneration: number | undefined;
+  private providerTestGeneration = 0;
   private testingVoice = false;
   private lastInterruptedAtMs: number | undefined;
   private lastScreenAwarenessProactiveAtMs: number | undefined;
@@ -320,12 +321,20 @@ export class RuntimeService {
 
   updateConfig(config: GreyfieldConfig): void {
     const previousThreadId = this.threadId;
+    const previousProviderTestFingerprint = providerTestFingerprint(this.config);
     this.config = mergeConfig(config);
+    if (providerTestFingerprint(this.config) !== previousProviderTestFingerprint) {
+      this.invalidateProviderTest();
+    }
     this.providerFactory = new RuntimeProviderFactory(this.config, this.options);
     if (this.threadId !== previousThreadId) {
       this.proactiveTriggerState = {};
     }
     this.refreshMemoryV2();
+  }
+
+  invalidateProviderTest(): void {
+    this.providerTestGeneration += 1;
   }
 
   async handle(input: RuntimeInputEvent, emit: RuntimeEventHandler): Promise<void> {
@@ -383,6 +392,12 @@ export class RuntimeService {
     return turns.flatMap((turn) =>
       turn.role === "user" || turn.role === "assistant" ? [{ role: turn.role, content: this.redactSecretText(turn.content) }] : []
     );
+  }
+
+  async getSessionContinuity(): Promise<{ restoredRecentMessageCount: number }> {
+    const limit = this.options.recentTurnLimit ?? 20;
+    const recentMessages = await this.sessionStore.getRecent(limit);
+    return { restoredRecentMessageCount: recentMessages.length };
   }
 
   async getMemoryDebugSnapshot(limit = 20): Promise<MemoryLibrarySnapshot> {
@@ -810,14 +825,15 @@ export class RuntimeService {
     };
   }
 
-  async testLLM(): Promise<LLMTestResult> {
+  async testLLM(): Promise<LLMTestResult | undefined> {
     if (this.activeRuntime) {
       return {
         ok: false,
         message: "LLM test is unavailable while a chat response is running."
       };
     }
-    if (this.testingLLM) {
+    const testGeneration = this.providerTestGeneration;
+    if (this.testingLLMGeneration === testGeneration) {
       return {
         ok: false,
         message: "LLM test is already running."
@@ -828,16 +844,22 @@ export class RuntimeService {
       return { ok: false, message: providerConfigError };
     }
 
-    this.testingLLM = true;
+    this.testingLLMGeneration = testGeneration;
     try {
-      return await testLLMProviderConnectivity(this.providerFactory.createChatLLMProvider());
+      const result = await testLLMProviderConnectivity(this.providerFactory.createChatLLMProvider());
+      return testGeneration === this.providerTestGeneration ? result : undefined;
     } catch (error) {
+      if (testGeneration !== this.providerTestGeneration) {
+        return undefined;
+      }
       return {
         ok: false,
         message: error instanceof Error ? error.message : String(error)
       };
     } finally {
-      this.testingLLM = false;
+      if (this.testingLLMGeneration === testGeneration) {
+        this.testingLLMGeneration = undefined;
+      }
     }
   }
 
@@ -1325,6 +1347,16 @@ export class RuntimeService {
   private redactSecretText(value: string): string {
     return redactSecretText(value, [this.config.provider.apiKey]);
   }
+}
+
+function providerTestFingerprint(config: GreyfieldConfig): string {
+  return JSON.stringify([
+    config.provider.llm,
+    config.provider.baseUrl,
+    config.provider.apiKey,
+    config.provider.model,
+    config.provider.taskModels.chat
+  ]);
 }
 
 class MainFakeMemoryStore implements MemoryStore {

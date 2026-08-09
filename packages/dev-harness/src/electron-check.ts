@@ -900,7 +900,7 @@ async function waitForSettingsLocale(path: string, locale: typeof defaultGreyfie
 
 async function verifyMemoryExtractionSettings(settingsWindow: Page): Promise<{
   activeStatusVisible: boolean;
-  toggleEnabled: boolean;
+  toggleDisabled: boolean;
   toggleUnchecked: boolean;
   manualCandidateControlsAbsent: boolean;
 }> {
@@ -908,20 +908,24 @@ async function verifyMemoryExtractionSettings(settingsWindow: Page): Promise<{
   await memorySection.waitFor();
   const toggle = memorySection.getByLabel(/^(Memory model enhancement|记忆模型增强)$/);
   await toggle.waitFor();
-  await expectActiveMemoryToggle(toggle);
-  await memorySection.locator(".memory-extraction-status--standard", { hasText: /Local memory is on|本地记忆已开启/ }).waitFor();
+  await expectPausedMemoryToggle(toggle);
+  await memorySection
+    .locator(".memory-extraction-status--disabled", {
+      hasText: /Long-term memory is currently paused|长期记忆当前暂停/
+    })
+    .waitFor();
   await assertNoManualMemoryCandidateControls(memorySection);
   return {
     activeStatusVisible: true,
-    toggleEnabled: true,
+    toggleDisabled: true,
     toggleUnchecked: true,
     manualCandidateControlsAbsent: true
   };
 }
 
-async function expectActiveMemoryToggle(toggle: Locator): Promise<void> {
-  if (await toggle.isDisabled()) {
-    throw new Error("Memory model enhancement toggle must be available");
+async function expectPausedMemoryToggle(toggle: Locator): Promise<void> {
+  if (!(await toggle.isDisabled())) {
+    throw new Error("Memory model enhancement toggle must stay disabled while long-term memory is paused");
   }
   if (await toggle.isChecked()) {
     throw new Error("Memory model toggle should stay off by default");

@@ -18,6 +18,10 @@ describe("settings i18n", () => {
     expect(settingsT("en-US", "field.taskModelSlots.detail")).toContain("chat replies, visual understanding");
     expect(settingsT("zh-CN", "status.proactivity", { level: 80 })).toBe("主动 80/100");
     expect(settingsT("zh-CN", "provider.preview.label")).toBe("预览模式");
+    expect(settingsT("zh-CN", "experience.preview")).toBe("试玩模式");
+    expect(settingsT("zh-CN", "experience.configure")).toBe("配置真实聊天");
+    expect(settingsT("zh-CN", "experience.untested")).toBe("配置已保存，待测试");
+    expect(settingsT("zh-CN", "memory.paused.label")).toBe("长期记忆当前暂停");
     expect(settingsT("zh-CN", "windowLayerMode.followClick")).toBe("按点击决定（默认）");
   });
 
@@ -33,9 +37,9 @@ describe("settings i18n", () => {
   });
 
   it("maps Memory Library control labels in zh-CN", () => {
-    expect(settingsT("zh-CN", "memory.about.title")).toBe("这个开关改变什么");
-    expect(settingsT("zh-CN", "memory.about.detail")).toContain("只控制 Greyfield 是否");
-    expect(settingsT("zh-CN", "memory.about.detail")).toContain("关掉它，仍然会使用已保存的本地记忆");
+    expect(settingsT("zh-CN", "memory.about.title")).toBe("长期记忆当前暂停");
+    expect(settingsT("zh-CN", "memory.about.detail")).toContain("不会写入或召回长期记忆");
+    expect(settingsT("zh-CN", "memory.about.detail")).toContain("最近对话消息");
     expect(settingsT("zh-CN", "memory.status.saved", { count: 3 })).toBe("已保存 3 条记忆");
     expect(settingsT("zh-CN", "memory.field.text")).toBe("记住的内容");
     expect(settingsT("zh-CN", "memory.field.recallCues")).toBe("帮助想起它的词");
@@ -65,5 +69,11 @@ describe("settings i18n", () => {
     expect(settingsT("en-US", "chat.message.collapse")).toBe("Collapse");
     expect(settingsT("zh-CN", "controls.placeholder")).toBe("和 Greyfield 说话...");
     expect(settingsT("zh-CN", "controls.stop")).toBe("停止回复或语音");
+    expect(settingsT("zh-CN", "voice.preview.fixedTranscript")).toBe("固定转写试玩");
+    expect(settingsT("zh-CN", "voice.preview.fixedTranscriptShort")).toBe("固定转写");
+    expect(settingsT("en-US", "voice.preview.fixedTranscriptShort")).toBe("Fixed text");
+    expect(settingsT("zh-CN", "chat.continuity.restored", { count: 3 })).toBe(
+      "已恢复最近 3 条对话消息（不是长期记忆）"
+    );
   });
 });

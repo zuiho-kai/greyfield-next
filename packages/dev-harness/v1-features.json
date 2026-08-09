@@ -205,6 +205,7 @@
         "Chat exposes microphone voice input; browser recording bytes are sent through Electron main, ASR, transcript.final, and the same runtime text path as typed messages.",
         "An independent draggable floating control window exposes text input, microphone input, voice output toggle, Settings, pass-through, hide, and Stop without interfering with pet-window transparency.",
         "OpenAI-compatible ASR posts microphone audio to /audio/transcriptions while fake ASR keeps offline harness coverage deterministic.",
+        "With fake ASR, Controls and Chat visibly render a localized fixed-transcript preview label instead of relying on a tooltip or implying real dictation.",
         "Renderer mouth-open is driven during real audio playback from decoded PCM audio energy instead of a one-time compressed-byte estimate.",
         "Finished renderer speech playback clears queued speech UI state across desktop windows.",
         "TTS or speech playback failure reports a voice-only error and does not remove the assistant text reply or session turn.",
@@ -214,7 +215,7 @@
         "Audio runtime exposes pure RMS VAD, microphone recorder, and decoded PCM mouth-open timeline boundaries."
       ],
       "qa": {
-        "script": "vitest sentence-splitter vad tts-text-budget speech-synthesis-output microphone-recorder audio-level-meter openai-compatible-asr-provider openai-compatible-tts-provider runtime-loop runtime-service desktop-runtime-bridge config; pnpm harness:v1-visual; pnpm harness:electron:stop-audio; pnpm harness:electron:voice-input"
+        "script": "vitest sentence-splitter vad tts-text-budget speech-synthesis-output microphone-recorder audio-level-meter openai-compatible-asr-provider openai-compatible-tts-provider runtime-loop runtime-service desktop-runtime-bridge provider-experience-status settings-i18n v1-visual-acceptance-check config; pnpm harness:v1-visual; pnpm harness:electron:stop-audio; pnpm harness:electron:voice-input"
       }
     },
     {
@@ -263,12 +264,15 @@
         "Settings exposes a Test LLM action and renders first-token success or a readable failure without writing chat history.",
         "Settings provider/Test LLM harness proves fake Preview, missing Base URL/API key/model reasons, blocked states send no provider requests, testing, success, and failure states.",
         "Electron settings-active-chat harness proves Test LLM is rejected with visible Stop-or-wait guidance while chat is actively streaming and does not send an extra provider request.",
+        "Controls and Chat share truthful Preview, incomplete, saved-but-untested, test-failed, and ready provider states; Preview and blocked states expose a visible text action toward real-chat setup or testing.",
+        "V1 visual acceptance proves the fresh Controls pill/action and Chat banner/action are rendered within their initial viewports without scrolling.",
+        "A fresh/default configuration keeps proactive speech disabled at startup with proactivity level 0, and keeps screen awareness disabled.",
         "V1 visual acceptance proves Settings first-glance navigation distinguishes Live2D/avatar settings from Model service task-model settings.",
         "V1 visual acceptance proves Settings Window scale/position controls remain readable and usable at narrow desktop widths.",
         "V1 visual acceptance proves the Settings body layout class is applied and ordinary mouse-wheel input can scroll the Settings panel down and back up."
       ],
       "qa": {
-        "script": "vitest desktop-runtime-bridge settings-provider-status settings-test-llm config settings-controller runtime-service; pnpm harness:v1-visual; pnpm harness:electron; pnpm harness:electron:config-relaunch; pnpm harness:electron:settings-provider-test; pnpm harness:electron:settings-active-chat-test"
+        "script": "vitest desktop-runtime-bridge provider-experience-status settings-provider-status settings-test-llm settings-memory-extraction-status settings-i18n config settings-controller runtime-service v1-visual-acceptance-check; pnpm harness:v1-visual; pnpm harness:electron; pnpm harness:electron:config-relaunch; pnpm harness:electron:settings-provider-test; pnpm harness:electron:settings-active-chat-test"
       }
     },
     {
@@ -281,11 +285,14 @@
         "Electron main runtime loads local memory from data/memory.md.",
         "Electron main runtime appends user and assistant turns to a JSONL SessionStore instead of an in-memory session only.",
         "A restart harness proves recent conversation context is available after app restart.",
+        "Electron main broadcasts only the bounded restored recent-message count to renderers, never historical message bodies.",
+        "Chat shows the restored recent-message count before the next send and explicitly distinguishes it from long-term memory.",
+        "While the long-term-memory capability is paused, Settings renders the paused status and the extraction toggle disabled and unchecked even if an existing saved configuration value is true.",
         "Successful turns are persisted before the final assistant message is emitted to the renderer, so app shutdown after final UI does not drop the assistant turn.",
         "Recent context remains capped and inspectable so prompt growth is bounded."
       ],
       "qa": {
-        "script": "vitest runtime-service character-persona jsonl-session-store prompt-assembler; pnpm harness:electron:restart-context"
+        "script": "vitest runtime-service desktop-runtime-bridge settings-memory-extraction-status v1-visual-acceptance-check character-persona jsonl-session-store prompt-assembler; pnpm harness:v1-visual; pnpm harness:electron:restart-context; pnpm harness:electron:memory-atom-library"
       }
     },
     {

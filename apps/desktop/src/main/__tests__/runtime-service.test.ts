@@ -2,7 +2,11 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
+import {
+  defaultGreyfieldConfig,
+  type GreyfieldConfig,
+  type GreyfieldConfigPatch
+} from "@greyfield/persistence/config-schema";
 import type {
   AppendSummarySegment,
   AppendDeletedMemoryEvidence,
@@ -46,6 +50,30 @@ function makeSummarySegment(id: string, threadId: string, summary: string): Summ
 
 const redactedSecretPlaceholder = "[redacted-secret]";
 
+function withProactivity(
+  config = defaultGreyfieldConfig,
+  proactivityLevel = 50
+): typeof defaultGreyfieldConfig {
+  return {
+    ...config,
+    ui: {
+      ...config.ui,
+      proactiveMemoryEnabled: true,
+      proactivityLevel
+    }
+  };
+}
+
+function providerTestResponse(firstToken: string): Response {
+  return new Response(
+    `data: ${JSON.stringify({ choices: [{ delta: { content: firstToken } }] })}\n\ndata: [DONE]\n\n`,
+    {
+      status: 200,
+      headers: { "content-type": "text/event-stream" }
+    }
+  );
+}
+
 function expectNoSecrets(value: unknown, secrets: string[]): void {
   const serialized = JSON.stringify(value) ?? "";
   for (const secret of secrets) {
@@ -70,6 +98,25 @@ describe("RuntimeService", () => {
     expect(emit).toHaveBeenCalledWith({ type: "assistant.text.delta", text: "你好，我醒着。" });
     expect(emit).toHaveBeenCalledWith({ type: "assistant.text.final", text: "你好，我醒着。现在可以继续做桌宠了。" });
     expect(emit).toHaveBeenLastCalledWith({ type: "runtime.status", status: "idle" });
+  });
+
+  it("reports only the bounded count of restored recent messages", async () => {
+    const sessionStore = new TestSessionStore("continuity-session", [
+      { id: "turn-1", role: "user", content: "private first message", createdAt: "2026-08-10T00:00:00.000Z" },
+      { id: "turn-2", role: "assistant", content: "private first reply", createdAt: "2026-08-10T00:00:01.000Z" },
+      { id: "turn-3", role: "user", content: "private second message", createdAt: "2026-08-10T00:00:02.000Z" }
+    ]);
+    const getRecent = vi.spyOn(sessionStore, "getRecent");
+    const service = new RuntimeService(defaultGreyfieldConfig, {
+      sessionStore,
+      recentTurnLimit: 2
+    });
+
+    const continuity = await service.getSessionContinuity();
+
+    expect(continuity).toEqual({ restoredRecentMessageCount: 2 });
+    expect(getRecent).toHaveBeenCalledWith(2);
+    expect(JSON.stringify(continuity)).not.toContain("private");
   });
 
   it("does not emit desktop TTS chunks until voice output is enabled", async () => {
@@ -706,6 +753,117 @@ describe("RuntimeService", () => {
       expect.objectContaining({
         body: expect.stringContaining('"ping"')
       })
+    );
+  });
+
+  it.each<[string, NonNullable<GreyfieldConfigPatch["provider"]>]>([
+    ["LLM", { llm: "fake" }],
+    ["Base URL", { baseUrl: "https://next.example/v1" }],
+    ["API key", { apiKey: "next-secret" }],
+    ["model", { model: "next-model" }],
+    ["Chat task model", { taskModels: { chat: "next-chat-model" } }]
+  ])("drops a delayed successful provider test after the %s changes", async (_label, providerPatch) => {
+    let markRequestStarted: (() => void) | undefined;
+    let finishRequest: ((response: Response) => void) | undefined;
+    const requestStarted = new Promise<void>((resolve) => {
+      markRequestStarted = resolve;
+    });
+    const fetch = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          finishRequest = resolve;
+          markRequestStarted?.();
+        })
+    );
+    const initialConfig: GreyfieldConfig = {
+      ...defaultGreyfieldConfig,
+      provider: {
+        ...defaultGreyfieldConfig.provider,
+        llm: "openai-compatible",
+        baseUrl: "https://llm.example/v1",
+        apiKey: "secret",
+        model: "remote-model"
+      }
+    };
+    const service = new RuntimeService(initialConfig, { fetch });
+
+    const pendingTest = service.testLLM();
+    await requestStarted;
+    service.updateConfig({
+      ...initialConfig,
+      provider: {
+        ...initialConfig.provider,
+        ...providerPatch,
+        taskModels: {
+          ...initialConfig.provider.taskModels,
+          ...providerPatch.taskModels
+        }
+      }
+    });
+    finishRequest?.(
+      new Response('data: {"choices":[{"delta":{"content":"stale pong"}}]}\n\ndata: [DONE]\n\n', {
+        status: 200,
+        headers: { "content-type": "text/event-stream" }
+      })
+    );
+
+    await expect(pendingTest).resolves.toBeUndefined();
+  });
+
+  it("lets a new provider-test generation run while the stale generation is still finishing", async () => {
+    const finishRequests: Array<(response: Response) => void> = [];
+    const fetch = vi.fn(
+      (_input: Parameters<typeof globalThis.fetch>[0], _init?: Parameters<typeof globalThis.fetch>[1]) =>
+        new Promise<Response>((resolve) => {
+          finishRequests.push(resolve);
+        })
+    );
+    const initialConfig: GreyfieldConfig = {
+      ...defaultGreyfieldConfig,
+      provider: {
+        ...defaultGreyfieldConfig.provider,
+        llm: "openai-compatible",
+        baseUrl: "https://llm.example/v1",
+        apiKey: "secret",
+        model: "old-chat-model",
+        taskModels: {
+          ...defaultGreyfieldConfig.provider.taskModels,
+          chat: "old-chat-model"
+        }
+      }
+    };
+    const service = new RuntimeService(initialConfig, { fetch });
+
+    const staleTest = service.testLLM();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    service.updateConfig({
+      ...initialConfig,
+      provider: {
+        ...initialConfig.provider,
+        model: "latest-chat-model",
+        taskModels: {
+          ...initialConfig.provider.taskModels,
+          chat: "latest-chat-model"
+        }
+      }
+    });
+    const latestTest = service.testLLM();
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    finishRequests[0]?.(providerTestResponse("stale pong"));
+    await expect(staleTest).resolves.toBeUndefined();
+    await expect(service.testLLM()).resolves.toEqual({
+      ok: false,
+      message: "LLM test is already running."
+    });
+    finishRequests[1]?.(providerTestResponse("latest pong"));
+    await expect(latestTest).resolves.toEqual({
+      ok: true,
+      message: "LLM test succeeded: latest pong",
+      firstToken: "latest pong"
+    });
+    expect(fetch.mock.calls[1]?.[1]).toEqual(
+      expect.objectContaining({ body: expect.stringContaining('"model":"latest-chat-model"') })
     );
   });
 
@@ -2001,7 +2159,7 @@ describe("RuntimeService", () => {
         throw new Error("deleted evidence list failed");
       }
     };
-    const service = new RuntimeService(defaultGreyfieldConfig, {
+    const service = new RuntimeService(withProactivity(), {
       threadId: "thread-a",
       memoryAtomStore,
       deletedMemoryEvidenceStore,
@@ -2058,7 +2216,7 @@ describe("RuntimeService", () => {
       virtualHome: { windowOpen: true },
       absenceDays: 45
     };
-    const service = new RuntimeService(defaultGreyfieldConfig, {
+    const service = new RuntimeService(withProactivity(), {
       threadId: "thread-a",
       memoryAtomStore
     });
@@ -2137,7 +2295,7 @@ describe("RuntimeService", () => {
       virtualHome: { windowOpen: true },
       absenceDays: 45
     };
-    const defaultService = new RuntimeService(defaultGreyfieldConfig, {
+    const defaultService = new RuntimeService(withProactivity(), {
       threadId: "thread-a",
       memoryAtomStore
     });
@@ -2146,6 +2304,7 @@ describe("RuntimeService", () => {
         ...defaultGreyfieldConfig,
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100
         }
       },
@@ -2167,6 +2326,7 @@ describe("RuntimeService", () => {
         },
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100
         }
       },
@@ -2228,6 +2388,7 @@ describe("RuntimeService", () => {
         ...defaultGreyfieldConfig,
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100
         }
       },
@@ -2242,6 +2403,7 @@ describe("RuntimeService", () => {
         },
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100
         }
       },
@@ -2317,6 +2479,7 @@ describe("RuntimeService", () => {
         },
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100
         }
       },
@@ -2335,6 +2498,7 @@ describe("RuntimeService", () => {
         },
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100
         }
       },
@@ -2383,6 +2547,7 @@ describe("RuntimeService", () => {
         },
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100
         }
       },
@@ -2426,6 +2591,7 @@ describe("RuntimeService", () => {
         },
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100,
           screenAwarenessStaleAfterSeconds: 60
         }
@@ -2469,6 +2635,7 @@ describe("RuntimeService", () => {
         },
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100
         }
       },
@@ -2526,6 +2693,7 @@ describe("RuntimeService", () => {
         },
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100
         }
       },
@@ -2580,6 +2748,7 @@ describe("RuntimeService", () => {
         },
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100
         }
       },
@@ -2623,7 +2792,7 @@ describe("RuntimeService", () => {
         }
       })
     ]);
-    const service = new RuntimeService(defaultGreyfieldConfig, {
+    const service = new RuntimeService(withProactivity(), {
       threadId: "thread-a",
       memoryAtomStore
     });
@@ -2702,11 +2871,11 @@ describe("RuntimeService", () => {
         }
       })
     ]);
-    const service = new RuntimeService(defaultGreyfieldConfig, { memoryAtomStore });
+    const service = new RuntimeService(withProactivity(), { memoryAtomStore });
 
     await expect(service.checkProactiveMemory(sceneContext)).resolves.toMatchObject({ displayed: true });
     service.updateConfig({
-      ...defaultGreyfieldConfig,
+      ...withProactivity(),
       characterFile: "characters/other.yaml"
     });
 

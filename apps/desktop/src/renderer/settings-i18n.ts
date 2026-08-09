@@ -125,6 +125,22 @@ export type SettingsI18nKey =
   | "provider.visionModel.detail"
   | "provider.ready.label"
   | "provider.ready.detail"
+  | "experience.preview"
+  | "experience.configure"
+  | "experience.incomplete"
+  | "experience.finishSetup"
+  | "experience.untested"
+  | "experience.testRequired"
+  | "experience.testFailed"
+  | "experience.retest"
+  | "experience.test"
+  | "experience.testing"
+  | "experience.configured"
+  | "voice.preview.fixedTranscript"
+  | "voice.preview.fixedTranscriptShort"
+  | "voice.realInput"
+  | "memory.paused.label"
+  | "memory.paused.detail"
   | "memory.standard.label"
   | "memory.standard.detail"
   | "memory.fallback.label"
@@ -299,6 +315,7 @@ export type SettingsI18nKey =
   | "chat.message"
   | "chat.message.expand"
   | "chat.message.collapse"
+  | "chat.continuity.restored"
   | "chat.placeholder"
   | "chat.observationIdle"
   | "chat.screenAwareness.visionMissingNotice"
@@ -462,8 +479,24 @@ const enUS: Record<SettingsI18nKey, string> = {
   "provider.visionModel.detail": "Screen awareness needs a Vision model. Leave it empty to keep screenshots unavailable instead of sending them to the Chat model.",
   "provider.ready.label": "Ready to test",
   "provider.ready.detail": "Provider settings are complete. Run Test LLM before a real chat.",
-  "memory.standard.label": "Local memory is on",
-  "memory.standard.detail": "Greyfield can save and reuse useful details from your chats. The Memory model enhancement is off, so it will not call an extra model to tidy new memories.",
+  "experience.preview": "Preview mode",
+  "experience.configure": "Configure real chat",
+  "experience.incomplete": "Setup incomplete",
+  "experience.finishSetup": "Finish setup",
+  "experience.untested": "Configuration saved, test pending",
+  "experience.testRequired": "Run Test LLM in Settings before treating this connection as ready.",
+  "experience.testFailed": "Connection test failed",
+  "experience.retest": "Test again",
+  "experience.test": "Test connection",
+  "experience.testing": "Testing connection",
+  "experience.configured": "Real chat ready",
+  "voice.preview.fixedTranscript": "Fixed-transcript preview",
+  "voice.preview.fixedTranscriptShort": "Fixed text",
+  "voice.realInput": "Microphone input",
+  "memory.paused.label": "Long-term memory is paused",
+  "memory.paused.detail": "The desktop runtime is not writing or recalling long-term memory. Recent message continuity is separate and remains bounded.",
+  "memory.standard.label": "Long-term memory is available",
+  "memory.standard.detail": "The desktop runtime can write and recall long-term memory for this character.",
   "memory.fallback.label": "Using local memory only",
   "memory.betterUsed.label": "New memory was organized",
   "memory.betterUsed.detail": "The Memory model helped turn the last chat into clearer long-term memory. Everything is still saved locally and can be reviewed or deleted.",
@@ -474,8 +507,8 @@ const enUS: Record<SettingsI18nKey, string> = {
   "memory.needsBaseUrl": "To use the Memory model, add the chat provider Base URL first. Local memory stays on.",
   "memory.needsApiKey": "To use the Memory model, save an API key first. Local memory stays on.",
   "memory.needsModel": "To use the Memory model, choose a Memory model name first. Local memory stays on.",
-  "memory.about.title": "What this switch changes",
-  "memory.about.detail": "Local memory is always available for this character. The switch below only controls whether Greyfield calls a Memory model to organize new memories after a chat turn. Turn it off if you want memory without extra model calls.",
+  "memory.about.title": "Long-term memory is paused",
+  "memory.about.detail": "This desktop runtime is not writing or recalling long-term memory. The bounded recent messages used for conversation continuity are separate from long-term memory. Existing developer management tools remain visible, but new memory extraction is unavailable.",
   "memory.status.loading": "Refreshing saved memories",
   "memory.status.loading.detail": "Greyfield is checking the latest local memory for this character.",
   "memory.status.notLoaded": "Saved memories not loaded",
@@ -636,6 +669,7 @@ const enUS: Record<SettingsI18nKey, string> = {
   "chat.message": "Message",
   "chat.message.expand": "See more",
   "chat.message.collapse": "Collapse",
+  "chat.continuity.restored": "Restored the latest {count} conversation messages (not long-term memory)",
   "chat.placeholder": "Type your message...",
   "chat.observationIdle": "Screenshots are temporary and only sent after you confirm with a message.",
   "chat.screenAwareness.visionMissingNotice": "Screen awareness needs a ready Vision model. This screenshot stayed temporary and was not sent to the Chat model.",
@@ -800,8 +834,24 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "provider.visionModel.detail": "屏幕感知需要单独的视觉模型。留空时不会把截图发给聊天模型。",
   "provider.ready.label": "可以测试",
   "provider.ready.detail": "模型服务配置已完整。真实聊天前建议先运行 Test LLM。",
-  "memory.standard.label": "本地记忆已开启",
-  "memory.standard.detail": "Greyfield 会保存并使用聊天里的重要细节。下面的“记忆模型增强”现在关闭，所以它不会额外调用模型来整理新记忆。",
+  "experience.preview": "试玩模式",
+  "experience.configure": "配置真实聊天",
+  "experience.incomplete": "配置未完成",
+  "experience.finishSetup": "完成配置",
+  "experience.untested": "配置已保存，待测试",
+  "experience.testRequired": "请先在设置中运行 Test LLM，再把这个连接视为已就绪。",
+  "experience.testFailed": "连接测试失败",
+  "experience.retest": "重新测试",
+  "experience.test": "测试连接",
+  "experience.testing": "正在测试连接",
+  "experience.configured": "真实聊天已就绪",
+  "voice.preview.fixedTranscript": "固定转写试玩",
+  "voice.preview.fixedTranscriptShort": "固定转写",
+  "voice.realInput": "麦克风输入",
+  "memory.paused.label": "长期记忆当前暂停",
+  "memory.paused.detail": "当前桌面 runtime 不会写入或召回长期记忆；有界的最近对话消息连续性与长期记忆是两回事。",
+  "memory.standard.label": "长期记忆可用",
+  "memory.standard.detail": "当前桌面 runtime 可以为这个角色写入和召回长期记忆。",
   "memory.fallback.label": "暂时只用本地记忆",
   "memory.betterUsed.label": "已整理出新记忆",
   "memory.betterUsed.detail": "记忆模型刚刚把上一轮聊天整理成了更清楚的长期记忆。记忆仍保存在本地，也仍然可以查看、停用或删除。",
@@ -812,8 +862,8 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "memory.needsBaseUrl": "要使用记忆模型，请先填写聊天服务 Base URL。本地记忆会继续开启。",
   "memory.needsApiKey": "要使用记忆模型，请先保存 API key。本地记忆会继续开启。",
   "memory.needsModel": "要使用记忆模型，请先填写记忆模型名称。本地记忆会继续开启。",
-  "memory.about.title": "这个开关改变什么",
-  "memory.about.detail": "这个角色的本地记忆默认可用。下面的开关只控制 Greyfield 是否在聊天后调用“记忆模型”来整理新记忆。关掉它，仍然会使用已保存的本地记忆。",
+  "memory.about.title": "长期记忆当前暂停",
+  "memory.about.detail": "当前桌面 runtime 不会写入或召回长期记忆。有界恢复的最近对话消息只用于连续聊天，不是长期记忆。已有开发管理工具仍可查看，但新的记忆抽取当前不可用。",
   "memory.status.loading": "正在刷新已保存的记忆",
   "memory.status.loading.detail": "Greyfield 正在检查这个角色当前的本地记忆。",
   "memory.status.notLoaded": "还没加载记忆",
@@ -974,6 +1024,7 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "chat.message": "消息",
   "chat.message.expand": "展开全文",
   "chat.message.collapse": "收起",
+  "chat.continuity.restored": "已恢复最近 {count} 条对话消息（不是长期记忆）",
   "chat.placeholder": "输入你想说的话...",
   "chat.observationIdle": "截图是临时的，只会在你发送消息确认后一起发给模型。",
   "chat.screenAwareness.visionMissingNotice": "屏幕感知需要可用的 Vision model。本次截图保持临时，没有发送给 Chat model。",

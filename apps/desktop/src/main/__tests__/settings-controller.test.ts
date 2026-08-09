@@ -52,6 +52,63 @@ describe("SettingsController", () => {
     expect(save).toHaveBeenLastCalledWith(expect.objectContaining({ provider: expect.objectContaining({ apiKey: "new-key" }) }));
   });
 
+  it("waits for a queued provider save before continuing with the latest config", async () => {
+    let finishSave: (() => void) | undefined;
+    let markSaveStarted: (() => void) | undefined;
+    const saveStarted = new Promise<void>((resolve) => {
+      markSaveStarted = resolve;
+    });
+    const save = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSave = resolve;
+          markSaveStarted?.();
+        })
+    );
+    let appliedModel = defaultGreyfieldConfig.provider.model;
+    const controller = new SettingsController(defaultGreyfieldConfig, save, (config) => {
+      appliedModel = config.provider.model;
+    });
+
+    const update = controller.update({ provider: { model: "latest-chat-model" } });
+    await saveStarted;
+    let testStarted = false;
+    const testAfterSave = controller.awaitPendingUpdates().then(() => {
+      testStarted = true;
+      return appliedModel;
+    });
+    await Promise.resolve();
+
+    expect(testStarted).toBe(false);
+    finishSave?.();
+    await update;
+    await expect(testAfterSave).resolves.toBe("latest-chat-model");
+  });
+
+  it("surfaces a failed queued save to a provider test waiter", async () => {
+    let failSave: ((error: Error) => void) | undefined;
+    let markSaveStarted: (() => void) | undefined;
+    const saveStarted = new Promise<void>((resolve) => {
+      markSaveStarted = resolve;
+    });
+    const save = vi.fn(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          failSave = reject;
+          markSaveStarted?.();
+        })
+    );
+    const controller = new SettingsController(defaultGreyfieldConfig, save, vi.fn());
+
+    const update = controller.update({ provider: { model: "unsaved-chat-model" } });
+    await saveStarted;
+    const waiter = controller.awaitPendingUpdates();
+    failSave?.(new Error("settings disk unavailable"));
+
+    await expect(update).rejects.toThrow("settings disk unavailable");
+    await expect(waiter).rejects.toThrow("settings disk unavailable");
+  });
+
   it("preserves existing UI settings when a partial UI patch is applied", async () => {
     const save = vi.fn(async () => undefined);
     const emit = vi.fn();

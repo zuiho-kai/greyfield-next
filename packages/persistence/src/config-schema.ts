@@ -140,9 +140,9 @@ export const defaultGreyfieldConfig: GreyfieldConfig = {
   },
   ui: {
     speechBubbleEnabled: true,
-    proactiveMemoryEnabled: true,
+    proactiveMemoryEnabled: false,
     locale: "zh-CN",
-    proactivityLevel: 50,
+    proactivityLevel: 0,
     screenAwarenessRefreshIntervalSeconds: 30,
     screenAwarenessStaleAfterSeconds: 120,
     screenAwarenessChangeThreshold: 5
