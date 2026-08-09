@@ -1,10 +1,11 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, screen, Tray } from "electron";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, resolve } from "node:path";
 import type { GreyfieldConfig, GreyfieldConfigPatch } from "@greyfield/persistence/config-schema";
 import { loadCharacterPersona, loadGreyfieldConfig, saveCharacterPersona, saveGreyfieldConfig } from "@greyfield/persistence";
 import { createDesktopRuntimeStoreOptions, resolveCharacterPath } from "./desktop-runtime-stores";
+import { ensurePackagedBootstrap, resolveDesktopPaths, type DesktopPaths } from "./desktop-paths";
 import { createChatWindowOptions, createControlsWindowOptions, createPetWindowOptions, createSettingsWindowOptions, resolvePreloadPath, resolveRendererHtmlPath } from "./electron-window-options";
 import { Live2DModelController, type Live2DModelInfo } from "./live2d-model-controller";
 import { resolveLive2DModelSelection } from "./live2d-model-selection";
@@ -31,6 +32,11 @@ import type {
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const desktopLongTermMemoryEnabled = false;
+const configuredUserDataPath = process.env.GREYFIELD_USER_DATA_PATH?.trim();
+if (configuredUserDataPath) {
+  app.setPath("userData", resolve(configuredUserDataPath));
+}
+let desktopPaths: DesktopPaths | undefined;
 let petWindow: BrowserWindow | undefined;
 let settingsWindow: BrowserWindow | undefined;
 let chatWindow: BrowserWindow | undefined;
@@ -927,14 +933,34 @@ function resolveCurrentCharacterPath(config: GreyfieldConfig): string {
 }
 
 function resolveConfigPath(): string {
-  return process.env.GREYFIELD_CONFIG_PATH ?? join(app.getPath("userData"), "greyfield.config.json");
+  return getDesktopPaths().configPath;
 }
 
 function resolveRuntimeStorePaths(): { userDataPath: string; projectRoot: string } {
+  const paths = getDesktopPaths();
   return {
-    userDataPath: process.env.GREYFIELD_USER_DATA_PATH ?? app.getPath("userData"),
-    projectRoot: process.env.GREYFIELD_PROJECT_ROOT ?? join(currentDir, "..", "..", "..")
+    userDataPath: paths.userDataPath,
+    projectRoot: paths.projectRoot
   };
+}
+
+function getDesktopPaths(): DesktopPaths {
+  if (!desktopPaths) {
+    throw new Error("Desktop paths are not initialized.");
+  }
+  return desktopPaths;
+}
+
+async function initializeDesktop(): Promise<void> {
+  desktopPaths = resolveDesktopPaths({
+    isPackaged: app.isPackaged,
+    currentDir,
+    resourcesPath: process.resourcesPath,
+    userDataPath: app.getPath("userData"),
+    env: process.env
+  });
+  await ensurePackagedBootstrap(desktopPaths);
+  await createWindows();
 }
 
 function resolvePositiveIntegerEnv(name: string): number | undefined {
@@ -950,7 +976,7 @@ function resolveScreenAwarenessTickMs(config: GreyfieldConfig): number {
   return resolvePositiveIntegerEnv("GREYFIELD_SCREEN_AWARENESS_TICK_MS") ?? config.ui.screenAwarenessRefreshIntervalSeconds * 1000;
 }
 
-app.whenReady().then(createWindows).catch((error) => {
+app.whenReady().then(initializeDesktop).catch((error) => {
   console.error("Greyfield failed to create windows:", error);
   app.quit();
 });

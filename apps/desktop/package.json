@@ -1,6 +1,6 @@
 {
   "name": "@greyfield/desktop",
-  "version": "0.0.0",
+  "version": "0.1.0-preview.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -21,15 +21,13 @@
     "@greyfield/core-runtime": "workspace:*",
     "@greyfield/persistence": "workspace:*",
     "@greyfield/stage-live2d": "workspace:*",
-    "better-sqlite3": "^12.11.1",
     "live2dcubismcore": "1.0.2",
     "lucide-vue-next": "^1.0.0",
-    "sqlite-vss": "^0.1.2",
     "vue": "^3.5.24"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.3",
-    "electron": "^42.2.0",
+    "electron": "42.2.0",
     "esbuild": "^0.28.0",
     "vite": "^8.0.14"
   }

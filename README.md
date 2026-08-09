@@ -4,10 +4,10 @@
 
 <img src="docs/assets/readme/greyfield-current.png" alt="Greyfield Live2D 桌面伴侣" width="480" />
 
-**生活在桌面上的 Live2D AI 伴侣（源码试玩阶段）**
+**生活在桌面上的 Live2D AI 伴侣（源码 + Windows portable 预览）**
 
 [![CI 状态](https://img.shields.io/badge/CI-passing-brightgreen)]()
-[![阶段](https://img.shields.io/badge/阶段-V1%20源码试玩-blue)]()
+[![阶段](https://img.shields.io/badge/阶段-V1%20portable%20预览-blue)]()
 [![许可证](https://img.shields.io/badge/许可证-Private-red)]()
 
 [当前状态](#-当前状态) • [快速开始](#-快速开始) • [冻结的后续方向](#️-冻结的后续方向) • [架构设计](#️-架构设计) • [文档](#-文档)
@@ -20,7 +20,7 @@
 
 Greyfield Next 是一个 TypeScript + Electron + Pixi.js 构建的 Live2D 桌面伴侣原型。目前主线证明的是：透明桌面对象、可见且可中断的对话、语音与 Live2D 反馈，以及跨重启的有界最近对话连续性。
 
-这还不是可下载发行物，也不应被描述成已经具有长期语义记忆的成品。当前桌面 runtime 明确暂停长期记忆的写入与召回。
+仓库现在能构建一个自包含的 Windows x64 portable 预览，但尚未发布 GitHub Release，也没有安装器、签名或自动更新。它也不应被描述成已经具有长期语义记忆的成品；当前桌面 runtime 明确暂停长期记忆的写入与召回。
 
 ### 核心理念
 
@@ -61,6 +61,9 @@ Greyfield Next 是一个 TypeScript + Electron + Pixi.js 构建的 Live2D 桌面
 ### 当前边界
 
 - `Launch Greyfield.vbs` / `Stop Greyfield.vbs` 是 Windows 上的**源码开发启动器**，负责启动现有 pnpm 开发流程；它不是安装包或发行版。
+- Windows portable 预览未签名，首次运行可能触发 Microsoft Defender SmartScreen；没有自动更新或安装器，也尚未发布 Release。
+- portable 只验收内置 Live2D 模型；用户自定义的绝对模型路径尚未作为便携交付路径验收。
+- 本地 SSE stub 只证明 OpenAI-compatible HTTP/SSE 合约、真实回复展示与中断，不证明任一公网供应商当前可用。
 - 重启后 Chat 只显示“已恢复最近 N 条对话消息（不是长期记忆）”。renderer 只收到有界数量，不收到历史正文。
 - 第二次 provider 请求会在主进程内使用有界 recent messages；这属于短期上下文连续性，不是长期语义记忆。
 - 仓库保留记忆 benchmark、数据结构与开发管理表面，不代表当前桌面 runtime 已启用长期记忆。
@@ -101,6 +104,21 @@ pnpm dev:live2d
 ```
 
 Windows 也可以双击 `Launch Greyfield.vbs` 启动同一套源码开发流程，并用 `Stop Greyfield.vbs` 停止。首次启动默认进入 fake LLM/ASR 试玩，不会自动连接真实模型。
+
+### 构建 Windows portable 预览
+
+```bash
+pnpm install --frozen-lockfile
+pnpm package:windows:portable
+```
+
+产物固定为 `.cache/greyfield-windows-portable/artifacts/Greyfield-0.1.0-preview.1-win-x64-portable.exe`。这是本地构建的未签名预览，不代表项目已经发布可下载版本。
+
+要从仓库外复制并启动同一个 portable、验证真实用户路径、Stop、写入隔离和重启连续性，可运行：
+
+```bash
+pnpm verify:windows:portable
+```
 
 ### 配置真实 provider
 
@@ -170,6 +188,7 @@ flowchart LR
 - fake ASR 固定转写披露，以及真实 ASR/TTS 请求路径
 - Stop 的文本、网络、语音、播放队列和嘴型中断
 - restart harness 的可见最近消息数量与第二次请求上下文
+- Windows portable 的仓库外启动、`file:` renderer、内置 Live2D 非 fallback、真实回复、Stop、userData 隔离与同一 exe 重启
 - 长期记忆暂停文案和 renderer 不接收历史正文的类型/单元约束
 
 记忆 benchmark 评估仓库中的算法与数据结构，不证明当前 desktop runtime 已启用长期记忆。
@@ -207,6 +226,7 @@ pnpm harness:pet:quick
 pnpm harness:electron
 pnpm harness:electron:quick
 pnpm harness:electron:restart-context
+pnpm harness:windows:portable
 pnpm harness:memory-benchmark
 ```
 
@@ -214,6 +234,8 @@ pnpm harness:memory-benchmark
 
 ```bash
 pnpm build:desktop
+pnpm package:windows:portable
+pnpm verify:windows:portable
 ```
 
 ---

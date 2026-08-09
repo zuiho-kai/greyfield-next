@@ -19,6 +19,7 @@
 | Renderer/harness complexity | Improved in PR #1; Phase E added restart coverage | Largest hotspots reduced: `App.vue` 278 lines, `desktop-runtime-bridge.ts` 261, `electron-check.ts` 339 plus `electron-check-helpers.ts` 232, restart context harness 152 lines | `Live2DStageView.vue` remains a future split target; harness can later split by pet/settings/chat files. |
 | Repo/PR flow | Private repo active; PR flow and CI active | Private GitHub repo `zuiho-kai/greyfield-next`; feature branches merge through PRs; `.github/workflows/ci.yml` is now in the repo | Continue avoiding direct pushes to `main`. |
 | Dev/CI loop speed | Improved, policy documented, CI restored | `dev:live2d:fast` reaches Electron PID in about 2.2s; `harness:pet:quick` about 6-8s; `harness:electron:quick` reuses built artifacts at about 7-8s locally; `docs/development-speed-policy.md` defines fast-loop vs checkpoint verification; GitHub Actions runs fast checks + pet quick on PR and full checkpoint on main/manual dispatch | Hosted CI Electron jobs now run `install-electron`; full harness must stay checkpoint-only. |
+| Windows portable preview | PR-local acceptance passed | `pnpm harness:windows:portable` launched the same external copied executable, proved `file:` renderers, non-fallback Live2D, trial/provider/real reply/Stop/restart paths, and produced `.cache/greyfield-packaged-smoke/latest/summary.json` plus six screenshots; accepted artifact is 92,659,984 bytes, SHA-256 `bab3ba594677fd865017170dcf4917988199794a7397afbc0e932ed7438f33d9` | Unsigned and not published; SmartScreen, no updater, built-in model only, and no custom absolute-model-path acceptance remain explicit boundaries. |
 
 Current product plan: [Greyfield Next V1 产品计划](plans/v1-product-plan.md).
 
@@ -27,6 +28,11 @@ Post-V1 roadmap: [Greyfield Next 版本产品书](plans/version-product-book.md)
 V2.1 memory research notes: [Clowder AI](research/v2-memory/clowder-ai.md), [SillyTavern](research/v2-memory/sillytavern.md), [MaiBot](research/v2-memory/maibot.md), and [Greyfield synthesis](research/v2-memory/synthesis.md).
 
 V2 memory implementation goal: [V2 Memory Goal](plans/v2-memory-goal.md) records the merged V2.0 raw-log, summary-segment, recall-context, memory-control, and memory benchmark foundation. Future memory product work is tracked as V2.1 in the version product book.
+
+## 2026-08-10
+
+- Issue #223 PR-local artifact acceptance passed for `Greyfield-0.1.0-preview.1-win-x64-portable.exe` (92,659,984 bytes; SHA-256 `bab3ba594677fd865017170dcf4917988199794a7397afbc0e932ed7438f33d9`). The packaged smoke copied that same executable outside the repository and proved visible Pet/Controls windows, `file:` renderer URLs, built-in Live2D `usedFallback=false`, trial and real OpenAI-compatible paths, provider/audio/mouth Stop, userData-only writes, unchanged repository hashes, and recent-context continuity after relaunch.
+- Evidence is stored under `.cache/greyfield-packaged-smoke/latest/` as `summary.json`, `pet.png`, `controls-trial.png`, `settings-real-config.png`, `chat-real-reply.png`, `chat-stopped.png`, and `restart.png`. This is implementation-branch evidence, not a claim that a signed build, installer, updater, or public Release exists.
 
 ## 2026-06-23
 
