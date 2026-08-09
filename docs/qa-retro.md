@@ -1,5 +1,22 @@
 # QA Retro: Desktop Pet Interaction Miss
 
+## 2026-08-09 Regression: Dev Launcher Replaced Saved Configuration On Every Relaunch
+
+The default Windows/dev launcher used a safe test patch as an unconditional startup write. After a user saved a real provider, API key, voice setting, character file, persona, or task-model override, the next ordinary launch replaced the complete config with only the safe `window` and `live2d` fields.
+
+How it was fixed:
+
+- The launcher resolves the config path once and writes `safeDevConfigPatch` only when the default file is missing or `GREYFIELD_RESET_DEV_CONFIG=1` is explicitly requested.
+- Explicit `GREYFIELD_CONFIG_PATH` remains caller-owned: the launcher neither creates it nor overwrites it, including when reset is requested.
+- Existing config is never read, merged, and rewritten by launcher preparation; not writing is what preserves API keys and unknown fields byte-for-byte.
+- `pnpm harness:electron:config-relaunch` uses one temporary default cache/userData directory for two real Electron launches. It saves provider, voice, character, and persona state through Settings, preserves a pre-seeded planner model, and verifies that the second renderer sees saved-key presence without plaintext.
+
+How we avoid repeating it:
+
+- A launcher safety default is initialization data, not authoritative user state. Startup preparation must prove both first-create behavior and ordinary-relaunch non-mutation.
+- Launcher tests must cover missing default config, existing default config, explicit reset, and explicit config-path ownership.
+- Configuration persistence claims need a real relaunch with disk evidence; one process, DOM presence, or an in-memory settings echo is insufficient.
+
 ## 2026-07-05 Regression: Settings Memory UI Claimed The Feature Was Still Paused
 
 Manual QA found that the latest Settings memory page still showed "In development / Memory is paused" even after Memory V2 was enabled and the legacy advanced memory block had been removed.

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
@@ -120,7 +120,8 @@ describe("Electron window options", () => {
         env: {},
         cacheRoot: dir
       });
-      const config = JSON.parse(await readFile(env.GREYFIELD_CONFIG_PATH, "utf8"));
+      const configRaw = await readFile(env.GREYFIELD_CONFIG_PATH, "utf8");
+      const config = JSON.parse(configRaw);
 
       expect(env).toMatchObject({
         GREYFIELD_CONFIG_PATH: join(dir, "greyfield.config.json"),
@@ -140,6 +141,64 @@ describe("Electron window options", () => {
           y: 0
         }
       });
+      expect(configRaw).toBe(`${JSON.stringify(devLaunch.safeDevConfigPatch, null, 2)}\n`);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves an existing default dev config byte for byte", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "greyfield-dev-launch-existing-"));
+    try {
+      const devLaunch = await import(new URL("../../../scripts/dev-live2d-electron.mjs", import.meta.url).href);
+      const configPath = join(dir, "greyfield.config.json");
+      const existingConfig = {
+        ...defaultGreyfieldConfig,
+        characterFile: "characters/persisted-greyfield.yaml",
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          baseUrl: "https://example.invalid/v1",
+          apiKey: "persisted-secret",
+          model: "persisted-chat-model",
+          taskModels: {
+            ...defaultGreyfieldConfig.provider.taskModels,
+            planner: "keep-planner-model"
+          },
+          unknownProviderField: "keep-provider-field"
+        },
+        voice: {
+          ...defaultGreyfieldConfig.voice,
+          speechEnabled: true
+        },
+        unknownTopLevelField: {
+          keep: true
+        }
+      };
+      const original = `${JSON.stringify(existingConfig, null, 2)}\n`;
+      await writeFile(configPath, original, "utf8");
+
+      await devLaunch.prepareDevLaunchEnvironment({ env: {}, cacheRoot: dir });
+
+      expect(await readFile(configPath, "utf8")).toBe(original);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("rebuilds the default dev config only when reset is explicitly requested", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "greyfield-dev-launch-reset-"));
+    try {
+      const devLaunch = await import(new URL("../../../scripts/dev-live2d-electron.mjs", import.meta.url).href);
+      const configPath = join(dir, "greyfield.config.json");
+      await writeFile(configPath, '{"keep":"until-reset"}\n', "utf8");
+
+      await devLaunch.prepareDevLaunchEnvironment({
+        env: { GREYFIELD_RESET_DEV_CONFIG: "1" },
+        cacheRoot: dir
+      });
+
+      expect(await readFile(configPath, "utf8")).toBe(`${JSON.stringify(devLaunch.safeDevConfigPatch, null, 2)}\n`);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -161,7 +220,8 @@ describe("Electron window options", () => {
       const env = await devLaunch.prepareDevLaunchEnvironment({
         env: {
           GREYFIELD_CONFIG_PATH: configPath,
-          GREYFIELD_USER_DATA_PATH: userDataPath
+          GREYFIELD_USER_DATA_PATH: userDataPath,
+          GREYFIELD_RESET_DEV_CONFIG: "1"
         },
         cacheRoot: dir
       });
@@ -172,6 +232,18 @@ describe("Electron window options", () => {
         GREYFIELD_USER_DATA_PATH: userDataPath
       });
       await expect(readFile(configPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+
+      const original = '{"explicit":"must-stay"}\n';
+      await writeFile(configPath, original, "utf8");
+      await devLaunch.prepareDevLaunchEnvironment({
+        env: {
+          GREYFIELD_CONFIG_PATH: configPath,
+          GREYFIELD_USER_DATA_PATH: userDataPath,
+          GREYFIELD_RESET_DEV_CONFIG: "1"
+        },
+        cacheRoot: dir
+      });
+      expect(await readFile(configPath, "utf8")).toBe(original);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
