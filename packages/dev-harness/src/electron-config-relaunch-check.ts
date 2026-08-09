@@ -6,6 +6,12 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultGreyfieldConfig, type GreyfieldConfig } from "@greyfield/persistence/config-schema";
+import {
+  formatPersistedStateFailure,
+  formatRendererSecretFailure,
+  redactSyntheticProviderKey,
+  type ExpectedPersistedState
+} from "./electron-config-relaunch-diagnostics";
 
 const workspaceRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const desktopRoot = join(workspaceRoot, "apps", "desktop");
@@ -143,12 +149,18 @@ try {
     const apiKeyValue = await apiKeyInput.inputValue();
     const apiKeyPlaceholder = (await apiKeyInput.getAttribute("placeholder")) ?? "";
     const rendererText = await settings.locator("body").innerText();
+    const savedPlaceholderMatched = /Saved API key|已保存 API key/.test(apiKeyPlaceholder);
+    const rendererContainsKnownSecret = rendererText.includes(providerApiKey);
     rendererSecretRedacted =
-      apiKeyValue === "" && /Saved API key|已保存 API key/.test(apiKeyPlaceholder) && !rendererText.includes(providerApiKey);
+      apiKeyValue === "" && savedPlaceholderMatched && !rendererContainsKnownSecret;
     if (!rendererSecretRedacted) {
-      throw new Error(
-        `Renderer exposed or failed to mark the saved API key; value=${JSON.stringify(apiKeyValue)}; placeholder=${JSON.stringify(apiKeyPlaceholder)}`
-      );
+      throw new Error(formatRendererSecretFailure({
+        apiKeyValue,
+        apiKeyPlaceholder,
+        savedPlaceholderMatched,
+        rendererContainsKnownSecret,
+        knownSecret: providerApiKey
+      }));
     }
     await settings.locator('[data-settings-section="provider"]').scrollIntoViewIfNeeded();
     secondArtifact = await captureWindowArtifact(secondApp, settings, join(artifactDir, "settings-second-launch.png"));
@@ -229,15 +241,6 @@ interface DevLaunchEnvironment {
   GREYFIELD_PROJECT_ROOT: string;
 }
 
-interface ExpectedPersistedState {
-  providerBaseUrl: string;
-  providerApiKey: string;
-  providerModel: string;
-  plannerModel: string;
-  personaPath: string;
-  personaName: string;
-}
-
 interface WindowArtifact {
   path: string;
   visible: boolean;
@@ -260,9 +263,11 @@ async function launchApp(launchEnv: DevLaunchEnvironment): Promise<ElectronAppli
     await app.firstWindow({ timeout: 10_000 });
   } catch (error) {
     const urls = app.windows().map((page) => page.url());
+    const sanitizedOutput = redactSyntheticProviderKey(output.join(""), providerApiKey).slice(-4000);
+    const sanitizedCause = redactSyntheticProviderKey(String(error), providerApiKey);
     await app.close().catch(() => undefined);
     throw new Error(
-      `Timed out waiting for first Electron window; urls=${JSON.stringify(urls)}; output=${output.join("").slice(-4000)}; cause=${String(error)}`
+      `Timed out waiting for first Electron window; urls=${JSON.stringify(urls)}; output=${sanitizedOutput}; cause=${sanitizedCause}`
     );
   }
   return app;
@@ -335,9 +340,7 @@ async function waitForPersistedState(path: string, expected: ExpectedPersistedSt
     }
     await delay(100);
   }
-  throw new Error(
-    `Timed out waiting for persisted first-launch state; config=${JSON.stringify(lastConfig)}; persona=${JSON.stringify(lastPersona)}`
-  );
+  throw new Error(formatPersistedStateFailure(lastConfig, lastPersona, expected));
 }
 
 async function expectInputValue(locator: ReturnType<Page["locator"]>, expected: string): Promise<void> {
