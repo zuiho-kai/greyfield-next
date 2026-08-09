@@ -258,6 +258,7 @@
         "Settings state exposes provider model, voice, microphone, character file, and model path.",
         "Settings edits do not mutate conversation history.",
         "Settings persist to greyfield.config.json through Electron IPC.",
+        "A default-path Electron relaunch preserves the saved real provider, API-key presence, voice, character file, persona content, and hidden task-model slots instead of restoring the safe dev patch.",
         "Settings shows provider readiness as Preview, blocked, or ready-to-test before users run Test LLM.",
         "Settings exposes a Test LLM action and renders first-token success or a readable failure without writing chat history.",
         "Settings provider/Test LLM harness proves fake Preview, missing Base URL/API key/model reasons, blocked states send no provider requests, testing, success, and failure states.",
@@ -267,7 +268,7 @@
         "V1 visual acceptance proves the Settings body layout class is applied and ordinary mouse-wheel input can scroll the Settings panel down and back up."
       ],
       "qa": {
-        "script": "vitest desktop-runtime-bridge settings-provider-status settings-test-llm config settings-controller runtime-service; pnpm harness:v1-visual; pnpm harness:electron; pnpm harness:electron:settings-provider-test; pnpm harness:electron:settings-active-chat-test"
+        "script": "vitest desktop-runtime-bridge settings-provider-status settings-test-llm config settings-controller runtime-service; pnpm harness:v1-visual; pnpm harness:electron; pnpm harness:electron:config-relaunch; pnpm harness:electron:settings-provider-test; pnpm harness:electron:settings-active-chat-test"
       }
     },
     {
@@ -298,10 +299,12 @@
         "Windows users can stop the dev pet by double-clicking Stop Greyfield.vbs, which reuses the existing pnpm dev:live2d:stop path.",
         "Launcher failures for missing pnpm, missing dependencies, missing Electron setup, occupied dev port, and early startup exit show a user-visible Windows popup instead of failing silently.",
         "Launcher stdout, stderr, Electron preparation, and stop command logs are written under .cache for troubleshooting.",
+        "The default launcher creates the safe dev config only when it is missing or explicitly reset; ordinary relaunch preserves the existing config byte-for-byte, while explicit config paths are never created or reset by the launcher.",
+        "A two-launch Electron harness proves the ordinary default cache/userData path preserves provider credentials, voice, character/persona state, and hidden task-model values while the renderer receives only saved-key presence.",
         "The existing pnpm dev:live2d, pnpm dev:live2d:fast, and pnpm dev:live2d:stop developer command semantics remain unchanged."
       ],
       "qa": {
-        "script": "pnpm launch:windows; pnpm test -- windows-launcher-content; powershell scriptblock parse check for scripts/launch-greyfield-windows.ps1 and scripts/stop-greyfield-windows.ps1"
+        "script": "pnpm launch:windows; pnpm test -- windows-launcher-content; pnpm harness:electron:config-relaunch; powershell scriptblock parse check for scripts/launch-greyfield-windows.ps1 and scripts/stop-greyfield-windows.ps1"
       }
     },
     {

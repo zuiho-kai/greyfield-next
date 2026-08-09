@@ -147,11 +147,13 @@ export function createRendererUrl(baseUrl, options = {}) {
 export function resolveDevLaunchPaths(options = {}) {
   const env = options.env ?? process.env;
   const cacheRoot = options.cacheRoot ?? devCacheRoot;
+  const configPath = env.GREYFIELD_CONFIG_PATH ?? join(cacheRoot, "greyfield.config.json");
+  const resetRequested = env.GREYFIELD_RESET_DEV_CONFIG === "1";
   return {
     cacheRoot,
-    configPath: env.GREYFIELD_CONFIG_PATH ?? join(cacheRoot, "greyfield.config.json"),
+    configPath,
     userDataPath: env.GREYFIELD_USER_DATA_PATH ?? join(cacheRoot, "user-data"),
-    shouldWriteSafeConfig: !env.GREYFIELD_CONFIG_PATH
+    shouldWriteSafeConfig: !env.GREYFIELD_CONFIG_PATH && (resetRequested || !existsSync(configPath))
   };
 }
 
