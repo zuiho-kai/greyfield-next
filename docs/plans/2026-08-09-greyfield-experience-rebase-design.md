@@ -111,15 +111,16 @@ flowchart LR
 
 ### 1. 产品真相、试玩状态与最近对话连续性
 
-用户结果：用户在 Controls、Chat 和 Settings 首屏都能一眼区分“本地试玩”和“真实聊天”；麦克风在 fake ASR 下不再伪装成真实听写；重启后 Chat 只提示已恢复的最近轮数，不回显隐私正文；README 与记忆区不再宣称默认运行时已经启用长期记忆。
+用户结果：用户在 Controls、Chat 和 Settings 首屏都能一眼区分“本地试玩”和“真实聊天”；麦克风在 fake ASR 下不再伪装成真实听写；重启后 Chat 只提示已恢复的最近消息数，不回显隐私正文；README 与记忆区不再宣称默认运行时已经启用长期记忆。
 
 设计：
 
 - 把 fake 定义为“试玩模式”，而不是默认产品能力。
 - Controls 提供短状态和一个“配置真实聊天”入口。
 - Chat 的固定回复带试玩标识，不把测试桩包装成人格回复。
-- Chat 在重启后显示“已恢复最近 N 轮对话”，并明确它不是长期记忆；恢复轮数遵守现有 recent-turn 上限。
+- Chat 在重启后显示“已恢复最近 N 条对话消息”，并明确它不是长期记忆；消息数遵守现有 recent-turn 上限。
 - 长期记忆区显示“当前桌面版暂未启用”，管理和 benchmark 代码仍保留为开发能力。
+- fresh/default 主动说话与屏幕感知保持关闭；已有显式用户配置不被静默迁移。
 - 删除所有与当前默认路径矛盾的完成声明，并用负向文本搜索保护。
 
 非目标：不把完整历史灌进 renderer，不恢复长期记忆，不新增角色脚本，不改 fake provider 的确定性测试用途。
@@ -158,9 +159,9 @@ flowchart LR
 设计：
 
 - 先交付一个版本化的 Windows portable `.exe`；代码签名、自动更新和安装器留到公开 beta 前。
-- 打包 Electron main、preload、renderer、Live2D 资产和需要的原生依赖。
+- 打包 Electron main、preload、renderer 与内置 Live2D 资产；长期记忆暂停路径不得把 Windows 不支持的 SQLite native 依赖带入 production main。
 - 生产配置放在 Electron `userData`，绝不写仓库 `.cache`。
-- 增加 packaged smoke harness：从临时 `userData` 启动，证明 Pet 与 Controls 位于可见屏幕、Live2D 有非空模型像素、试玩状态可见、Settings 入口可点击。
+- 增加 packaged smoke harness：对同一个仓库外 portable exe，从临时 `userData` 完成启动、试玩披露、Test LLM、真实 nonce 回复、Stop、退出与重启；同时证明 Pet/Controls 位于可见屏幕、`usedFallback=false` 且 Live2D 有非空模型像素。
 - 生成 artifact 清单、大小和 SHA-256；不把本地绝对路径写进用户界面。
 
 非目标：不承诺代码签名、自动更新、macOS/Linux、安装器卸载流程或公开 Release 发布。
@@ -184,7 +185,7 @@ flowchart LR
 | 未就绪 | 选择真实 provider，但缺字段或测试失败 | 缺失项或可读错误 | 编辑、保存、重试 Test LLM |
 | 已就绪 | 配置完整且本次 Test LLM 成功 | 可开始真实聊天 | 发送消息、Stop、重测 |
 
-“已就绪”不是永久健康认证。应用重启后可显示“已配置”，首次发送仍按真实网络结果处理；请求失败回到可重试状态，不静默降级成 fake。
+“已就绪”不是永久健康认证。应用重启后只能显示“真实配置已保存，待测试”；本次 Test LLM 成功后才显示“已就绪”。请求失败回到可重试状态，不静默降级成 fake；改动 provider、Base URL、API Key 或聊天模型后，旧测试成功状态立即失效。
 
 ## 错误处理
 
@@ -203,8 +204,8 @@ flowchart LR
 - Settings 测试：试玩、未就绪、已就绪和 provider 错误状态。
 - Electron restart harness：保存真实 provider 配置后重启仍在，且没有回到 fake；Chat 显示有界的最近对话恢复提示，第二次 provider 请求仍携带上一轮 recent context。
 - 首眼视觉 harness：从默认状态看见试玩状态与真实聊天入口，无需滚动或开发快捷键。
-- packaged smoke harness：从发行文件启动真实 Pet/Controls；截图显示非空 Live2D 像素。
-- Stop 现有 provider-abort 与 stop-audio 门禁继续通过。
+- packaged smoke harness：同一个发行 exe 完成真实 Test LLM、真实回复、Stop 与重启；截图显示非空 Live2D 像素并明确 `usedFallback=false`。
+- Stop 现有 provider-abort 与 stop-audio 门禁继续作为模块回归，但不能替代 portable 自身的 Stop 证据。
 
 ### 独立验收
 
