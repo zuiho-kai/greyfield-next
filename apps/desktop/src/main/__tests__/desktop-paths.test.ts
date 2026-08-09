@@ -1,8 +1,23 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ensurePackagedBootstrap, resolveDesktopPaths } from "../desktop-paths";
+
+const fsMockState = vi.hoisted(() => ({
+  beforeRead: undefined as ((path: string) => Promise<void>) | undefined
+}));
+
+vi.mock("node:fs/promises", async () => {
+  const actual = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+  return {
+    ...actual,
+    readFile: async (...args: unknown[]) => {
+      await fsMockState.beforeRead?.(String(args[0]));
+      return Reflect.apply(actual.readFile, actual, args);
+    }
+  };
+});
 
 const temporaryRoots: string[] = [];
 
@@ -19,6 +34,7 @@ async function writeFixture(path: string, contents: string): Promise<void> {
 
 describe("desktop paths", () => {
   afterEach(async () => {
+    fsMockState.beforeRead = undefined;
     await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
   });
 
@@ -117,6 +133,54 @@ describe("desktop paths", () => {
 
     expect(await readFile(paths.characterPath, "utf8")).toBe("persona-user-edited\n");
     expect(await readFile(paths.memorySeedPath, "utf8")).toBe("memory-user-edited\n");
+  });
+
+  it("keeps a working file created while concurrent packaged bootstraps are in flight", async () => {
+    const root = await createTemporaryRoot();
+    const resourcesPath = join(root, "resources");
+    const userDataPath = join(root, "user-data");
+    const characterSource = join(resourcesPath, "bootstrap", "characters", "greyfield.yaml");
+    await writeFixture(characterSource, "persona-bootstrap\n");
+    await writeFixture(join(resourcesPath, "bootstrap", "data", "memory.md"), "memory-bootstrap\n");
+    const paths = resolveDesktopPaths({
+      isPackaged: true,
+      currentDir: join(resourcesPath, "app.asar", "dist-main"),
+      resourcesPath,
+      userDataPath,
+      env: {}
+    });
+
+    let characterReads = 0;
+    let releaseReads!: () => void;
+    let confirmConcurrentReads!: () => void;
+    const readGate = new Promise<void>((resolveGate) => {
+      releaseReads = resolveGate;
+    });
+    const concurrentReads = new Promise<void>((resolveReads) => {
+      confirmConcurrentReads = resolveReads;
+    });
+    fsMockState.beforeRead = async (path) => {
+      if (path !== characterSource) {
+        return;
+      }
+      characterReads += 1;
+      if (characterReads === 2) {
+        confirmConcurrentReads();
+      }
+      await readGate;
+    };
+
+    const firstBootstrap = ensurePackagedBootstrap(paths);
+    const secondBootstrap = ensurePackagedBootstrap(paths);
+    await concurrentReads;
+    await writeFixture(paths.characterPath, "persona-created-concurrently\n");
+    releaseReads();
+    await Promise.all([firstBootstrap, secondBootstrap]);
+    fsMockState.beforeRead = undefined;
+
+    expect(await readFile(paths.characterPath, "utf8")).toBe("persona-created-concurrently\n");
+    expect(await readFile(paths.memorySeedPath, "utf8")).toBe("memory-bootstrap\n");
+    expect((await readdir(dirname(paths.characterPath))).some((name) => name.includes(".bootstrap-"))).toBe(false);
   });
 
   it("does not leave a half bootstrap and redacts broad paths when a source is missing", async () => {

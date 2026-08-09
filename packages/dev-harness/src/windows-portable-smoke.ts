@@ -98,10 +98,15 @@ if (copiedArtifactHash !== artifact.sha256) {
 }
 
 const repositoryHashesBefore = await hashRepositoryEvidence();
-const stubServer = createServer(handleStubRequest);
+const stubServer = createServer((request, response) => {
+  void handleStubRequest(request, response).catch(() => {
+    response.destroy();
+  });
+});
 await new Promise<void>((resolveListen) => stubServer.listen(0, "127.0.0.1", resolveListen));
 const stubPort = (stubServer.address() as AddressInfo).port;
 const providerBaseUrl = `http://127.0.0.1:${stubPort}/v1`;
+const stubValidation = await assertStubRejectsInvalidRequests(providerBaseUrl);
 
 let firstLaunch: PortableLaunch | undefined;
 let secondLaunch: PortableLaunch | undefined;
@@ -322,6 +327,7 @@ try {
     restartUsedFallback: false,
     controlsTrial,
     providerViewport,
+    stubValidation,
     testNonce,
     realNonce,
     abortNonce,
@@ -381,8 +387,35 @@ try {
 }
 
 async function handleStubRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  if (request.method !== "POST" || request.url !== "/v1/chat/completions") {
+    respondWithJsonError(response, 404, "unsupported request");
+    return;
+  }
   const raw = await readRequestBody(request);
-  const payload = JSON.parse(raw) as {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    respondWithJsonError(response, 400, "invalid json");
+    return;
+  }
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    typeof (parsed as { model?: unknown }).model !== "string" ||
+    !Array.isArray((parsed as { messages?: unknown }).messages) ||
+    !(parsed as { messages: unknown[] }).messages.every(
+      (message) =>
+        typeof message === "object" &&
+        message !== null &&
+        typeof (message as { role?: unknown }).role === "string" &&
+        typeof (message as { content?: unknown }).content === "string"
+    )
+  ) {
+    respondWithJsonError(response, 400, "invalid chat payload");
+    return;
+  }
+  const payload = parsed as {
     model?: unknown;
     messages?: Array<{ role?: unknown; content?: unknown }>;
   };
@@ -416,6 +449,9 @@ async function handleStubRequest(request: IncomingMessage, response: ServerRespo
   });
   if (kind === "abort") {
     abortResponse = response;
+    response.on("error", () => {
+      abortRequestClosed = true;
+    });
     response.write(`data: {"choices":[{"delta":{"content":${JSON.stringify(abortSentence)}}}]}\n\n`);
     response.on("close", () => {
       abortRequestClosed = true;
@@ -423,11 +459,20 @@ async function handleStubRequest(request: IncomingMessage, response: ServerRespo
     request.on("aborted", () => {
       abortRequestClosed = true;
     });
-    setTimeout(() => {
+    const lateWrite = setTimeout(() => {
       abortLateWriteAttempted = true;
-      response.write(`data: {"choices":[{"delta":{"content":${JSON.stringify(lateNonce)}}}]}\n\n`);
-      response.end("data: [DONE]\n\n");
+      if (response.destroyed || response.closed || response.writableEnded) {
+        return;
+      }
+      try {
+        response.write(`data: {"choices":[{"delta":{"content":${JSON.stringify(lateNonce)}}}]}\n\n`);
+        response.end("data: [DONE]\n\n");
+      } catch {
+        abortRequestClosed = true;
+        response.destroy();
+      }
     }, 1_200);
+    lateWrite.unref();
     return;
   }
   const reply =
@@ -439,6 +484,42 @@ async function handleStubRequest(request: IncomingMessage, response: ServerRespo
           ? `连接测试:${testNonce}`
           : "unexpected-request";
   response.end(`data: {"choices":[{"delta":{"content":${JSON.stringify(reply)}}}]}\n\ndata: [DONE]\n\n`);
+}
+
+function respondWithJsonError(response: ServerResponse, status: number, error: string): void {
+  response.writeHead(status, { "content-type": "application/json" });
+  response.end(`${JSON.stringify({ error })}\n`);
+}
+
+async function assertStubRejectsInvalidRequests(providerBaseUrl: string): Promise<{
+  unsupportedStatus: number;
+  invalidJsonStatus: number;
+  invalidPayloadStatus: number;
+}> {
+  const unsupported = await fetch(`${providerBaseUrl}/models`);
+  const invalidJson = await fetch(`${providerBaseUrl}/chat/completions`, {
+    method: "POST",
+    body: "{"
+  });
+  const invalidPayload = await fetch(`${providerBaseUrl}/chat/completions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ model: chatModel, messages: "not-an-array" })
+  });
+  const result = {
+    unsupportedStatus: unsupported.status,
+    invalidJsonStatus: invalidJson.status,
+    invalidPayloadStatus: invalidPayload.status
+  };
+  if (
+    result.unsupportedStatus !== 404 ||
+    result.invalidJsonStatus !== 400 ||
+    result.invalidPayloadStatus !== 400 ||
+    requests.length !== 0
+  ) {
+    throw new Error(`Packaged stub accepted an invalid request: ${JSON.stringify(result)}`);
+  }
+  return result;
 }
 
 async function resolveUniquePortableArtifact(): Promise<string> {

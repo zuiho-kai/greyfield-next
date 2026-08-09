@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { access, link, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 
 export interface ResolveDesktopPathsOptions {
@@ -81,24 +81,33 @@ export async function ensurePackagedBootstrap(paths: DesktopPaths): Promise<void
 
   const staged: Array<BootstrapEntry & { temporary: string }> = [];
   const createdTargets: string[] = [];
+  let activeEntry: BootstrapEntry | undefined;
   try {
     for (const entry of missing) {
+      activeEntry = entry;
       await mkdir(dirname(entry.target), { recursive: true });
       const temporary = join(dirname(entry.target), `.${basename(entry.target)}.bootstrap-${randomUUID()}`);
       await writeFile(temporary, entry.contents, { flag: "wx" });
       staged.push({ ...entry, temporary });
     }
     for (const entry of staged) {
-      await rename(entry.temporary, entry.target);
-      createdTargets.push(entry.target);
+      activeEntry = entry;
+      try {
+        await link(entry.temporary, entry.target);
+        createdTargets.push(entry.target);
+      } catch (error) {
+        if (!isNodeError(error) || error.code !== "EEXIST") {
+          throw error;
+        }
+      }
     }
+    await Promise.all(staged.map((entry) => rm(entry.temporary, { force: true })));
   } catch (error) {
-    await Promise.all([
+    await Promise.allSettled([
       ...staged.map((entry) => rm(entry.temporary, { force: true })),
       ...createdTargets.map((target) => rm(target, { force: true }))
     ]);
-    const failedEntry = staged.find((entry) => !createdTargets.includes(entry.target)) ?? missing[0];
-    throw createBootstrapError(failedEntry?.label ?? "bootstrap", error);
+    throw createBootstrapError(activeEntry?.label ?? "bootstrap", error);
   }
 }
 

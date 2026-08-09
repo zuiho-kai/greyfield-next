@@ -75,6 +75,8 @@ describe("Windows portable stage", () => {
       'import "better-sqlite3";',
       'require("sqlite-vss");',
       'import "left-pad";',
+      'export * from "left-pad";',
+      'export { default as pad } from "left-pad";',
       'const native = "addon.node";',
       `const source = ${JSON.stringify(root)};`
     ]) {

@@ -14,6 +14,7 @@ const forbiddenContent = /better-sqlite3|sqlite-vss|(?:^|[^A-Za-z])playwright(?:
 const nativeAddonLiteral = /(?:^|[\\/"'`])[^\\/"'`\s]+\.node(?:["'`\s,;)]|$)/imu;
 const importSpecifierPatterns = [
   /^\s*import\s+(?:[^"'\n]+?\s+from\s+)?["']([^"']+)["']/gmu,
+  /\bexport\s+(?:\*|\{[^}]*\})\s*(?:as\s+[^\s]+\s*)?from\s*["']([^"']+)["']/gmu,
   /\brequire\s*\(\s*["']([^"']+)["']\s*\)/gu,
   /\bimport\s*\(\s*["']([^"']+)["']\s*\)/gu
 ];
