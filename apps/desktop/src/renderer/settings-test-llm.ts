@@ -114,6 +114,28 @@ export function describeProviderTestStatus(providerTest: {
   return {
     tone: "error",
     label: settingsT(locale, "test.failed"),
-    detail: providerTest.message
+    detail: sanitizeProviderTestFailure(providerTest.message, locale)
   };
+}
+
+export function sanitizeProviderTestFailure(message: string, locale?: SettingsLocale): string {
+  if (/request failed:\s*401\b/u.test(message)) {
+    return settingsT(locale, "test.provider.error.unauthorized");
+  }
+  if (/request failed:\s*403\b/u.test(message)) {
+    return settingsT(locale, "test.provider.error.forbidden");
+  }
+  if (/request failed:\s*404\b/u.test(message)) {
+    return settingsT(locale, "test.provider.error.notFound");
+  }
+  if (message.includes("request timed out")) {
+    return settingsT(locale, "test.provider.error.timeout");
+  }
+  if (message.includes("malformed SSE data")) {
+    return settingsT(locale, "test.provider.error.stream");
+  }
+  if (message.includes("without receiving a token")) {
+    return settingsT(locale, "test.provider.error.empty");
+  }
+  return settingsT(locale, "test.provider.error.generic");
 }

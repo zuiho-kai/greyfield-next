@@ -111,6 +111,7 @@ try {
 
   const settings = await waitForRoleWindow(app, "settings");
   await settings.waitForSelector(".greyfield-shell");
+  await openMemorySettings(settings);
   await settings.getByRole("button", { name: "Refresh memory" }).click();
   const memoryLibrary = settings.locator('[data-harness="settings-memory-library"]');
   await memoryLibrary.waitFor();
@@ -243,6 +244,14 @@ async function waitForRoleWindow(app: ElectronApplication, roleName: "chat" | "s
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Timed out waiting for ${roleName} window`);
+}
+
+async function openMemorySettings(page: Page): Promise<void> {
+  const advanced = page.getByRole("button", { name: /^(Advanced settings|高级设置)$/ });
+  if ((await advanced.getAttribute("aria-expanded")) !== "true") {
+    await advanced.click();
+  }
+  await page.getByRole("button", { name: /^(Memory|记忆)$/ }).click();
 }
 
 async function openSourcePassage(memoryLibrary: Locator, id: string): Promise<Locator> {

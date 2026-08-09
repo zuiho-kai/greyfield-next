@@ -50,16 +50,24 @@ describe("provider experience status", () => {
     });
   });
 
-  it("shows a readable failed-test detail and retest action", () => {
+  it("shows the same safe failed-test detail used by Settings and a retest action", () => {
     const state = createCompleteProviderState();
-    state.providerTest = { status: "error", message: "401 Unauthorized. Check API key." };
+    const secret = "sk-provider-status-secret";
+    state.providerTest = {
+      status: "error",
+      message: `OpenAI-compatible LLM request failed: 401 Unauthorized ${secret} request-body-marker at unsafe.ts:12:3. Check API key, Base URL, and Model, then retry.`
+    };
 
-    expect(describeProviderExperience(state, "zh-CN")).toEqual({
+    const experience = describeProviderExperience(state, "zh-CN");
+    expect(experience).toEqual({
       tone: "blocked",
       label: "连接测试失败",
-      detail: "401 Unauthorized. Check API key.",
+      detail: "凭据未通过，请检查 API Key 后重试。",
       actionLabel: "重新测试"
     });
+    expect(JSON.stringify(experience)).not.toContain(secret);
+    expect(JSON.stringify(experience)).not.toContain("request-body-marker");
+    expect(JSON.stringify(experience)).not.toContain("unsafe.ts");
   });
 
   it("marks only complete settings with a successful current test as ready", () => {

@@ -183,10 +183,11 @@
         "Provider failures do not append half turns to the JSONL session.",
         "Electron provider-failure harness covers missing-key, unauthorized, forbidden, not-found, timeout, and malformed-stream failures with visible chat errors and restored retry drafts.",
         "Electron provider-abort harness proves Stop stays clickable during streaming, closes the active provider HTTP request, shows Stopped, and does not append the old partial assistant reply.",
-        "Settings can send a small LLM test request through Electron main and report first-token success or a readable failure."
+        "Settings can send a small LLM test request through Electron main and report first-token success or a readable failure.",
+        "The first-real-reply Electron harness proves the ordinary Controls setup action, four-field provider test, and same Chat path reach a local OpenAI-compatible SSE provider, render its nonce reply in Chat and the pet bubble, and persist only the real user/assistant turn."
       ],
       "qa": {
-        "script": "vitest runtime-loop desktop-runtime-bridge chat-status; pnpm test:backend; pnpm test:frontend; pnpm harness:acceptance; pnpm harness:v1-visual; pnpm harness:electron; pnpm harness:electron:provider-failure; pnpm harness:electron:provider-abort"
+        "script": "vitest runtime-loop desktop-runtime-bridge chat-status; pnpm test:backend; pnpm test:frontend; pnpm harness:acceptance; pnpm harness:v1-visual; pnpm harness:electron; pnpm harness:electron:provider-failure; pnpm harness:electron:provider-abort; pnpm harness:electron:first-real-reply"
       }
     },
     {
@@ -262,17 +263,19 @@
         "A default-path Electron relaunch preserves the saved real provider, API-key presence, voice, character file, persona content, and hidden task-model slots instead of restoring the safe dev patch.",
         "Settings shows provider readiness as Preview, blocked, or ready-to-test before users run Test LLM.",
         "Settings exposes a Test LLM action and renders first-token success or a readable failure without writing chat history.",
-        "Settings provider/Test LLM harness proves fake Preview, missing Base URL/API key/model reasons, blocked states send no provider requests, testing, success, and failure states.",
+        "Settings provider/Test LLM harness proves the four required chat fields and Test LLM fit the initial viewport, fake Preview and missing Base URL/API key/model states are blocked without requests, and success plus 401/403/404/timeout/no-token/malformed-stream results stay readable, retryable, redacted, and session-free.",
+        "Provider is the only primary Settings section; Persona, Voice, Live2D, Window, Memory, and seven non-chat task-model slots remain mounted and reachable through advanced areas that are closed by default.",
+        "Editing provider, Base URL, API key, or the Chat model never rewrites Planner, Utility, Memory, Vision, Multimodal, Voice ASR, or Voice TTS model slots.",
         "Electron settings-active-chat harness proves Test LLM is rejected with visible Stop-or-wait guidance while chat is actively streaming and does not send an extra provider request.",
         "Controls and Chat share truthful Preview, incomplete, saved-but-untested, test-failed, and ready provider states; Preview and blocked states expose a visible text action toward real-chat setup or testing.",
         "V1 visual acceptance proves the fresh Controls pill/action and Chat banner/action are rendered within their initial viewports without scrolling.",
         "A fresh/default configuration keeps proactive speech disabled at startup with proactivity level 0, and keeps screen awareness disabled.",
-        "V1 visual acceptance proves Settings first-glance navigation distinguishes Live2D/avatar settings from Model service task-model settings.",
+        "V1 visual acceptance proves Settings first-glance navigation exposes Start chatting, Chat, and Advanced settings while all four provider fields, readiness, and Test LLM fit without scrolling; a separate advanced artifact proves the retained low-frequency navigation and task-model slots.",
         "V1 visual acceptance proves Settings Window scale/position controls remain readable and usable at narrow desktop widths.",
         "V1 visual acceptance proves the Settings body layout class is applied and ordinary mouse-wheel input can scroll the Settings panel down and back up."
       ],
       "qa": {
-        "script": "vitest desktop-runtime-bridge provider-experience-status settings-provider-status settings-test-llm settings-memory-extraction-status settings-i18n config settings-controller runtime-service v1-visual-acceptance-check; pnpm harness:v1-visual; pnpm harness:electron; pnpm harness:electron:config-relaunch; pnpm harness:electron:settings-provider-test; pnpm harness:electron:settings-active-chat-test"
+        "script": "vitest desktop-runtime-bridge provider-experience-status settings-provider-status settings-test-llm settings-memory-extraction-status settings-i18n settings-nav settings-input-patch config settings-controller runtime-service v1-visual-acceptance-check; pnpm harness:v1-visual; pnpm harness:electron; pnpm harness:electron:config-relaunch; pnpm harness:electron:settings-provider-test; pnpm harness:electron:settings-active-chat-test; pnpm harness:electron:first-real-reply"
       }
     },
     {

@@ -16,6 +16,11 @@ export type SettingsI18nKey =
   | "nav.provider"
   | "nav.memory"
   | "nav.chat"
+  | "nav.startChat"
+  | "nav.advanced"
+  | "advanced.taskModels"
+  | "advanced.settings"
+  | "advanced.settings.close"
   | "app.status"
   | "settings.label"
   | "settings.language"
@@ -286,6 +291,13 @@ export type SettingsI18nKey =
   | "test.voice.failed"
   | "test.provider.firstToken"
   | "test.provider.replied"
+  | "test.provider.error.unauthorized"
+  | "test.provider.error.forbidden"
+  | "test.provider.error.notFound"
+  | "test.provider.error.timeout"
+  | "test.provider.error.stream"
+  | "test.provider.error.empty"
+  | "test.provider.error.generic"
   | "voice.blocked.baseUrl"
   | "voice.blocked.apiKey"
   | "voice.blocked.ttsModel"
@@ -370,6 +382,11 @@ const enUS: Record<SettingsI18nKey, string> = {
   "nav.provider": "Model service",
   "nav.memory": "Memory",
   "nav.chat": "Chat",
+  "nav.startChat": "Start chatting",
+  "nav.advanced": "Advanced settings",
+  "advanced.taskModels": "Advanced task models",
+  "advanced.settings": "Show advanced settings",
+  "advanced.settings.close": "Hide advanced settings",
   "app.status": "Status",
   "settings.label": "Settings",
   "settings.language": "Language",
@@ -640,6 +657,13 @@ const enUS: Record<SettingsI18nKey, string> = {
   "test.voice.failed": "Voice test failed",
   "test.provider.firstToken": "Received first token: {token}. Real chat can use this provider.",
   "test.provider.replied": "The provider replied. Real chat can use this provider.",
+  "test.provider.error.unauthorized": "Credentials were rejected. Check the API key and retry.",
+  "test.provider.error.forbidden": "These credentials do not have access. Check permissions and retry.",
+  "test.provider.error.notFound": "The Base URL or chat model was not found. Check both and retry.",
+  "test.provider.error.timeout": "Connection timed out. Check the Base URL and network, then retry.",
+  "test.provider.error.stream": "The provider returned an invalid stream. Retry, then check the Base URL if it continues.",
+  "test.provider.error.empty": "The provider disconnected before the first reply token. Retry the test.",
+  "test.provider.error.generic": "Connection test failed. Check the four chat settings and retry.",
   "voice.blocked.baseUrl": "OpenAI-compatible voice needs a Base URL before testing.",
   "voice.blocked.apiKey": "Voice test needs an API key.",
   "voice.blocked.ttsModel": "Choose the TTS model name before testing voice.",
@@ -725,6 +749,11 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "nav.provider": "模型服务",
   "nav.memory": "记忆",
   "nav.chat": "聊天",
+  "nav.startChat": "开始聊天",
+  "nav.advanced": "高级设置",
+  "advanced.taskModels": "高级任务模型",
+  "advanced.settings": "展开高级设置",
+  "advanced.settings.close": "收起高级设置",
   "app.status": "状态",
   "settings.label": "设置",
   "settings.language": "语言",
@@ -995,6 +1024,13 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "test.voice.failed": "语音测试失败",
   "test.provider.firstToken": "收到首个 token：{token}。真实聊天可以使用这个服务。",
   "test.provider.replied": "服务已回复。真实聊天可以使用这个服务。",
+  "test.provider.error.unauthorized": "凭据未通过，请检查 API Key 后重试。",
+  "test.provider.error.forbidden": "当前凭据没有访问权限，请检查权限后重试。",
+  "test.provider.error.notFound": "Base URL 或聊天模型不存在，请检查后重试。",
+  "test.provider.error.timeout": "连接超时，请检查 Base URL 和网络后重试。",
+  "test.provider.error.stream": "服务返回的流格式异常，请重试；持续失败时检查 Base URL。",
+  "test.provider.error.empty": "服务在首个回复 token 前断开，请重新测试。",
+  "test.provider.error.generic": "连接测试失败，请检查四项聊天配置后重试。",
   "voice.blocked.baseUrl": "OpenAI 兼容语音测试需要先填写 Base URL。",
   "voice.blocked.apiKey": "语音测试需要 API key。",
   "voice.blocked.ttsModel": "语音测试前请先填写 TTS 模型名称。",

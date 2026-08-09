@@ -119,6 +119,7 @@ try {
     await assertProactiveEventCountStays(petWindow, 1, "zero proactivity level allowed proactive display");
 
     await showSettingsWindow(app);
+    await openWindowSettings(settingsWindow);
     await settingsWindow.getByLabel("Remembered moments").setChecked(false);
     await hideSettingsWindow(app);
     await petWindow.locator(".speech-bubble").waitFor({ state: "detached", timeout: 5_000 });
@@ -265,6 +266,7 @@ async function assertSettingsWindowVisibility(app: ElectronApplication, expected
 }
 
 async function setProactivityLevel(page: Page, value: number): Promise<void> {
+  await openWindowSettings(page);
   const slider = proactivitySlider(page);
   await slider.waitFor({ state: "attached" });
   await slider.evaluate((input, value) => {
@@ -277,6 +279,14 @@ async function setProactivityLevel(page: Page, value: number): Promise<void> {
       (document.querySelector<HTMLInputElement>('[data-testid="proactivity-level-slider"]')?.value ?? "") === String(value),
     value
   );
+}
+
+async function openWindowSettings(page: Page): Promise<void> {
+  const advanced = page.getByRole("button", { name: /^(Advanced settings|高级设置)$/ });
+  if ((await advanced.getAttribute("aria-expanded")) !== "true") {
+    await advanced.click();
+  }
+  await page.getByRole("button", { name: /^(Window|窗口)$/ }).click();
 }
 
 function proactivitySlider(page: Page) {

@@ -11,7 +11,7 @@
       <h2>{{ t("section.provider") }}</h2>
       <span>{{ providerStatus.label }}</span>
     </header>
-    <div class="settings-fields">
+    <div class="settings-fields settings-fields--provider-first" data-harness="provider-first-fields">
       <label>
         <span>{{ t("field.provider") }}</span>
         <select
@@ -43,27 +43,15 @@
           @input="emit('update-setting', 'providerApiKey', valueFrom($event))"
         />
       </label>
-    </div>
-    <div class="task-model-slots" :aria-label="t('field.taskModelSlots')">
-      <header class="task-model-slots__header">
-        <strong>{{ t("field.taskModelSlots") }}</strong>
-        <span>{{ t("field.taskModelSlots.detail") }}</span>
-      </header>
-      <label
-        v-for="slot in taskModelSlots"
-        :key="slot.key"
-        class="task-model-slot"
-        :data-task-model-slot="slot.slot"
-      >
-        <span>{{ slot.label }}</span>
+      <label>
+        <span>{{ t("taskModel.chat.label") }}</span>
         <input
-          :aria-label="slot.label"
-          :value="slot.value"
+          :aria-label="t('taskModel.chat.label')"
+          :value="state.settings.providerModel"
           autocomplete="off"
           spellcheck="false"
-          @input="emit('update-setting', slot.key, valueFrom($event))"
+          @input="emit('update-setting', 'providerModel', valueFrom($event))"
         />
-        <small>{{ slot.detail }}</small>
       </label>
     </div>
     <div class="provider-status" :class="`provider-status--${providerStatus.tone}`" role="status">
@@ -97,6 +85,31 @@
       <strong>{{ providerTestStatus.label }}</strong>
       <span>{{ providerTestStatus.detail }}</span>
     </p>
+    <details class="provider-advanced" data-harness="provider-advanced-models">
+      <summary>{{ t("advanced.taskModels") }}</summary>
+      <div class="task-model-slots" :aria-label="t('field.taskModelSlots')">
+        <header class="task-model-slots__header">
+          <strong>{{ t("field.taskModelSlots") }}</strong>
+          <span>{{ t("field.taskModelSlots.detail") }}</span>
+        </header>
+        <label
+          v-for="slot in advancedTaskModelSlots"
+          :key="slot.key"
+          class="task-model-slot"
+          :data-task-model-slot="slot.slot"
+        >
+          <span>{{ slot.label }}</span>
+          <input
+            :aria-label="slot.label"
+            :value="slot.value"
+            autocomplete="off"
+            spellcheck="false"
+            @input="emit('update-setting', slot.key, valueFrom($event))"
+          />
+          <small>{{ slot.detail }}</small>
+        </label>
+      </div>
+    </details>
   </div>
 </template>
 
@@ -125,7 +138,7 @@ const t = (key: SettingsI18nKey, values?: Record<string, string | number>): stri
   settingsT(props.locale, key, values);
 const pendingProviderTestBaseline = ref<string | null>(null);
 const providerStatus = computed(() => describeProviderStatus(props.state, props.locale));
-const taskModelSlots = computed<
+const advancedTaskModelSlots = computed<
   Array<{
     slot: string;
     key: keyof DesktopSettingsState;
@@ -134,13 +147,6 @@ const taskModelSlots = computed<
     value: string;
   }>
 >(() => [
-  {
-    slot: "chat",
-    key: "providerModel",
-    label: t("taskModel.chat.label"),
-    detail: t("taskModel.chat.detail"),
-    value: props.state.settings.providerModel
-  },
   {
     slot: "planner",
     key: "providerPlannerModel",

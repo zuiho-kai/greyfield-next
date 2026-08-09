@@ -61,6 +61,16 @@ type VisualAcceptanceSummaryInput = {
     unexpectedProactiveMessageAbsent: boolean;
   };
   settings: {
+    startChatNavVisible: boolean;
+    chatNavVisible: boolean;
+    advancedToggleVisible: boolean;
+    advancedDefaultClosed: boolean;
+    providerFourFieldsVisible: boolean;
+    providerTestVisible: boolean;
+    providerCardFitsViewport: boolean;
+    advancedTaskModelsDefaultClosed: boolean;
+    advancedNavVisibleAfterOpen: boolean;
+    advancedTaskModelsVisibleAfterOpen: boolean;
     avatarNavVisible: boolean;
     modelServiceNavVisible: boolean;
     genericModelNavAbsent: boolean;
@@ -109,8 +119,8 @@ export function buildV1VisualAcceptanceSummary(input: VisualAcceptanceSummaryInp
       "Open controls-active-state.png and confirm clicked controls keep visible icons instead of white-on-white blocks.",
       "Open pet-after-chat.png and confirm the speech bubble reads like a short subtitle and does not cover the model.",
       "Open chat-after-reply.png and confirm the 试玩模式 banner, real-chat action, fake-ASR disclosure, and full assistant reply stay visible.",
-      "Open settings-first-glance-nav.png and confirm the first Settings view shows distinct Live2D/avatar and Model service navigation entries.",
-      "Open settings-model-service-task-models.png and confirm clicking Model service shows the task models without manual provider-section scrolling.",
+      "Open settings-provider-first.png and confirm the four chat fields, readiness, and Test LLM fit the first 820x620 Settings view while advanced areas stay closed.",
+      "Open settings-advanced.png and confirm advanced task models and advanced navigation are reachable without replacing the provider-first path.",
       "Open settings-live2d-avatar.png and confirm clicking Live2D/avatar shows the Live2D appearance/model section, not a generic model section.",
       "Open settings-memory-extraction.png and confirm 长期记忆当前暂停 is visible after ordinary Memory navigation, the extraction switch is disabled, and there are no Accept/Reject candidate review controls.",
       "Open settings-window-controls.png and confirm Window scale/position controls are readable and not collapsed."
@@ -260,20 +270,49 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     });
     const settingsWindow = await waitForRoleWindow(app, "settings");
     await settingsWindow.waitForSelector(".greyfield-shell");
-    await settingsWindow.getByRole("button", { name: /^(Live2D|形象)$/ }).waitFor();
-    await settingsWindow.getByRole("button", { name: /^(Model service|模型服务)$/ }).waitFor();
+    await settingsWindow.getByRole("button", { name: /^(Start chatting|开始聊天)$/ }).waitFor();
+    await settingsWindow.getByRole("button", { name: /^(Advanced settings|高级设置)$/ }).waitFor();
     await settingsWindow.locator(".provider-status--preview", { hasText: /Fake provider is active|本地假服务/ }).waitFor();
-    const settingsLayout = await readSettingsLayout(settingsWindow);
+    const firstGlanceSettingsLayout = await readSettingsLayout(settingsWindow);
     if (
-      !settingsLayout.avatarNavVisible ||
-      !settingsLayout.modelServiceNavVisible ||
-      !settingsLayout.genericModelNavAbsent
+      !firstGlanceSettingsLayout.startChatNavVisible ||
+      !firstGlanceSettingsLayout.chatNavVisible ||
+      !firstGlanceSettingsLayout.advancedToggleVisible ||
+      !firstGlanceSettingsLayout.advancedDefaultClosed ||
+      !firstGlanceSettingsLayout.providerFourFieldsVisible ||
+      !firstGlanceSettingsLayout.providerTestVisible ||
+      !firstGlanceSettingsLayout.providerCardFitsViewport ||
+      !firstGlanceSettingsLayout.advancedTaskModelsDefaultClosed ||
+      !firstGlanceSettingsLayout.navFirstGlanceOrderCorrect
     ) {
-      throw new Error(`Settings navigation does not distinguish avatar from model service: ${JSON.stringify(settingsLayout)}`);
+      throw new Error(`Settings did not render the provider-first path in the initial viewport: ${JSON.stringify(firstGlanceSettingsLayout)}`);
     }
-    if (!settingsLayout.noHorizontalOverflow || !settingsLayout.windowControlsUsable) {
-      throw new Error(`Settings window has horizontal overflow: ${JSON.stringify(settingsLayout)}`);
+    if (!firstGlanceSettingsLayout.noHorizontalOverflow) {
+      throw new Error(`Settings provider-first view has horizontal overflow: ${JSON.stringify(firstGlanceSettingsLayout)}`);
     }
+    artifacts.push(
+      await screenshot(settingsWindow, artifactDir, "settings-provider-first.png", "Provider-first Settings without hidden scrolling.")
+    );
+
+    await settingsWindow.locator('[data-harness="provider-advanced-models"] > summary').click();
+    await settingsWindow.getByRole("button", { name: /^(Advanced settings|高级设置)$/ }).click();
+    await settingsWindow.getByRole("button", { name: /^(Live2D|形象)$/ }).waitFor();
+    await settingsWindow.getByRole("button", { name: /^(Memory|记忆)$/ }).waitFor();
+    const expandedSettingsLayout = await readSettingsLayout(settingsWindow);
+    if (
+      !expandedSettingsLayout.advancedNavVisibleAfterOpen ||
+      !expandedSettingsLayout.advancedTaskModelsVisibleAfterOpen ||
+      !expandedSettingsLayout.avatarNavVisible ||
+      !expandedSettingsLayout.modelServiceNavVisible ||
+      !expandedSettingsLayout.genericModelNavAbsent ||
+      !expandedSettingsLayout.windowControlsUsable
+    ) {
+      throw new Error(`Settings advanced areas are not reachable: ${JSON.stringify(expandedSettingsLayout)}`);
+    }
+    artifacts.push(
+      await screenshot(settingsWindow, artifactDir, "settings-advanced.png", "Expanded advanced task models and Settings navigation.")
+    );
+
     const settingsScroll = await verifySettingsWheelScroll(settingsWindow);
     if (
       !settingsScroll.settingsBodyClassApplied ||
@@ -283,20 +322,14 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     ) {
       throw new Error(`Settings window does not support ordinary wheel scrolling: ${JSON.stringify(settingsScroll)}`);
     }
-    if (!settingsLayout.navFirstGlanceOrderCorrect) {
-      throw new Error(`Settings first-glance navigation order is wrong: ${JSON.stringify(settingsLayout)}`);
-    }
-    artifacts.push(
-      await screenshot(settingsWindow, artifactDir, "settings-first-glance-nav.png", "Settings first-glance navigation.")
-    );
     if (
-      !settingsLayout.memoryExtractionVisible ||
-      !settingsLayout.memoryPausedVisible ||
-      !settingsLayout.memoryEnhancementToggleDisabled ||
-      !settingsLayout.proactiveSpeechDefaultOff ||
-      !settingsLayout.memoryExtractionManualCandidateControlsAbsent
+      !expandedSettingsLayout.memoryExtractionVisible ||
+      !expandedSettingsLayout.memoryPausedVisible ||
+      !expandedSettingsLayout.memoryEnhancementToggleDisabled ||
+      !expandedSettingsLayout.proactiveSpeechDefaultOff ||
+      !expandedSettingsLayout.memoryExtractionManualCandidateControlsAbsent
     ) {
-      throw new Error(`Settings Memory extraction section is incomplete: ${JSON.stringify(settingsLayout)}`);
+      throw new Error(`Settings Memory extraction section is incomplete: ${JSON.stringify(expandedSettingsLayout)}`);
     }
     await resizeElectronWindow(app, "settings", 520, 620);
     await settingsWindow.waitForTimeout(100);
@@ -306,9 +339,19 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     }
     const finalSettingsLayout = {
       ...narrowSettingsLayout,
+      startChatNavVisible: firstGlanceSettingsLayout.startChatNavVisible,
+      chatNavVisible: firstGlanceSettingsLayout.chatNavVisible,
+      advancedToggleVisible: firstGlanceSettingsLayout.advancedToggleVisible,
+      advancedDefaultClosed: firstGlanceSettingsLayout.advancedDefaultClosed,
+      providerFourFieldsVisible: firstGlanceSettingsLayout.providerFourFieldsVisible,
+      providerTestVisible: firstGlanceSettingsLayout.providerTestVisible,
+      providerCardFitsViewport: firstGlanceSettingsLayout.providerCardFitsViewport,
+      advancedTaskModelsDefaultClosed: firstGlanceSettingsLayout.advancedTaskModelsDefaultClosed,
+      advancedNavVisibleAfterOpen: expandedSettingsLayout.advancedNavVisibleAfterOpen,
+      advancedTaskModelsVisibleAfterOpen: expandedSettingsLayout.advancedTaskModelsVisibleAfterOpen,
       narrowNoHorizontalOverflow: narrowSettingsLayout.noHorizontalOverflow
     };
-    await clickSettingsNavButton(settingsWindow, /^(Model service|模型服务)$/);
+    await clickSettingsNavButton(settingsWindow, /^(Start chatting|开始聊天)$/);
     await waitForSettingsSectionActive(settingsWindow, "provider");
     const providerPreviewEvidence = await readProviderPreviewEvidence(settingsWindow);
     if (
@@ -319,9 +362,6 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
     ) {
       throw new Error(`Settings provider preview is not visible in the artifact target: ${JSON.stringify(providerPreviewEvidence)}`);
     }
-    artifacts.push(
-      await screenshot(settingsWindow, artifactDir, "settings-model-service-task-models.png", "Settings model service task models.")
-    );
     await clickSettingsNavButton(settingsWindow, /^(Live2D|形象)$/);
     await waitForSettingsSectionActive(settingsWindow, "model");
     const avatarEvidence = await readAvatarSectionEvidence(settingsWindow);
@@ -767,11 +807,58 @@ async function readRoleWindowBounds(
 async function readSettingsLayout(page: Page): Promise<VisualAcceptanceSummaryInput["settings"]> {
   return page.evaluate(() => {
     const scrollWidth = document.scrollingElement?.scrollWidth ?? document.documentElement.scrollWidth;
-    const compactInputs = Array.from(document.querySelectorAll<HTMLInputElement>(".settings-fields--compact input"));
-    const memorySection = document.querySelector<HTMLElement>('[aria-label="How memory works"], [aria-label="记忆方式"]');
-    const navButtonLabels = Array.from(document.querySelectorAll<HTMLButtonElement>(".settings-nav__button")).map((button) =>
-      button.textContent?.trim() ?? ""
+    const controlSurface = document.querySelector<HTMLElement>(".control-surface");
+    const controlRect = controlSurface?.getBoundingClientRect();
+    const compactInputs = Array.from(document.querySelectorAll<HTMLInputElement>(".settings-fields--compact input")).filter(
+      (input) => {
+        const rect = input.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      }
     );
+    const memorySection = document.querySelector<HTMLElement>('[aria-label="How memory works"], [aria-label="记忆方式"]');
+    const navButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".settings-nav__button")).filter((button) => {
+      const rect = button.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
+    const navButtonLabels = navButtons.map((button) => button.textContent?.trim() ?? "");
+    const providerSection = document.querySelector<HTMLElement>('[data-settings-section="provider"]');
+    const providerFields = document.querySelector<HTMLElement>('[data-harness="provider-first-fields"]');
+    const providerFieldControls = Array.from(providerFields?.querySelectorAll<HTMLElement>("select, input") ?? []);
+    const testLlmButton = Array.from(providerSection?.querySelectorAll<HTMLButtonElement>("button") ?? []).find((button) =>
+      /^(Test LLM|测试 LLM)$/u.test(button.textContent?.trim() ?? "")
+    );
+    const advancedToggle = document.querySelector<HTMLButtonElement>('[data-harness="settings-advanced-toggle"]');
+    const advancedContent = document.querySelector<HTMLElement>('[data-harness="settings-advanced-content"]');
+    const advancedNav = document.querySelector<HTMLElement>('[data-harness="settings-advanced-nav"]');
+    const advancedTaskModels = document.querySelector<HTMLDetailsElement>('[data-harness="provider-advanced-models"]');
+    const advancedContentRect = advancedContent?.getBoundingClientRect();
+    const advancedNavRect = advancedNav?.getBoundingClientRect();
+    const memorySectionRect = memorySection?.getBoundingClientRect();
+    const providerSectionRect = providerSection?.getBoundingClientRect();
+    const testLlmButtonRect = testLlmButton?.getBoundingClientRect();
+    const advancedTaskModelSlots = Array.from(
+      advancedTaskModels?.querySelectorAll<HTMLElement>("[data-task-model-slot]") ?? []
+    );
+    const advancedTaskModelSlotsVisible =
+      advancedTaskModelSlots.length === 7 &&
+      advancedTaskModelSlots.every((slot) => {
+        const rect = slot.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+    const providerFieldsFit =
+      providerFieldControls.length === 4 &&
+      controlRect !== undefined &&
+      providerFieldControls.every((field) => {
+        const rect = field.getBoundingClientRect();
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rect.left >= controlRect.left &&
+          rect.right <= controlRect.right &&
+          rect.top >= controlRect.top &&
+          rect.bottom <= controlRect.bottom
+        );
+      });
     const memoryText = memorySection?.textContent ?? "";
     const windowControlsUsable =
       compactInputs.length >= 4 &&
@@ -792,19 +879,54 @@ async function readSettingsLayout(page: Page): Promise<VisualAcceptanceSummaryIn
         );
       });
     return {
+      startChatNavVisible: navButtonLabels.includes("Start chatting") || navButtonLabels.includes("开始聊天"),
+      chatNavVisible: navButtonLabels.includes("Chat") || navButtonLabels.includes("聊天"),
+      advancedToggleVisible: navButtonLabels.includes("Advanced settings") || navButtonLabels.includes("高级设置"),
+      advancedDefaultClosed:
+        advancedToggle?.getAttribute("aria-expanded") === "false" &&
+        (advancedContentRect?.width ?? 0) === 0 &&
+        (advancedContentRect?.height ?? 0) === 0,
+      providerFourFieldsVisible: providerFieldsFit,
+      providerTestVisible:
+        controlRect !== undefined &&
+        testLlmButtonRect !== undefined &&
+        testLlmButtonRect.width > 0 &&
+        testLlmButtonRect.height > 0 &&
+        testLlmButtonRect.top >= controlRect.top &&
+        testLlmButtonRect.bottom <= controlRect.bottom,
+      providerCardFitsViewport:
+        controlRect !== undefined &&
+        providerSectionRect !== undefined &&
+        providerSectionRect.width > 0 &&
+        providerSectionRect.height > 0 &&
+        providerSectionRect.top >= controlRect.top &&
+        providerSectionRect.bottom <= controlRect.bottom,
+      advancedTaskModelsDefaultClosed: advancedTaskModels?.open === false,
+      advancedNavVisibleAfterOpen:
+        advancedToggle?.getAttribute("aria-expanded") === "true" &&
+        (advancedContentRect?.width ?? 0) > 0 &&
+        (advancedContentRect?.height ?? 0) > 0 &&
+        (advancedNavRect?.width ?? 0) > 0 &&
+        (advancedNavRect?.height ?? 0) > 0,
+      advancedTaskModelsVisibleAfterOpen: advancedTaskModels?.open === true && advancedTaskModelSlotsVisible,
       avatarNavVisible: navButtonLabels.includes("Live2D") || navButtonLabels.includes("形象"),
-      modelServiceNavVisible: navButtonLabels.includes("Model service") || navButtonLabels.includes("模型服务"),
+      modelServiceNavVisible:
+        navButtonLabels.includes("Start chatting") ||
+        navButtonLabels.includes("开始聊天") ||
+        navButtonLabels.includes("Model service") ||
+        navButtonLabels.includes("模型服务"),
       genericModelNavAbsent: !navButtonLabels.includes("Model") && !navButtonLabels.includes("模型"),
       navFirstGlanceOrderCorrect:
-        (navButtonLabels[0] === "Live2D" && navButtonLabels[1] === "Model service") ||
-        (navButtonLabels[0] === "形象" && navButtonLabels[1] === "模型服务"),
+        (navButtonLabels[0] === "Start chatting" && navButtonLabels[1] === "Chat" && navButtonLabels[2] === "Advanced settings") ||
+        (navButtonLabels[0] === "开始聊天" && navButtonLabels[1] === "聊天" && navButtonLabels[2] === "高级设置"),
       modelServiceActiveAfterClick: false,
       avatarActiveAfterClick: false,
       live2dAvatarSectionVisible: false,
       providerPreviewVisible: document.querySelector(".provider-status--preview") !== null,
       providerPreviewInViewport: false,
-      taskModelSlotsVisible: document.querySelector('[data-task-model-slot="chat"]') !== null,
-      memoryExtractionVisible: memorySection !== null,
+      taskModelSlotsVisible:
+        advancedTaskModels?.open === true && advancedTaskModelSlotsVisible,
+      memoryExtractionVisible: (memorySectionRect?.width ?? 0) > 0 && (memorySectionRect?.height ?? 0) > 0,
       memoryPausedVisible: /长期记忆当前暂停|Long-term memory is paused/u.test(memoryText),
       memoryPausedInViewportAfterNav: false,
       memoryEnhancementToggleDisabled: (() => {
@@ -815,7 +937,9 @@ async function readSettingsLayout(page: Page): Promise<VisualAcceptanceSummaryIn
       })(),
       memoryExtractionManualCandidateControlsAbsent: !/\b(accept|reject|candidate|pending)\b/i.test(memoryText),
       proactiveSpeechDefaultOff:
-        document.querySelector<HTMLInputElement>('input[aria-label="Remembered moments"]')?.checked === false,
+        document.querySelector<HTMLInputElement>(
+          'input[aria-label="Remembered moments"], input[aria-label="记住的时刻"]'
+        )?.checked === false,
       screenAwarenessDefaultOff: false,
       settingsShellVisible: document.querySelector(".greyfield-shell") !== null,
       settingsBodyClassApplied: document.body.classList.contains("settings-window"),
@@ -928,7 +1052,7 @@ async function waitForSettingsSectionActive(page: Page, sectionId: "model" | "pr
       }
       const expectedLabels =
         targetSectionId === "provider"
-          ? ["Model service", "模型服务"]
+          ? ["Start chatting", "开始聊天", "Model service", "模型服务"]
           : targetSectionId === "memory"
             ? ["Memory", "记忆"]
             : ["Live2D", "形象"];
@@ -998,16 +1122,22 @@ async function readProviderPreviewEvidence(
     const providerSection = document.querySelector<HTMLElement>('[data-settings-section="provider"]');
     const providerStatus = document.querySelector<HTMLElement>(".provider-status--preview");
     const taskModelSlots = document.querySelector<HTMLElement>(".task-model-slots");
-    const chatTaskModelSlot = document.querySelector<HTMLElement>('[data-task-model-slot="chat"]');
+    const advancedTaskModels = document.querySelector<HTMLDetailsElement>('[data-harness="provider-advanced-models"]');
+    const advancedTaskModelSlots = Array.from(document.querySelectorAll<HTMLElement>("[data-task-model-slot]"));
     return {
       modelServiceActiveAfterClick:
         activeButton?.getAttribute("aria-current") === "true" &&
-        ["Model service", "模型服务"].includes(activeButton.textContent?.trim() ?? ""),
+        ["Start chatting", "开始聊天", "Model service", "模型服务"].includes(activeButton.textContent?.trim() ?? ""),
       providerPreviewVisible: providerStatus !== null,
       providerPreviewInViewport: isInViewport(providerSection, viewportWidth, viewportHeight),
       taskModelSlotsVisible:
-        isInViewport(taskModelSlots, viewportWidth, viewportHeight) &&
-        isInViewport(chatTaskModelSlot, viewportWidth, viewportHeight)
+        advancedTaskModels?.open === true &&
+        taskModelSlots !== null &&
+        advancedTaskModelSlots.length === 7 &&
+        advancedTaskModelSlots.every((slot) => {
+          const rect = slot.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0 && getComputedStyle(slot).visibility !== "hidden";
+        })
     };
 
     function isInViewport(element: HTMLElement | null, width: number, height: number): boolean {

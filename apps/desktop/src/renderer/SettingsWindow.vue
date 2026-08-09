@@ -3,7 +3,7 @@
     <nav class="settings-nav" :aria-label="t('nav.label')">
       <strong>Greyfield</strong>
       <button
-        v-for="item in settingsNavItems"
+        v-for="item in primarySettingsNavItems"
         :key="item.id"
         type="button"
         class="settings-nav__button"
@@ -16,6 +16,30 @@
       <button type="button" class="settings-nav__button settings-nav__button--chat" @click="$emit('open-chat')">
         {{ t("nav.chat") }}
       </button>
+      <button
+        type="button"
+        class="settings-nav__button settings-nav__button--advanced"
+        :class="{ 'settings-nav__button--expanded': advancedSettingsOpen }"
+        :aria-expanded="advancedSettingsOpen"
+        aria-controls="settings-advanced-content"
+        data-harness="settings-advanced-toggle"
+        @click="toggleAdvancedSettings"
+      >
+        {{ t("nav.advanced") }}
+      </button>
+      <div v-show="advancedSettingsOpen" class="settings-nav__advanced" data-harness="settings-advanced-nav">
+        <button
+          v-for="item in advancedSettingsNavItems"
+          :key="item.id"
+          type="button"
+          class="settings-nav__button settings-nav__button--nested"
+          :class="{ 'settings-nav__button--active': activeSectionId === item.id }"
+          :aria-current="activeSectionId === item.id ? 'true' : undefined"
+          @click="scrollToSection(item.id)"
+        >
+          {{ item.label }}
+        </button>
+      </div>
     </nav>
     <section class="stage-surface" :class="{ speaking: state.status === 'speaking' }">
       <Live2DStageView
@@ -37,7 +61,23 @@
       </header>
 
       <section class="settings-panel" :aria-label="t('settings.label')">
-        <label class="settings-language-select">
+        <ProviderSettingsSection
+          :state="state"
+          :stage-status="stageStatus"
+          :locale="locale"
+          :aria-label="sectionAriaLabel('provider')"
+          :section-ref="setSectionRef('provider')"
+          @update-setting="forwardSettingUpdate"
+          @test-llm="$emit('test-llm')"
+        />
+
+        <div
+          v-show="advancedSettingsOpen"
+          id="settings-advanced-content"
+          class="settings-advanced-content"
+          data-harness="settings-advanced-content"
+        >
+          <label class="settings-language-select">
           <span>{{ t("settings.language") }}</span>
           <select
             :value="state.settings.settingsLocale"
@@ -48,26 +88,16 @@
               {{ locale.label }}
             </option>
           </select>
-        </label>
+          </label>
 
-        <PersonaSettingsSection
+          <PersonaSettingsSection
           :state="state"
           :locale="locale"
           :aria-label="sectionAriaLabel('persona')"
           :section-ref="setSectionRef('persona')"
           @update-persona-field="forwardPersonaFieldUpdate"
           @save-persona="forwardPersonaSave"
-        />
-
-        <ProviderSettingsSection
-          :state="state"
-          :stage-status="stageStatus"
-          :locale="locale"
-          :aria-label="sectionAriaLabel('provider')"
-          :section-ref="setSectionRef('provider')"
-          @update-setting="forwardSettingUpdate"
-          @test-llm="$emit('test-llm')"
-        />
+          />
 
         <VoiceSettingsSection
           :state="state"
@@ -518,6 +548,7 @@
         <p v-if="state.voiceErrorMessage" class="provider-test-result provider-test-result--error" role="status">
           {{ state.voiceErrorMessage }}
         </p>
+        </div>
       </section>
 
       <section v-if="modelInfo" class="model-inspector" aria-label="Live2D model info">
@@ -595,7 +626,12 @@ import {
   isMemoryExtractionToggleChecked
 } from "./settings-memory-extraction-status";
 import { normalizeSettingsLocale, settingsLocales, settingsT, type SettingsI18nKey } from "./settings-i18n";
-import { resolveActiveSettingsSection, settingsNavSectionIds, type SettingsSectionId } from "./settings-nav";
+import {
+  resolveActiveSettingsSection,
+  settingsAdvancedSectionIds,
+  settingsPrimarySectionIds,
+  type SettingsSectionId
+} from "./settings-nav";
 import VoiceSettingsSection from "./VoiceSettingsSection.vue";
 import WindowSettingsSection from "./WindowSettingsSection.vue";
 
@@ -658,12 +694,21 @@ const motionCount = computed(() =>
 const locale = computed(() => normalizeSettingsLocale(props.state.settings.settingsLocale));
 const t = (key: SettingsI18nKey, values?: Record<string, string | number>): string =>
   settingsT(locale.value, key, values);
+const advancedSettingsOpen = ref(false);
 const localizedStageStatus = computed(() => {
   const key = `status.${props.state.status}` as SettingsI18nKey;
   return settingsT(locale.value, key) === key ? props.state.status : settingsT(locale.value, key);
 });
+const primarySettingsNavItems = computed<Array<{ id: SettingsSectionId; label: string }>>(() =>
+  settingsPrimarySectionIds.map((id) => ({ id, label: id === "provider" ? t("nav.startChat") : t(`nav.${id}` as SettingsI18nKey) }))
+);
+const advancedSettingsNavItems = computed<Array<{ id: SettingsSectionId; label: string }>>(() =>
+  settingsAdvancedSectionIds.map((id) => ({ id, label: t(`nav.${id}` as SettingsI18nKey) }))
+);
 const settingsNavItems = computed<Array<{ id: SettingsSectionId; label: string }>>(() =>
-  settingsNavSectionIds.map((id) => ({ id, label: t(`nav.${id}` as SettingsI18nKey) }))
+  advancedSettingsOpen.value
+    ? [...primarySettingsNavItems.value, ...advancedSettingsNavItems.value]
+    : primarySettingsNavItems.value
 );
 const memorySnapshot = computed(() => props.state.memoryDebug.snapshot);
 const memoryExtractionStatus = computed(() => describeMemoryExtractionStatus(props.state, locale.value));
@@ -756,7 +801,7 @@ const memoryAtomDrafts = ref<Record<string, string>>({});
 type MemorySourceSelection = { kind: "summary"; id: string } | { kind: "atom"; id: string };
 const selectedSource = ref<MemorySourceSelection | null>(null);
 const controlSurfaceRef = ref<HTMLElement | null>(null);
-const activeSectionId = ref<SettingsSectionId>("model");
+const activeSectionId = ref<SettingsSectionId>("provider");
 const sectionRefs = new Map<SettingsSectionId, HTMLElement>();
 const selectedSourceDrilldown = computed(() => {
   if (!selectedSource.value) {
@@ -961,7 +1006,11 @@ function setSectionRef(id: SettingsSectionId): (element: Element | null) => void
   };
 }
 
-function scrollToSection(id: SettingsSectionId): void {
+async function scrollToSection(id: SettingsSectionId): Promise<void> {
+  if (settingsAdvancedSectionIds.includes(id) && !advancedSettingsOpen.value) {
+    advancedSettingsOpen.value = true;
+    await nextTick();
+  }
   activeSectionId.value = id;
   const section = sectionRefs.get(id);
   if (!section) {
@@ -969,6 +1018,14 @@ function scrollToSection(id: SettingsSectionId): void {
   }
   section.scrollIntoView({ behavior: "smooth", block: "start" });
   section.focus({ preventScroll: true });
+}
+
+function toggleAdvancedSettings(): void {
+  advancedSettingsOpen.value = !advancedSettingsOpen.value;
+  if (!advancedSettingsOpen.value) {
+    activeSectionId.value = "provider";
+    void nextTick(updateActiveSection);
+  }
 }
 
 function updateActiveSection(): void {

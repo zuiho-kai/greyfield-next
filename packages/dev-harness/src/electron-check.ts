@@ -284,6 +284,8 @@ try {
   const auxiliaryWindowCloseRecovery = await verifyAuxiliaryWindowCloseRecovery();
   await settingsWindow.waitForSelector(".greyfield-shell");
   await settingsWindow.locator(".provider-status--preview", { hasText: /Fake provider is active|本地假服务/ }).waitFor();
+  await settingsWindow.getByRole("button", { name: /^(Advanced settings|高级设置)$/ }).click();
+  await settingsWindow.locator('[data-harness="settings-advanced-content"]').waitFor({ state: "visible" });
   const memoryExtractionSettings = await verifyMemoryExtractionSettings(settingsWindow);
   const live2DModelSelect = settingsWindow.getByLabel(/^(Live2D model|Live2D 模型)$/);
   await live2DModelSelect.waitFor();
@@ -694,7 +696,7 @@ async function verifySettingsNavAndI18n(
   }
 
   const avatarNavWorked = await clickSettingsNavAndVerify(settingsWindow, "形象", "model");
-  const modelServiceNavWorked = await clickSettingsNavAndVerify(settingsWindow, "模型服务", "provider");
+  const modelServiceNavWorked = await clickSettingsNavAndVerify(settingsWindow, "开始聊天", "provider");
   const voiceNavWorked = await clickSettingsNavAndVerify(settingsWindow, "语音", "voice");
   const windowNavWorked = await clickSettingsNavAndVerify(settingsWindow, "窗口", "window");
 
@@ -710,6 +712,8 @@ async function verifySettingsNavAndI18n(
   await closeAndReopenWindow("settings");
   await settingsWindow.waitForSelector(".greyfield-shell");
   await waitForSettingsText(settingsWindow, "窗口");
+  await settingsWindow.getByRole("button", { name: "高级设置", exact: true }).click();
+  await settingsWindow.locator('[data-harness="settings-advanced-content"]').waitFor({ state: "visible" });
   await settingsWindow.getByRole("button", { name: "窗口", exact: true }).waitFor();
   await settingsWindow.getByRole("heading", { name: "窗口" }).waitFor();
   await assertNoEnglishMemoryLibraryLabels(settingsWindow);

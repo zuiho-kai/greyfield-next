@@ -22,18 +22,31 @@ describe("createTextSettingPatch", () => {
 
   it("keeps switching Chat provider fields to OpenAI-compatible when filled from fake mode", () => {
     const state = createInitialDesktopRendererState();
+    const advancedProviderFields = [
+      "providerPlannerModel",
+      "providerUtilityModel",
+      "providerMemoryModel",
+      "providerVisionModel",
+      "providerMultimodalModel",
+      "providerASRModel",
+      "providerTTSModel"
+    ];
 
-    expect(createTextSettingPatch(state.settings, "providerBaseUrl", "https://llm.example/v1")).toEqual({
-      providerBaseUrl: "https://llm.example/v1",
-      providerLLM: "openai-compatible"
-    });
-    expect(createTextSettingPatch(state.settings, "providerApiKey", "secret")).toEqual({
-      providerApiKey: "secret",
-      providerLLM: "openai-compatible"
-    });
-    expect(createTextSettingPatch(state.settings, "providerModel", "chat-model")).toEqual({
-      providerModel: "chat-model",
-      providerLLM: "openai-compatible"
-    });
+    const patches = [
+      createTextSettingPatch(state.settings, "providerBaseUrl", "https://llm.example/v1"),
+      createTextSettingPatch(state.settings, "providerApiKey", "secret"),
+      createTextSettingPatch(state.settings, "providerModel", "chat-model")
+    ];
+
+    expect(patches).toEqual([
+      { providerBaseUrl: "https://llm.example/v1", providerLLM: "openai-compatible" },
+      { providerApiKey: "secret", providerLLM: "openai-compatible" },
+      { providerModel: "chat-model", providerLLM: "openai-compatible" }
+    ]);
+    for (const patch of patches) {
+      for (const field of advancedProviderFields) {
+        expect(patch).not.toHaveProperty(field);
+      }
+    }
   });
 });

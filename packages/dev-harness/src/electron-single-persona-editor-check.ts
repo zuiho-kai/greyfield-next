@@ -83,6 +83,7 @@ try {
   const firstApp = await launchApp();
   try {
     const settingsWindow = await waitForRoleWindow(firstApp, "settings");
+    await openPersonaSettings(settingsWindow);
     await settingsWindow.locator(".provider-test-result--success", { hasText: "Loaded persona" }).waitFor({
       timeout: 10_000
     });
@@ -127,6 +128,7 @@ try {
   const secondApp = await launchApp();
   try {
     const settingsWindow = await waitForRoleWindow(secondApp, "settings");
+    await openPersonaSettings(settingsWindow);
     await settingsWindow.locator(".provider-test-result--success", { hasText: "Loaded persona" }).waitFor({
       timeout: 10_000
     });
@@ -168,6 +170,7 @@ try {
   const thirdApp = await launchApp();
   try {
     const settingsWindow = await waitForRoleWindow(thirdApp, "settings");
+    await openPersonaSettings(settingsWindow);
     await settingsWindow.locator(".provider-test-result--error", { hasText: "Could not load persona" }).waitFor({
       timeout: 10_000
     });
@@ -249,6 +252,14 @@ async function waitForRoleWindow(app: ElectronApplication, roleName: "settings" 
     await delay(100);
   }
   throw new Error(`Timed out waiting for ${roleName} window`);
+}
+
+async function openPersonaSettings(page: Page): Promise<void> {
+  const advanced = page.getByRole("button", { name: /^(Advanced settings|高级设置)$/ });
+  if ((await advanced.getAttribute("aria-expanded")) !== "true") {
+    await advanced.click();
+  }
+  await page.getByRole("button", { name: /^(Persona|人格)$/ }).click();
 }
 
 async function sendMessage(page: Page, text: string): Promise<void> {
