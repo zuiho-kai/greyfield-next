@@ -7,6 +7,10 @@ export interface MemoryExtractionStatusView {
   detail: string;
 }
 
+export function isMemoryExtractionToggleChecked(state: DesktopRendererState): boolean {
+  return state.sessionContinuity.longTermMemoryEnabled && state.settings.llmAtomExtractionEnabled;
+}
+
 export function describeMemoryExtractionStatus(state: DesktopRendererState, locale?: SettingsLocale): MemoryExtractionStatusView {
   if (!state.sessionContinuity.longTermMemoryEnabled) {
     return {

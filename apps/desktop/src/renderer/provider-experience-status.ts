@@ -12,6 +12,7 @@ export interface ProviderExperienceView {
 export interface VoiceInputExperienceView {
   isPreview: boolean;
   label: string;
+  shortLabel: string;
 }
 
 export function describeProviderExperience(
@@ -66,6 +67,7 @@ export function describeVoiceInputExperience(
   const isPreview = state.settings.providerASR.trim() === "fake";
   return {
     isPreview,
-    label: settingsT(locale, isPreview ? "voice.preview.fixedTranscript" : "voice.realInput")
+    label: settingsT(locale, isPreview ? "voice.preview.fixedTranscript" : "voice.realInput"),
+    shortLabel: settingsT(locale, isPreview ? "voice.preview.fixedTranscriptShort" : "voice.realInput")
   };
 }

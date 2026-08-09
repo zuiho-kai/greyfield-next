@@ -137,6 +137,7 @@ export type SettingsI18nKey =
   | "experience.testing"
   | "experience.configured"
   | "voice.preview.fixedTranscript"
+  | "voice.preview.fixedTranscriptShort"
   | "voice.realInput"
   | "memory.paused.label"
   | "memory.paused.detail"
@@ -490,6 +491,7 @@ const enUS: Record<SettingsI18nKey, string> = {
   "experience.testing": "Testing connection",
   "experience.configured": "Real chat ready",
   "voice.preview.fixedTranscript": "Fixed-transcript preview",
+  "voice.preview.fixedTranscriptShort": "Fixed text",
   "voice.realInput": "Microphone input",
   "memory.paused.label": "Long-term memory is paused",
   "memory.paused.detail": "The desktop runtime is not writing or recalling long-term memory. Recent message continuity is separate and remains bounded.",
@@ -844,6 +846,7 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "experience.testing": "正在测试连接",
   "experience.configured": "真实聊天已就绪",
   "voice.preview.fixedTranscript": "固定转写试玩",
+  "voice.preview.fixedTranscriptShort": "固定转写",
   "voice.realInput": "麦克风输入",
   "memory.paused.label": "长期记忆当前暂停",
   "memory.paused.detail": "当前桌面 runtime 不会写入或召回长期记忆；有界的最近对话消息连续性与长期记忆是两回事。",

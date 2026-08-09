@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createInitialDesktopRendererState } from "../desktop-runtime-bridge";
-import { describeMemoryExtractionStatus } from "../settings-memory-extraction-status";
+import {
+  describeMemoryExtractionStatus,
+  isMemoryExtractionToggleChecked
+} from "../settings-memory-extraction-status";
 
 describe("describeMemoryExtractionStatus", () => {
   it("shows long-term memory as paused when the desktop capability is off", () => {
@@ -21,6 +24,10 @@ describe("describeMemoryExtractionStatus", () => {
       tone: "disabled",
       label: "长期记忆当前暂停"
     });
+    expect(isMemoryExtractionToggleChecked(state)).toBe(false);
+
+    state.sessionContinuity.longTermMemoryEnabled = true;
+    expect(isMemoryExtractionToggleChecked(state)).toBe(true);
   });
 
   it("uses Chinese for the default locale", () => {

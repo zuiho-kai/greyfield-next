@@ -23,7 +23,8 @@ describe("provider experience status", () => {
     });
     expect(describeVoiceInputExperience(state, "zh-CN")).toEqual({
       isPreview: true,
-      label: "固定转写试玩"
+      label: "固定转写试玩",
+      shortLabel: "固定转写"
     });
   });
 

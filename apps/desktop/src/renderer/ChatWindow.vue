@@ -163,7 +163,11 @@
           :title="voiceInputExperience.isPreview ? voiceInputExperience.label : voiceInputLabel"
           @click="$emit(state.voiceInput.status === 'listening' ? 'stop-voice-input' : 'start-voice-input')"
         >
-          <span>🎙️</span> {{ voiceInputLabel }}
+          <span>🎙️</span>
+          <span>{{ voiceInputLabel }}</span>
+          <small v-if="voiceInputExperience.isPreview" class="voice-input-button__preview-label">
+            {{ voiceInputExperience.label }}
+          </small>
         </button>
         <button type="button" class="stop-button" :disabled="!chatStatus.canStop" data-testid="chat-stop-button" @click="$emit('interrupt')">
           <span>⏹️</span> {{ chatStatus.stopLabel }}
@@ -290,7 +294,7 @@ const voiceInputLabel = computed(() => {
   if (props.state.voiceInput.status === "transcribing") {
     return t("chat.voice.transcribing");
   }
-  return voiceInputExperience.value.isPreview ? voiceInputExperience.value.label : t("chat.voice");
+  return t("chat.voice");
 });
 </script>
 
@@ -351,5 +355,15 @@ const voiceInputLabel = computed(() => {
   font-size: 12px;
   font-weight: 700;
   line-height: 1.35;
+}
+
+.voice-input-button__preview-label {
+  padding: 2px 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
 }
 </style>

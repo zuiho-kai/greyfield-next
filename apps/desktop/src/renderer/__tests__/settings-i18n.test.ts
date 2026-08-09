@@ -70,6 +70,8 @@ describe("settings i18n", () => {
     expect(settingsT("zh-CN", "controls.placeholder")).toBe("和 Greyfield 说话...");
     expect(settingsT("zh-CN", "controls.stop")).toBe("停止回复或语音");
     expect(settingsT("zh-CN", "voice.preview.fixedTranscript")).toBe("固定转写试玩");
+    expect(settingsT("zh-CN", "voice.preview.fixedTranscriptShort")).toBe("固定转写");
+    expect(settingsT("en-US", "voice.preview.fixedTranscriptShort")).toBe("Fixed text");
     expect(settingsT("zh-CN", "chat.continuity.restored", { count: 3 })).toBe(
       "已恢复最近 3 条对话消息（不是长期记忆）"
     );

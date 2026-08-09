@@ -150,6 +150,10 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
         live2d: {
           ...defaultGreyfieldConfig.live2d,
           modelPath: pathToFileURL(resolveLive2DFixturePath()).href
+        },
+        memory: {
+          ...defaultGreyfieldConfig.memory,
+          llmAtomExtractionEnabled: true
         }
       },
       null,
@@ -599,8 +603,8 @@ async function readControlsSnapshot(page: Page): Promise<VisualAcceptanceSummary
           actionRect.bottom <= window.innerHeight
       ),
       providerActionOpensSettings: false,
-      fakeAsrDisclosureVisible: /固定转写试玩|Fixed-transcript preview/u.test(
-        `${fakeAsrDisclosure?.textContent ?? ""} ${fakeAsrDisclosure?.getAttribute("title") ?? ""} ${fakeAsrDisclosure?.getAttribute("aria-label") ?? ""}`
+      fakeAsrDisclosureVisible: /固定转写(?:试玩)?|Fixed(?:-transcript preview| text)/u.test(
+        fakeAsrDisclosure?.textContent ?? ""
       ),
       screenAwarenessDefaultOff: screenAwarenessButton !== null
     };
@@ -637,7 +641,7 @@ async function readChatTruthSnapshot(
           actionRect.bottom <= window.innerHeight
       ),
       fakeAsrDisclosureVisible: /固定转写试玩|Fixed-transcript preview/u.test(
-        `${voiceButton?.textContent ?? ""} ${voiceButton?.getAttribute("title") ?? ""}`
+        voiceButton?.textContent ?? ""
       ),
       unexpectedProactiveMessageAbsent: false
     };

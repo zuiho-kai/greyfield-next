@@ -120,7 +120,7 @@
           <label class="memory-extraction-toggle">
             <span>{{ t("field.betterMemory") }}</span>
             <input
-              :checked="state.settings.llmAtomExtractionEnabled"
+              :checked="isMemoryExtractionToggleChecked(state)"
               :disabled="!state.sessionContinuity.longTermMemoryEnabled"
               :aria-label="t('field.betterMemory')"
               type="checkbox"
@@ -590,7 +590,10 @@ import {
 import PersonaSettingsSection from "./PersonaSettingsSection.vue";
 import ProviderSettingsSection from "./ProviderSettingsSection.vue";
 import { checkedFrom, valueFrom } from "./settings-dom-events";
-import { describeMemoryExtractionStatus } from "./settings-memory-extraction-status";
+import {
+  describeMemoryExtractionStatus,
+  isMemoryExtractionToggleChecked
+} from "./settings-memory-extraction-status";
 import { normalizeSettingsLocale, settingsLocales, settingsT, type SettingsI18nKey } from "./settings-i18n";
 import { resolveActiveSettingsSection, settingsNavSectionIds, type SettingsSectionId } from "./settings-nav";
 import VoiceSettingsSection from "./VoiceSettingsSection.vue";

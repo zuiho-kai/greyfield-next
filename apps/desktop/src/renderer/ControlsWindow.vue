@@ -73,7 +73,10 @@
         <button
           type="button"
           class="desktop-control-button"
-          :class="{ 'desktop-control-button--active': state.voiceInput.status === 'listening' }"
+          :class="{
+            'desktop-control-button--active': state.voiceInput.status === 'listening',
+            'desktop-control-button--voice-preview': voiceInputExperience.isPreview
+          }"
           :disabled="state.voiceInput.status === 'transcribing'"
           :title="voiceInputTitle"
           :aria-label="voiceInputTitle"
@@ -81,6 +84,9 @@
           @click="$emit(state.voiceInput.status === 'listening' ? 'stop-voice-input' : 'start-voice-input')"
         >
           <Mic :size="16" stroke-width="2.35" />
+          <span v-if="voiceInputExperience.isPreview" class="desktop-control-button__micro-label">
+            {{ voiceInputExperience.shortLabel }}
+          </span>
         </button>
         <button
           type="button"
@@ -289,5 +295,19 @@ onBeforeUnmount(() => {
   line-height: 1.1;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.desktop-control-button--voice-preview {
+  align-content: center;
+  grid-template-rows: 16px 10px;
+  gap: 1px;
+}
+
+.desktop-control-button__micro-label {
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.15px;
+  white-space: nowrap;
 }
 </style>
