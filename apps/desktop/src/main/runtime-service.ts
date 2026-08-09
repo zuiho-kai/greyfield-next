@@ -385,6 +385,12 @@ export class RuntimeService {
     );
   }
 
+  async getSessionContinuity(): Promise<{ restoredRecentMessageCount: number }> {
+    const limit = this.options.recentTurnLimit ?? 20;
+    const recentMessages = await this.sessionStore.getRecent(limit);
+    return { restoredRecentMessageCount: recentMessages.length };
+  }
+
   async getMemoryDebugSnapshot(limit = 20): Promise<MemoryLibrarySnapshot> {
     return this.getMemoryLibrarySnapshot(limit);
   }

@@ -8,6 +8,14 @@ export interface MemoryExtractionStatusView {
 }
 
 export function describeMemoryExtractionStatus(state: DesktopRendererState, locale?: SettingsLocale): MemoryExtractionStatusView {
+  if (!state.sessionContinuity.longTermMemoryEnabled) {
+    return {
+      tone: "disabled",
+      label: settingsT(locale, "memory.paused.label"),
+      detail: settingsT(locale, "memory.paused.detail")
+    };
+  }
+
   if (!state.settings.llmAtomExtractionEnabled) {
     return {
       tone: "standard",

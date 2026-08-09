@@ -46,6 +46,20 @@ function makeSummarySegment(id: string, threadId: string, summary: string): Summ
 
 const redactedSecretPlaceholder = "[redacted-secret]";
 
+function withProactivity(
+  config = defaultGreyfieldConfig,
+  proactivityLevel = 50
+): typeof defaultGreyfieldConfig {
+  return {
+    ...config,
+    ui: {
+      ...config.ui,
+      proactiveMemoryEnabled: true,
+      proactivityLevel
+    }
+  };
+}
+
 function expectNoSecrets(value: unknown, secrets: string[]): void {
   const serialized = JSON.stringify(value) ?? "";
   for (const secret of secrets) {
@@ -70,6 +84,25 @@ describe("RuntimeService", () => {
     expect(emit).toHaveBeenCalledWith({ type: "assistant.text.delta", text: "你好，我醒着。" });
     expect(emit).toHaveBeenCalledWith({ type: "assistant.text.final", text: "你好，我醒着。现在可以继续做桌宠了。" });
     expect(emit).toHaveBeenLastCalledWith({ type: "runtime.status", status: "idle" });
+  });
+
+  it("reports only the bounded count of restored recent messages", async () => {
+    const sessionStore = new TestSessionStore("continuity-session", [
+      { id: "turn-1", role: "user", content: "private first message", createdAt: "2026-08-10T00:00:00.000Z" },
+      { id: "turn-2", role: "assistant", content: "private first reply", createdAt: "2026-08-10T00:00:01.000Z" },
+      { id: "turn-3", role: "user", content: "private second message", createdAt: "2026-08-10T00:00:02.000Z" }
+    ]);
+    const getRecent = vi.spyOn(sessionStore, "getRecent");
+    const service = new RuntimeService(defaultGreyfieldConfig, {
+      sessionStore,
+      recentTurnLimit: 2
+    });
+
+    const continuity = await service.getSessionContinuity();
+
+    expect(continuity).toEqual({ restoredRecentMessageCount: 2 });
+    expect(getRecent).toHaveBeenCalledWith(2);
+    expect(JSON.stringify(continuity)).not.toContain("private");
   });
 
   it("does not emit desktop TTS chunks until voice output is enabled", async () => {
@@ -2001,7 +2034,7 @@ describe("RuntimeService", () => {
         throw new Error("deleted evidence list failed");
       }
     };
-    const service = new RuntimeService(defaultGreyfieldConfig, {
+    const service = new RuntimeService(withProactivity(), {
       threadId: "thread-a",
       memoryAtomStore,
       deletedMemoryEvidenceStore,
@@ -2058,7 +2091,7 @@ describe("RuntimeService", () => {
       virtualHome: { windowOpen: true },
       absenceDays: 45
     };
-    const service = new RuntimeService(defaultGreyfieldConfig, {
+    const service = new RuntimeService(withProactivity(), {
       threadId: "thread-a",
       memoryAtomStore
     });
@@ -2137,7 +2170,7 @@ describe("RuntimeService", () => {
       virtualHome: { windowOpen: true },
       absenceDays: 45
     };
-    const defaultService = new RuntimeService(defaultGreyfieldConfig, {
+    const defaultService = new RuntimeService(withProactivity(), {
       threadId: "thread-a",
       memoryAtomStore
     });
@@ -2146,6 +2179,7 @@ describe("RuntimeService", () => {
         ...defaultGreyfieldConfig,
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100
         }
       },
@@ -2167,6 +2201,7 @@ describe("RuntimeService", () => {
         },
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100
         }
       },
@@ -2228,6 +2263,7 @@ describe("RuntimeService", () => {
         ...defaultGreyfieldConfig,
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100
         }
       },
@@ -2242,6 +2278,7 @@ describe("RuntimeService", () => {
         },
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100
         }
       },
@@ -2317,6 +2354,7 @@ describe("RuntimeService", () => {
         },
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100
         }
       },
@@ -2335,6 +2373,7 @@ describe("RuntimeService", () => {
         },
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100
         }
       },
@@ -2383,6 +2422,7 @@ describe("RuntimeService", () => {
         },
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100
         }
       },
@@ -2426,6 +2466,7 @@ describe("RuntimeService", () => {
         },
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100,
           screenAwarenessStaleAfterSeconds: 60
         }
@@ -2469,6 +2510,7 @@ describe("RuntimeService", () => {
         },
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100
         }
       },
@@ -2526,6 +2568,7 @@ describe("RuntimeService", () => {
         },
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100
         }
       },
@@ -2580,6 +2623,7 @@ describe("RuntimeService", () => {
         },
         ui: {
           ...defaultGreyfieldConfig.ui,
+          proactiveMemoryEnabled: true,
           proactivityLevel: 100
         }
       },
@@ -2623,7 +2667,7 @@ describe("RuntimeService", () => {
         }
       })
     ]);
-    const service = new RuntimeService(defaultGreyfieldConfig, {
+    const service = new RuntimeService(withProactivity(), {
       threadId: "thread-a",
       memoryAtomStore
     });
@@ -2702,11 +2746,11 @@ describe("RuntimeService", () => {
         }
       })
     ]);
-    const service = new RuntimeService(defaultGreyfieldConfig, { memoryAtomStore });
+    const service = new RuntimeService(withProactivity(), { memoryAtomStore });
 
     await expect(service.checkProactiveMemory(sceneContext)).resolves.toMatchObject({ displayed: true });
     service.updateConfig({
-      ...defaultGreyfieldConfig,
+      ...withProactivity(),
       characterFile: "characters/other.yaml"
     });
 

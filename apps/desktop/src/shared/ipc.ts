@@ -198,6 +198,11 @@ export interface DesktopIpcRequestMap {
 }
 
 export interface DesktopIpcEventMap {
+  "provider:test-reset": {};
+  "session:continuity": {
+    restoredRecentMessageCount: number;
+    longTermMemoryEnabled: boolean;
+  };
   "runtime:event": RuntimeOutputEvent;
   "runtime:speech-playback": DesktopSpeechPlaybackEvent;
   "provider:test-llm-result": {

@@ -263,12 +263,13 @@
         "Settings exposes a Test LLM action and renders first-token success or a readable failure without writing chat history.",
         "Settings provider/Test LLM harness proves fake Preview, missing Base URL/API key/model reasons, blocked states send no provider requests, testing, success, and failure states.",
         "Electron settings-active-chat harness proves Test LLM is rejected with visible Stop-or-wait guidance while chat is actively streaming and does not send an extra provider request.",
+        "A fresh/default configuration keeps proactive speech disabled at startup with proactivity level 0, and keeps screen awareness disabled.",
         "V1 visual acceptance proves Settings first-glance navigation distinguishes Live2D/avatar settings from Model service task-model settings.",
         "V1 visual acceptance proves Settings Window scale/position controls remain readable and usable at narrow desktop widths.",
         "V1 visual acceptance proves the Settings body layout class is applied and ordinary mouse-wheel input can scroll the Settings panel down and back up."
       ],
       "qa": {
-        "script": "vitest desktop-runtime-bridge settings-provider-status settings-test-llm config settings-controller runtime-service; pnpm harness:v1-visual; pnpm harness:electron; pnpm harness:electron:config-relaunch; pnpm harness:electron:settings-provider-test; pnpm harness:electron:settings-active-chat-test"
+        "script": "vitest desktop-runtime-bridge provider-experience-status settings-provider-status settings-test-llm settings-memory-extraction-status settings-i18n config settings-controller runtime-service v1-visual-acceptance-check; pnpm harness:v1-visual; pnpm harness:electron; pnpm harness:electron:config-relaunch; pnpm harness:electron:settings-provider-test; pnpm harness:electron:settings-active-chat-test"
       }
     },
     {
@@ -281,11 +282,13 @@
         "Electron main runtime loads local memory from data/memory.md.",
         "Electron main runtime appends user and assistant turns to a JSONL SessionStore instead of an in-memory session only.",
         "A restart harness proves recent conversation context is available after app restart.",
+        "Electron main broadcasts only the bounded restored recent-message count to renderers, never historical message bodies.",
+        "Chat shows the restored recent-message count before the next send and explicitly distinguishes it from long-term memory.",
         "Successful turns are persisted before the final assistant message is emitted to the renderer, so app shutdown after final UI does not drop the assistant turn.",
         "Recent context remains capped and inspectable so prompt growth is bounded."
       ],
       "qa": {
-        "script": "vitest runtime-service character-persona jsonl-session-store prompt-assembler; pnpm harness:electron:restart-context"
+        "script": "vitest runtime-service desktop-runtime-bridge character-persona jsonl-session-store prompt-assembler; pnpm harness:electron:restart-context"
       }
     },
     {

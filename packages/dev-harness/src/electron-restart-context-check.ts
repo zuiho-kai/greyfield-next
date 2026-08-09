@@ -57,8 +57,28 @@ try {
   }
 
   const secondApp = await launchApp();
+  let restoredRecentMessageCountVisible = false;
+  let restoredBeforeSecondSend = false;
+  let longTermMemoryClaimPaused = false;
   try {
     const secondChat = await waitForRoleWindow(secondApp, "chat");
+    const restoredNotice = secondChat.getByTestId("session-continuity-notice");
+    await restoredNotice.waitFor({ state: "visible" });
+    const restoredNoticeText = (await restoredNotice.textContent())?.trim() ?? "";
+    restoredRecentMessageCountVisible = /(?:最近\s*2\s*条|latest\s*2\s*conversation messages)/iu.test(restoredNoticeText);
+    restoredBeforeSecondSend = requests.length === 1;
+    longTermMemoryClaimPaused = /不是长期记忆|not long-term memory/iu.test(restoredNoticeText);
+    if (!restoredRecentMessageCountVisible || !restoredBeforeSecondSend || !longTermMemoryClaimPaused) {
+      throw new Error(
+        `Second launch continuity notice was not truthful before send: ${JSON.stringify({
+          restoredNoticeText,
+          restoredRecentMessageCountVisible,
+          restoredBeforeSecondSend,
+          longTermMemoryClaimPaused,
+          requestCount: requests.length
+        })}`
+      );
+    }
     await sendMessage(secondChat, "第二轮读取上下文");
     await secondChat.locator(".message-list .assistant:not(.draft)", { hasText: "second restart reply." }).waitFor();
   } finally {
@@ -91,6 +111,9 @@ try {
         launchCount: 2,
         requestCount: requests.length,
         restartedContextWorked: true,
+        restoredRecentMessageCountVisible,
+        restoredBeforeSecondSend,
+        longTermMemoryClaimPaused,
         persistedSessionLines: sessionJsonl.trim().split(/\r?\n/).length
       },
       null,

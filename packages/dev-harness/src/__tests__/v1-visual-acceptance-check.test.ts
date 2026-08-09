@@ -25,7 +25,13 @@ describe("V1 visual acceptance summary", () => {
         hasPanel: true,
         panelWithinViewport: true,
         draggable: true,
-        activeButtonContrastOk: true
+        activeButtonContrastOk: true,
+        providerPreviewVisible: true,
+        providerActionVisible: true,
+        providerTruthWithinViewport: true,
+        providerActionOpensSettings: true,
+        fakeAsrDisclosureVisible: true,
+        screenAwarenessDefaultOff: true
       },
       stage: {
         modelPoint: { x: 120, y: 240 },
@@ -37,7 +43,12 @@ describe("V1 visual acceptance summary", () => {
         assistantReplyVisible: true,
         speechBubbleVisible: true,
         speechBubbleAvoidsModel: true,
-        bubbleText: "你好，我醒着。"
+        bubbleText: "你好，我醒着。",
+        providerPreviewVisible: true,
+        providerActionVisible: true,
+        providerTruthWithinViewport: true,
+        fakeAsrDisclosureVisible: true,
+        unexpectedProactiveMessageAbsent: true
       },
       settings: {
         avatarNavVisible: true,
@@ -51,8 +62,12 @@ describe("V1 visual acceptance summary", () => {
         providerPreviewInViewport: true,
         taskModelSlotsVisible: true,
         memoryExtractionVisible: true,
-        memoryEnhancementToggleAvailable: true,
+        memoryPausedVisible: true,
+        memoryPausedInViewportAfterNav: true,
+        memoryEnhancementToggleDisabled: true,
         memoryExtractionManualCandidateControlsAbsent: true,
+        proactiveSpeechDefaultOff: true,
+        screenAwarenessDefaultOff: true,
         settingsShellVisible: true,
         settingsBodyClassApplied: true,
         settingsWheelScrollsDown: true,
@@ -117,6 +132,8 @@ describe("V1 visual acceptance summary", () => {
     expect(summary.visualReviewRequired.join("\n")).toContain("task models");
     expect(summary.visualReviewRequired.join("\n")).toContain("settings-memory-extraction.png");
     expect(summary.visualReviewRequired.join("\n")).toContain("settings-window-controls.png");
+    expect(summary.visualReviewRequired.join("\n")).toContain("试玩模式");
+    expect(summary.visualReviewRequired.join("\n")).toContain("长期记忆当前暂停");
   });
 
   it("keeps destructive cleanup inside the visual acceptance artifact root", () => {

@@ -28,15 +28,27 @@ describe("Greyfield config", () => {
     expect(defaultGreyfieldConfig.window.modelPassThrough).toBe(false);
     expect(defaultGreyfieldConfig.window.layerMode).toBe("follow-click");
     expect(defaultGreyfieldConfig.ui.speechBubbleEnabled).toBe(true);
-    expect(defaultGreyfieldConfig.ui.proactiveMemoryEnabled).toBe(true);
+    expect(defaultGreyfieldConfig.ui.proactiveMemoryEnabled).toBe(false);
     expect(defaultGreyfieldConfig.ui.locale).toBe("zh-CN");
-    expect(defaultGreyfieldConfig.ui.proactivityLevel).toBe(50);
+    expect(defaultGreyfieldConfig.ui.proactivityLevel).toBe(0);
     expect(defaultGreyfieldConfig.ui.screenAwarenessRefreshIntervalSeconds).toBe(30);
     expect(defaultGreyfieldConfig.ui.screenAwarenessStaleAfterSeconds).toBe(120);
     expect(defaultGreyfieldConfig.ui.screenAwarenessChangeThreshold).toBe(5);
     expect(defaultGreyfieldConfig.memory.llmAtomExtractionEnabled).toBe(false);
     expect(defaultGreyfieldConfig.memory.llmAtomExtractionInterval).toBe(4);
     expect(defaultGreyfieldConfig.memory.useV2System).toBe(true);
+  });
+
+  it("preserves explicit proactive settings while keeping only fresh defaults quiet", () => {
+    const config = mergeConfig({
+      ui: {
+        proactiveMemoryEnabled: true,
+        proactivityLevel: 73
+      }
+    });
+
+    expect(config.ui.proactiveMemoryEnabled).toBe(true);
+    expect(config.ui.proactivityLevel).toBe(73);
   });
 
   it("deep-merges nested settings without dropping defaults", () => {
@@ -234,7 +246,7 @@ describe("Greyfield config", () => {
   it("keeps proactivity level within the Settings slider range", () => {
     expect(mergeConfig({ ui: { proactivityLevel: -1 } }).ui.proactivityLevel).toBe(0);
     expect(mergeConfig({ ui: { proactivityLevel: 100.6 } }).ui.proactivityLevel).toBe(100);
-    expect(mergeConfig({ ui: { proactivityLevel: Number.NaN } }).ui.proactivityLevel).toBe(50);
+    expect(mergeConfig({ ui: { proactivityLevel: Number.NaN } }).ui.proactivityLevel).toBe(0);
   });
 
   it("keeps screen awareness tuning within safe Settings ranges", () => {

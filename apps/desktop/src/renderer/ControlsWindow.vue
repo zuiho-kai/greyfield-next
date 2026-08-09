@@ -18,9 +18,25 @@
         >
           <GripHorizontal :size="16" stroke-width="2.25" />
         </button>
-        <span class="desktop-control-status" :class="`desktop-control-status--${chatStatus.tone}`">
-          {{ chatStatus.label }}
-        </span>
+        <div class="desktop-provider-experience">
+          <span
+            class="desktop-control-status"
+            :class="`desktop-control-status--provider-${providerExperience.tone}`"
+            role="status"
+            data-testid="provider-experience"
+          >
+            {{ providerExperience.label }}
+          </span>
+          <button
+            v-if="providerExperience.actionLabel"
+            type="button"
+            class="desktop-provider-experience__action"
+            data-testid="provider-experience-action"
+            @click="$emit('open-settings')"
+          >
+            {{ providerExperience.actionLabel }}
+          </button>
+        </div>
         <button
           type="button"
           class="desktop-control-button desktop-control-button--ghost"
@@ -61,6 +77,7 @@
           :disabled="state.voiceInput.status === 'transcribing'"
           :title="voiceInputTitle"
           :aria-label="voiceInputTitle"
+          :data-testid="voiceInputExperience.isPreview ? 'controls-fake-asr-disclosure' : undefined"
           @click="$emit(state.voiceInput.status === 'listening' ? 'stop-voice-input' : 'start-voice-input')"
         >
           <Mic :size="16" stroke-width="2.35" />
@@ -135,6 +152,7 @@ import {
 } from "lucide-vue-next";
 import { describeChatStatus } from "./chat-status";
 import type { DesktopRendererState } from "./desktop-runtime-bridge";
+import { describeProviderExperience, describeVoiceInputExperience } from "./provider-experience-status";
 import { normalizeSettingsLocale, settingsT, type SettingsI18nKey } from "./settings-i18n";
 
 const props = defineProps<{
@@ -163,15 +181,18 @@ const locale = computed(() => normalizeSettingsLocale(props.state.settings.setti
 const t = (key: SettingsI18nKey, values?: Record<string, string | number>): string =>
   settingsT(locale.value, key, values);
 const chatStatus = computed(() => describeChatStatus(props.state, inlineDraft.value, locale.value));
+const providerExperience = computed(() => describeProviderExperience(props.state, locale.value));
+const voiceInputExperience = computed(() => describeVoiceInputExperience(props.state, locale.value));
 const canStop = computed(() => chatStatus.value.canStop || props.state.voiceInput.status === "listening" || props.state.voiceInput.status === "transcribing");
 const voiceInputTitle = computed(() => {
+  const previewPrefix = voiceInputExperience.value.isPreview ? `${voiceInputExperience.value.label} · ` : "";
   if (props.state.voiceInput.status === "listening") {
-    return t("controls.mic.stop");
+    return `${previewPrefix}${t("controls.mic.stop")}`;
   }
   if (props.state.voiceInput.status === "transcribing") {
-    return t("controls.mic.transcribing");
+    return `${previewPrefix}${t("controls.mic.transcribing")}`;
   }
-  return t("controls.mic.start");
+  return `${previewPrefix}${t("controls.mic.start")}`;
 });
 const speechOutputTitle = computed(() =>
   props.state.settings.voiceSpeechEnabled ? t("controls.voice.off") : t("controls.voice.on")
@@ -232,3 +253,41 @@ onBeforeUnmount(() => {
   endDrag();
 });
 </script>
+
+<style scoped>
+.desktop-provider-experience {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.desktop-control-status--provider-preview {
+  color: #80540f;
+  background: rgba(255, 245, 214, 0.9);
+}
+
+.desktop-control-status--provider-blocked {
+  color: #7b2442;
+}
+
+.desktop-control-status--provider-configured {
+  color: #18594f;
+}
+
+.desktop-provider-experience__action {
+  flex: 0 0 auto;
+  max-width: 132px;
+  padding: 4px 8px;
+  border: 1px solid rgba(31, 122, 107, 0.22);
+  border-radius: 8px;
+  background: rgba(231, 246, 242, 0.96);
+  color: #18594f;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+</style>

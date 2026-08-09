@@ -19,6 +19,34 @@
     </header>
 
     <div class="chat-status-block">
+      <section
+        class="chat-provider-experience"
+        :class="`chat-provider-experience--${providerExperience.tone}`"
+        data-testid="chat-provider-experience"
+        role="status"
+      >
+        <div class="chat-provider-experience__copy">
+          <strong>{{ providerExperience.label }}</strong>
+          <span>{{ providerExperience.detail }}</span>
+        </div>
+        <button
+          v-if="providerExperience.actionLabel"
+          type="button"
+          class="chat-provider-experience__action"
+          data-testid="chat-provider-experience-action"
+          @click="$emit('open-settings')"
+        >
+          {{ providerExperience.actionLabel }}
+        </button>
+      </section>
+      <p
+        v-if="state.sessionContinuity.restoredRecentMessageCount > 0"
+        class="session-continuity-notice"
+        data-testid="session-continuity-notice"
+        role="status"
+      >
+        {{ t("chat.continuity.restored", { count: state.sessionContinuity.restoredRecentMessageCount }) }}
+      </p>
       <p class="chat-status-detail">{{ chatStatus.detail }}</p>
       <p
         v-if="state.screenAwarenessNotice"
@@ -132,6 +160,7 @@
           :class="{ 'voice-input-button--active': state.voiceInput.status === 'listening' }"
           :disabled="state.voiceInput.status === 'transcribing'"
           data-testid="chat-voice-input-button"
+          :title="voiceInputExperience.isPreview ? voiceInputExperience.label : voiceInputLabel"
           @click="$emit(state.voiceInput.status === 'listening' ? 'stop-voice-input' : 'start-voice-input')"
         >
           <span>🎙️</span> {{ voiceInputLabel }}
@@ -149,6 +178,7 @@ import { computed, ref } from "vue";
 import type { DesktopMessage, DesktopRendererState } from "./desktop-runtime-bridge";
 import { describeScreenAwarenessNotice } from "./chat-screen-awareness-notice";
 import { describeChatStatus } from "./chat-status";
+import { describeProviderExperience, describeVoiceInputExperience } from "./provider-experience-status";
 import {
   createChatMessageDisclosureKey,
   draftMessageKey,
@@ -250,6 +280,8 @@ const locale = computed(() => normalizeSettingsLocale(props.state.settings.setti
 const t = (key: SettingsI18nKey, values?: Record<string, string | number>): string =>
   settingsT(locale.value, key, values);
 const chatStatus = computed(() => describeChatStatus(props.state, props.draft, locale.value));
+const providerExperience = computed(() => describeProviderExperience(props.state, locale.value));
+const voiceInputExperience = computed(() => describeVoiceInputExperience(props.state, locale.value));
 const screenAwarenessNoticeText = computed(() => describeScreenAwarenessNotice(props.state, locale.value));
 const voiceInputLabel = computed(() => {
   if (props.state.voiceInput.status === "listening") {
@@ -258,6 +290,66 @@ const voiceInputLabel = computed(() => {
   if (props.state.voiceInput.status === "transcribing") {
     return t("chat.voice.transcribing");
   }
-  return t("chat.voice");
+  return voiceInputExperience.value.isPreview ? voiceInputExperience.value.label : t("chat.voice");
 });
 </script>
+
+<style scoped>
+.chat-provider-experience {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(31, 41, 51, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.chat-provider-experience--preview {
+  border-color: rgba(162, 111, 21, 0.24);
+  background: rgba(255, 247, 222, 0.78);
+}
+
+.chat-provider-experience--configured {
+  border-color: rgba(31, 122, 107, 0.24);
+  background: rgba(231, 246, 242, 0.78);
+}
+
+.chat-provider-experience__copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  color: #34424f;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.chat-provider-experience__copy strong {
+  color: #1f2933;
+  font-size: 13px;
+}
+
+.chat-provider-experience__action {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border: 1px solid rgba(31, 122, 107, 0.24);
+  border-radius: 8px;
+  background: #1f7a6b;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.session-continuity-notice {
+  margin: 0;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: rgba(47, 95, 143, 0.08);
+  color: #2f5f8f;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+</style>

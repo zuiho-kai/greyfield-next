@@ -12,6 +12,37 @@ async function flushSpeechPlaybackQueue(): Promise<void> {
 }
 
 describe("createDesktopRuntimeBridge", () => {
+  it("starts with paused long-term memory and reduces only a bounded recent-message count", () => {
+    let sessionContinuity:
+      | ((event: {
+          restoredRecentMessageCount: number;
+          longTermMemoryEnabled: boolean;
+        }) => void)
+      | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: () => undefined,
+      on: (channel, handler) => {
+        if (channel === "session:continuity") {
+          sessionContinuity = handler as typeof sessionContinuity;
+        }
+        return () => undefined;
+      }
+    });
+
+    expect(bridge.getState().sessionContinuity).toEqual({
+      restoredRecentMessageCount: 0,
+      longTermMemoryEnabled: false
+    });
+
+    sessionContinuity?.({ restoredRecentMessageCount: 7, longTermMemoryEnabled: false });
+
+    expect(bridge.getState().sessionContinuity).toEqual({
+      restoredRecentMessageCount: 7,
+      longTermMemoryEnabled: false
+    });
+    expect(JSON.stringify(bridge.getState().sessionContinuity)).not.toContain("content");
+  });
+
   it("sends text through fake runtime and reduces output into renderer state", async () => {
     const bridge = createDesktopRuntimeBridge();
 
@@ -239,6 +270,7 @@ describe("createDesktopRuntimeBridge", () => {
         return () => undefined;
       }
     });
+    bridge.updateSettings({ proactiveMemoryEnabled: true, proactivityLevel: 50 });
 
     proactiveMessage?.({
       text: "It's raining again. I remembered our hotpot night at home.",
@@ -314,6 +346,79 @@ describe("createDesktopRuntimeBridge", () => {
       message: "LLM test succeeded: pong",
       firstToken: "pong"
     });
+  });
+
+  it("invalidates a successful provider test when any chat connection field changes", () => {
+    const providerPatches = [
+      { providerLLM: "fake" },
+      { providerBaseUrl: "https://next.example/v1" },
+      { providerApiKey: "next-secret" },
+      { providerModel: "next-chat-model" }
+    ] as const;
+
+    for (const patch of providerPatches) {
+      let providerTestResult:
+        | ((event: { ok: boolean; message: string; firstToken?: string }) => void)
+        | undefined;
+      const bridge = createDesktopRuntimeBridge({
+        send: () => undefined,
+        on: (channel, handler) => {
+          if (channel === "provider:test-llm-result") {
+            providerTestResult = handler as typeof providerTestResult;
+          }
+          return () => undefined;
+        }
+      });
+      providerTestResult?.({ ok: true, message: "LLM test succeeded: pong", firstToken: "pong" });
+
+      const state = bridge.updateSettings(patch);
+
+      expect(state.providerTest, JSON.stringify(patch)).toEqual({ status: "idle", message: "" });
+    }
+  });
+
+  it("accepts a main-process provider test reset for other desktop windows", () => {
+    let providerTestResult:
+      | ((event: { ok: boolean; message: string; firstToken?: string }) => void)
+      | undefined;
+    let providerTestReset: (() => void) | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: () => undefined,
+      on: (channel, handler) => {
+        if (channel === "provider:test-llm-result") {
+          providerTestResult = handler as typeof providerTestResult;
+        }
+        if (channel === "provider:test-reset") {
+          providerTestReset = handler as typeof providerTestReset;
+        }
+        return () => undefined;
+      }
+    });
+    providerTestResult?.({ ok: true, message: "LLM test succeeded: pong", firstToken: "pong" });
+
+    providerTestReset?.();
+
+    expect(bridge.getState().providerTest).toEqual({ status: "idle", message: "" });
+  });
+
+  it("keeps a successful chat-provider test when unrelated settings change", () => {
+    let providerTestResult:
+      | ((event: { ok: boolean; message: string; firstToken?: string }) => void)
+      | undefined;
+    const bridge = createDesktopRuntimeBridge({
+      send: () => undefined,
+      on: (channel, handler) => {
+        if (channel === "provider:test-llm-result") {
+          providerTestResult = handler as typeof providerTestResult;
+        }
+        return () => undefined;
+      }
+    });
+    providerTestResult?.({ ok: true, message: "LLM test succeeded: pong", firstToken: "pong" });
+
+    const state = bridge.updateSettings({ providerVisionModel: "vision-model" });
+
+    expect(state.providerTest.status).toBe("success");
   });
 
   it("sends a voice test request and plays returned audio even when reply speech is disabled", async () => {
