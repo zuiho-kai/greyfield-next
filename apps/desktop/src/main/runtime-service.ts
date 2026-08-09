@@ -51,7 +51,7 @@ import {
   type LLMTestResult,
   type VoiceTestResult
 } from "./runtime-providers";
-import { initializeMemoryStoresV2, shouldUseNewMemorySystem, type MemoryStoresV2 } from "./memory-v2-init";
+import type { MemoryStoresV2 } from "./memory-v2-init";
 import type { JsonlTopicIndexStore, SqliteCoreMemoryStore } from "@greyfield/persistence";
 import type { DesktopProfileFact } from "../shared/ipc";
 
@@ -65,6 +65,7 @@ export interface RuntimeServiceOptions {
   deletedMemoryEvidenceStore?: DeletedMemoryEvidenceStore;
   profileStore?: ProfileFactStore;
   memoryV2UserDataPath?: string;
+  initializeMemoryStoresV2?: (characterId: string, userDataPath: string) => MemoryStoresV2;
   memoryEnabled?: boolean;
   threadId?: string;
   recentTurnLimit?: number;
@@ -226,7 +227,10 @@ export class RuntimeService {
       return;
     }
 
-    const nativeManagerEnabled = this.options.memoryEnabled !== false && this.options.memoryV2UserDataPath !== undefined;
+    const nativeManagerEnabled =
+      this.options.memoryEnabled !== false &&
+      this.options.memoryV2UserDataPath !== undefined &&
+      this.options.initializeMemoryStoresV2 !== undefined;
     if (!nativeManagerEnabled) {
       this.teardownMemoryV2();
       this.memoryV2CharacterId = characterId;
@@ -247,7 +251,7 @@ export class RuntimeService {
     this.memoryV2CharacterId = characterId;
     this.profileStoreV2 = this.options.profileStore;
     try {
-      this.memoryStoresV2 = initializeMemoryStoresV2(characterId, this.options.memoryV2UserDataPath);
+      this.memoryStoresV2 = this.options.initializeMemoryStoresV2!(characterId, this.options.memoryV2UserDataPath!);
       this.profileStoreV2 = this.options.profileStore ?? this.memoryStoresV2.profileStore;
       // One long-lived manager for the whole service: a GreyfieldRuntime
       // is created per interaction, so the manager (and its unindexed-turn
@@ -1357,6 +1361,10 @@ function providerTestFingerprint(config: GreyfieldConfig): string {
     config.provider.model,
     config.provider.taskModels.chat
   ]);
+}
+
+function shouldUseNewMemorySystem(config: GreyfieldConfig): boolean {
+  return config.memory.useV2System !== false;
 }
 
 class MainFakeMemoryStore implements MemoryStore {

@@ -1,0 +1,25 @@
+appId: io.greyfield.desktop
+productName: Greyfield
+electronVersion: 42.2.0
+directories:
+  app: .cache/greyfield-windows-portable/app
+  output: .cache/greyfield-windows-portable/artifacts
+asar: true
+npmRebuild: false
+files:
+  - package.json
+  - dist-main/index.mjs
+  - dist-preload/index.cjs
+  - dist-renderer/**/*
+asarUnpack:
+  - dist-renderer/assets/live2d/**/*
+extraResources:
+  - from: .cache/greyfield-windows-portable/app/bootstrap/characters
+    to: bootstrap/characters
+  - from: .cache/greyfield-windows-portable/app/bootstrap/data
+    to: bootstrap/data
+win:
+  target:
+    - target: portable
+      arch: [x64]
+  artifactName: Greyfield-${version}-win-${arch}-portable.${ext}

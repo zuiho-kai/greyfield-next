@@ -318,6 +318,22 @@
       }
     },
     {
+      "id": "GFN-V1-017",
+      "title": "Self-contained Windows portable preview",
+      "status": "completed",
+      "package": "apps/desktop",
+      "acceptance": [
+        "The Windows packaging command produces exactly one x64 portable executable named Greyfield-0.1.0-preview.1-win-x64-portable.exe without dependency staging.",
+        "The same portable executable runs from a directory outside the repository with file-scheme renderers, visible Pet and Controls windows, a non-fallback built-in Live2D model, and no Vite, pnpm, Node development server, or repository process dependency.",
+        "The packaged ordinary path proves disclosed fake ASR trial, first-viewport provider setup and Test LLM, a nonce-bound real OpenAI-compatible reply in Chat and Pet, and Controls Stop aborting the provider plus queued speech and mouth state.",
+        "Packaged config, session, persona working copy, and data stay under the selected userData directory; repository source hashes and the external executable directory remain unchanged.",
+        "Relaunching the same executable with the same userData preserves provider fields and bounded recent-message continuity, includes the first turn in the second provider request, and still renders Live2D without fallback."
+      ],
+      "qa": {
+        "script": "pnpm verify:windows:portable"
+      }
+    },
+    {
       "id": "GFN-V1-009",
       "title": "Fake provider acceptance chain",
       "status": "completed",

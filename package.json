@@ -1,6 +1,6 @@
 {
   "name": "greyfield-next",
-  "version": "0.0.0",
+  "version": "0.1.0-preview.1",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@9.15.9",
@@ -12,6 +12,9 @@
     "test:changed": "vitest related --run",
     "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
     "build:desktop": "pnpm --filter @greyfield/desktop build:all",
+    "package:windows:portable": "pnpm build:desktop && node scripts/prepare-windows-portable-stage.mjs && electron-builder --config electron-builder.yml --win portable --x64",
+    "harness:windows:portable": "tsx packages/dev-harness/src/windows-portable-smoke.ts",
+    "verify:windows:portable": "pnpm test -- apps/desktop/src/main/__tests__/desktop-paths.test.ts packages/dev-harness/src/__tests__/windows-portable-stage.test.ts && pnpm typecheck && pnpm package:windows:portable && pnpm harness:windows:portable",
     "harness:acceptance": "tsx packages/dev-harness/src/acceptance.ts",
     "harness:v1-visual": "pnpm build:desktop && tsx packages/dev-harness/src/v1-visual-acceptance-check.ts",
     "harness:fallback": "tsx packages/dev-harness/src/fallback-check.ts",
@@ -55,6 +58,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "electron-builder": "26.15.3",
     "playwright": "^1.60.0",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
