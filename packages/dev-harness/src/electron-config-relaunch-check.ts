@@ -96,6 +96,7 @@ try {
     await settings.getByLabel("API Key").fill(providerApiKey);
     await settings.getByLabel(/^(Chat reply|聊天回复)$/, { exact: true }).fill(providerModel);
 
+    await openAdvancedSettingsSection(settings, /^(Persona|人格)$/);
     await settings.getByLabel(/^(Character|角色文件)$/).fill(personaPath);
     await settings.locator(".provider-test-result--success", { hasText: /Loaded persona|已加载人格/ }).waitFor({
       timeout: 10_000
@@ -105,6 +106,7 @@ try {
     await settings.locator(".provider-test-result--success", { hasText: /Saved persona|已保存人格/ }).waitFor({
       timeout: 10_000
     });
+    await openAdvancedSettingsSection(settings, /^(Voice|语音)$/);
     await settings.getByLabel("Speak replies").check();
 
     await waitForPersistedState(configPath, {
@@ -139,8 +141,10 @@ try {
     await expectInputValue(settings.locator('[data-settings-section="provider"] select').first(), "openai-compatible");
     await expectInputValue(settings.getByLabel("Base URL"), providerBaseUrl);
     await expectInputValue(settings.getByLabel(/^(Chat reply|聊天回复)$/, { exact: true }), providerModel);
+    await openAdvancedSettingsSection(settings, /^(Persona|人格)$/);
     await expectInputValue(settings.getByLabel(/^(Character|角色文件)$/), personaPath);
     await expectInputValue(settings.getByLabel("Greyfield name"), personaName);
+    await openAdvancedSettingsSection(settings, /^(Voice|语音)$/);
     if (!(await settings.getByLabel("Speak replies").isChecked())) {
       throw new Error("Voice speech setting was off after relaunch");
     }
@@ -286,6 +290,14 @@ async function openSettingsThroughControls(app: ElectronApplication): Promise<Pa
     await delay(100);
   }
   throw new Error("Settings BrowserWindow did not become visible through the ordinary controls entry");
+}
+
+async function openAdvancedSettingsSection(settings: Page, sectionName: RegExp): Promise<void> {
+  const advanced = settings.getByRole("button", { name: /^(Advanced settings|高级设置)$/ });
+  if ((await advanced.getAttribute("aria-expanded")) !== "true") {
+    await advanced.click();
+  }
+  await settings.getByRole("button", { name: sectionName }).click();
 }
 
 async function waitForRoleWindow(app: ElectronApplication, roleName: "controls" | "settings"): Promise<Page> {

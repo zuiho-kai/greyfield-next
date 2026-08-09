@@ -13,6 +13,10 @@ const tempDir = await mkdtemp(join(tmpdir(), "greyfield-settings-provider-test-"
 const configPath = join(tempDir, "greyfield.config.json");
 const apiKey = "local-settings-provider-key";
 const responseBodyMarker = "upstream-private-body-marker";
+const syntheticSecret = "sk-provider-status-secret";
+const syntheticRequestBodyMarker = "provider-request-body-marker";
+const syntheticStackMarker = "at-provider-harness.ts:404:12";
+const injectedDiagnostics = `${syntheticSecret} ${syntheticRequestBodyMarker} ${syntheticStackMarker}`;
 const preservedTaskModels = {
   chat: "greyfield-fake-v1",
   planner: "preserved-planner-model",
@@ -44,8 +48,9 @@ const server = createServer(async (_request: IncomingMessage, response: ServerRe
   if (mode === "timeout") {
     await delay(800);
     if (!response.destroyed) {
-      response.writeHead(200, { "content-type": "text/event-stream" });
-      response.end();
+      response.statusMessage = `Gateway Timeout ${injectedDiagnostics}`;
+      response.writeHead(504, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: `${responseBodyMarker} ${injectedDiagnostics}` }));
     }
     return;
   }
@@ -69,10 +74,11 @@ const server = createServer(async (_request: IncomingMessage, response: ServerRe
     "cache-control": "no-cache"
   });
   if (mode === "malformed") {
-    response.end("data: not-json\n\n");
+    response.end(`data: ${injectedDiagnostics}\n\n`);
     return;
   }
   if (mode === "no-token") {
+    response.write(`: ${injectedDiagnostics}\n\n`);
     response.end("data: [DONE]\n\n");
     return;
   }
@@ -104,6 +110,7 @@ try {
   try {
     const settingsWindow = await waitForRoleWindow(app, "settings");
     const chatWindow = await waitForRoleWindow(app, "chat");
+    const controlsWindow = await waitForRoleWindow(app, "controls");
     const initialChatMessageCount = await chatWindow.locator(".message-list .message-item").count();
     const initialChatVisible = await isRoleWindowVisible(app, "chat");
     const initialEvidence = await readInitialProviderEvidence(settingsWindow);
@@ -157,12 +164,12 @@ try {
       timeout: 10_000
     });
 
-    await runProviderFailure(settingsWindow, "unauthorized", /凭据未通过|Credentials were rejected/);
-    await runProviderFailure(settingsWindow, "forbidden", /没有访问权限|do not have access/);
-    await runProviderFailure(settingsWindow, "not-found", /Base URL.*聊天模型不存在|Base URL or chat model was not found/);
-    await runProviderFailure(settingsWindow, "timeout", /连接超时|Connection timed out/);
-    await runProviderFailure(settingsWindow, "no-token", /首个回复 token 前断开|before the first reply token/);
-    await runProviderFailure(settingsWindow, "malformed", /流格式异常|invalid stream/);
+    await runProviderFailure(settingsWindow, controlsWindow, chatWindow, "unauthorized", /凭据未通过|Credentials were rejected/);
+    await runProviderFailure(settingsWindow, controlsWindow, chatWindow, "forbidden", /没有访问权限|do not have access/);
+    await runProviderFailure(settingsWindow, controlsWindow, chatWindow, "not-found", /Base URL.*聊天模型不存在|Base URL or chat model was not found/);
+    await runProviderFailure(settingsWindow, controlsWindow, chatWindow, "timeout", /连接超时|Connection timed out/);
+    await runProviderFailure(settingsWindow, controlsWindow, chatWindow, "no-token", /首个回复 token 前断开|before the first reply token/);
+    await runProviderFailure(settingsWindow, controlsWindow, chatWindow, "malformed", /流格式异常|invalid stream/);
 
     const savedConfig = await waitForSavedConfig();
     assertAdvancedTaskModelsPreserved(savedConfig);
@@ -200,6 +207,7 @@ try {
           disconnectedBeforeFirstTokenReadableAndRetryable: true,
           malformedStreamReadableAndRetryable: true,
           failureMessagesRedacted: true,
+          controlsAndChatFailureMessagesRedacted: true,
           advancedTaskModelsPreserved: true,
           testLlmDidNotWriteSession: true,
           testLlmDidNotOpenChat: true,
@@ -220,9 +228,9 @@ try {
 }
 
 function writeHttpFailure(response: ServerResponse, status: number, statusMessage: string): void {
-  response.statusMessage = statusMessage;
+  response.statusMessage = `${statusMessage} ${injectedDiagnostics}`;
   response.writeHead(status, { "content-type": "application/json" });
-  response.end(JSON.stringify({ error: responseBodyMarker }));
+  response.end(JSON.stringify({ error: `${responseBodyMarker} ${injectedDiagnostics}` }));
 }
 
 async function launchApp(): Promise<ElectronApplication> {
@@ -253,13 +261,15 @@ async function launchApp(): Promise<ElectronApplication> {
   return app;
 }
 
-async function waitForRoleWindow(app: ElectronApplication, roleName: "settings" | "chat"): Promise<Page> {
+async function waitForRoleWindow(app: ElectronApplication, roleName: "settings" | "chat" | "controls"): Promise<Page> {
   const started = Date.now();
   while (Date.now() - started < 5_000) {
     for (const page of app.windows()) {
       const role = await page.evaluate(() => new URLSearchParams(window.location.search).get("window")).catch(() => null);
       if (role === roleName) {
-        await page.waitForSelector(roleName === "settings" ? ".greyfield-shell" : ".chat-shell");
+        await page.waitForSelector(
+          roleName === "settings" ? ".greyfield-shell" : roleName === "chat" ? ".chat-shell" : ".desktop-controls-shell"
+        );
         return page;
       }
     }
@@ -322,7 +332,13 @@ async function readInitialProviderEvidence(page: Page): Promise<{
   });
 }
 
-async function runProviderFailure(page: Page, mode: Exclude<ResponseMode, "success">, expected: RegExp): Promise<void> {
+async function runProviderFailure(
+  page: Page,
+  controlsPage: Page,
+  chatPage: Page,
+  mode: Exclude<ResponseMode, "success">,
+  expected: RegExp
+): Promise<void> {
   responseMode = mode;
   const button = page.getByRole("button", { name: /^(Test LLM|测试 LLM)$/ });
   await button.click();
@@ -332,9 +348,31 @@ async function runProviderFailure(page: Page, mode: Exclude<ResponseMode, "succe
   if (text.length === 0 || text.length > 180 || !/重试|重新测试|retry/iu.test(text)) {
     throw new Error(`Provider failure did not show short retry guidance for ${mode}: ${text}`);
   }
-  for (const sensitive of [apiKey, responseBodyMarker, "at unsafe.ts", "api_key"]) {
-    if (text.includes(sensitive)) {
-      throw new Error(`Provider failure leaked sensitive diagnostics for ${mode}`);
+  const settingsDetail = (await result.locator("span").textContent())?.trim() ?? "";
+  const chatExperience = chatPage.getByTestId("chat-provider-experience");
+  await chatExperience.locator("span", { hasText: expected }).waitFor({ timeout: 10_000 });
+  const chatDetail = (await chatExperience.locator("span").textContent())?.trim() ?? "";
+  if (settingsDetail !== chatDetail) {
+    throw new Error(`Settings and Chat did not share the same safe provider failure for ${mode}`);
+  }
+  await controlsPage.getByTestId("provider-experience").filter({ hasText: /Connection test failed|连接测试失败/ }).waitFor();
+  await controlsPage.getByTestId("provider-experience-action").filter({ hasText: /Retest|重新测试/ }).waitFor();
+  const surfaceTexts = [
+    await page.locator("body").innerText(),
+    await controlsPage.locator("body").innerText(),
+    await chatPage.locator("body").innerText()
+  ];
+  for (const sensitive of [
+    apiKey,
+    responseBodyMarker,
+    syntheticSecret,
+    syntheticRequestBodyMarker,
+    syntheticStackMarker,
+    "at unsafe.ts",
+    "api_key"
+  ]) {
+    if (surfaceTexts.some((surfaceText) => surfaceText.includes(sensitive))) {
+      throw new Error(`Provider failure leaked sensitive diagnostics across renderer surfaces for ${mode}`);
     }
   }
   if (!(await button.isEnabled())) {

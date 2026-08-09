@@ -62,6 +62,7 @@ try {
     petWindow = await reloadPetWindowWithAudioProbe(petWindow);
     await rebroadcastSettings(settingsWindow);
 
+    await openVoiceSettings(settingsWindow);
     await settingsWindow.getByRole("button", { name: "Test Voice" }).click();
     await settingsWindow.locator(".provider-test-result--success", { hasText: "Voice test succeeded" }).waitFor({
       timeout: 30_000
@@ -168,6 +169,14 @@ async function waitForRoleWindow(app: ElectronApplication, roleName: "pet" | "se
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Timed out waiting for ${roleName} window`);
+}
+
+async function openVoiceSettings(page: Page): Promise<void> {
+  const advanced = page.getByRole("button", { name: /^(Advanced settings|高级设置)$/ });
+  if ((await advanced.getAttribute("aria-expanded")) !== "true") {
+    await advanced.click();
+  }
+  await page.getByRole("button", { name: /^(Voice|语音)$/ }).click();
 }
 
 async function installAudioProbeBeforeReload(page: Page): Promise<void> {

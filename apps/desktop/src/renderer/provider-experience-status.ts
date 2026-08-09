@@ -1,6 +1,7 @@
 import type { DesktopRendererState } from "./desktop-runtime-bridge";
 import { settingsT, type SettingsLocale } from "./settings-i18n";
 import { describeProviderStatus } from "./settings-provider-status";
+import { sanitizeProviderTestFailure } from "./settings-test-llm";
 
 export interface ProviderExperienceView {
   tone: "preview" | "blocked" | "configured";
@@ -40,7 +41,7 @@ export function describeProviderExperience(
     return {
       tone: "blocked",
       label: settingsT(locale, "experience.testFailed"),
-      detail: state.providerTest.message || settingsT(locale, "experience.testRequired"),
+      detail: sanitizeProviderTestFailure(state.providerTest.message, locale),
       actionLabel: settingsT(locale, "experience.retest")
     };
   }

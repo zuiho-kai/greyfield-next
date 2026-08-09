@@ -114,11 +114,11 @@ export function describeProviderTestStatus(providerTest: {
   return {
     tone: "error",
     label: settingsT(locale, "test.failed"),
-    detail: describeProviderTestError(providerTest.message, locale)
+    detail: sanitizeProviderTestFailure(providerTest.message, locale)
   };
 }
 
-function describeProviderTestError(message: string, locale?: SettingsLocale): string {
+export function sanitizeProviderTestFailure(message: string, locale?: SettingsLocale): string {
   if (/request failed:\s*401\b/u.test(message)) {
     return settingsT(locale, "test.provider.error.unauthorized");
   }
