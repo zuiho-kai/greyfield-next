@@ -171,7 +171,7 @@ export class RuntimeService {
   private proactiveTriggerState: ProactiveMemoryTriggerState = {};
   private activeRuntime: GreyfieldRuntime | undefined;
   private providerFactory: RuntimeProviderFactory;
-  private testingLLM = false;
+  private testingLLMGeneration: number | undefined;
   private providerTestGeneration = 0;
   private testingVoice = false;
   private lastInterruptedAtMs: number | undefined;
@@ -832,7 +832,8 @@ export class RuntimeService {
         message: "LLM test is unavailable while a chat response is running."
       };
     }
-    if (this.testingLLM) {
+    const testGeneration = this.providerTestGeneration;
+    if (this.testingLLMGeneration === testGeneration) {
       return {
         ok: false,
         message: "LLM test is already running."
@@ -843,8 +844,7 @@ export class RuntimeService {
       return { ok: false, message: providerConfigError };
     }
 
-    const testGeneration = this.providerTestGeneration;
-    this.testingLLM = true;
+    this.testingLLMGeneration = testGeneration;
     try {
       const result = await testLLMProviderConnectivity(this.providerFactory.createChatLLMProvider());
       return testGeneration === this.providerTestGeneration ? result : undefined;
@@ -857,7 +857,9 @@ export class RuntimeService {
         message: error instanceof Error ? error.message : String(error)
       };
     } finally {
-      this.testingLLM = false;
+      if (this.testingLLMGeneration === testGeneration) {
+        this.testingLLMGeneration = undefined;
+      }
     }
   }
 

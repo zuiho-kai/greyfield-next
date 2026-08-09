@@ -345,7 +345,10 @@ function registerIpc(): void {
       runtimeService?.invalidateProviderTest();
       broadcastProviderTestReset();
     }
-    const nextConfig = await settingsController?.update(patch);
+    const nextConfig = await settingsController?.update(patch).catch((error) => {
+      console.warn("Greyfield could not save settings:", error);
+      return undefined;
+    });
     if (nextConfig?.window.modelPassThrough !== undefined) {
       petWindowController?.setModelPassThrough(nextConfig.window.modelPassThrough);
       if (petWindowController?.isModelPassThrough()) {
@@ -450,6 +453,15 @@ function handleRuntimeInput(payload: Parameters<NonNullable<typeof runtimeServic
 }
 
 async function testLLMProvider(): Promise<void> {
+  try {
+    await settingsController?.awaitPendingUpdates();
+  } catch {
+    broadcastProviderTestResult({
+      ok: false,
+      message: "Provider settings could not be saved. Fix the settings save error and test again."
+    });
+    return;
+  }
   const result = await runtimeService?.testLLM();
   if (result) {
     broadcastProviderTestResult(result);

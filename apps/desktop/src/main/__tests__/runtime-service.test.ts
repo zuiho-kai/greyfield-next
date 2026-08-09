@@ -64,6 +64,16 @@ function withProactivity(
   };
 }
 
+function providerTestResponse(firstToken: string): Response {
+  return new Response(
+    `data: ${JSON.stringify({ choices: [{ delta: { content: firstToken } }] })}\n\ndata: [DONE]\n\n`,
+    {
+      status: 200,
+      headers: { "content-type": "text/event-stream" }
+    }
+  );
+}
+
 function expectNoSecrets(value: unknown, secrets: string[]): void {
   const serialized = JSON.stringify(value) ?? "";
   for (const secret of secrets) {
@@ -798,6 +808,63 @@ describe("RuntimeService", () => {
     );
 
     await expect(pendingTest).resolves.toBeUndefined();
+  });
+
+  it("lets a new provider-test generation run while the stale generation is still finishing", async () => {
+    const finishRequests: Array<(response: Response) => void> = [];
+    const fetch = vi.fn(
+      (_input: Parameters<typeof globalThis.fetch>[0], _init?: Parameters<typeof globalThis.fetch>[1]) =>
+        new Promise<Response>((resolve) => {
+          finishRequests.push(resolve);
+        })
+    );
+    const initialConfig: GreyfieldConfig = {
+      ...defaultGreyfieldConfig,
+      provider: {
+        ...defaultGreyfieldConfig.provider,
+        llm: "openai-compatible",
+        baseUrl: "https://llm.example/v1",
+        apiKey: "secret",
+        model: "old-chat-model",
+        taskModels: {
+          ...defaultGreyfieldConfig.provider.taskModels,
+          chat: "old-chat-model"
+        }
+      }
+    };
+    const service = new RuntimeService(initialConfig, { fetch });
+
+    const staleTest = service.testLLM();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    service.updateConfig({
+      ...initialConfig,
+      provider: {
+        ...initialConfig.provider,
+        model: "latest-chat-model",
+        taskModels: {
+          ...initialConfig.provider.taskModels,
+          chat: "latest-chat-model"
+        }
+      }
+    });
+    const latestTest = service.testLLM();
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    finishRequests[0]?.(providerTestResponse("stale pong"));
+    await expect(staleTest).resolves.toBeUndefined();
+    await expect(service.testLLM()).resolves.toEqual({
+      ok: false,
+      message: "LLM test is already running."
+    });
+    finishRequests[1]?.(providerTestResponse("latest pong"));
+    await expect(latestTest).resolves.toEqual({
+      ok: true,
+      message: "LLM test succeeded: latest pong",
+      firstToken: "latest pong"
+    });
+    expect(fetch.mock.calls[1]?.[1]).toEqual(
+      expect.objectContaining({ body: expect.stringContaining('"model":"latest-chat-model"') })
+    );
   });
 
   it("reports missing API key before testing the OpenAI-compatible provider", async () => {
