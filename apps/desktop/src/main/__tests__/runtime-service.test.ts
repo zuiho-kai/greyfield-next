@@ -2,7 +2,11 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
+import {
+  defaultGreyfieldConfig,
+  type GreyfieldConfig,
+  type GreyfieldConfigPatch
+} from "@greyfield/persistence/config-schema";
 import type {
   AppendSummarySegment,
   AppendDeletedMemoryEvidence,
@@ -740,6 +744,60 @@ describe("RuntimeService", () => {
         body: expect.stringContaining('"ping"')
       })
     );
+  });
+
+  it.each<[string, NonNullable<GreyfieldConfigPatch["provider"]>]>([
+    ["LLM", { llm: "fake" }],
+    ["Base URL", { baseUrl: "https://next.example/v1" }],
+    ["API key", { apiKey: "next-secret" }],
+    ["model", { model: "next-model" }],
+    ["Chat task model", { taskModels: { chat: "next-chat-model" } }]
+  ])("drops a delayed successful provider test after the %s changes", async (_label, providerPatch) => {
+    let markRequestStarted: (() => void) | undefined;
+    let finishRequest: ((response: Response) => void) | undefined;
+    const requestStarted = new Promise<void>((resolve) => {
+      markRequestStarted = resolve;
+    });
+    const fetch = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          finishRequest = resolve;
+          markRequestStarted?.();
+        })
+    );
+    const initialConfig: GreyfieldConfig = {
+      ...defaultGreyfieldConfig,
+      provider: {
+        ...defaultGreyfieldConfig.provider,
+        llm: "openai-compatible",
+        baseUrl: "https://llm.example/v1",
+        apiKey: "secret",
+        model: "remote-model"
+      }
+    };
+    const service = new RuntimeService(initialConfig, { fetch });
+
+    const pendingTest = service.testLLM();
+    await requestStarted;
+    service.updateConfig({
+      ...initialConfig,
+      provider: {
+        ...initialConfig.provider,
+        ...providerPatch,
+        taskModels: {
+          ...initialConfig.provider.taskModels,
+          ...providerPatch.taskModels
+        }
+      }
+    });
+    finishRequest?.(
+      new Response('data: {"choices":[{"delta":{"content":"stale pong"}}]}\n\ndata: [DONE]\n\n', {
+        status: 200,
+        headers: { "content-type": "text/event-stream" }
+      })
+    );
+
+    await expect(pendingTest).resolves.toBeUndefined();
   });
 
   it("reports missing API key before testing the OpenAI-compatible provider", async () => {

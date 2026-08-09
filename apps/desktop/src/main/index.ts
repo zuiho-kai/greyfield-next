@@ -342,6 +342,7 @@ function registerIpc(): void {
 
   ipcMain.on("settings:update", async (_event, patch: GreyfieldConfigPatch) => {
     if (providerPatchInvalidatesTest(patch.provider)) {
+      runtimeService?.invalidateProviderTest();
       broadcastProviderTestReset();
     }
     const nextConfig = await settingsController?.update(patch);
@@ -772,7 +773,7 @@ function broadcastSpeechPlayback(payload: { type: "finished" | "error"; text: st
   }
 }
 
-function broadcastProviderTestResult(result: Awaited<ReturnType<RuntimeService["testLLM"]>>): void {
+function broadcastProviderTestResult(result: NonNullable<Awaited<ReturnType<RuntimeService["testLLM"]>>>): void {
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send("provider:test-llm-result", result);
   }
