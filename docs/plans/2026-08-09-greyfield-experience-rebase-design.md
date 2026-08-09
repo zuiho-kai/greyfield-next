@@ -109,19 +109,20 @@ flowchart LR
 
 ## 本轮四个原子交付
 
-### 1. 产品真相与试玩状态
+### 1. 产品真相、试玩状态与最近对话连续性
 
-用户结果：用户在 Controls、Chat 和 Settings 首屏都能一眼区分“本地试玩”和“真实聊天”；麦克风在 fake ASR 下不再伪装成真实听写；README 与记忆区不再宣称默认运行时已经启用长期记忆。
+用户结果：用户在 Controls、Chat 和 Settings 首屏都能一眼区分“本地试玩”和“真实聊天”；麦克风在 fake ASR 下不再伪装成真实听写；重启后 Chat 只提示已恢复的最近轮数，不回显隐私正文；README 与记忆区不再宣称默认运行时已经启用长期记忆。
 
 设计：
 
 - 把 fake 定义为“试玩模式”，而不是默认产品能力。
 - Controls 提供短状态和一个“配置真实聊天”入口。
 - Chat 的固定回复带试玩标识，不把测试桩包装成人格回复。
+- Chat 在重启后显示“已恢复最近 N 轮对话”，并明确它不是长期记忆；恢复轮数遵守现有 recent-turn 上限。
 - 长期记忆区显示“当前桌面版暂未启用”，管理和 benchmark 代码仍保留为开发能力。
 - 删除所有与当前默认路径矛盾的完成声明，并用负向文本搜索保护。
 
-非目标：不恢复长期记忆，不新增角色脚本，不改 fake provider 的确定性测试用途。
+非目标：不把完整历史灌进 renderer，不恢复长期记忆，不新增角色脚本，不改 fake provider 的确定性测试用途。
 
 ### 2. 配置持久化
 
@@ -200,7 +201,7 @@ flowchart LR
 
 - 单元测试：配置首次创建、已有配置保留、显式测试重置、无关字段不变。
 - Settings 测试：试玩、未就绪、已就绪和 provider 错误状态。
-- Electron restart harness：保存真实 provider 配置后重启仍在，且没有回到 fake。
+- Electron restart harness：保存真实 provider 配置后重启仍在，且没有回到 fake；Chat 显示有界的最近对话恢复提示，第二次 provider 请求仍携带上一轮 recent context。
 - 首眼视觉 harness：从默认状态看见试玩状态与真实聊天入口，无需滚动或开发快捷键。
 - packaged smoke harness：从发行文件启动真实 Pet/Controls；截图显示非空 Live2D 像素。
 - Stop 现有 provider-abort 与 stop-audio 门禁继续通过。
