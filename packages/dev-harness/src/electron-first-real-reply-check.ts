@@ -124,6 +124,11 @@ try {
       throw new Error("Settings Chat action did not show the same app's Chat window");
     }
     const chatWindow = await waitForRoleWindow(app, "chat");
+    const firstGlance = await readChatFirstGlanceEvidence(chatWindow);
+    if (!Object.values(firstGlance).every(Boolean)) {
+      throw new Error(`Chat first-glance acceptance failed: ${JSON.stringify(firstGlance)}`);
+    }
+    await chatWindow.screenshot({ path: join(artifactDir, "chat-first-glance.png") });
     await chatWindow.getByTestId("chat-message-input").fill(nonce);
     await chatWindow.getByTestId("chat-send-button").click();
     await chatWindow.locator(".message-list .assistant:not(.draft)", { hasText: expectedReply }).waitFor({ timeout: 10_000 });
@@ -179,11 +184,13 @@ try {
           fakeReplyAbsent,
           configSavedAsOpenAICompatible: true,
           sessionContainsOnlyRealUserAssistant: true,
+          firstGlance,
           artifactDir,
           artifacts: [
             "controls-real-chat-entry.png",
             "settings-four-fields.png",
             "settings-test-success.png",
+            "chat-first-glance.png",
             "chat-real-reply.png",
             "pet-real-reply.png"
           ].map((name) => join(artifactDir, name))
@@ -199,6 +206,77 @@ try {
   server.closeAllConnections?.();
   server.close();
   await rm(tempDir, { recursive: true, force: true });
+}
+
+async function readChatFirstGlanceEvidence(page: Page): Promise<{
+  greyfieldIdentityVisible: boolean;
+  emptyStatePromptIsFresh: boolean;
+  compactProviderState: boolean;
+  composerFitsViewport: boolean;
+  threeActionsFitViewport: boolean;
+  noSurfaceOverflow: boolean;
+}> {
+  return page.evaluate(() => {
+    const shell = document.querySelector<HTMLElement>(".chat-shell");
+    const title = document.querySelector<HTMLElement>(".chat-identity__name");
+    const emptyState = document.querySelector<HTMLElement>(".chat-empty-state");
+    const provider = document.querySelector<HTMLElement>('[data-testid="chat-provider-experience"]');
+    const composer = document.querySelector<HTMLElement>(".message-composer");
+    const actions = Array.from(document.querySelectorAll<HTMLElement>(".action-buttons > button"));
+    const titleRect = title?.getBoundingClientRect();
+    const providerRect = provider?.getBoundingClientRect();
+    const composerRect = composer?.getBoundingClientRect();
+    const actionRects = actions.map((action) => action.getBoundingClientRect());
+    const visibleRects = [composerRect, ...actionRects].filter((rect): rect is DOMRect => rect !== undefined);
+    const mainControlsFit =
+      visibleRects.length === 4 &&
+      visibleRects.every(
+        (rect) =>
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rect.left >= 0 &&
+          rect.top >= 0 &&
+          rect.right <= window.innerWidth &&
+          rect.bottom <= window.innerHeight
+      );
+    return {
+      greyfieldIdentityVisible:
+        title?.textContent?.trim() === "Greyfield" &&
+        Boolean(
+          titleRect &&
+          titleRect.width > 0 &&
+          titleRect.height > 0 &&
+          titleRect.left >= 0 &&
+          titleRect.top >= 0 &&
+          titleRect.right <= window.innerWidth &&
+          titleRect.bottom <= window.innerHeight
+        ),
+      emptyStatePromptIsFresh:
+        emptyState !== null &&
+        /输入你想说的话|Type your message/u.test(emptyState.textContent ?? "") &&
+        !/继续|continue/iu.test(emptyState.textContent ?? ""),
+      compactProviderState:
+        provider?.dataset.providerLayout === "compact" &&
+        Boolean(
+          providerRect &&
+          providerRect.width > 0 &&
+          providerRect.height > 0 &&
+          providerRect.left >= 0 &&
+          providerRect.top >= 0 &&
+          providerRect.right <= window.innerWidth &&
+          providerRect.bottom <= window.innerHeight
+        ) &&
+        (providerRect?.height ?? Number.POSITIVE_INFINITY) <= 32,
+      composerFitsViewport: mainControlsFit,
+      threeActionsFitViewport: actions.length === 3 && mainControlsFit,
+      noSurfaceOverflow:
+        shell !== null &&
+        shell.scrollWidth <= shell.clientWidth &&
+        shell.scrollHeight <= shell.clientHeight &&
+        document.documentElement.scrollWidth <= window.innerWidth &&
+        document.documentElement.scrollHeight <= window.innerHeight
+    };
+  });
 }
 
 async function launchApp(): Promise<ElectronApplication> {
