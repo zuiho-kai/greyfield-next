@@ -94,7 +94,7 @@
       <div v-if="state.messages.length === 0 && !state.assistantDraft" class="chat-empty-state">
         <span class="chat-empty-state__mark" aria-hidden="true">G</span>
         <strong>Greyfield</strong>
-        <span>{{ chatStatus.detail }}</span>
+        <span>{{ t("chat.placeholder") }}</span>
       </div>
       <div
         v-for="messageView in messagesWithSegments"

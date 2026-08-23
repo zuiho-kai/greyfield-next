@@ -210,6 +210,7 @@ try {
 
 async function readChatFirstGlanceEvidence(page: Page): Promise<{
   greyfieldIdentityVisible: boolean;
+  emptyStatePromptIsFresh: boolean;
   compactProviderState: boolean;
   composerFitsViewport: boolean;
   threeActionsFitViewport: boolean;
@@ -218,6 +219,7 @@ async function readChatFirstGlanceEvidence(page: Page): Promise<{
   return page.evaluate(() => {
     const shell = document.querySelector<HTMLElement>(".chat-shell");
     const title = document.querySelector<HTMLElement>(".chat-identity__name");
+    const emptyState = document.querySelector<HTMLElement>(".chat-empty-state");
     const provider = document.querySelector<HTMLElement>('[data-testid="chat-provider-experience"]');
     const composer = document.querySelector<HTMLElement>(".message-composer");
     const actions = Array.from(document.querySelectorAll<HTMLElement>(".action-buttons > button"));
@@ -241,6 +243,10 @@ async function readChatFirstGlanceEvidence(page: Page): Promise<{
       greyfieldIdentityVisible:
         title?.textContent?.trim() === "Greyfield" &&
         Boolean(titleRect && titleRect.width > 0 && titleRect.height > 0 && titleRect.left >= 0 && titleRect.right <= window.innerWidth),
+      emptyStatePromptIsFresh:
+        emptyState !== null &&
+        /输入你想说的话|Type your message/u.test(emptyState.textContent ?? "") &&
+        !/继续|continue/iu.test(emptyState.textContent ?? ""),
       compactProviderState:
         provider?.dataset.providerLayout === "compact" &&
         Boolean(providerRect && providerRect.width > 0 && providerRect.height > 0 && providerRect.left >= 0 && providerRect.right <= window.innerWidth) &&
