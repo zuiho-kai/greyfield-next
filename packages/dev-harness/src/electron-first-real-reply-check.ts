@@ -242,14 +242,30 @@ async function readChatFirstGlanceEvidence(page: Page): Promise<{
     return {
       greyfieldIdentityVisible:
         title?.textContent?.trim() === "Greyfield" &&
-        Boolean(titleRect && titleRect.width > 0 && titleRect.height > 0 && titleRect.left >= 0 && titleRect.right <= window.innerWidth),
+        Boolean(
+          titleRect &&
+          titleRect.width > 0 &&
+          titleRect.height > 0 &&
+          titleRect.left >= 0 &&
+          titleRect.top >= 0 &&
+          titleRect.right <= window.innerWidth &&
+          titleRect.bottom <= window.innerHeight
+        ),
       emptyStatePromptIsFresh:
         emptyState !== null &&
         /输入你想说的话|Type your message/u.test(emptyState.textContent ?? "") &&
         !/继续|continue/iu.test(emptyState.textContent ?? ""),
       compactProviderState:
         provider?.dataset.providerLayout === "compact" &&
-        Boolean(providerRect && providerRect.width > 0 && providerRect.height > 0 && providerRect.left >= 0 && providerRect.right <= window.innerWidth) &&
+        Boolean(
+          providerRect &&
+          providerRect.width > 0 &&
+          providerRect.height > 0 &&
+          providerRect.left >= 0 &&
+          providerRect.top >= 0 &&
+          providerRect.right <= window.innerWidth &&
+          providerRect.bottom <= window.innerHeight
+        ) &&
         (providerRect?.height ?? Number.POSITIVE_INFINITY) <= 32,
       composerFitsViewport: mainControlsFit,
       threeActionsFitViewport: actions.length === 3 && mainControlsFit,

@@ -446,7 +446,7 @@ body.settings-window .greyfield-shell {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: currentColor;
+  background: currentcolor;
   box-shadow: 0 0 0 3px rgba(82, 121, 140, 0.1);
 }
 
@@ -455,7 +455,7 @@ body.settings-window .greyfield-shell {
   height: 16px;
   flex: 0 0 auto;
   fill: none;
-  stroke: currentColor;
+  stroke: currentcolor;
   stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
