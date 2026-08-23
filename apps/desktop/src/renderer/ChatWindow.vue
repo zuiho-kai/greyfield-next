@@ -1,8 +1,12 @@
 <template>
   <main class="chat-shell">
     <header class="chat-window-header">
-      <div class="chat-header-title">
-        <h1>{{ t("chat.title") }}</h1>
+      <div class="chat-identity">
+        <span class="chat-identity__mark" aria-hidden="true">G</span>
+        <div class="chat-identity__copy">
+          <h1 class="chat-identity__name">Greyfield</h1>
+          <span>{{ t("chat.title") }}</span>
+        </div>
         <span
           class="status-badge status-pill"
           :class="`status-badge--${chatStatus.tone}`"
@@ -10,19 +14,26 @@
           data-testid="chat-status"
           :data-status-tone="chatStatus.tone"
         >
+          <span class="status-badge__dot" aria-hidden="true"></span>
           {{ chatStatus.label }}
         </span>
       </div>
       <button type="button" class="settings-btn" @click="$emit('open-settings')">
-        <span>⚙️</span> {{ t("chat.settings") }}
+        <svg class="chat-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" />
+          <path d="M19.4 13.5a7.8 7.8 0 0 0 0-3l2-1.5-2-3.4-2.4 1a8 8 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.6A8 8 0 0 0 7 6.6l-2.4-1-2 3.4 2 1.5a7.8 7.8 0 0 0 0 3l-2 1.5 2 3.4 2.4-1a8 8 0 0 0 2.6 1.5l.4 2.6h4l.4-2.6a8 8 0 0 0 2.6-1.5l2.4 1 2-3.4-2-1.5Z" />
+        </svg>
+        {{ t("chat.settings") }}
       </button>
     </header>
 
     <div class="chat-status-block">
       <section
+        v-if="providerExperience.tone !== 'configured'"
         class="chat-provider-experience"
         :class="`chat-provider-experience--${providerExperience.tone}`"
         data-testid="chat-provider-experience"
+        data-provider-layout="card"
         role="status"
       >
         <div class="chat-provider-experience__copy">
@@ -39,6 +50,16 @@
           {{ providerExperience.actionLabel }}
         </button>
       </section>
+      <div
+        v-else
+        class="chat-provider-compact"
+        data-testid="chat-provider-experience"
+        data-provider-layout="compact"
+        role="status"
+      >
+        <span class="chat-provider-compact__dot" aria-hidden="true"></span>
+        <span>{{ providerExperience.label }}</span>
+      </div>
       <p
         v-if="state.sessionContinuity.restoredRecentMessageCount > 0"
         class="session-continuity-notice"
@@ -47,7 +68,7 @@
       >
         {{ t("chat.continuity.restored", { count: state.sessionContinuity.restoredRecentMessageCount }) }}
       </p>
-      <p class="chat-status-detail">{{ chatStatus.detail }}</p>
+      <p v-if="showChatStatusDetail" class="chat-status-detail">{{ chatStatus.detail }}</p>
       <p
         v-if="state.screenAwarenessNotice"
         class="screen-awareness-notice"
@@ -70,6 +91,11 @@
     </div>
 
     <div class="message-list-container message-list" aria-live="polite">
+      <div v-if="state.messages.length === 0 && !state.assistantDraft" class="chat-empty-state">
+        <span class="chat-empty-state__mark" aria-hidden="true">G</span>
+        <strong>Greyfield</strong>
+        <span>{{ chatStatus.detail }}</span>
+      </div>
       <div
         v-for="messageView in messagesWithSegments"
         :key="messageView.key"
@@ -152,7 +178,11 @@
       </div>
       <div class="action-buttons">
         <button type="submit" class="send-button" :disabled="!draft.trim()" data-testid="chat-send-button">
-          <span>📤</span> {{ chatStatus.sendLabel }}
+          <svg class="chat-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m4 4 17 8-17 8 3-8-3-8Z" />
+            <path d="M7 12h14" />
+          </svg>
+          {{ chatStatus.sendLabel }}
         </button>
         <button
           type="button"
@@ -163,14 +193,20 @@
           :title="voiceInputExperience.isPreview ? voiceInputExperience.label : voiceInputLabel"
           @click="$emit(state.voiceInput.status === 'listening' ? 'stop-voice-input' : 'start-voice-input')"
         >
-          <span>🎙️</span>
+          <svg class="chat-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="9" y="3" width="6" height="11" rx="3" />
+            <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6" />
+          </svg>
           <span>{{ voiceInputLabel }}</span>
           <small v-if="voiceInputExperience.isPreview" class="voice-input-button__preview-label">
             {{ voiceInputExperience.label }}
           </small>
         </button>
         <button type="button" class="stop-button" :disabled="!chatStatus.canStop" data-testid="chat-stop-button" @click="$emit('interrupt')">
-          <span>⏹️</span> {{ chatStatus.stopLabel }}
+          <svg class="chat-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="6" y="6" width="12" height="12" rx="2" />
+          </svg>
+          {{ chatStatus.stopLabel }}
         </button>
       </div>
     </form>
@@ -287,6 +323,7 @@ const chatStatus = computed(() => describeChatStatus(props.state, props.draft, l
 const providerExperience = computed(() => describeProviderExperience(props.state, locale.value));
 const voiceInputExperience = computed(() => describeVoiceInputExperience(props.state, locale.value));
 const screenAwarenessNoticeText = computed(() => describeScreenAwarenessNotice(props.state, locale.value));
+const showChatStatusDetail = computed(() => props.state.status !== "idle" || chatStatus.value.canStop);
 const voiceInputLabel = computed(() => {
   if (props.state.voiceInput.status === "listening") {
     return t("chat.voice.stopMic");
@@ -318,6 +355,30 @@ const voiceInputLabel = computed(() => {
 .chat-provider-experience--configured {
   border-color: rgba(31, 122, 107, 0.24);
   background: rgba(231, 246, 242, 0.78);
+}
+
+.chat-provider-compact {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 1px solid rgba(31, 122, 107, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.54);
+  color: #43635e;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.chat-provider-compact__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #1f7a6b;
+  box-shadow: 0 0 0 3px rgba(31, 122, 107, 0.1);
 }
 
 .chat-provider-experience__copy {
