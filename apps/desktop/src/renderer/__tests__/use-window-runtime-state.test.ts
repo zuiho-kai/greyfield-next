@@ -7,6 +7,37 @@ afterEach(() => {
 });
 
 describe("useWindowRuntimeState", () => {
+  it("keeps repeated starts on NEKO through delayed host states and allows retry after error", async () => {
+    const handlers: Array<(event: any) => void> = [];
+    const send = vi.fn();
+    vi.stubGlobal("window", { greyfield: { send, on: (channel: string, handler: (event: any) => void) => {
+      if (channel === "neko:event") handlers.push(handler);
+      return () => undefined;
+    } } });
+    const runtime = useWindowRuntimeState({ isPetWindow: false, isChatWindow: false, isControlsWindow: false, queryModelPath: null });
+    const legacy = vi.spyOn(runtime.bridge, "startVoiceInput");
+    const emit = (status: string) => handlers.forEach((handler) => handler({ type: "state", state: { status, message: status } }));
+    emit("stopped");
+    await runtime.startVoiceInput();
+    await runtime.startVoiceInput();
+    expect(runtime.state.value.nekoPlugin.status).toBe("starting");
+    for (const status of ["starting", "connecting", "ready"]) {
+      emit(status);
+      await runtime.startVoiceInput();
+      await runtime.startVoiceInput();
+    }
+    expect(send.mock.calls.filter(([channel, payload]) => channel === "neko:command" && payload.action === "start")).toHaveLength(1);
+    expect(legacy).not.toHaveBeenCalled();
+    await runtime.stopVoiceInput();
+    expect(send).toHaveBeenCalledWith("neko:command", { action: "stop" });
+    emit("error");
+    await runtime.startVoiceInput();
+    expect(runtime.state.value.nekoPlugin.status).toBe("starting");
+    emit("not-installed");
+    await runtime.startVoiceInput();
+    expect(legacy).toHaveBeenCalledOnce();
+    runtime.dispose();
+  });
   it("does not clear local composer edits on unrelated async state changes", () => {
     const windowStateHandlers: Array<(state: { locked: boolean }) => void> = [];
     vi.stubGlobal("window", {
