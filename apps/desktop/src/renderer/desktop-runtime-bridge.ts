@@ -31,6 +31,7 @@ export interface DesktopMessage {
 }
 
 export interface DesktopRendererState {
+  nekoPlugin: import("../../../../packages/neko-plugin/src/index").NekoPluginState;
   status: string;
   errorMessage: string;
   screenAwarenessNotice: string;
@@ -202,6 +203,19 @@ export class DesktopRuntimeBridge {
           ...windowState
         }
       };
+      this.emitStateChange();
+    });
+    this.host?.on("neko:event", (event) => {
+      if (event.type === "state") this.state = { ...this.state, nekoPlugin: event.state };
+      if (event.type === "message" && event.data.type === "user_transcript") {
+        this.state = { ...this.state, messages: [...this.state.messages, { role: "user", text: String(event.data.text ?? "") }] };
+      }
+      if (event.type === "message" && event.data.type === "gemini_response") {
+        this.state = { ...this.state, status: "speaking", assistantDraft: `${event.data.isNewMessage ? "" : this.state.assistantDraft}${String(event.data.text ?? "")}` };
+      }
+      if (event.type === "message" && event.data.type === "system" && event.data.data === "turn end") {
+        this.state = { ...this.state, status: "idle", messages: this.state.assistantDraft ? [...this.state.messages, { role: "assistant", text: this.state.assistantDraft }] : this.state.messages, assistantDraft: "" };
+      }
       this.emitStateChange();
     });
     this.host?.on("runtime:event", (event) => {
@@ -1130,6 +1144,7 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       exportText: "",
       snapshot: null
     },
+    nekoPlugin: { status: "not-installed", message: "N.E.K.O 原版实时语音" },
     memoryExtraction: null,
     sessionContinuity: {
       restoredRecentMessageCount: 0,

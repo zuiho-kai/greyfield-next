@@ -5,3 +5,4 @@ export * from "./tts-text-budget";
 export * from "./vad";
 export * from "./audio-level-meter";
 export * from "./microphone-recorder";
+export * from "./realtime-audio";

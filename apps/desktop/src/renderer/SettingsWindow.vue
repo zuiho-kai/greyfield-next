@@ -71,6 +71,9 @@
           @test-llm="$emit('test-llm')"
         />
 
+        <div :ref="setSectionRef('plugins')" id="settings-section-plugins" tabindex="-1" data-settings-section="plugins">
+          <PluginMarketplace :state="state.nekoPlugin" :locale="locale" />
+        </div>
         <div
           v-show="advancedSettingsOpen"
           id="settings-advanced-content"
@@ -608,6 +611,7 @@ import type { DesktopMemoryAtom, DesktopMemorySourcePassage, DesktopMemorySummar
 import type { DesktopPersonaFormState, DesktopRendererState, DesktopSettingsState } from "./desktop-runtime-bridge";
 import Live2DStageView from "./Live2DStageView.vue";
 import ModelSettingsSection from "./ModelSettingsSection.vue";
+import PluginMarketplace from "./PluginMarketplace.vue";
 import {
   describeMemorySourceCount,
   describeRecallReason,

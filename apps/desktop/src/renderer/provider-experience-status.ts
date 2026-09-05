@@ -65,7 +65,7 @@ export function describeVoiceInputExperience(
   state: DesktopRendererState,
   locale?: SettingsLocale
 ): VoiceInputExperienceView {
-  const isPreview = state.settings.providerASR.trim() === "fake";
+  const isPreview = state.settings.providerASR.trim() === "fake" && state.nekoPlugin.status !== "ready";
   return {
     isPreview,
     label: settingsT(locale, isPreview ? "voice.preview.fixedTranscript" : "voice.realInput"),

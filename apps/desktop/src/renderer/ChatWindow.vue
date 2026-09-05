@@ -161,7 +161,7 @@
           :disabled="state.voiceInput.status === 'transcribing'"
           data-testid="chat-voice-input-button"
           :title="voiceInputExperience.isPreview ? voiceInputExperience.label : voiceInputLabel"
-          @click="$emit(state.voiceInput.status === 'listening' ? 'stop-voice-input' : 'start-voice-input')"
+          @click="$emit(state.voiceInput.status === 'listening' || state.nekoPlugin.status === 'ready' ? 'stop-voice-input' : 'start-voice-input')"
         >
           <span>🎙️</span>
           <span>{{ voiceInputLabel }}</span>
@@ -169,7 +169,7 @@
             {{ voiceInputExperience.label }}
           </small>
         </button>
-        <button type="button" class="stop-button" :disabled="!chatStatus.canStop" data-testid="chat-stop-button" @click="$emit('interrupt')">
+        <button type="button" class="stop-button" :disabled="!chatStatus.canStop && state.nekoPlugin.status !== 'ready'" data-testid="chat-stop-button" @click="$emit('interrupt')">
           <span>⏹️</span> {{ chatStatus.stopLabel }}
         </button>
       </div>
@@ -288,6 +288,7 @@ const providerExperience = computed(() => describeProviderExperience(props.state
 const voiceInputExperience = computed(() => describeVoiceInputExperience(props.state, locale.value));
 const screenAwarenessNoticeText = computed(() => describeScreenAwarenessNotice(props.state, locale.value));
 const voiceInputLabel = computed(() => {
+  if (props.state.nekoPlugin.status === "ready") return "结束 N.E.K.O 语音";
   if (props.state.voiceInput.status === "listening") {
     return t("chat.voice.stopMic");
   }

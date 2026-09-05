@@ -81,7 +81,7 @@
           :title="voiceInputTitle"
           :aria-label="voiceInputTitle"
           :data-testid="voiceInputExperience.isPreview ? 'controls-fake-asr-disclosure' : undefined"
-          @click="$emit(state.voiceInput.status === 'listening' ? 'stop-voice-input' : 'start-voice-input')"
+          @click="$emit(state.voiceInput.status === 'listening' || state.nekoPlugin.status === 'ready' ? 'stop-voice-input' : 'start-voice-input')"
         >
           <Mic :size="16" stroke-width="2.35" />
           <span v-if="voiceInputExperience.isPreview" class="desktop-control-button__micro-label">
@@ -189,8 +189,9 @@ const t = (key: SettingsI18nKey, values?: Record<string, string | number>): stri
 const chatStatus = computed(() => describeChatStatus(props.state, inlineDraft.value, locale.value));
 const providerExperience = computed(() => describeProviderExperience(props.state, locale.value));
 const voiceInputExperience = computed(() => describeVoiceInputExperience(props.state, locale.value));
-const canStop = computed(() => chatStatus.value.canStop || props.state.voiceInput.status === "listening" || props.state.voiceInput.status === "transcribing");
+const canStop = computed(() => chatStatus.value.canStop || props.state.voiceInput.status === "listening" || props.state.voiceInput.status === "transcribing" || ["starting", "connecting", "ready"].includes(props.state.nekoPlugin.status));
 const voiceInputTitle = computed(() => {
+  if (props.state.nekoPlugin.status === "ready") return "结束 N.E.K.O 语音";
   const previewPrefix = voiceInputExperience.value.isPreview ? `${voiceInputExperience.value.label} · ` : "";
   if (props.state.voiceInput.status === "listening") {
     return `${previewPrefix}${t("controls.mic.stop")}`;
