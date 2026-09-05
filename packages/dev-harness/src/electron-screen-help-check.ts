@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
 import { resolveLive2DFixturePath } from "./live2d-fixture";
@@ -220,7 +220,8 @@ try {
   await writeFile(join(artifacts, "summary.json"), JSON.stringify(summary, null, 2));
   console.log(JSON.stringify(summary, null, 2));
   await app?.close().catch(() => {});
-  await rm(configPath, { force: true });
+  if (dirname(resolve(temp)) !== resolve(tmpdir()) || !basename(temp).startsWith("greyfield-screen-help-")) throw new Error("Unexpected temporary user-data path");
+  await rm(temp, { recursive: true, force: true });
   server.closeAllConnections();
   await new Promise<void>((resolve) => server.close(() => resolve()));
 }

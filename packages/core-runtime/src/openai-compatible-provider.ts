@@ -54,7 +54,7 @@ export class OpenAICompatibleLLMProvider implements LLMProvider {
       }
       return typeof delta?.content === "string" && delta.content.length > 0 ? [{ type: "text", text: delta.content }] : [];
     };
-    const completedCalls = (): LLMStreamEvent[] => [...calls.values()].map((call) => {
+    const completedCalls = (): LLMStreamEvent[] => [...calls.entries()].sort(([left], [right]) => left - right).map(([, call]) => {
       if (!call.id || !call.function.name) throw new Error("OpenAI-compatible LLM stream returned an incomplete tool call");
       return { type: "tool_call", call };
     });
