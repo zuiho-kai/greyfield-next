@@ -320,7 +320,7 @@ const toolStatusText = computed(() => {
   if (tool.status === "failed") return `${chinese ? "资料获取失败" : "Research failed"}: ${tool.message ?? ""}`;
   if (tool.status === "completed") return chinese ? "资料已获取，正在整理…" : "Sources received, preparing the answer…";
   if (tool.name === "screen_context") return chinese ? "正在看你眼前的报错…" : "Reading the current screen…";
-  return tool.name === "web_search" ? (chinese ? "正在用 Chrome 查资料…" : "Searching in Chrome…") : (chinese ? "正在浏览来源网页…" : "Browsing a source…");
+  return ["web_search", "research_web"].includes(tool.name) ? (chinese ? "正在用 Chrome 查资料…" : "Searching in Chrome…") : (chinese ? "正在浏览来源网页…" : "Browsing a source…");
 });
 const t = (key: SettingsI18nKey, values?: Record<string, string | number>): string =>
   settingsT(locale.value, key, values);

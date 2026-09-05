@@ -4,6 +4,17 @@ import { RealtimeAudio } from "../realtime-audio";
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("realtime audio lifecycle", () => {
+  it("reports speech onset while research is silent without inventing a playback interruption", async () => {
+    const fixture = contextFixture();
+    const audio = new RealtimeAudio(vi.fn());
+    const speechStart = vi.fn(); const barge = vi.fn();
+    await audio.start(vi.fn(), barge, speechStart);
+    const frame = { inputBuffer: { getChannelData: () => new Float32Array(2048).fill(.1) } };
+    for (let index = 0; index < 8; index++) fixture.processor.onaudioprocess?.(frame);
+    expect(speechStart).toHaveBeenCalledOnce();
+    expect(barge).not.toHaveBeenCalled();
+    audio.stop();
+  });
   it("releases a late permission grant after the plugin was disabled", async () => {
     let grant!: (stream: MediaStream) => void;
     const track = { stop: vi.fn() };

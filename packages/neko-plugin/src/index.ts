@@ -5,6 +5,8 @@ import { mkdir, appendFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { NekoBrowserTools } from "./browser-tools";
+import type { WebTools, WebSource } from "../../core-runtime/src/web-tools";
 
 export const NEKO_REVISION = "e1fa3482509132532a242d841b98d55ba03d4c4b";
 export interface NekoPluginState {
@@ -15,6 +17,7 @@ export type NekoPluginEvent =
   | { type: "state"; state: NekoPluginState }
   | { type: "audio"; speechId: string; data: Uint8Array }
   | { type: "interrupt"; speechId?: string }
+  | { type: "research"; name: string; status: "running" | "done" | "error"; sources?: WebSource[]; message?: string }
   | { type: "message"; data: Record<string, unknown> };
 
 const sourceDirectories = ["app", "brain", "config", "deps", "local_server", "main_logic", "main_routers", "memory", "utils", "plugin", "templates", "static/app"];
@@ -28,9 +31,13 @@ export class NekoPlugin {
   private generation = 0;
   private audioHeaders: string[] = [];
   private interruptedSpeech = new Set<string>();
+  private activeSpeechId?: string;
+  private responseMessageSpeechId?: string;
   private state: NekoPluginState;
+  private browserTools?: NekoBrowserTools;
+  private closeBrowserTools?: () => Promise<void>;
 
-  constructor(private readonly options: { root: string; sourcePath?: string; uvPath?: string; emit(event: NekoPluginEvent): void }) {
+  constructor(private readonly options: { root: string; sourcePath?: string; uvPath?: string; createBrowserTools?: () => WebTools; emit(event: NekoPluginEvent): void }) {
     this.sourcePath = options.sourcePath ?? join(options.root, "runtime");
     this.state = { status: this.installed ? "stopped" : "not-installed", message: "N.E.K.O 原版实时语音" };
   }
@@ -123,6 +130,12 @@ export class NekoPlugin {
       const configResult = await configResponse.json() as { success?: boolean; error?: string };
       if (configResult.success === false) throw new Error(`原版语音配置失败：${configResult.error ?? "unknown"}`);
       if (generation !== this.generation) return;
+      if (this.options.createBrowserTools) {
+        const browserTools = new NekoBrowserTools(this.options.createBrowserTools(), (event) => this.options.emit({ type: "research", ...event }));
+        const close = await browserTools.register(base, character.current_catgirl);
+        if (generation !== this.generation) { await close(); return; }
+        this.browserTools = browserTools; this.closeBrowserTools = close;
+      }
       this.setState("connecting", "运行时已启动，正在连接原版实时语音服务…");
       await this.connect(`${base.replace("http:", "ws:")}/ws/${encodeURIComponent(character.current_catgirl)}`, generation);
     } catch (error) { if (generation === this.generation) await this.fail(errorText(error)); }
@@ -154,9 +167,18 @@ export class NekoPlugin {
         }
         let data: Record<string, unknown>;
         try { data = JSON.parse(String(event.data)); } catch { return; }
-        this.options.emit({ type: "message", data });
+        // Every audio header still consumes its binary frame, even when cancelled.
         if (data.type === "audio_chunk") this.audioHeaders.push(String(data.speech_id ?? ""));
+        const responseId = typeof data.turn_id === "string" ? data.turn_id : typeof data.speech_id === "string" ? data.speech_id : undefined;
+        if (responseId) this.responseMessageSpeechId = responseId;
+        // Original `turn end` has no ID. Associate it with the most recent
+        // response event on this ordered socket (including cancelled audio_done).
+        const owner = responseId ?? (data.type === "system" && data.data === "turn end" ? this.responseMessageSpeechId : undefined);
+        if (owner && this.interruptedSpeech.has(owner)) return;
+        if (responseId) this.activeSpeechId = responseId;
+        this.options.emit({ type: "message", data });
         if (data.type === "user_activity") {
+          this.browserTools?.cancel();
           const speechId = typeof data.interrupted_speech_id === "string" ? data.interrupted_speech_id : undefined;
           if (speechId) this.interruptedSpeech.add(speechId);
           this.options.emit({ type: "interrupt", speechId });
@@ -178,6 +200,13 @@ export class NekoPlugin {
   }
   send(data: Record<string, unknown>): void { if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(data)); }
   reportError(message: string): Promise<void> { return this.fail(message); }
+  interruptResearch(): void {
+    this.browserTools?.cancel();
+    // Tool-only native responses already carry a speech ID before any sound.
+    // Ignore late audio for that cancelled response, including a spoken tool error.
+    if (this.activeSpeechId) this.interruptedSpeech.add(this.activeSpeechId);
+    this.options.emit({ type: "interrupt", speechId: this.activeSpeechId });
+  }
 
   async stop(report = true): Promise<void> {
     const generation = ++this.generation;
@@ -186,9 +215,12 @@ export class NekoPlugin {
   }
 
   private async cleanup(): Promise<void> {
+    const closeBrowserTools = this.closeBrowserTools;
+    this.closeBrowserTools = undefined; this.browserTools = undefined;
+    await closeBrowserTools?.();
     this.send({ action: "pause_session" });
     this.socket?.close(); this.socket = undefined;
-    this.audioHeaders = []; this.interruptedSpeech.clear();
+    this.audioHeaders = []; this.interruptedSpeech.clear(); this.activeSpeechId = undefined; this.responseMessageSpeechId = undefined;
     const children = [...this.children.splice(0), ...this.operations];
     await Promise.all(children.map(terminateChild));
   }

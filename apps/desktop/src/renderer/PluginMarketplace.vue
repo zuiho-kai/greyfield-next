@@ -5,7 +5,7 @@
       <div class="neko-plugin-icon" aria-hidden="true">N</div>
       <div>
         <h3>N.E.K.O {{ zh ? '实时语音' : 'Realtime Voice' }}</h3>
-        <p>{{ zh ? '在 Greyfield 里和她自然交谈。原版实时语音持续听说，支持插话。' : 'Talk naturally in Greyfield with the original N.E.K.O realtime voice runtime.' }}</p>
+        <p>{{ zh ? '在 Greyfield 里和她自然交谈，直接开口让她用 Chrome 查网页，再听她说出结果。支持插话。' : 'Talk naturally, ask her to research in Chrome, and hear the answer in the same realtime voice. You can interrupt.' }}</p>
         <small>{{ zh ? 'Project N.E.K.O. · 官方开源运行时' : 'Project N.E.K.O. · Official open-source runtime' }}</small>
       </div>
     </article>

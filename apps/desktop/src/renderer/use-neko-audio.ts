@@ -16,7 +16,7 @@ export function useNekoAudio(isPetWindow: boolean, onMouth: (value: number) => v
         void audio.start((data, sampleRate) => host.send("neko:audio", { data, sampleRate }), () => {
           interruptedSpeech.add(currentSpeechId);
           audio.interrupt();
-        }).catch((error) => {
+        }, () => host.send("neko:command", { action: "user-activity" })).catch((error) => {
           if (current !== epoch) return;
           host.send("neko:command", { action: "stop", message: `麦克风无法开启：${error instanceof Error ? error.message : String(error)}` });
         });
