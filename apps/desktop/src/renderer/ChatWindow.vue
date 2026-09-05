@@ -263,7 +263,7 @@ const draftSegments = computed<ChatMessageSegmentView[]>(() =>
 
 function splitChatReply(text: string): string[] {
   // Sentence segmentation can split URLs at periods. Keep source paragraphs intact.
-  return text.split(/\n\s*\n/).flatMap((paragraph) => /\]\(https?:\/\/|(?:^|\n)\s*(?:\d+[.)]|\*\*步骤)/.test(paragraph) ? [paragraph] : splitAssistantReplyForDisplay(paragraph));
+  return text.split(/\n\s*\n/).flatMap((paragraph) => /\]\(https?:\/\/|```|(?:^|\n)\s*(?:\d+[.)]|\*\*步骤)/.test(paragraph) ? [paragraph] : splitAssistantReplyForDisplay(paragraph));
 }
 
 function createMessageSegments(

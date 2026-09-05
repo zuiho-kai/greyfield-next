@@ -46,7 +46,7 @@ const server = createServer(async (req, res) => {
   if (user.includes("为什么")) send({ content: "第二步检查依赖是否安装，是因为 Node 在解析导入路径时需要找到对应的包。" });
   else if (toolResults.length === 0) send({ content: "我来查一下这个模块加载错误。", tool_calls: [{ index: 0, id: "search-1", type: "function", function: { name: "web_search", arguments: JSON.stringify({ query: "site:nodejs.org ERR_MODULE_NOT_FOUND" }) } }] });
   else if (toolResults.length === 1 && firstResult.results?.[0]?.url) send({ tool_calls: [{ index: 0, id: "read-1", type: "function", function: { name: "read_webpage", arguments: JSON.stringify({ url: firstResult.results[0].url, focus: "ERR_MODULE_NOT_FOUND" }) } }] });
-  else send({ content: toolResults.some((message: { content: string }) => JSON.parse(message.content).error) ? "资料获取失败，请稍后重试。" : "ERR_MODULE_NOT_FOUND 表示模块解析失败。\n1. 核对 import 的包名或文件路径。\n2. 在项目目录安装缺少的依赖。\n3. 如果导入本地 ES 模块，确认扩展名和文件实际位置。" });
+  else send({ content: toolResults.some((message: { content: string }) => JSON.parse(message.content).error) ? "资料获取失败，请稍后重试。" : "ERR_MODULE_NOT_FOUND：当前项目缺少 lodash。\n\n1. **安装缺少的依赖**，在项目目录运行：\n```sh\nnpm install lodash\n```\n\n2. **确认导入**：`import lodash from 'lodash'`。\n\n3. **重新运行**：`node index.mjs`。" });
   res.end("data: [DONE]\n\n");
 });
 await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -113,7 +113,7 @@ try {
   await controls.getByRole("button", { name: "关闭屏幕感知", exact: true }).waitFor();
   await controls.screenshot({ path: join(artifacts, "controls-screen-on.png") });
   await pet.screenshot({ path: join(artifacts, "pet.png") });
-  await controls.locator(".desktop-control-input").fill("这个报错帮我查一下：请联网搜索并读取官方资料，给我三个简短步骤和来源。");
+  await controls.locator(".desktop-control-input").fill("这个报错帮我查一下：请联网搜索并读取官方资料，给我简短可执行的修复和来源。");
   const start = Date.now();
   await controls.locator(".desktop-control-input").press("Enter");
   await controls.getByRole("button", { name: /打开设置|Open settings/ }).click();
@@ -136,7 +136,18 @@ try {
   for (const button of await answerCard.getByRole("button", { name: "展开全文", exact: true }).all()) await button.click();
   await chat.locator(".message-list").hover();
   await chat.mouse.wheel(0, -1400);
+  const command = answerCard.locator("code").filter({ hasText: "npm install" }).first();
+  if (await command.count()) {
+    const commandBox = await command.boundingBox();
+    const listBox = await chat.locator(".message-list").boundingBox();
+    if (commandBox && listBox) await chat.mouse.wheel(0, commandBox.y - listBox.y - 70);
+    await command.evaluate((element) => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+  }
   await chat.screenshot({ path: join(artifacts, "chat-answer-steps.png") });
+  if (!liveConfig) {
+    const renderedCommand = await answerCard.locator(".chat-code-block").innerText();
+    if (renderedCommand.trim() !== "npm install lodash" || !(await answerCard.locator("strong").count()) || !(await answerCard.locator(".chat-inline-code").count())) throw new Error("Markdown commands and emphasis did not render");
+  }
   await chat.mouse.wheel(0, 1400);
   await chat.screenshot({ path: join(artifacts, "chat-answer-sources.png") });
   const sourceLink = answerCard.locator(".chat-source-link").last();
@@ -156,7 +167,7 @@ try {
     if (!requests.some((request) => request.messages.some((message) => message.role === "tool" && String(message.content).includes('"content":')))) throw new Error("No real page text returned to model stub");
   }
   await controls.getByRole("button", { name: "关闭屏幕感知", exact: true }).click();
-  await chat.getByTestId("chat-message-input").fill("第二步为什么？");
+  await chat.getByTestId("chat-message-input").fill("为什么需要安装这个包？");
   await chat.getByTestId("chat-send-button").click();
   await chat.locator(".message-item.assistant:not(.draft)").nth(1).waitFor({ timeout: 90_000 });
   await chat.screenshot({ path: join(artifacts, "chat-followup.png") });
