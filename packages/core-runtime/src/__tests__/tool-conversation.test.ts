@@ -66,6 +66,8 @@ describe("research conversation", () => {
     const context = setup(fetchImpl, execute, undefined, async (text) => { spoken.push(text); return new Uint8Array(); });
     await context.runtime.handle({ type: "text.input", text: "帮我查这个错误" }, context.emit);
     expect(requests[0]?.tools).toEqual([{ type: "function", function: { name: "web_search", parameters: { type: "object" } } }]);
+    expect(requests[0]?.messages[0]?.content).toContain("Give one recommended repair for the observed error");
+    expect(requests[0]?.messages[0]?.content).toContain("Do not pad to a fixed number of steps");
     expect(execute).toHaveBeenCalledWith("web_search", { query: "ERR_MODULE_NOT_FOUND" }, expect.any(AbortSignal));
     expect(requests[1]?.messages).toContainEqual({ role: "tool", tool_call_id: "call-1", content: "RAW_PAGE_CONTENT_ONLY_FOR_THIS_TURN" });
     const turns = await context.sessionStore.getRecent(10);
