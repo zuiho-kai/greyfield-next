@@ -77,7 +77,8 @@
             'desktop-control-button--active': state.voiceInput.status === 'listening' || state.nekoPlugin.status === 'ready',
             'desktop-control-button--voice-preview': voiceInputExperience.isPreview
           }"
-          :disabled="state.voiceInput.status === 'transcribing'"
+          :disabled="state.voiceInput.status === 'transcribing' || ['starting', 'connecting'].includes(state.nekoPlugin.status)"
+          :data-neko-status="state.nekoPlugin.status"
           :title="voiceInputTitle"
           :aria-label="voiceInputTitle"
           :data-testid="voiceInputExperience.isPreview ? 'controls-fake-asr-disclosure' : undefined"

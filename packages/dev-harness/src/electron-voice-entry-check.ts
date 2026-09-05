@@ -40,12 +40,15 @@ try {
   await chat.screenshot({ path: join(artifacts, "before.png") });
   await button.click();
   await chat.locator('[data-testid="chat-voice-input-button"][data-neko-status="starting"]:disabled').waitFor();
+  await verifyControlsPending("starting");
   await button.evaluate((element: HTMLButtonElement) => { element.click(); element.click(); });
   await chat.screenshot({ path: join(artifacts, "starting.png") });
   await chat.locator('[data-testid="chat-voice-input-button"][data-neko-status="connecting"]:disabled').waitFor({ timeout: 90_000 });
+  await verifyControlsPending("connecting");
   await button.evaluate((element: HTMLButtonElement) => { element.click(); element.click(); });
   await chat.screenshot({ path: join(artifacts, "connecting.png") });
   await chat.locator('[data-testid="chat-voice-input-button"][data-neko-status="ready"]').waitFor({ timeout: 60_000 });
+  await controls.locator('button[data-neko-status="ready"]:enabled').waitFor();
   const layout = await button.evaluate((element) => {
     const label = element.querySelectorAll("span")[1]!;
     const range = document.createRange(); range.selectNodeContents(label);
@@ -58,8 +61,15 @@ try {
   await chat.screenshot({ path: join(artifacts, "stopped.png") });
   const commands = await app.evaluate(() => (globalThis as any).__voiceEntry);
   if (commands.starts !== 1 || commands.legacyAudio !== 0 || layout.lines !== 1 || !layout.visible) throw new Error(JSON.stringify({ commands, layout }));
-  result = { ok: true, realOfficialConnection: true, silentMicrophoneFixture: true, commands, layout,
+  result = { ok: true, realOfficialConnection: true, silentMicrophoneFixture: true, controlsPendingDisabled: true, controlsStopAvailable: true, commands, layout,
     bounds: await app.evaluate(({ BrowserWindow, screen }) => ({ displays: screen.getAllDisplays().map((display) => display.bounds), windows: BrowserWindow.getAllWindows().map((window) => ({ title: window.getTitle(), visible: window.isVisible(), bounds: window.getBounds() })) })) };
+  async function verifyControlsPending(status: "starting" | "connecting") {
+    const mic = controls.locator(`button[data-neko-status="${status}"]:disabled`);
+    await mic.waitFor();
+    if (!await controls.locator(".desktop-control-button--stop").isEnabled()) throw new Error(`Controls Stop disabled during ${status}`);
+    await mic.evaluate((element: HTMLButtonElement) => { element.click(); element.click(); });
+    await controls.screenshot({ path: join(artifacts, `controls-${status}.png`) });
+  }
 } catch (error) {
   result = { ok: false, error: String(error) }; process.exitCode = 1;
   await (await roleWindow(app, "chat")).screenshot({ path: join(artifacts, "failure.png") });

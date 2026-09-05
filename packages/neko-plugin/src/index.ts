@@ -6,6 +6,7 @@ import { createServer } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { NekoBrowserTools } from "./browser-tools";
+import { terminateChild } from "./process-lifecycle";
 import type { WebTools, WebSource } from "../../core-runtime/src/web-tools";
 
 export const NEKO_REVISION = "e1fa3482509132532a242d841b98d55ba03d4c4b";
@@ -210,7 +211,11 @@ export class NekoPlugin {
 
   async stop(report = true): Promise<void> {
     const generation = ++this.generation;
-    await this.cleanup();
+    try { await this.cleanup(); }
+    catch (error) {
+      if (generation === this.generation) this.setState("error", `结束原版进程失败：${errorText(error)}`);
+      return;
+    }
     if (report && generation === this.generation) this.setState(this.installed ? "stopped" : "not-installed", "已停用，麦克风和插件进程已关闭");
   }
 
@@ -221,8 +226,12 @@ export class NekoPlugin {
     this.send({ action: "pause_session" });
     this.socket?.close(); this.socket = undefined;
     this.audioHeaders = []; this.interruptedSpeech.clear(); this.activeSpeechId = undefined; this.responseMessageSpeechId = undefined;
-    const children = [...this.children.splice(0), ...this.operations];
-    await Promise.all(children.map(terminateChild));
+    const children = new Set([...this.children, ...this.operations]);
+    await Promise.all([...children].map(async (child) => {
+      await terminateChild(child);
+      this.children = this.children.filter((running) => running !== child);
+      this.operations.delete(child);
+    }));
   }
 
   private async fail(message: string): Promise<void> {
@@ -253,14 +262,6 @@ export class NekoPlugin {
 }
 
 function errorText(error: unknown): string { return error instanceof Error ? error.message : String(error); }
-function terminateChild(child: ChildProcess): Promise<void> {
-  if (!child.pid || child.exitCode !== null) return Promise.resolve();
-  if (process.platform !== "win32") { child.kill("SIGTERM"); return Promise.resolve(); }
-  return new Promise((resolve) => {
-    const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
-    killer.on("exit", () => resolve()); killer.on("error", () => resolve());
-  });
-}
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = createServer(); server.on("error", reject);

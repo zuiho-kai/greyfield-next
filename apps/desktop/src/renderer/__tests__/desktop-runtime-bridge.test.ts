@@ -12,6 +12,20 @@ async function flushSpeechPlaybackQueue(): Promise<void> {
 }
 
 describe("createDesktopRuntimeBridge", () => {
+  it("finalizes an empty native voice turn without carrying its sources into the next answer", () => {
+    let receive: ((event: import("../../../../../packages/neko-plugin/src/index").NekoPluginEvent) => void) | undefined;
+    const bridge = createDesktopRuntimeBridge({ send: () => undefined, on: (channel, handler) => {
+      if (channel === "neko:event") receive = handler as typeof receive;
+      return () => undefined;
+    } });
+    receive?.({ type: "research", name: "read_webpage", status: "done", sources: [{ title: "Old source", url: "https://old.example/" }] });
+    expect(bridge.getState().status).toBe("thinking");
+    receive?.({ type: "message", data: { type: "system", data: "turn end" } });
+    expect(bridge.getState()).toMatchObject({ status: "idle", assistantDraft: "", messages: [] });
+    receive?.({ type: "message", data: { type: "gemini_response", text: "新的回答。", isNewMessage: true } });
+    receive?.({ type: "message", data: { type: "system", data: "turn end" } });
+    expect(bridge.getState().messages.at(-1)?.text).toBe("新的回答。");
+  });
   it("shows read sources with the native voice answer and clears them on the next voice turn", () => {
     let receive: ((event: import("../../../../../packages/neko-plugin/src/index").NekoPluginEvent) => void) | undefined;
     const bridge = createDesktopRuntimeBridge({ send: () => undefined, on: (channel, handler) => {
