@@ -5,7 +5,7 @@ import type { RuntimeImageAttachment, RuntimeObservationInput, RuntimeObservatio
 export type RuntimeInputEvent =
   | { type: "text.input"; text: string; attachments?: RuntimeImageAttachment[]; observation?: RuntimeObservationInput }
   | { type: "audio.chunk"; data: Uint8Array }
-  | { type: "audio.end" }
+  | { type: "audio.end"; attachments?: RuntimeImageAttachment[]; observation?: RuntimeObservationInput }
   | { type: "runtime.interrupt" }
   | { type: "stage.touch"; areaId: string; x?: number; y?: number }
   | { type: "settings.update"; patch: Record<string, unknown> };
@@ -16,8 +16,11 @@ export type RuntimeOutputEvent =
   | { type: "runtime.status"; status: RuntimeStatus }
   | { type: "transcript.partial"; text: string }
   | { type: "transcript.final"; text: string }
+  | { type: "user.text.accepted"; text: string }
   | { type: "assistant.text.delta"; text: string }
+  | { type: "assistant.text.reset" }
   | { type: "assistant.text.final"; text: string }
+  | { type: "assistant.tool.status"; name: string; status: "running" | "completed" | "failed"; message?: string }
   | { type: "assistant.audio.chunk"; text: string; data: Uint8Array }
   | { type: "assistant.audio.error"; text: string; message: string }
   | { type: "assistant.audio.end" }

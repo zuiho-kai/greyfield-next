@@ -1,5 +1,14 @@
 # QA Retro: Desktop Pet Interaction Miss
 
+## 2026-09-05: Screen Research Returned Links Before Reading A Source
+
+Real-provider QA found that successful search results were being treated as proof of successful page reading, even when every `read_webpage` request failed. The first runtime loop also accumulated tool-round preambles into the saved answer and sent them to TTS.
+
+- Research acceptance must observe both a completed search and a successful page read, then open a retained source through the ordinary Chat link. A URL alone is not evidence that its relevant content was read.
+- Keep only successfully read pages in the attached source list. For long documentation, verify that the requested error section is actually included.
+- Tool-round text is temporary feedback. Reset only the current draft between rounds and keep preambles out of the final saved answer and speech queue.
+- Keep stub timing, real-provider failures, and subsequent successful runs as separate evidence; a renderer failure does not become a passing desktop acceptance because a backend request worked.
+
 ## 2026-08-09 Regression: Dev Launcher Replaced Saved Configuration On Every Relaunch
 
 The default Windows/dev launcher used a safe test patch as an unconditional startup write. After a user saved a real provider, API key, voice setting, character file, persona, or task-model override, the next ordinary launch replaced the complete config with only the safe `window` and `live2d` fields.

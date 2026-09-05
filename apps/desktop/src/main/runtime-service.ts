@@ -1,5 +1,6 @@
 import {
   GreyfieldRuntime,
+  createWebTools,
   InMemorySessionStore,
   LLMBackedMemoryAtomExtractor,
   MemoryManager,
@@ -1001,6 +1002,7 @@ export class RuntimeService {
     const atomExtractionPolicy = this.resolveMemoryAtomExtractionPolicy();
     return new GreyfieldRuntime({
       llm: this.providerFactory.createChatLLMProvider(),
+      webTools: createWebTools(this.options.fetch),
       visionLlm: this.providerFactory.createVisionLLMProvider(),
       asr: this.providerFactory.createASRProvider(),
       tts: this.providerFactory.createTTSProvider(),

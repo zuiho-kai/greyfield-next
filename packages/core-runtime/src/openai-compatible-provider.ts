@@ -1,4 +1,4 @@
-import type { ChatMessage, LLMProvider, LLMStreamOptions, ToolDefinition } from "./providers";
+import type { ChatMessage, LLMProvider, LLMStreamOptions, LLMStreamEvent, ToolCall, ToolDefinition } from "./providers";
 
 export interface OpenAICompatibleLLMProviderOptions {
   baseUrl: string;
@@ -15,6 +15,7 @@ interface OpenAICompatibleChunk {
   choices?: Array<{
     delta?: {
       content?: unknown;
+      tool_calls?: Array<{ index: number; id?: string; function?: { name?: string; arguments?: string } }>;
     };
   }>;
 }
@@ -29,9 +30,34 @@ export class OpenAICompatibleLLMProvider implements LLMProvider {
   }
 
   async *stream(messages: ChatMessage[], tools?: ToolDefinition[], options: LLMStreamOptions = {}): AsyncIterable<string> {
+    for await (const event of this.streamEvents(messages, tools, options)) {
+      if (event.type === "text") yield event.text;
+    }
+  }
+
+  async *streamEvents(messages: ChatMessage[], tools?: ToolDefinition[], options: LLMStreamOptions = {}): AsyncIterable<LLMStreamEvent> {
     const timeoutMs = this.options.timeoutMs ?? DEFAULT_OPENAI_COMPATIBLE_TIMEOUT_MS;
     const abortHandle = createRequestAbortHandle(options.signal, timeoutMs);
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    const calls = new Map<number, ToolCall>();
+    const readEvents = (raw: string): LLMStreamEvent[] => {
+      let parsed: OpenAICompatibleChunk;
+      try { parsed = JSON.parse(raw) as OpenAICompatibleChunk; }
+      catch { throw new Error("OpenAI-compatible LLM stream returned malformed SSE data"); }
+      const delta = parsed.choices?.[0]?.delta;
+      for (const part of delta?.tool_calls ?? []) {
+        const call = calls.get(part.index) ?? { id: "", type: "function", function: { name: "", arguments: "" } };
+        call.id += part.id ?? "";
+        call.function.name += part.function?.name ?? "";
+        call.function.arguments += part.function?.arguments ?? "";
+        calls.set(part.index, call);
+      }
+      return typeof delta?.content === "string" && delta.content.length > 0 ? [{ type: "text", text: delta.content }] : [];
+    };
+    const completedCalls = (): LLMStreamEvent[] => [...calls.values()].map((call) => {
+      if (!call.id || !call.function.name) throw new Error("OpenAI-compatible LLM stream returned an incomplete tool call");
+      return { type: "tool_call", call };
+    });
 
     try {
       const response = await this.fetchImpl(`${trimTrailingSlash(this.options.baseUrl)}/chat/completions`, {
@@ -45,7 +71,7 @@ export class OpenAICompatibleLLMProvider implements LLMProvider {
           model: this.options.model,
           messages,
           stream: true,
-          ...(tools && tools.length > 0 ? { tools } : {})
+          ...(tools && tools.length > 0 ? { tools: tools.map((tool) => ({ type: "function", function: tool })) } : {})
         })
       });
 
@@ -73,14 +99,15 @@ export class OpenAICompatibleLLMProvider implements LLMProvider {
             continue;
           }
           if (text === "[DONE]") {
+            yield* completedCalls();
             return;
           }
-          const content = readDeltaContent(text);
-          if (content.length > 0) {
-            yield content;
-          }
+          yield* readEvents(text);
         }
       }
+      const trailing = parseSseLine(buffer + decoder.decode());
+      if (trailing && trailing !== "[DONE]") yield* readEvents(trailing);
+      yield* completedCalls();
     } catch (error) {
       if (abortHandle.timedOut) {
         throw new Error(`OpenAI-compatible LLM request timed out after ${timeoutMs}ms`);
@@ -91,6 +118,7 @@ export class OpenAICompatibleLLMProvider implements LLMProvider {
       throw error;
     } finally {
       abortHandle.dispose();
+      await reader?.cancel().catch(() => {});
       reader?.releaseLock();
     }
   }
@@ -102,17 +130,6 @@ function parseSseLine(line: string): string | undefined {
     return undefined;
   }
   return trimmed.slice("data:".length).trim();
-}
-
-function readDeltaContent(raw: string): string {
-  let parsed: OpenAICompatibleChunk;
-  try {
-    parsed = JSON.parse(raw) as OpenAICompatibleChunk;
-  } catch {
-    throw new Error("OpenAI-compatible LLM stream returned malformed SSE data");
-  }
-  const content = parsed.choices?.[0]?.delta?.content;
-  return typeof content === "string" ? content : "";
 }
 
 function trimTrailingSlash(value: string): string {

@@ -69,7 +69,7 @@
       </div>
     </div>
 
-    <div class="message-list-container message-list" aria-live="polite">
+    <div ref="messageList" class="message-list-container message-list" aria-live="polite" @scroll="updateFollowLatest">
       <div
         v-for="messageView in messagesWithSegments"
         :key="messageView.key"
@@ -85,7 +85,7 @@
               :class="['message-bubble', { 'message-bubble--collapsed': segment.isLong && !isExpandedMessage(segment.key) }]"
               :data-message-expanded="isExpandedMessage(segment.key)"
             >
-              {{ segment.text }}
+              <ChatReplyText :text="segment.text" />
             </div>
             <button
               v-if="segment.isLong"
@@ -106,6 +106,9 @@
         </div>
       </div>
 
+      <div v-if="state.toolStatus" class="tool-progress" role="status" data-testid="chat-tool-status">
+        {{ toolStatusText }}
+      </div>
       <div v-if="state.assistantDraft" class="message-item assistant draft">
         <div class="message-content">
           <template
@@ -117,7 +120,7 @@
               :class="['message-bubble', { 'message-bubble--collapsed': segment.isLong && !isExpandedMessage(segment.key) }]"
               :data-message-expanded="isExpandedMessage(segment.key)"
             >
-              {{ segment.text }}
+              <ChatReplyText :text="segment.text" />
             </div>
             <button
               v-if="segment.isLong"
@@ -178,7 +181,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
+import ChatReplyText from "./ChatReplyText.vue";
 import type { DesktopMessage, DesktopRendererState } from "./desktop-runtime-bridge";
 import { describeScreenAwarenessNotice } from "./chat-screen-awareness-notice";
 import { describeChatStatus } from "./chat-status";
@@ -195,6 +199,18 @@ const props = defineProps<{
   state: DesktopRendererState;
   draft: string;
 }>();
+
+const messageList = ref<HTMLElement>();
+let followLatest = true;
+function updateFollowLatest(): void {
+  const list = messageList.value;
+  if (list) followLatest = list.scrollHeight - list.clientHeight - list.scrollTop < 64;
+}
+watch(() => [props.state.messages.length, props.state.assistantDraft, props.state.toolStatus], async () => {
+  const shouldFollow = followLatest;
+  await nextTick();
+  if (shouldFollow && messageList.value) messageList.value.scrollTop = messageList.value.scrollHeight;
+});
 
 defineEmits<{
   "update:draft": [value: string];
@@ -234,7 +250,7 @@ const messagesWithSegments = computed<ChatMessageView[]>(() =>
     return {
       key,
       message,
-      segments: createMessageSegments(splitAssistantReplyForDisplay(message.text), key, (segmentIndex) =>
+      segments: createMessageSegments(splitChatReply(message.text), key, (segmentIndex) =>
         messageBubbleId(index, segmentIndex)
       )
     };
@@ -242,8 +258,13 @@ const messagesWithSegments = computed<ChatMessageView[]>(() =>
 );
 
 const draftSegments = computed<ChatMessageSegmentView[]>(() =>
-  createMessageSegments(splitAssistantReplyForDisplay(props.state.assistantDraft), draftMessageKey, draftBubbleId)
+  createMessageSegments(splitChatReply(props.state.assistantDraft), draftMessageKey, draftBubbleId)
 );
+
+function splitChatReply(text: string): string[] {
+  // Sentence segmentation can split URLs at periods. Keep source paragraphs intact.
+  return text.split(/\n\s*\n/).flatMap((paragraph) => /\]\(https?:\/\/|(?:^|\n)\s*(?:\d+[.)]|\*\*步骤)/.test(paragraph) ? [paragraph] : splitAssistantReplyForDisplay(paragraph));
+}
 
 function createMessageSegments(
   texts: string[],
@@ -281,6 +302,15 @@ function toggleMessageExpansion(key: string): void {
 }
 
 const locale = computed(() => normalizeSettingsLocale(props.state.settings.settingsLocale));
+const toolStatusText = computed(() => {
+  const tool = props.state.toolStatus;
+  if (!tool) return "";
+  const chinese = locale.value === "zh-CN";
+  if (tool.status === "failed") return `${chinese ? "资料获取失败" : "Research failed"}: ${tool.message ?? ""}`;
+  if (tool.status === "completed") return chinese ? "资料已获取，正在整理…" : "Sources received, preparing the answer…";
+  if (tool.name === "screen_context") return chinese ? "正在看你眼前的报错…" : "Reading the current screen…";
+  return tool.name === "web_search" ? (chinese ? "正在联网查资料…" : "Searching the web…") : (chinese ? "正在阅读来源…" : "Reading a source…");
+});
 const t = (key: SettingsI18nKey, values?: Record<string, string | number>): string =>
   settingsT(locale.value, key, values);
 const chatStatus = computed(() => describeChatStatus(props.state, props.draft, locale.value));
@@ -299,6 +329,7 @@ const voiceInputLabel = computed(() => {
 </script>
 
 <style scoped>
+.tool-progress { color: #17675c; padding: 8px 12px; font-size: 13px; }
 .chat-provider-experience {
   display: flex;
   align-items: center;

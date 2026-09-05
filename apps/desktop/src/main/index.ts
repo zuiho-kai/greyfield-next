@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, screen, Tray } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, screen, shell, Tray } from "electron";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -67,6 +67,7 @@ function profileActionFailure(message: string): DesktopMemoryActionResult {
 async function createWindows(): Promise<void> {
   const config = await loadGreyfieldConfig(resolveConfigPath());
   runtimeService = new RuntimeService(config, {
+    fetch: (input, init) => net.fetch(input instanceof URL ? input.href : input, init),
     ...createDesktopRuntimeStoreOptions(resolveRuntimeStorePaths()),
     llmTimeoutMs: resolvePositiveIntegerEnv("GREYFIELD_LLM_TIMEOUT_MS"),
     recentTurnLimit: resolvePositiveIntegerEnv("GREYFIELD_RECENT_TURN_LIMIT"),
@@ -122,6 +123,10 @@ async function createWindows(): Promise<void> {
   settingsWindow = new BrowserWindow(createSettingsWindowOptions(preload));
   attachSettingsReplayOnLoad(settingsWindow);
   chatWindow = new BrowserWindow(createChatWindowOptions(preload));
+  chatWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url).catch((error) => console.warn("Could not open source link", error));
+    return { action: "deny" };
+  });
   attachSettingsReplayOnLoad(chatWindow);
   controlsWindow = new BrowserWindow(createControlsWindowOptions(config, preload, displayWorkAreas));
   attachSettingsReplayOnLoad(controlsWindow);
@@ -192,7 +197,12 @@ function createTrayIcon(): Electron.NativeImage {
 }
 
 function registerIpc(): void {
-  ipcMain.on("runtime:input", (_event, payload) => {
+  ipcMain.on("runtime:input", (event, payload) => {
+    if (payload.type === "text.input" && typeof payload.text === "string") {
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (window.webContents.id !== event.sender.id) window.webContents.send("runtime:event", { type: "user.text.accepted", text: payload.text });
+      }
+    }
     handleRuntimeInput(payload);
   });
 
@@ -448,7 +458,7 @@ function attachHideOnClose(window: BrowserWindow | undefined, markDestroyed: () 
 function handleRuntimeInput(payload: Parameters<NonNullable<typeof runtimeService>["handle"]>[0]): void {
   void (async () => {
     const input =
-      payload.type === "text.input" && observationController?.isEnabled()
+      (payload.type === "text.input" || payload.type === "audio.end") && observationController?.isEnabled()
         ? {
             ...payload,
             ...(await observationController.ensureFreshContext())

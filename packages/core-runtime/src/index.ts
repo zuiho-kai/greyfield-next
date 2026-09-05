@@ -16,6 +16,7 @@ export * from "./persona";
 export * from "./profile-view";
 export * from "./prompt-assembler";
 export * from "./providers";
+export * from "./web-tools";
 export * from "./runtime-loop";
 export * from "./session-store";
 export * from "./stage-driver";

@@ -57,6 +57,7 @@ export interface DesktopRendererState {
   messages: DesktopMessage[];
   screenAwareness: DesktopScreenAwarenessState;
   assistantDraft: string;
+  toolStatus?: { name: string; status: "running" | "completed" | "failed"; message?: string };
   proactiveMessage: {
     text: string;
     createdAt: string;

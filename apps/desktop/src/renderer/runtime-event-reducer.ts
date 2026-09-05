@@ -14,6 +14,7 @@ export function reduceRuntimeEvent(
       return {
         ...state,
         status: event.status,
+        toolStatus: undefined,
         proactiveMessage: null,
         voiceInput: {
           status: "idle",
@@ -31,6 +32,7 @@ export function reduceRuntimeEvent(
     return {
       ...state,
       status: event.status,
+      ...((event.status === "thinking" || event.status === "idle") ? { toolStatus: undefined } : {}),
       voiceInput:
         event.status === "listening"
           ? {
@@ -56,6 +58,7 @@ export function reduceRuntimeEvent(
       return {
         ...state,
         status: "error",
+        toolStatus: undefined,
         errorMessage: "",
         screenAwarenessNotice: event.message,
         voiceErrorMessage: "",
@@ -72,6 +75,7 @@ export function reduceRuntimeEvent(
     return {
       ...state,
       status: "error",
+      toolStatus: undefined,
       errorMessage: event.message,
       screenAwarenessNotice: "",
       voiceErrorMessage: "",
@@ -90,12 +94,13 @@ export function reduceRuntimeEvent(
     };
   }
 
-  if (event.type === "transcript.final") {
-    if (state.status === "interrupted") {
+  if (event.type === "transcript.final" || event.type === "user.text.accepted") {
+    if (state.status === "interrupted" && event.type === "transcript.final") {
       return state;
     }
     return {
       ...state,
+      ...(event.type === "user.text.accepted" ? { status: "thinking", assistantDraft: "", toolStatus: undefined } : {}),
       voiceInput: {
         status: "idle",
         message: ""
@@ -105,6 +110,15 @@ export function reduceRuntimeEvent(
       proactiveMessage: null,
       messages: [...state.messages, { role: "user", text: event.text }]
     };
+  }
+
+  if (event.type === "assistant.text.reset") {
+    return state.status === "interrupted" ? state : { ...state, assistantDraft: "" };
+  }
+
+  if (event.type === "assistant.tool.status") {
+    if (state.status === "interrupted") return state;
+    return { ...state, toolStatus: { name: event.name, status: event.status, ...(event.message ? { message: event.message } : {}) } };
   }
 
   if (event.type === "assistant.text.delta") {
