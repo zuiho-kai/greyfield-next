@@ -6,6 +6,8 @@ export interface WebToolResult { text: string; sources: WebSource[] }
 export interface WebTools {
   definitions: ToolDefinition[];
   execute(name: string, args: unknown, signal: AbortSignal): Promise<WebToolResult>;
+  finish?(signal: AbortSignal, completed: boolean): Promise<void>;
+  dispose?(): Promise<void>;
 }
 
 const definitions: ToolDefinition[] = [

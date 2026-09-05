@@ -17,6 +17,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@greyfield/browser-runtime": "workspace:*",
+    "playwright-core": "1.60.0",
     "@greyfield/audio-runtime": "workspace:*",
     "@greyfield/core-runtime": "workspace:*",
     "@greyfield/persistence": "workspace:*",

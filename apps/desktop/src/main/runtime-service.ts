@@ -59,6 +59,7 @@ import type { DesktopProfileFact } from "../shared/ipc";
 export interface RuntimeServiceOptions {
   fetch?: typeof fetch;
   webFetch?: typeof fetch;
+  webTools?: import("@greyfield/core-runtime").WebTools;
   loadPersona?: (config: GreyfieldConfig) => Promise<CharacterPersona>;
   memoryStore?: MemoryStore;
   sessionStore?: SessionStore;
@@ -312,6 +313,7 @@ export class RuntimeService {
    * Flush unindexed turns and close the memory stores. Called on app quit.
    */
   async shutdown(): Promise<void> {
+    await this.options.webTools?.dispose?.().catch(() => {});
     if (this.memoryManagerV2) {
       try {
         await this.memoryManagerV2.close();
@@ -1003,7 +1005,7 @@ export class RuntimeService {
     const atomExtractionPolicy = this.resolveMemoryAtomExtractionPolicy();
     return new GreyfieldRuntime({
       llm: this.providerFactory.createChatLLMProvider(),
-      webTools: createWebTools(this.options.webFetch ?? this.options.fetch),
+      webTools: this.options.webTools ?? createWebTools(this.options.webFetch ?? this.options.fetch),
       visionLlm: this.providerFactory.createVisionLLMProvider(),
       asr: this.providerFactory.createASRProvider(),
       tts: this.providerFactory.createTTSProvider(),

@@ -30,7 +30,7 @@ await build({
   platform: "node",
   format: "esm",
   outfile: "dist-main/index.mjs",
-  external: ["electron"],
+  external: ["electron", "playwright-core"],
   plugins: [productionPersistenceEntryPlugin],
   banner: {
     js: "import { createRequire } from 'node:module';\nconst require = createRequire(import.meta.url);"
