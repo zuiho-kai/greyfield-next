@@ -1,6 +1,5 @@
 import {
   GreyfieldRuntime,
-  createWebTools,
   InMemorySessionStore,
   LLMBackedMemoryAtomExtractor,
   MemoryManager,
@@ -35,6 +34,7 @@ import {
   type ProactiveMemoryTriggerState,
   type ChatMessage
 } from "@greyfield/core-runtime";
+import { createWebTools } from "../../../../packages/core-runtime/src/web-tools";
 import {
   filterDeletedSessionTurns,
   hasDeletedMemoryEvidenceSource,
