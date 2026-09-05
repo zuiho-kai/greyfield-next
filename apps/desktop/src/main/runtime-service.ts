@@ -58,6 +58,7 @@ import type { DesktopProfileFact } from "../shared/ipc";
 
 export interface RuntimeServiceOptions {
   fetch?: typeof fetch;
+  webFetch?: typeof fetch;
   loadPersona?: (config: GreyfieldConfig) => Promise<CharacterPersona>;
   memoryStore?: MemoryStore;
   sessionStore?: SessionStore;
@@ -1002,7 +1003,7 @@ export class RuntimeService {
     const atomExtractionPolicy = this.resolveMemoryAtomExtractionPolicy();
     return new GreyfieldRuntime({
       llm: this.providerFactory.createChatLLMProvider(),
-      webTools: createWebTools(this.options.fetch),
+      webTools: createWebTools(this.options.webFetch ?? this.options.fetch),
       visionLlm: this.providerFactory.createVisionLLMProvider(),
       asr: this.providerFactory.createASRProvider(),
       tts: this.providerFactory.createTTSProvider(),

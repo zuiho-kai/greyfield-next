@@ -13,6 +13,7 @@ const root = fileURLToPath(new URL("../../..", import.meta.url));
 const desktopRoot = join(root, "apps", "desktop");
 const liveConfig = process.env.GREYFIELD_ACCEPTANCE_CONFIG;
 const diagnostic = process.argv.includes("--diagnose");
+const checkRedirects = process.argv.includes("--redirect-check");
 const artifacts = join(root, ".cache", "greyfield-screen-help", liveConfig ? "real" : "stub", new Date().toISOString().replace(/[:.]/g, "-"));
 const temp = await mkdtemp(join(tmpdir(), "greyfield-screen-help-"));
 await mkdir(artifacts, { recursive: true });
@@ -45,8 +46,8 @@ const server = createServer(async (req, res) => {
   const firstResult = toolResults[0] ? JSON.parse(toolResults[0].content) : undefined;
   if (user.includes("为什么")) send({ content: "第二步检查依赖是否安装，是因为 Node 在解析导入路径时需要找到对应的包。" });
   else if (toolResults.length === 0) send({ content: "我来查一下这个模块加载错误。", tool_calls: [{ index: 0, id: "search-1", type: "function", function: { name: "web_search", arguments: JSON.stringify({ query: "site:nodejs.org ERR_MODULE_NOT_FOUND" }) } }] });
-  else if (toolResults.length === 1 && firstResult.results?.[0]?.url) send({ tool_calls: [{ index: 0, id: "read-1", type: "function", function: { name: "read_webpage", arguments: JSON.stringify({ url: firstResult.results[0].url, focus: "ERR_MODULE_NOT_FOUND" }) } }] });
-  else send({ content: toolResults.some((message: { content: string }) => JSON.parse(message.content).error) ? "资料获取失败，请稍后重试。" : "ERR_MODULE_NOT_FOUND：当前项目缺少 lodash。\n\n1. **安装缺少的依赖**，在项目目录运行：\n```sh\nnpm install lodash\n```\n\n2. **确认导入**：`import lodash from 'lodash'`。\n\n3. **重新运行**：`node index.mjs`。" });
+  else if (toolResults.length === 1 && firstResult.results?.[0]?.url) send({ tool_calls: [{ index: 0, id: "read-1", type: "function", function: { name: "read_webpage", arguments: JSON.stringify({ url: checkRedirects ? `https://httpbin.org/redirect-to?url=${encodeURIComponent(firstResult.results[0].url)}` : firstResult.results[0].url, focus: "ERR_MODULE_NOT_FOUND" }) } }] });
+  else send({ content: toolResults.some((message: { content: string }) => JSON.parse(message.content).error) ? "资料获取失败，请稍后重试。" : "ERR_MODULE_NOT_FOUND：当前项目缺少 lodash。\n\n1. **安装缺少的依赖**，在项目目录运行：\n```sh\nnpm install lodash\n\nnode index.mjs\n```\n\n2. **确认导入**：`import lodash from 'lodash'`。\n\n3. **重新运行**：`node index.mjs`。" });
   res.end("data: [DONE]\n\n");
 });
 await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -76,6 +77,12 @@ try {
     }
   });
   const chat = await role(app, "chat", ".chat-shell");
+  if (checkRedirects) await app.evaluate(({ session }) => {
+    session.defaultSession.webRequest.onHeadersReceived({ urls: ["https://httpbin.org/*"] }, (details, callback) => {
+      (globalThis as typeof globalThis & { webRedirectStatus?: number }).webRedirectStatus = details.statusCode;
+      callback({});
+    });
+  });
   await chat.exposeFunction("recordResearchEvent", (event: { type: string; name?: string; status?: string; message?: string }) => {
     toolEvents.push(event);
     console.log(JSON.stringify(event));
@@ -131,6 +138,10 @@ try {
   const links = await chat.locator(".message-item.assistant .chat-source-link").evaluateAll((elements) => elements.map((element) => ({ text: element.textContent, href: (element as HTMLAnchorElement).href })));
   summary.answer = answer;
   summary.sources = links;
+  if (checkRedirects) {
+    summary.webRedirectStatus = await app.evaluate(() => (globalThis as typeof globalThis & { webRedirectStatus?: number }).webRedirectStatus);
+    if (summary.webRedirectStatus !== 302) throw new Error("The live redirect probe did not return HTTP 302");
+  }
   await chat.screenshot({ path: join(artifacts, "chat-answer.png") });
   const answerCard = chat.locator(".message-item.assistant:not(.draft)").last();
   for (const button of await answerCard.getByRole("button", { name: "展开全文", exact: true }).all()) await button.click();
@@ -146,7 +157,7 @@ try {
   await chat.screenshot({ path: join(artifacts, "chat-answer-steps.png") });
   if (!liveConfig) {
     const renderedCommand = await answerCard.locator(".chat-code-block").innerText();
-    if (renderedCommand.trim() !== "npm install lodash" || !(await answerCard.locator("strong").count()) || !(await answerCard.locator(".chat-inline-code").count())) throw new Error("Markdown commands and emphasis did not render");
+    if (renderedCommand.trim() !== "npm install lodash\n\nnode index.mjs" || !(await answerCard.locator("strong").count()) || !(await answerCard.locator(".chat-inline-code").count())) throw new Error("Markdown commands and emphasis did not render");
   }
   await chat.mouse.wheel(0, 1400);
   await chat.screenshot({ path: join(artifacts, "chat-answer-sources.png") });

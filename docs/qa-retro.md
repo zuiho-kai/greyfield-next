@@ -8,6 +8,7 @@ Real-provider QA found that successful search results were being treated as proo
 - Keep only successfully read pages in the attached source list. For long documentation, verify that the requested error section is actually included.
 - Tool-round text is temporary feedback. Reset only the current draft between rounds and keep preambles out of the final saved answer and speech queue.
 - Keep stub timing, real-provider failures, and subsequent successful runs as separate evidence; a renderer failure does not become a passing desktop acceptance because a backend request worked.
+- Electron `net.fetch` rejects manual redirects instead of returning their headers. Web tools use a narrow `net.request` adapter and must prove a real redirect reaches readable content; provider streaming remains on `net.fetch`.
 
 ## 2026-08-09 Regression: Dev Launcher Replaced Saved Configuration On Every Relaunch
 

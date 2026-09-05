@@ -14,6 +14,7 @@ import { toWindowMenuPoint } from "./pet-menu";
 import { PetWindowController } from "./pet-window-controller";
 import { RuntimeIpcController } from "./runtime-ipc-controller";
 import { RuntimeService } from "./runtime-service";
+import { fetchWebPage } from "./web-fetch";
 import { ElectronScreenCaptureSource } from "./screen-capture-source";
 import { redactConfigForRenderer } from "./settings-redaction";
 import { SettingsController } from "./settings-controller";
@@ -68,6 +69,7 @@ async function createWindows(): Promise<void> {
   const config = await loadGreyfieldConfig(resolveConfigPath());
   runtimeService = new RuntimeService(config, {
     fetch: (input, init) => net.fetch(input instanceof URL ? input.href : input, init),
+    webFetch: fetchWebPage,
     ...createDesktopRuntimeStoreOptions(resolveRuntimeStorePaths()),
     llmTimeoutMs: resolvePositiveIntegerEnv("GREYFIELD_LLM_TIMEOUT_MS"),
     recentTurnLimit: resolvePositiveIntegerEnv("GREYFIELD_RECENT_TURN_LIMIT"),
