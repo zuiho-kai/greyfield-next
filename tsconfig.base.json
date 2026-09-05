@@ -5,6 +5,7 @@
     "moduleResolution": "Bundler",
     "baseUrl": ".",
     "paths": {
+      "@greyfield/browser-runtime": ["packages/browser-runtime/src/index.ts"],
       "@greyfield/audio-runtime": ["packages/audio-runtime/src/index.ts"],
       "@greyfield/core-runtime": ["packages/core-runtime/src/index.ts"],
       "@greyfield/persistence/config-schema": ["packages/persistence/src/config-schema.ts"],

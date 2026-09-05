@@ -66,7 +66,7 @@ let app: ElectronApplication | undefined;
 const summary: Record<string, unknown> = { ok: false, model: liveConfig ? "real configured provider" : "local SSE stub", web: "real public network", artifacts };
 try {
   app = await electron.launch({ executablePath: await getElectronExecutablePath(desktopRoot), cwd: desktopRoot,
-    args: [join(desktopRoot, "dist-main", "index.mjs")], env: { ...process.env, GREYFIELD_CONFIG_PATH: configPath, GREYFIELD_PROJECT_ROOT: root, GREYFIELD_USER_DATA_PATH: temp, GREYFIELD_LLM_TIMEOUT_MS: "90000" } });
+    args: [join(desktopRoot, "dist-main", "index.mjs")], env: { ...process.env, PW_TEST_SCREENSHOT_NO_FONTS_READY: "1", GREYFIELD_BROWSER_TRACE_PATH: join(artifacts, "chrome"), GREYFIELD_CONFIG_PATH: configPath, GREYFIELD_PROJECT_ROOT: root, GREYFIELD_USER_DATA_PATH: temp, GREYFIELD_LLM_TIMEOUT_MS: "90000" } });
   const controls = await role(app, "controls", ".desktop-control-panel");
   const pet = await role(app, "pet", ".pet-shell");
   const petWarnings = new Set<string>();
@@ -133,7 +133,7 @@ try {
   await chat.getByTestId("chat-stop-button").waitFor();
   await chat.waitForFunction(() => (document.querySelector('[data-testid="chat-stop-button"]') as HTMLButtonElement)?.disabled, { timeout: 90_000 });
   summary.answerMs = Date.now() - start;
-  if (!["web_search", "read_webpage"].every((name) => toolEvents.some((event) => event.name === name && event.status === "completed"))) throw new Error("Research did not complete both a real search and a successful page read");
+  if (!toolEvents.some((event) => event.name === "web_search" && event.status === "completed") || !toolEvents.some((event) => ["read_webpage", "browser_click", "browser_read"].includes(event.name ?? "") && event.status === "completed")) throw new Error("Research did not complete a real search and a successful browser page read");
   const answer = await chat.locator(".message-item.assistant").last().innerText();
   const links = await chat.locator(".message-item.assistant .chat-source-link").evaluateAll((elements) => elements.map((element) => ({ text: element.textContent, href: (element as HTMLAnchorElement).href })));
   summary.answer = answer;

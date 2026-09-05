@@ -274,7 +274,7 @@ function splitChatReply(text: string): string[] {
   }
   if (lines.length) paragraphs.push(lines.join("\n"));
   // Preserve source URLs and whole code blocks when splitting display bubbles.
-  return paragraphs.flatMap((paragraph) => /\]\(https?:\/\/|```|(?:^|\n)\s*(?:\d+[.)]|\*\*步骤)/.test(paragraph) ? [paragraph] : splitAssistantReplyForDisplay(paragraph));
+  return paragraphs.flatMap((paragraph) => /https?:\/\/|```|(?:^|\n)\s*(?:\d+[.)]|\*\*步骤)/.test(paragraph) ? [paragraph] : splitAssistantReplyForDisplay(paragraph));
 }
 
 function createMessageSegments(
@@ -320,7 +320,7 @@ const toolStatusText = computed(() => {
   if (tool.status === "failed") return `${chinese ? "资料获取失败" : "Research failed"}: ${tool.message ?? ""}`;
   if (tool.status === "completed") return chinese ? "资料已获取，正在整理…" : "Sources received, preparing the answer…";
   if (tool.name === "screen_context") return chinese ? "正在看你眼前的报错…" : "Reading the current screen…";
-  return tool.name === "web_search" ? (chinese ? "正在联网查资料…" : "Searching the web…") : (chinese ? "正在阅读来源…" : "Reading a source…");
+  return tool.name === "web_search" ? (chinese ? "正在用 Chrome 查资料…" : "Searching in Chrome…") : (chinese ? "正在浏览来源网页…" : "Browsing a source…");
 });
 const t = (key: SettingsI18nKey, values?: Record<string, string | number>): string =>
   settingsT(locale.value, key, values);

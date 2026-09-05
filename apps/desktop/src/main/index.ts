@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, screen, shell, Tray } from "electron";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import type { GreyfieldConfig, GreyfieldConfigPatch } from "@greyfield/persistence/config-schema";
@@ -16,6 +16,7 @@ import { RuntimeIpcController } from "./runtime-ipc-controller";
 import { RuntimeService } from "./runtime-service";
 import { fetchWebPage } from "./web-fetch";
 import { registerNekoPluginHost } from "./neko-plugin-host";
+import { createBrowserResearchTools } from "@greyfield/browser-runtime";
 import { ElectronScreenCaptureSource } from "./screen-capture-source";
 import { redactConfigForRenderer } from "./settings-redaction";
 import { SettingsController } from "./settings-controller";
@@ -69,9 +70,20 @@ function profileActionFailure(message: string): DesktopMemoryActionResult {
 
 async function createWindows(): Promise<void> {
   const config = await loadGreyfieldConfig(resolveConfigPath());
+  const browserTracePath = process.env.GREYFIELD_BROWSER_TRACE_PATH;
+  let browserTraceStep = 0;
   runtimeService = new RuntimeService(config, {
     fetch: (input, init) => net.fetch(input instanceof URL ? input.href : input, init),
     webFetch: fetchWebPage,
+    webTools: createBrowserResearchTools({
+      profilePath: resolve(app.getPath("userData"), "research-chrome"),
+      ...(browserTracePath ? { onResult: async (event, page) => {
+        await mkdir(browserTracePath, { recursive: true });
+        const name = `${++browserTraceStep}-${event.name}`;
+        await writeFile(resolve(browserTracePath, `${name}.json`), JSON.stringify({ name: event.name, elapsedMs: event.elapsedMs, ...JSON.parse(event.result.text) }, null, 2));
+        await page.screenshot({ path: resolve(browserTracePath, `${name}.png`) });
+      } } : {})
+    }),
     ...createDesktopRuntimeStoreOptions(resolveRuntimeStorePaths()),
     llmTimeoutMs: resolvePositiveIntegerEnv("GREYFIELD_LLM_TIMEOUT_MS"),
     recentTurnLimit: resolvePositiveIntegerEnv("GREYFIELD_RECENT_TURN_LIMIT"),
