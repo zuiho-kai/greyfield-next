@@ -12,16 +12,38 @@ async function flushSpeechPlaybackQueue(): Promise<void> {
 }
 
 describe("createDesktopRuntimeBridge", () => {
-  it("finalizes an empty native voice turn without carrying its sources into the next answer", () => {
+  it("replays native weather research without treating its empty tool end as the final answer", () => {
+    let receive: ((event: import("../../../../../packages/neko-plugin/src/index").NekoPluginEvent) => void) | undefined;
+    const bridge = createDesktopRuntimeBridge({ send: () => undefined, on: (channel, handler) => {
+      if (channel === "neko:event") receive = handler as typeof receive;
+      return () => undefined;
+    } });
+    // Captured original-runtime order: transcript 26.447s, empty end 57.393s,
+    // research start 57.401s, result 83.291s, answer 90.146s, final end 90.151s.
+    receive?.({ type: "message", data: { type: "user_transcript", text: "请读香港天文台当前预报。" } });
+    receive?.({ type: "message", data: { type: "system", data: "turn end", request_id: null } });
+    expect(bridge.getState().status).toBe("thinking");
+    receive?.({ type: "research", name: "research_web", status: "running" });
+    receive?.({ type: "research", name: "research_web", status: "done", sources: [{ title: "香港天文台", url: "https://www.weather.gov.hk/sc/wxinfo/currwx/flw.htm" }] });
+    receive?.({ type: "message", data: { type: "gemini_response", text: "现在香港大致天晴炎热。", isNewMessage: true } });
+    receive?.({ type: "message", data: { type: "system", data: "turn end" } });
+    expect(bridge.getState()).toMatchObject({ status: "idle", assistantDraft: "" });
+    expect(bridge.getState().messages.at(-1)?.text).toContain("[香港天文台](https://www.weather.gov.hk/sc/wxinfo/currwx/flw.htm)");
+  });
+  it("keeps sources through an empty tool end but discards them when a new user turn starts", () => {
     let receive: ((event: import("../../../../../packages/neko-plugin/src/index").NekoPluginEvent) => void) | undefined;
     const bridge = createDesktopRuntimeBridge({ send: () => undefined, on: (channel, handler) => {
       if (channel === "neko:event") receive = handler as typeof receive;
       return () => undefined;
     } });
     receive?.({ type: "research", name: "read_webpage", status: "done", sources: [{ title: "Old source", url: "https://old.example/" }] });
-    expect(bridge.getState().status).toBe("thinking");
     receive?.({ type: "message", data: { type: "system", data: "turn end" } });
-    expect(bridge.getState()).toMatchObject({ status: "idle", assistantDraft: "", messages: [] });
+    expect(bridge.getState().status).toBe("thinking");
+    receive?.({ type: "message", data: { type: "gemini_response", text: "同一回合的回答。", isNewMessage: true } });
+    receive?.({ type: "message", data: { type: "system", data: "turn end" } });
+    expect(bridge.getState().messages.at(-1)?.text).toContain("[Old source](https://old.example/)");
+    receive?.({ type: "research", name: "read_webpage", status: "done", sources: [{ title: "Unused source", url: "https://unused.example/" }] });
+    receive?.({ type: "message", data: { type: "user_transcript", text: "换个话题。" } });
     receive?.({ type: "message", data: { type: "gemini_response", text: "新的回答。", isNewMessage: true } });
     receive?.({ type: "message", data: { type: "system", data: "turn end" } });
     expect(bridge.getState().messages.at(-1)?.text).toBe("新的回答。");
