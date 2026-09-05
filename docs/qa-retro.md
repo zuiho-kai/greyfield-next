@@ -401,3 +401,9 @@ How we avoid repeating it:
 - Main-process ESM bundles that include CommonJS dependencies must provide a `createRequire(import.meta.url)` shim, or the dependency must be proven ESM-safe.
 - Harness checks for async persistence must poll the persisted condition, not read once after a UI event that can precede disk writes.
 - `GFN-V1-015` acceptance must include both full Electron session write proof and a restart harness proving the next launch prompt sees the previous turn.
+
+## 2026-09-05: Live2D startup initialized two renderers
+
+Issue #234 was exposed by ordinary Electron startup with an absolute model path: the initial bundled path began loading before settings hydration changed it. Both entries passed the completed-driver check while Cubism initialization was still pending, leaving two canvases and WebGL shader errors instead of a visible pet.
+
+The stage now shares pending initialization, serializes model replacement, ignores superseded load results, and destroys a pending renderer after unmount. Regression acceptance under `GFN-V1-002` uses the real bundled `.model3.json` through persisted configuration and requires exactly one canvas, at least 2,000 non-transparent pixels, a visible pet window, an inspected screenshot, and no related shader errors. `pnpm exec tsx packages/dev-harness/src/electron-check.ts --live2d-init` runs this focused path after the desktop build; the unchanged Live2D harness covers animation and touch reactions.
