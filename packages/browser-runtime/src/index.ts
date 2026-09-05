@@ -1,5 +1,6 @@
 import { chromium, errors, type BrowserContext, type Page } from "playwright-core";
 import type { WebTools, WebToolResult, ToolDefinition } from "@greyfield/core-runtime";
+import { publicWebUrl } from "../../core-runtime/src/web-tools";
 
 const definitions: ToolDefinition[] = [
   { name: "web_search", description: "Search the web in visible Chrome. Returns real search result cards with link refs, not the search engine's AI answer. Use exact quoted errors and prefer official sources. Click a result ref or open its URL to verify it.", parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },
@@ -50,7 +51,11 @@ export function createBrowserResearchTools(options: BrowserResearchOptions): Web
       await turn.page.route("**/*", (route) => {
         // Research never submits arbitrary forms or uploads data.
         const request = route.request();
-        return request.isNavigationRequest() && request.method() !== "GET" ? route.abort() : route.continue();
+        if (request.isNavigationRequest()) {
+          try { publicUrl(request.url()); } catch { return route.abort(); }
+          if (request.method() !== "GET") return route.abort();
+        }
+        return route.continue();
       });
     }
     options.onPage?.(turn.page);
@@ -60,6 +65,7 @@ export function createBrowserResearchTools(options: BrowserResearchOptions): Web
   async function open(page: Page, url: string): Promise<void> {
     const target = publicUrl(url);
     const response = await page.goto(target, { waitUntil: "domcontentloaded", timeout: 25_000 });
+    publicUrl(page.url());
     if (response && response.status() >= 400) throw new Error(`Source returned HTTP ${response.status()}: ${page.url()}`);
     await page.locator("body").waitFor();
   }
@@ -105,7 +111,7 @@ export function createBrowserResearchTools(options: BrowserResearchOptions): Web
             await element.evaluate((node) => node.removeAttribute("target"));
             const before = page.url();
             if (destination.href !== before) await Promise.all([
-              page.waitForURL((url) => url.href !== before && url.origin === destination.origin, { waitUntil: "domcontentloaded", timeout: 25_000 }),
+              page.waitForURL((url) => url.href !== before, { waitUntil: "domcontentloaded", timeout: 25_000 }),
               element.click()
             ]);
             else await element.click();
@@ -124,6 +130,7 @@ export function createBrowserResearchTools(options: BrowserResearchOptions): Web
             await page.waitForLoadState("domcontentloaded");
           }
         } else if (name !== "browser_read") throw new Error(`Unknown browser tool: ${name}`);
+        publicUrl(page.url());
         if (typeof input.waitForText === "string" && input.waitForText.trim()) await page.getByText(input.waitForText, { exact: false }).first().waitFor();
         const renderingPending = await waitForRenderedBody(page);
         result = await readPage(page, input, `g${++generation}-`, renderingPending);
@@ -170,6 +177,7 @@ async function waitForRenderedBody(page: Page): Promise<boolean> {
 }
 
 async function readPage(page: Page, input: Record<string, unknown>, prefix: string, renderingPending: boolean): Promise<WebToolResult> {
+  publicUrl(page.url());
   const snapshot = await page.evaluate(({ focus, offset, prefix }) => {
     const root = document.querySelector<HTMLElement>("main, [role=main], article, #apicontent") ?? document.body;
     let text = root.innerText;
@@ -210,6 +218,7 @@ async function readPage(page: Page, input: Record<string, unknown>, prefix: stri
     }).filter((item) => item.text);
     return { url: location.href, title: document.title, content: text.slice(offset, offset + 10000), totalCharacters: text.length, nextOffset: text.length > offset + 10000 ? offset + 10000 : null, focusFound: target ? matched : undefined, elements };
   }, { focus: typeof input.focus === "string" ? input.focus.trim() : "", offset: typeof input.offset === "number" ? Math.max(0, Math.floor(input.offset)) : 0, prefix });
+  publicUrl(snapshot.url);
   if (/captcha|verify you are human|just a moment|access denied/i.test(snapshot.title) || /\/sorry\//.test(snapshot.url)) throw new Error(`Source needs human verification: ${snapshot.url}. Use another source; do not bypass it.`);
   if (snapshot.content.trim().length < 40) throw new Error("Page has little rendered text yet; use browser_read with waitForText or follow a visible link.");
   return { text: JSON.stringify({ ...snapshot, ...(renderingPending ? { renderingPending: true } : {}) }), sources: [{ title: snapshot.title, url: snapshot.url }] };
@@ -221,7 +230,5 @@ function stringArg(value: unknown, name: string): string {
 }
 
 function publicUrl(value: string): string {
-  const url = new URL(value);
-  if (!/^https?:$/.test(url.protocol) || url.username || url.password || /^(localhost|127\.|0\.|10\.|192\.168\.|\[::1\])/.test(url.hostname)) throw new Error("Research supports public HTTP(S) URLs only");
-  return url.href;
+  return publicWebUrl(value).href;
 }

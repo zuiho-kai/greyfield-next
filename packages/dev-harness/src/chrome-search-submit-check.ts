@@ -14,14 +14,19 @@ const server = createServer((request, response) => {
   response.end(`<title>Greyfield local search fixture</title><main><h1>Documentation search</h1><form role="search" action="/results"><input type="search" name="q" aria-label="Search documentation"><button>Search</button></form><p id="result">${url.pathname === "/results" ? "Navigation result: exact dependency installation from the requested documentation." : "Previous search result: this stale paragraph must not be returned after a query."}</p></main>${url.pathname === "/dynamic" ? `<script>document.querySelector('form').addEventListener('submit', event => { event.preventDefault(); document.querySelector('main').setAttribute('aria-busy','true'); document.querySelector('#result').textContent='Loading the requested documentation...'; setTimeout(() => { document.querySelector('#result').textContent='Dynamic result: '+document.querySelector('input').value+' — install only the missing dependency.'; document.querySelector('main').removeAttribute('aria-busy'); }, 350); });</script>` : ""}`);
 });
 await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+const localOrigin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+const origin = "https://search.greyfield.example";
 let activePage: Page | undefined;
 const tools = createBrowserResearchTools({ profilePath: await mkdtemp(join(tmpdir(), "greyfield-search-submit-")), onPage: (page) => { activePage = page; } });
 const signal = new AbortController().signal;
 const summary: Record<string, unknown> = { ok: false, artifacts };
 try {
-  // The fixture is loaded directly by the harness; production open-URL policy remains unchanged.
+  // Serve the local fixture behind a public test URL; production policy has no local exception.
   await tools.execute("browser_read", {}, signal).catch(() => {});
+  await activePage!.route(`${origin}/**`, async (route) => {
+    const url = new URL(route.request().url());
+    await route.fulfill({ response: await activePage!.request.get(localOrigin + url.pathname + url.search) });
+  });
   for (const path of ["/dynamic", "/navigation"]) {
     await activePage!.goto(origin + path);
     const snapshot = JSON.parse((await tools.execute("browser_read", {}, signal)).text);

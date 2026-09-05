@@ -27,6 +27,25 @@ const tools = createBrowserResearchTools({
 const summary: Record<string, unknown> = { ok: false, artifacts };
 try {
   const signal = new AbortController().signal;
+  if (process.argv.includes("--redirect-check")) {
+    await tools.execute("read_webpage", { url: "https://example.com" }, signal);
+    // A controlled HTTP redirect in real Chrome avoids coupling this regression
+    // check to a search engine's changing result list or redirect service uptime.
+    await activePage!.route("https://redirect.greyfield.example/**", (route) => route.fulfill({ status: 302, headers: { location: "https://example.org/" }, body: "" }));
+    await activePage!.setContent('<main><p>Public reference navigation fixture. Follow the link to its final public source.</p><a href="https://redirect.greyfield.example/source">Follow redirected source</a></main>');
+    const first = JSON.parse((await tools.execute("browser_read", {}, signal)).text);
+    const link = first.elements.find((item: { text: string }) => item.text === "Follow redirected source");
+    const started = Date.now();
+    const redirected = JSON.parse((await tools.execute("browser_click", { ref: link.ref }, signal)).text);
+    if (new URL(redirected.url).hostname !== "example.org" || !redirected.content.includes("Example Domain")) throw new Error("Cross-origin redirect did not return the landed source");
+    summary.crossOriginRedirect = { elapsedMs: Date.now() - started, url: redirected.url, content: redirected.content };
+    for (const url of ["http://172.16.0.1", "http://169.254.169.254", "http://[fc00::1]"]) {
+      let rejected = false;
+      try { await tools.execute("read_webpage", { url }, signal); } catch (error) { rejected = String(error).includes("public HTTP(S)"); }
+      if (!rejected) throw new Error(`Private target was accepted: ${url}`);
+    }
+    summary.privateTargetsRejected = true;
+  } else {
   const search = JSON.parse((await tools.execute("web_search", { query: '"ERR_MODULE_NOT_FOUND" "lodash"' }, signal)).text);
   const result = search.results.find((item: { url: string }) => item.url.includes("github.com/lodash"));
   if (!result) throw new Error("Search did not return the upstream lodash issue");
@@ -42,6 +61,7 @@ try {
   const secondPage = JSON.parse((await tools.execute("browser_click", { ref: next.ref }, signal)).text);
   if (!secondPage.url.includes("page/2") || !secondPage.content.includes("Marilyn Monroe")) throw new Error("JS pagination was not navigated/read");
   summary.javascriptPagination = { url: secondPage.url, content: secondPage.content };
+  }
   await tools.finish?.(signal, true);
 
   const configPath = process.env.GREYFIELD_ACCEPTANCE_CONFIG;
@@ -64,7 +84,11 @@ try {
   const previousPage = activePage;
   const pending = tools.execute("read_webpage", { url: "https://httpbin.org/delay/20" }, controller.signal);
   const rejected = pending.then(() => false, () => true);
-  while (activePage === previousPage) await new Promise((resolve) => setTimeout(resolve, 20));
+  let settled = false;
+  void rejected.finally(() => { settled = true; });
+  const deadline = Date.now() + 30_000;
+  while (activePage === previousPage && !settled && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20));
+  if (activePage === previousPage) { controller.abort(); throw new Error("Cancellation check never received a new research page"); }
   const stopAt = Date.now();
   controller.abort();
   if (!await rejected) throw new Error("Cancelled browser navigation unexpectedly completed");
