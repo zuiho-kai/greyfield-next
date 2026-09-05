@@ -157,6 +157,7 @@ export interface WindowStatePatch {
 }
 
 export class DesktopRuntimeBridge {
+  private nekoSources = new Map<string, { title: string; url: string }>();
   private state: DesktopRendererState = createInitialDesktopRendererState();
   private readonly stateChangeHandlers = new Set<DesktopStateChangeHandler>();
   private readonly interactionProfile = createDefaultInteractionProfile();
@@ -207,21 +208,27 @@ export class DesktopRuntimeBridge {
       this.emitStateChange();
     });
     this.host?.on("neko:event", (event) => {
+      if (event.type === "interrupt") { this.nekoSources.clear(); this.state = { ...this.state, status: "idle", toolStatus: undefined }; }
+      if (event.type === "research") {
+        for (const source of event.sources ?? []) this.nekoSources.set(source.url, source);
+        this.state = { ...this.state, status: "thinking", toolStatus: { name: "research_web", status: event.status === "done" ? "completed" : event.status === "error" ? "failed" : "running", message: event.message } };
+      }
       if (event.type === "state") {
         const wasActive = ["starting", "connecting", "ready"].includes(this.state.nekoPlugin.status);
         this.state = { ...this.state, nekoPlugin: event.state };
         if (wasActive && ["stopped", "error", "not-installed"].includes(event.state.status)) {
-          this.state = { ...this.state, status: "idle", assistantDraft: "", stage: { ...this.state.stage, mouthOpen: 0 } };
+          this.state = { ...this.state, status: "idle", assistantDraft: "", toolStatus: undefined, stage: { ...this.state.stage, mouthOpen: 0 } };
         }
       }
       if (event.type === "message" && event.data.type === "user_transcript") {
-        this.state = { ...this.state, messages: [...this.state.messages, { role: "user", text: String(event.data.text ?? "") }] };
+        this.state = { ...this.state, status: "thinking", toolStatus: undefined, messages: [...this.state.messages, { role: "user", text: String(event.data.text ?? "") }] };
       }
       if (event.type === "message" && event.data.type === "gemini_response") {
-        this.state = { ...this.state, status: "speaking", assistantDraft: `${event.data.isNewMessage ? "" : this.state.assistantDraft}${String(event.data.text ?? "")}` };
+        this.state = { ...this.state, status: "speaking", toolStatus: undefined, assistantDraft: `${event.data.isNewMessage ? "" : this.state.assistantDraft}${String(event.data.text ?? "")}` };
       }
       if (event.type === "message" && event.data.type === "system" && event.data.data === "turn end") {
-        this.state = { ...this.state, status: "idle", messages: this.state.assistantDraft ? [...this.state.messages, { role: "assistant", text: this.state.assistantDraft }] : this.state.messages, assistantDraft: "" };
+        const sourceText = this.nekoSources.size ? `\n\n资料来源：\n${[...this.nekoSources.values()].map((source) => `[${source.title.replace(/[\[\]\r\n]/g, " ")}](${source.url})`).join("\n")}` : "";
+        this.state = { ...this.state, status: this.state.assistantDraft ? "idle" : this.state.status, messages: this.state.assistantDraft ? [...this.state.messages, { role: "assistant", text: this.state.assistantDraft + sourceText }] : this.state.messages, assistantDraft: "" };
       }
       this.emitStateChange();
     });

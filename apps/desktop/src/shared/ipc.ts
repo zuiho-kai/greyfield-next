@@ -151,7 +151,7 @@ export interface DesktopScreenAwarenessState {
 }
 
 export interface DesktopIpcRequestMap {
-  "neko:command": { action: "install" | "start" | "stop" | "status"; message?: string };
+  "neko:command": { action: "install" | "start" | "stop" | "status" | "user-activity"; message?: string };
   "neko:audio": { data: Uint8Array; sampleRate: number };
   "runtime:input": RuntimeInputEvent;
   "runtime:speech-playback": DesktopSpeechPlaybackEvent;

@@ -13,6 +13,13 @@ function createCompleteProviderState(): DesktopRendererState {
 }
 
 describe("provider experience status", () => {
+  it("shows a connected original voice session without an unrelated text-provider setup banner", () => {
+    const state = createInitialDesktopRendererState();
+    state.nekoPlugin = { status: "ready", message: "connected" };
+    expect(describeProviderExperience(state, "zh-CN")).toMatchObject({ tone: "configured", label: "N.E.K.O 语音已连接", actionLabel: "" });
+    state.nekoPlugin.status = "stopped";
+    expect(describeProviderExperience(state, "zh-CN").tone).toBe("preview");
+  });
   it("labels fake LLM and ASR as explicit previews with a real-chat next step", () => {
     const state = createInitialDesktopRendererState();
 

@@ -12,6 +12,21 @@ async function flushSpeechPlaybackQueue(): Promise<void> {
 }
 
 describe("createDesktopRuntimeBridge", () => {
+  it("shows read sources with the native voice answer and clears them on the next voice turn", () => {
+    let receive: ((event: import("../../../../../packages/neko-plugin/src/index").NekoPluginEvent) => void) | undefined;
+    const bridge = createDesktopRuntimeBridge({ send: () => undefined, on: (channel, handler) => {
+      if (channel === "neko:event") receive = handler as typeof receive;
+      return () => undefined;
+    } });
+    receive?.({ type: "research", name: "read_webpage", status: "done", sources: [{ title: "Example Domain", url: "https://example.com/" }] });
+    receive?.({ type: "message", data: { type: "gemini_response", text: "这是文档示例域名。", isNewMessage: true } });
+    receive?.({ type: "message", data: { type: "system", data: "turn end" } });
+    expect(bridge.getState().messages.at(-1)?.text).toContain("[Example Domain](https://example.com/)");
+    receive?.({ type: "interrupt" });
+    receive?.({ type: "message", data: { type: "gemini_response", text: "你好。", isNewMessage: true } });
+    receive?.({ type: "message", data: { type: "system", data: "turn end" } });
+    expect(bridge.getState().messages.at(-1)?.text).toBe("你好。");
+  });
   it("resets the speaking surface when the active NEKO plugin is disabled", () => {
     let receive: ((event: import("../../../../../packages/neko-plugin/src/index").NekoPluginEvent) => void) | undefined;
     const bridge = createDesktopRuntimeBridge({ send: () => undefined, on: (channel, handler) => {

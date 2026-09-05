@@ -15,7 +15,7 @@ export class RealtimeAudio {
 
   constructor(private readonly onMouth: (value: number) => void) {}
 
-  async start(onPcm: (data: Uint8Array, sampleRate: number) => void, onBargeIn?: () => void): Promise<void> {
+  async start(onPcm: (data: Uint8Array, sampleRate: number) => void, onBargeIn?: () => void, onSpeechStart?: () => void): Promise<void> {
     this.stop();
     const epoch = this.epoch;
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
@@ -41,6 +41,7 @@ export class RealtimeAudio {
         if (silenceMs > 250) voicing = false;
         if (!voicing && voiceMs >= 90) {
           voicing = true;
+          onSpeechStart?.();
           if (this.playback.size) onBargeIn?.();
         }
         // 2048 frames at 48k are below the official 120ms packet limit.
