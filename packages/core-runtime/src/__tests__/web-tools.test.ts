@@ -1,9 +1,26 @@
-import { describe, expect, it, vi } from "vitest";
-import { createWebTools } from "../web-tools";
+import type { LookupAddress } from "node:dns";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createWebTools, publicWebUrl, type PublicWebFetch } from "../web-tools";
 
-vi.mock("node:dns/promises", () => ({ lookup: vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]) }));
+const dns = vi.hoisted(() => ({ lookup: vi.fn<() => Promise<LookupAddress[]>>(async () => [{ address: "93.184.216.34", family: 4 }]) }));
+vi.mock("node:dns/promises", () => dns);
+afterEach(() => { dns.lookup.mockReset().mockResolvedValue([{ address: "93.184.216.34", family: 4 }]); });
 
 describe("read-only web tools", () => {
+  it.each(["http://172.16.0.1", "http://172.31.255.254", "http://169.254.169.254", "http://[fc00::1]", "http://[fe80::1]", "http://[::ffff:127.0.0.1]", "http://127.1", "http://localhost.", "http://x.localhost"])("rejects non-public literal target %s", (url) => {
+    expect(() => publicWebUrl(url)).toThrow("public HTTP(S)");
+  });
+
+  it("passes the validated DNS answer to the transport and revalidates a redirect", async () => {
+    dns.lookup.mockResolvedValueOnce([{ address: "93.184.216.34", family: 4 }]).mockResolvedValueOnce([{ address: "127.0.0.1", family: 4 }]);
+    const fetch = vi.fn<PublicWebFetch>(async () => new Response(null, { status: 302, headers: { location: "/redirect" } }));
+    const tools = createWebTools(fetch);
+    await expect(tools.execute("read_webpage", { url: "https://rebind.example/" }, new AbortController().signal)).rejects.toThrow("Local and private");
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0]?.[2]).toEqual([{ address: "93.184.216.34", family: 4 }]);
+    expect(dns.lookup).toHaveBeenCalledTimes(2);
+  });
+
   it("reads the matching section of long documentation instead of only its opening", async () => {
     const html = `<title>Node errors</title><nav>ERR_MODULE_NOT_FOUND table of contents</nav><p>${"Unrelated introductory material. ".repeat(1000)}</p><h4 id="err_module_not_found">ERR_MODULE_NOT_FOUND</h4><p>The module loader could not resolve the requested package. Check the exact import name and install the missing dependency in the project directory.</p>`;
     const tools = createWebTools(async () => new Response(html, { headers: { "content-type": "text/html" } }));

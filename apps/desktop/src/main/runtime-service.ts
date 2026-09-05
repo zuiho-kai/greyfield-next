@@ -34,7 +34,7 @@ import {
   type ProactiveMemoryTriggerState,
   type ChatMessage
 } from "@greyfield/core-runtime";
-import { createWebTools } from "../../../../packages/core-runtime/src/web-tools";
+import { createWebTools, type PublicWebFetch } from "../../../../packages/core-runtime/src/web-tools";
 import {
   filterDeletedSessionTurns,
   hasDeletedMemoryEvidenceSource,
@@ -58,7 +58,7 @@ import type { DesktopProfileFact } from "../shared/ipc";
 
 export interface RuntimeServiceOptions {
   fetch?: typeof fetch;
-  webFetch?: typeof fetch;
+  webFetch?: PublicWebFetch;
   webTools?: import("@greyfield/core-runtime").WebTools;
   loadPersona?: (config: GreyfieldConfig) => Promise<CharacterPersona>;
   memoryStore?: MemoryStore;
@@ -1005,7 +1005,7 @@ export class RuntimeService {
     const atomExtractionPolicy = this.resolveMemoryAtomExtractionPolicy();
     return new GreyfieldRuntime({
       llm: this.providerFactory.createChatLLMProvider(),
-      webTools: this.options.webTools ?? createWebTools(this.options.webFetch ?? this.options.fetch),
+      webTools: this.options.webTools ?? createWebTools(this.options.webFetch),
       visionLlm: this.providerFactory.createVisionLLMProvider(),
       asr: this.providerFactory.createASRProvider(),
       tts: this.providerFactory.createTTSProvider(),
