@@ -18,7 +18,7 @@ export type NekoPluginEvent =
   | { type: "state"; state: NekoPluginState }
   | { type: "audio"; speechId: string; data: Uint8Array }
   | { type: "interrupt"; speechId?: string }
-  | { type: "research"; name: string; status: "running" | "done" | "error"; sources?: WebSource[]; message?: string }
+  | { type: "research"; name: string; status: "running" | "done" | "error"; sources?: WebSource[]; message?: string; resultText?: string }
   | { type: "message"; data: Record<string, unknown> };
 
 const sourceDirectories = ["app", "brain", "config", "deps", "local_server", "main_logic", "main_routers", "memory", "utils", "plugin", "templates", "static/app"];

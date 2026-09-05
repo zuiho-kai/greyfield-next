@@ -6,6 +6,7 @@
       <div>
         <h3>N.E.K.O {{ zh ? '实时语音' : 'Realtime Voice' }}</h3>
         <p>{{ zh ? '在 Greyfield 里和她自然交谈，直接开口让她用 Chrome 查网页，再听她说出结果。支持插话。' : 'Talk naturally, ask her to research in Chrome, and hear the answer in the same realtime voice. You can interrupt.' }}</p>
+        <p data-testid="neko-note-example">{{ zh ? '试着说：“把刚才的内容记成一份笔记，用记事本打开。”笔记会保存在文档的 Greyfield Notes 文件夹。' : 'Try: “Save what we discussed as a note and open it in Notepad.” Notes are saved in Documents/Greyfield Notes.' }}</p>
         <small>{{ zh ? 'Project N.E.K.O. · 官方开源运行时' : 'Project N.E.K.O. · Official open-source runtime' }}</small>
       </div>
     </article>

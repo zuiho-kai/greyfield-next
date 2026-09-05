@@ -87,6 +87,8 @@ importers:
         specifier: workspace:*
         version: link:../audio-runtime
 
+  packages/desktop-note: {}
+
   packages/dev-harness:
     dependencies:
       '@greyfield/core-runtime':

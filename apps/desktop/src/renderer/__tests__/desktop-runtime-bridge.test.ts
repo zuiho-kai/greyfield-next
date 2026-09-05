@@ -12,6 +12,22 @@ async function flushSpeechPlaybackQueue(): Promise<void> {
 }
 
 describe("createDesktopRuntimeBridge", () => {
+  it("keeps a readable saved note location after native reply and Stop", () => {
+    let receive: ((event: import("../../../../../packages/neko-plugin/src/index").NekoPluginEvent) => void) | undefined;
+    const bridge = createDesktopRuntimeBridge({ send: () => undefined, on: (channel, handler) => {
+      if (channel === "neko:event") receive = handler as typeof receive;
+      return () => undefined;
+    } });
+    const receipt = "笔记已保存，已请求记事本打开：C:/Users/Test/Documents/Greyfield Notes/验收.txt";
+    receive?.({ type: "state", state: { status: "ready", message: "connected" } });
+    receive?.({ type: "research", name: "create_desktop_note", status: "done", message: receipt, sources: [] });
+    expect(bridge.getState().toolStatus?.name).toBe("create_desktop_note");
+    receive?.({ type: "message", data: { type: "system", data: "turn end" } });
+    receive?.({ type: "message", data: { type: "gemini_response", text: "笔记已保存。", isNewMessage: true } });
+    receive?.({ type: "message", data: { type: "system", data: "turn end" } });
+    receive?.({ type: "state", state: { status: "stopped", message: "stopped" } });
+    expect(bridge.getState().messages).toEqual([{ role: "assistant", text: receipt }, { role: "assistant", text: "笔记已保存。" }]);
+  });
   it("replays native weather research without treating its empty tool end as the final answer", () => {
     let receive: ((event: import("../../../../../packages/neko-plugin/src/index").NekoPluginEvent) => void) | undefined;
     const bridge = createDesktopRuntimeBridge({ send: () => undefined, on: (channel, handler) => {

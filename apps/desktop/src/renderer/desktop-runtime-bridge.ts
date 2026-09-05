@@ -211,7 +211,10 @@ export class DesktopRuntimeBridge {
       if (event.type === "interrupt") { this.nekoSources.clear(); this.state = { ...this.state, status: "idle", assistantDraft: "", toolStatus: undefined }; }
       if (event.type === "research") {
         for (const source of event.sources ?? []) this.nekoSources.set(source.url, source);
-        this.state = { ...this.state, status: "thinking", toolStatus: { name: "research_web", status: event.status === "done" ? "completed" : event.status === "error" ? "failed" : "running", message: event.message } };
+        this.state = { ...this.state, status: "thinking", toolStatus: { name: event.name === "create_desktop_note" ? event.name : "research_web", status: event.status === "done" ? "completed" : event.status === "error" ? "failed" : "running", message: event.message } };
+        if (event.name === "create_desktop_note" && event.status === "done" && event.message) {
+          this.state = { ...this.state, messages: [...this.state.messages, { role: "assistant", text: event.message }] };
+        }
       }
       if (event.type === "state") {
         const wasActive = ["starting", "connecting", "ready"].includes(this.state.nekoPlugin.status);

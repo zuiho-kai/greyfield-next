@@ -275,8 +275,8 @@ function splitChatReply(text: string): string[] {
     } else lines.push(line);
   }
   if (lines.length) paragraphs.push(lines.join("\n"));
-  // Preserve source URLs and whole code blocks when splitting display bubbles.
-  return paragraphs.flatMap((paragraph) => /https?:\/\/|```|(?:^|\n)\s*(?:\d+[.)]|\*\*步骤)/.test(paragraph) ? [paragraph] : splitAssistantReplyForDisplay(paragraph));
+  // Preserve source URLs, Windows file locations and whole code blocks.
+  return paragraphs.flatMap((paragraph) => /https?:\/\/|[A-Za-z]:\\|```|(?:^|\n)\s*(?:\d+[.)]|\*\*步骤)/.test(paragraph) ? [paragraph] : splitAssistantReplyForDisplay(paragraph));
 }
 
 function createMessageSegments(
@@ -319,6 +319,11 @@ const toolStatusText = computed(() => {
   const tool = props.state.toolStatus;
   if (!tool) return "";
   const chinese = locale.value === "zh-CN";
+  if (tool.name === "create_desktop_note") {
+    if (tool.status === "failed") return `${chinese ? "笔记创建失败" : "Note creation failed"}: ${tool.message ?? ""}`;
+    if (tool.status === "completed") return tool.message ?? (chinese ? "笔记已保存，正在回报…" : "Note saved, preparing the reply…");
+    return chinese ? "正在保存笔记并启动记事本…" : "Saving the note and launching Notepad…";
+  }
   if (tool.status === "failed") return `${chinese ? "资料获取失败" : "Research failed"}: ${tool.message ?? ""}`;
   if (tool.status === "completed") return chinese ? "资料已获取，正在整理…" : "Sources received, preparing the answer…";
   if (tool.name === "screen_context") return chinese ? "正在看你眼前的报错…" : "Reading the current screen…";
