@@ -40,10 +40,18 @@ export function useWindowRuntimeState(params: {
   }
 
   async function startVoiceInput(): Promise<DesktopRendererState> {
+    if (state.value.nekoPlugin.status === "stopped" || state.value.nekoPlugin.status === "error") {
+      window.greyfield?.send("neko:command", { action: "start" });
+      return applyState(bridge.getState());
+    }
     return applyState(bridge.startVoiceInput());
   }
 
   async function stopVoiceInput(audio?: Uint8Array): Promise<DesktopRendererState> {
+    if (["starting", "connecting", "ready"].includes(state.value.nekoPlugin.status)) {
+      window.greyfield?.send("neko:command", { action: "stop" });
+      return applyState(bridge.getState());
+    }
     if (!microphoneRecorder) {
       return applyState(bridge.failVoiceInput("Voice input is available from the pet controls or Chat window."));
     }

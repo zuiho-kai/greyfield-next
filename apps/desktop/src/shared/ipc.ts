@@ -151,6 +151,8 @@ export interface DesktopScreenAwarenessState {
 }
 
 export interface DesktopIpcRequestMap {
+  "neko:command": { action: "install" | "start" | "stop" | "status"; message?: string };
+  "neko:audio": { data: Uint8Array; sampleRate: number };
   "runtime:input": RuntimeInputEvent;
   "runtime:speech-playback": DesktopSpeechPlaybackEvent;
   "provider:test-llm": {};
@@ -198,6 +200,7 @@ export interface DesktopIpcRequestMap {
 }
 
 export interface DesktopIpcEventMap {
+  "neko:event": import("../../../../packages/neko-plugin/src/index").NekoPluginEvent;
   "provider:test-reset": {};
   "session:continuity": {
     restoredRecentMessageCount: number;

@@ -15,6 +15,7 @@ import { PetWindowController } from "./pet-window-controller";
 import { RuntimeIpcController } from "./runtime-ipc-controller";
 import { RuntimeService } from "./runtime-service";
 import { fetchWebPage } from "./web-fetch";
+import { registerNekoPluginHost } from "./neko-plugin-host";
 import { ElectronScreenCaptureSource } from "./screen-capture-source";
 import { redactConfigForRenderer } from "./settings-redaction";
 import { SettingsController } from "./settings-controller";
@@ -45,6 +46,7 @@ let controlsWindow: BrowserWindow | undefined;
 let tray: Tray | undefined;
 let settingsController: SettingsController | undefined;
 let runtimeService: RuntimeService | undefined;
+let nekoPlugin: ReturnType<typeof registerNekoPluginHost> | undefined;
 let runtimeIpcController: RuntimeIpcController | undefined;
 let observationController: ObservationController | undefined;
 let petWindowController: PetWindowController | undefined;
@@ -199,7 +201,9 @@ function createTrayIcon(): Electron.NativeImage {
 }
 
 function registerIpc(): void {
+  nekoPlugin = registerNekoPluginHost(app.getPath("userData"), () => handleRuntimeInput({ type: "runtime.interrupt" }));
   ipcMain.on("runtime:input", (event, payload) => {
+    if (payload.type === "runtime.interrupt") void nekoPlugin?.stop();
     if (payload.type === "text.input" && typeof payload.text === "string") {
       for (const window of BrowserWindow.getAllWindows()) {
         if (window.webContents.id !== event.sender.id) window.webContents.send("runtime:event", { type: "user.text.accepted", text: payload.text });
@@ -1004,7 +1008,7 @@ app.on("before-quit", (event) => {
     event.preventDefault();
     memoryShutdownDone = true;
     const timeout = new Promise<void>((resolve) => setTimeout(resolve, 10_000));
-    void Promise.race([runtimeService.shutdown(), timeout]).finally(() => app.quit());
+    void Promise.race([Promise.all([runtimeService.shutdown(), nekoPlugin?.stop()]), timeout]).finally(() => app.quit());
   }
 });
 

@@ -31,6 +31,7 @@ export interface DesktopMessage {
 }
 
 export interface DesktopRendererState {
+  nekoPlugin: import("../../../../packages/neko-plugin/src/index").NekoPluginState;
   status: string;
   errorMessage: string;
   screenAwarenessNotice: string;
@@ -205,6 +206,25 @@ export class DesktopRuntimeBridge {
       };
       this.emitStateChange();
     });
+    this.host?.on("neko:event", (event) => {
+      if (event.type === "state") {
+        const wasActive = ["starting", "connecting", "ready"].includes(this.state.nekoPlugin.status);
+        this.state = { ...this.state, nekoPlugin: event.state };
+        if (wasActive && ["stopped", "error", "not-installed"].includes(event.state.status)) {
+          this.state = { ...this.state, status: "idle", assistantDraft: "", stage: { ...this.state.stage, mouthOpen: 0 } };
+        }
+      }
+      if (event.type === "message" && event.data.type === "user_transcript") {
+        this.state = { ...this.state, messages: [...this.state.messages, { role: "user", text: String(event.data.text ?? "") }] };
+      }
+      if (event.type === "message" && event.data.type === "gemini_response") {
+        this.state = { ...this.state, status: "speaking", assistantDraft: `${event.data.isNewMessage ? "" : this.state.assistantDraft}${String(event.data.text ?? "")}` };
+      }
+      if (event.type === "message" && event.data.type === "system" && event.data.data === "turn end") {
+        this.state = { ...this.state, status: "idle", messages: this.state.assistantDraft ? [...this.state.messages, { role: "assistant", text: this.state.assistantDraft }] : this.state.messages, assistantDraft: "" };
+      }
+      this.emitStateChange();
+    });
     this.host?.on("runtime:event", (event) => {
       this.state = reduceRuntimeEvent(this.state, event, this.interactionProfile);
       if (event.type === "memory.recall.context" && this.state.memoryDebug.snapshot) {
@@ -225,6 +245,7 @@ export class DesktopRuntimeBridge {
         this.playSpeech(event.text, event.data);
       }
       if (event.type === "runtime.status" && event.status === "interrupted") {
+        this.speechPlaybackEpoch += 1;
         this.speechOutput?.cancel();
       }
       this.emitStateChange();
@@ -1131,6 +1152,7 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       exportText: "",
       snapshot: null
     },
+    nekoPlugin: { status: "not-installed", message: "N.E.K.O 原版实时语音" },
     memoryExtraction: null,
     sessionContinuity: {
       restoredRecentMessageCount: 0,

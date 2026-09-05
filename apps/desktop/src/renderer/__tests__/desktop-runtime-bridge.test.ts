@@ -12,6 +12,18 @@ async function flushSpeechPlaybackQueue(): Promise<void> {
 }
 
 describe("createDesktopRuntimeBridge", () => {
+  it("resets the speaking surface when the active NEKO plugin is disabled", () => {
+    let receive: ((event: import("../../../../../packages/neko-plugin/src/index").NekoPluginEvent) => void) | undefined;
+    const bridge = createDesktopRuntimeBridge({ send: () => undefined, on: (channel, handler) => {
+      if (channel === "neko:event") receive = handler as typeof receive;
+      return () => undefined;
+    } });
+    receive?.({ type: "state", state: { status: "ready", message: "connected" } });
+    receive?.({ type: "message", data: { type: "gemini_response", text: "你好", isNewMessage: true } });
+    expect(bridge.getState().status).toBe("speaking");
+    receive?.({ type: "state", state: { status: "stopped", message: "stopped" } });
+    expect(bridge.getState()).toMatchObject({ status: "idle", assistantDraft: "", stage: { mouthOpen: 0 } });
+  });
   it("starts with paused long-term memory and reduces only a bounded recent-message count", () => {
     let sessionContinuity:
       | ((event: {
