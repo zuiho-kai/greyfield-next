@@ -20,6 +20,10 @@ export function describeProviderExperience(
   state: DesktopRendererState,
   locale?: SettingsLocale
 ): ProviderExperienceView {
+  if (["starting", "connecting"].includes(state.nekoPlugin.status)) {
+    const chinese = locale !== "en-US";
+    return { tone: "configured", label: chinese ? "正在连接 N.E.K.O 语音" : "Connecting N.E.K.O voice", detail: state.nekoPlugin.message, actionLabel: "" };
+  }
   if (state.nekoPlugin.status === "ready") {
     const chinese = locale !== "en-US";
     return { tone: "configured", label: chinese ? "N.E.K.O 语音已连接" : "N.E.K.O voice connected", detail: chinese ? "可以直接开口交谈，也可以让她用 Chrome 查网页。" : "Speak naturally, or ask her to research in Chrome.", actionLabel: "" };

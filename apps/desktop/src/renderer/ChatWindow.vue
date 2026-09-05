@@ -161,7 +161,9 @@
           type="button"
           class="voice-input-button"
           :class="{ 'voice-input-button--active': state.voiceInput.status === 'listening' || state.nekoPlugin.status === 'ready' }"
-          :disabled="state.voiceInput.status === 'transcribing'"
+          :disabled="voiceConnecting || state.voiceInput.status === 'transcribing'"
+          :aria-busy="voiceConnecting"
+          :data-neko-status="state.nekoPlugin.status"
           data-testid="chat-voice-input-button"
           :title="voiceInputExperience.isPreview ? voiceInputExperience.label : voiceInputLabel"
           @click="$emit(state.voiceInput.status === 'listening' || state.nekoPlugin.status === 'ready' ? 'stop-voice-input' : 'start-voice-input')"
@@ -324,13 +326,26 @@ const toolStatusText = computed(() => {
 });
 const t = (key: SettingsI18nKey, values?: Record<string, string | number>): string =>
   settingsT(locale.value, key, values);
-const chatStatus = computed(() => describeChatStatus(props.state, props.draft, locale.value));
+const chatStatus = computed(() => {
+  const view = describeChatStatus(props.state, props.draft, locale.value);
+  const status = props.state.nekoPlugin.status;
+  if (["starting", "connecting", "ready"].includes(status) && ["idle", "interrupted"].includes(props.state.status)) {
+    const chinese = locale.value === "zh-CN";
+    return { ...view, tone: "waiting" as const, label: status === "ready" ? (chinese ? "语音已连接" : "Voice connected") : (chinese ? "连接中" : "Connecting"),
+      detail: status === "ready" ? (chinese ? "可以直接开口说话。" : "You can speak now.") : (chinese ? "连接完成后即可开口。" : "You can speak once connected."),
+      canStop: true, stopLabel: t("chat.action.stop") };
+  }
+  return view;
+});
 const providerExperience = computed(() => describeProviderExperience(props.state, locale.value));
 const voiceInputExperience = computed(() => describeVoiceInputExperience(props.state, locale.value));
 const screenAwarenessNoticeText = computed(() => describeScreenAwarenessNotice(props.state, locale.value));
 const voiceInputLabel = computed(() => {
-  if (props.state.nekoPlugin.status === "ready") return "结束 N.E.K.O 语音";
-  if (["stopped", "error"].includes(props.state.nekoPlugin.status)) return "启动 N.E.K.O 语音";
+  const chinese = locale.value === "zh-CN";
+  if (props.state.nekoPlugin.status === "starting") return chinese ? "启动中…" : "Starting…";
+  if (props.state.nekoPlugin.status === "connecting") return chinese ? "连接中…" : "Connecting…";
+  if (props.state.nekoPlugin.status === "ready") return chinese ? "结束语音" : "End voice";
+  if (["stopped", "error"].includes(props.state.nekoPlugin.status)) return chinese ? "开始语音" : "Start voice";
   if (props.state.voiceInput.status === "listening") {
     return t("chat.voice.stopMic");
   }
@@ -339,9 +354,11 @@ const voiceInputLabel = computed(() => {
   }
   return t("chat.voice");
 });
+const voiceConnecting = computed(() => ["starting", "connecting"].includes(props.state.nekoPlugin.status));
 </script>
 
 <style scoped>
+.voice-input-button { white-space: nowrap; }
 .tool-progress { color: #17675c; padding: 8px 12px; font-size: 13px; }
 .chat-provider-experience {
   display: flex;
