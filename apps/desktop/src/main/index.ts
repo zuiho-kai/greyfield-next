@@ -451,6 +451,9 @@ function attachHideOnClose(window: BrowserWindow | undefined, markDestroyed: () 
 
 function handleRuntimeInput(payload: Parameters<NonNullable<typeof runtimeService>["handle"]>[0]): void {
   void (async () => {
+    if (payload.type === "text.input" && nekoPlugin && ["starting", "connecting", "ready"].includes(nekoPlugin.getState().status)) {
+      await nekoPlugin.stop();
+    }
     const input =
       payload.type === "text.input" && observationController?.isEnabled()
         ? {

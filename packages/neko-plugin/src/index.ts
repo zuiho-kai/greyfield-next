@@ -69,12 +69,14 @@ export class NekoPlugin {
 
   async start(): Promise<void> {
     if (["installing", "starting", "connecting", "ready"].includes(this.state.status)) return;
-    this.setState("starting", "正在启动 N.E.K.O 原版语音运行时…");
-    await this.stop(false);
     const generation = ++this.generation;
+    this.setState("starting", "正在启动 N.E.K.O 原版语音运行时…");
     try {
+      await this.cleanup();
+      if (generation !== this.generation) return;
       if (!existsSync(this.pythonPath)) throw new Error("请先安装插件。");
       const revision = await this.command("git", ["rev-parse", "HEAD"], this.sourcePath);
+      if (generation !== this.generation) return;
       if (revision.trim() !== NEKO_REVISION) throw new Error("N.E.K.O 源码版本不匹配，请重新安装插件。");
       await this.command("git", ["diff", "--quiet", "HEAD", "--"], this.sourcePath);
       if (generation !== this.generation) return;
@@ -86,10 +88,12 @@ export class NekoPlugin {
       const localDataRoot = join(this.options.root, "local");
       const dataRoot = join(localDataRoot, "N.E.K.O");
       await mkdir(dataRoot, { recursive: true });
+      if (generation !== this.generation) return;
       const env = { ...process.env, ...servicePorts, NEKO_INSTANCE_ID: randomUUID(), LOCALAPPDATA: localDataRoot, APPDATA: join(this.options.root, "roaming"), XDG_DATA_HOME: localDataRoot,
         PYTHONIOENCODING: "utf-8", NEKO_STORAGE_SELECTED_ROOT: dataRoot,
         NEKO_STORAGE_ANCHOR_ROOT: dataRoot, NEKO_MAIN_SERVER_PORT: String(ports[0]), NEKO_MEMORY_SERVER_PORT: String(ports[1]) };
       const launch = (module: string, args: string[] = []) => {
+        if (generation !== this.generation) return;
         const child = spawn(this.pythonPath, ["-m", module, ...args], { cwd: this.sourcePath, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
         this.children.push(child);
         for (const output of [child.stdout, child.stderr]) output?.on("data", (chunk) => {
@@ -103,6 +107,7 @@ export class NekoPlugin {
       launch("app.main_server");
       const base = `http://127.0.0.1:${ports[0]}`;
       const bootstrap = await this.waitHttp(`${base}/api/storage/location/bootstrap`, generation) as { selection_required?: boolean };
+      if (generation !== this.generation) return;
       if (bootstrap.selection_required) {
         const selection = await fetch(`${base}/api/storage/location/select`, { method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify({ selected_root: dataRoot, selection_source: "user_selected" }) });
@@ -110,6 +115,7 @@ export class NekoPlugin {
       }
       await this.waitHttp(`http://127.0.0.1:${ports[1]}/docs`, generation);
       const character = await this.waitHttp(`${base}/api/characters/current_catgirl`, generation) as { current_catgirl?: string };
+      if (generation !== this.generation) return;
       if (!character.current_catgirl) throw new Error("原版运行时未返回当前角色。");
       // Official configuration API selects the official free profile, retaining its initialization.
       const configResponse = await fetch(`${base}/api/config/core_api`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ coreApi: "free", assistApi: "free" }) });
@@ -123,12 +129,14 @@ export class NekoPlugin {
   }
 
   private async connect(url: string, generation: number): Promise<void> {
+    if (generation !== this.generation) return;
     const socket = this.socket = new WebSocket(url);
     socket.binaryType = "arraybuffer";
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error("原版实时语音连接超时，未收到 session_started。")), 90_000);
       const finish = (error?: Error) => { clearTimeout(timer); error ? reject(error) : resolve(); };
       socket.onopen = () => {
+        if (generation !== this.generation) return;
         this.send({ action: "voice_input_control", event: "lease_sync", owner: "core", hard_muted: false, focus_suppressed: false, engaged: true, lease_generation: 1 });
         this.send({ action: "start_session", input_type: "audio", new_session: true });
       };
@@ -172,13 +180,17 @@ export class NekoPlugin {
   reportError(message: string): Promise<void> { return this.fail(message); }
 
   async stop(report = true): Promise<void> {
-    ++this.generation;
+    const generation = ++this.generation;
+    await this.cleanup();
+    if (report && generation === this.generation) this.setState(this.installed ? "stopped" : "not-installed", "已停用，麦克风和插件进程已关闭");
+  }
+
+  private async cleanup(): Promise<void> {
     this.send({ action: "pause_session" });
     this.socket?.close(); this.socket = undefined;
     this.audioHeaders = []; this.interruptedSpeech.clear();
     const children = [...this.children.splice(0), ...this.operations];
     await Promise.all(children.map(terminateChild));
-    if (report) this.setState(this.installed ? "stopped" : "not-installed", "已停用，麦克风和插件进程已关闭");
   }
 
   private async fail(message: string): Promise<void> {
