@@ -9,12 +9,18 @@ const desktop = join(root, "apps", "desktop");
 const preview = process.env.GREYFIELD_NEKO_PREVIEW_DIR || join(root, ".cache", "neko-plugin-acceptance");
 const config = join(preview, "greyfield.preview.config.json");
 if (!existsSync(config)) throw new Error("Missing private preview config. Set up the preview before launching.");
+const entry = join(desktop, "dist-main", "index.mjs");
+if (!existsSync(entry)) throw new Error("Missing desktop build. Run pnpm build:desktop before launching the preview.");
 const require = createRequire(join(desktop, "package.json"));
 const executable = require("electron");
 const env = { ...process.env, GREYFIELD_PROJECT_ROOT: root, GREYFIELD_CONFIG_PATH: config,
   GREYFIELD_USER_DATA_PATH: join(preview, "user-data") };
 delete env.GREYFIELD_NEKO_SOURCE_PATH;
 delete env.ELECTRON_RUN_AS_NODE;
-const child = spawn(executable, [join(desktop, "dist-main", "index.mjs")], { cwd: desktop, env, detached: true, stdio: "ignore", windowsHide: true });
+const child = spawn(executable, [entry], { cwd: desktop, env, detached: true, stdio: "ignore", windowsHide: true });
+await new Promise((resolve, reject) => {
+  child.once("error", reject);
+  child.once("spawn", resolve);
+});
 child.unref();
-console.log("Greyfield preview started. Open Settings → Plugins → N.E.K.O → Start voice.");
+console.log("Greyfield preview process launched. Open Settings → Plugins → N.E.K.O → Start voice.");
