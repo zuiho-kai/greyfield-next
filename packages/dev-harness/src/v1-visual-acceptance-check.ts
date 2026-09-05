@@ -343,6 +343,7 @@ export async function runV1VisualAcceptanceCheck(): Promise<V1VisualAcceptanceSu
       chatNavVisible: firstGlanceSettingsLayout.chatNavVisible,
       advancedToggleVisible: firstGlanceSettingsLayout.advancedToggleVisible,
       advancedDefaultClosed: firstGlanceSettingsLayout.advancedDefaultClosed,
+      navFirstGlanceOrderCorrect: firstGlanceSettingsLayout.navFirstGlanceOrderCorrect,
       providerFourFieldsVisible: firstGlanceSettingsLayout.providerFourFieldsVisible,
       providerTestVisible: firstGlanceSettingsLayout.providerTestVisible,
       providerCardFitsViewport: firstGlanceSettingsLayout.providerCardFitsViewport,
@@ -917,8 +918,14 @@ async function readSettingsLayout(page: Page): Promise<VisualAcceptanceSummaryIn
         navButtonLabels.includes("模型服务"),
       genericModelNavAbsent: !navButtonLabels.includes("Model") && !navButtonLabels.includes("模型"),
       navFirstGlanceOrderCorrect:
-        (navButtonLabels[0] === "Start chatting" && navButtonLabels[1] === "Chat" && navButtonLabels[2] === "Advanced settings") ||
-        (navButtonLabels[0] === "开始聊天" && navButtonLabels[1] === "聊天" && navButtonLabels[2] === "高级设置"),
+        ((navButtonLabels[0] === "Start chatting" && navButtonLabels[1] === "Plugins" &&
+          navButtonLabels[2] === "Chat" && navButtonLabels[3] === "Advanced settings") ||
+          (navButtonLabels[0] === "开始聊天" && navButtonLabels[1] === "插件广场" &&
+            navButtonLabels[2] === "聊天" && navButtonLabels[3] === "高级设置")) &&
+        navButtons.slice(0, 4).every((button) => {
+          const rect = button.getBoundingClientRect();
+          return rect.left >= 0 && rect.right <= window.innerWidth && rect.top >= 0 && rect.bottom <= window.innerHeight;
+        }),
       modelServiceActiveAfterClick: false,
       avatarActiveAfterClick: false,
       live2dAvatarSectionVisible: false,
