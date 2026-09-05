@@ -112,7 +112,15 @@ export function createBrowserResearchTools(options: BrowserResearchOptions): Web
           } else {
             if (await element.getAttribute("data-greyfield-search") !== "true") throw new Error("Only a visible search field can be used");
             await element.fill(stringArg(input.text, "text"));
-            await element.press("Enter");
+            const before = await page.evaluate(() => ({ documentStartedAt: performance.timeOrigin, text: (document.querySelector<HTMLElement>("main, [role=main], article, #apicontent") ?? document.body).innerText }));
+            await Promise.all([
+              page.waitForFunction((before) => {
+                const root = document.querySelector<HTMLElement>("main, [role=main], article, #apicontent") ?? document.body;
+                if (document.readyState === "loading" || root.matches('[aria-busy="true"]') || root.querySelector('[aria-busy="true"]')) return false;
+                return performance.timeOrigin !== before.documentStartedAt || root.innerText !== before.text;
+              }, before),
+              element.press("Enter")
+            ]);
             await page.waitForLoadState("domcontentloaded");
           }
         } else if (name !== "browser_read") throw new Error(`Unknown browser tool: ${name}`);
