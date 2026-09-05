@@ -13,7 +13,12 @@ export async function* streamToolConversation(llm: LLMProvider, messages: ChatMe
   const isolatedMessages = (): ChatMessage[] => [{ role: "system", content: `${researchPolicy}\nCurrent local date: ${new Date().toLocaleDateString("sv-SE")}. Collect evidence for the current request only; prior conversation is unavailable here.` }, ...(currentRequest ? [currentRequest] : [])];
   let isolated = policy === "answer" && hasUntrustedInput;
   let conversation: ChatMessage[] = isolated ? isolatedMessages() : [...messages];
-  if (policy === "answer" && !isolated) conversation = [{ role: "system", content: researchPolicy }, ...conversation];
+  if (policy === "answer" && !isolated) {
+    const first = conversation[0];
+    if (first?.role === "system" && typeof first.content === "string") {
+      conversation[0] = { ...first, content: `${first.content}\n\n${researchPolicy}` };
+    } else conversation.unshift({ role: "system", content: researchPolicy });
+  }
   const readSources = new Map<string, WebSource>();
   let completed = false;
   try {
