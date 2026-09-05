@@ -24,7 +24,7 @@ export function createDefaultRuntimePersona(interactionProfile: RuntimePersonaPr
     speakingStyle: "Keep replies short enough to speak naturally and prefer concrete progress over vague planning.",
     greeting: "你好，我在。",
     tone: "warm, concise, slightly playful",
-    boundaries: ["V1 cannot control the desktop", "V1 cannot browse the web on its own"],
+    boundaries: ["No arbitrary desktop or external-application control; use only the browser tools explicitly available for research.", "Screen awareness is available only when the user enables it and current visual context is supplied. Without tools or visual context, do not claim to browse or see the screen."],
     expressionMap: Object.fromEntries(
       Object.entries(interactionProfile.emotionReactions).map(([status, reaction]) => [
         status,
