@@ -1,5 +1,5 @@
 import { _electron as electron, type ElectronApplication } from "playwright";
-import { readFile, mkdir, writeFile } from "node:fs/promises";
+import { access, readFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
@@ -12,6 +12,7 @@ const fixturePath = process.env.GREYFIELD_NEKO_CHECK_AUDIO;
 const uiOnly = process.env.GREYFIELD_NEKO_UI_ONLY === "1";
 const cancelOnly = process.env.GREYFIELD_NEKO_BROWSER_CHECK === "interrupt";
 const browserCheck = process.env.GREYFIELD_NEKO_BROWSER_CHECK === "1" || cancelOnly;
+const noteCheck = process.env.GREYFIELD_NEKO_NOTE_CHECK === "1";
 const bargeFixturePath = process.env.GREYFIELD_NEKO_BARGE_AUDIO;
 process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY = "1";
 if (!configSource || (!fixturePath && !uiOnly)) throw new Error("Set GREYFIELD_NEKO_CONFIG_PATH and GREYFIELD_NEKO_CHECK_AUDIO; optional GREYFIELD_NEKO_SOURCE_PATH reuses an official checkout.");
@@ -25,12 +26,13 @@ const app = await electron.launch({ cwd: join(workspace, "apps", "desktop"), arg
   env: { ...process.env, GREYFIELD_CONFIG_PATH: configPath, GREYFIELD_PROJECT_ROOT: workspace,
     GREYFIELD_USER_DATA_PATH: join(artifacts, "user-data"), ...(source ? { GREYFIELD_NEKO_SOURCE_PATH: source } : {}) } });
 let result: Record<string, unknown> = {};
+let noteEvidence: Record<string, unknown> | undefined;
 try {
   const pet = await roleWindow(app, "pet"); const controls = await roleWindow(app, "controls");
   const settings = await roleWindow(app, "settings"); const chat = await roleWindow(app, "chat");
-  if (browserCheck) pet.on("console", (message) => { if (message.text().startsWith("NEKO_BROWSER ")) console.log(message.text()); });
+  if (browserCheck || noteCheck) pet.on("console", (message) => { if (message.text().startsWith("NEKO_BROWSER ")) console.log(message.text()); });
   if (!uiOnly) await pet.evaluate((fixture) => {
-    const probe: any = (window as any).__nekoProbe = { research: [], messages: [], starts: [] as number[], stops: [] as number[], ended: [] as number[], transcript: [] as string[], audio: [] as number[][], trackStops: 0, mouthSeen: false, inputStarted: [] as number[], active: new Set(), userActivity: [] as number[] };
+    const probe: any = (window as any).__nekoProbe = { research: [], messages: [], starts: [] as number[], stops: [] as number[], ended: [] as number[], transcript: [] as string[], audio: [] as number[][], trackStops: 0, mouthSeen: false, inputStarted: [] as number[], inputEnded: [] as number[], active: new Set(), userActivity: [] as number[] };
     const inputSources = new WeakSet<AudioBufferSourceNode>();
     const originalStart = AudioBufferSourceNode.prototype.start;
     const originalStop = AudioBufferSourceNode.prototype.stop;
@@ -51,6 +53,7 @@ try {
       const buffer = await context.decodeAudioData(new Uint8Array(fixture).buffer);
       probe.speak = async (replacement?: number[]) => {
         const source = context.createBufferSource(); inputSources.add(source); source.buffer = replacement ? await context.decodeAudioData(new Uint8Array(replacement).buffer) : buffer;
+        source.onended = () => probe.inputEnded.push(performance.now());
         source.connect(target); source.start(); probe.inputStarted.push(performance.now());
       };
       for (const track of target.stream.getTracks()) {
@@ -97,9 +100,42 @@ try {
   await settings.getByTestId("neko-start").click();
   await settings.locator('[data-testid="neko-plugin-status"][data-status="ready"]').waitFor({ timeout: 120_000 });
   await pet.waitForFunction(() => typeof (window as any).__nekoProbe.speak === "function");
-  if (browserCheck) await settings.locator('.settings-nav__button--chat').click();
+  if (browserCheck || noteCheck) await settings.locator('.settings-nav__button--chat').click();
   await pet.evaluate(() => (window as any).__nekoProbe.speak());
-  if (browserCheck) {
+  if (noteCheck) {
+    await pet.waitForFunction(() => (window as any).__nekoProbe.research.some((event: any) => event.name === "create_desktop_note" && event.status !== "running"), undefined, { timeout: 150_000 });
+    const action = await pet.evaluate(() => (window as any).__nekoProbe.research.find((event: any) => event.name === "create_desktop_note" && event.status !== "running"));
+    if (action.status === "error") throw new Error(action.message);
+    const saved = JSON.parse(action.resultText);
+    const text = await readFile(saved.path, "utf8");
+    if (saved.status !== "saved_launch_requested" || !/上午(?:十|10)点/.test(text) || !text.includes("语音延迟") || !text.includes("待办")) throw new Error(`Note outcome/content failed: ${JSON.stringify(saved)}`);
+    console.log(`NEKO_NOTE_OPEN_REQUESTED ${saved.path}`);
+    await pet.waitForFunction(() => { const p = (window as any).__nekoProbe; const done = p.research.find((event: any) => event.name === "create_desktop_note" && event.status === "done"); return p.starts.some((at: number) => at > done.at) && p.messages.some((event: any) => event.type === "gemini_response" && event.at > done.at) && p.messages.some((event: any) => event.type === "system" && event.data === "turn end" && event.at > done.at); }, undefined, { timeout: 90_000 });
+    noteEvidence = await pet.evaluate((saved) => {
+      const p = (window as any).__nekoProbe;
+      const running = p.research.find((event: any) => event.name === "create_desktop_note" && event.status === "running");
+      const done = p.research.find((event: any) => event.name === "create_desktop_note" && event.status === "done");
+      const firstAudio = p.starts.find((at: number) => at > done.at);
+      return { ...saved, inputStartedAt: p.inputStarted[0], inputEndedAt: p.inputEnded[0], transcriptAt: p.messages.find((event: any) => event.type === "user_transcript")?.at,
+        toolRunningAt: running.at, toolDoneAt: done.at, firstReplyAudioAt: firstAudio, localActionMs: done.at - running.at,
+        userFinishedToActionMs: done.at - p.inputEnded[0], userFinishedToReplyAudioMs: firstAudio - p.inputEnded[0],
+        spokenText: p.messages.filter((event: any) => event.type === "gemini_response" && event.at > done.at).map((event: any) => event.text).join("") };
+    }, saved);
+    await writeFile(join(artifacts, "note-result.json"), JSON.stringify(noteEvidence, null, 2));
+    await chat.getByText(saved.message, { exact: true }).waitFor();
+    await chat.getByText("把这段内容记成笔记", { exact: false }).waitFor();
+    await chat.screenshot({ path: join(artifacts, "voice-note-answer.png"), animations: "disabled" });
+    const inspectionRelease = process.env.GREYFIELD_NEKO_INSPECTION_RELEASE;
+    if (inspectionRelease) {
+      await writeFile(join(artifacts, "inspection-ready.json"), JSON.stringify({ path: saved.path, release: inspectionRelease }));
+      console.log(`NEKO_NOTE_INSPECTION_READY ${saved.path}`);
+      const deadline = Date.now() + 240_000;
+      while (!await access(inspectionRelease).then(() => true, () => false)) {
+        if (Date.now() > deadline) throw new Error("Visible Notepad inspection was not acknowledged before timeout.");
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    }
+  } else if (browserCheck) {
     if (!cancelOnly) {
     await pet.waitForFunction(() => (window as any).__nekoProbe.research.some((event: any) => event.status === "error" || (event.status === "done" && event.sources?.length)), undefined, { timeout: 120_000 });
     const researchFailure = await pet.evaluate(() => (window as any).__nekoProbe.research.find((event: any) => event.status === "error")?.message);
@@ -136,19 +172,25 @@ try {
   header.writeUInt16LE(2, 32); header.writeUInt16LE(16, 34); header.write("data", 36); header.writeUInt32LE(audio.length, 40);
   await writeFile(join(artifacts, "original-neko-reply.wav"), Buffer.concat([header, audio]));
   delete probe.audio;
-  result = { ok: true, simulatedMicrophone: true, realOfficialUpstream: true, audioBytes: audio.length, probe,
+  result = { ok: true, simulatedMicrophone: true, realOfficialUpstream: true, audioBytes: audio.length, probe, ...(noteEvidence ? { note: noteEvidence } : {}),
     bounds: await app.evaluate(({ BrowserWindow, screen }) => ({ displays: screen.getAllDisplays().map((display) => display.bounds), windows: BrowserWindow.getAllWindows().map((window) => ({ title: window.getTitle(), visible: window.isVisible(), bounds: window.getBounds() })) })) };
   await settings.screenshot({ path: join(artifacts, "plugin-stopped.png") }); await chat.screenshot({ path: join(artifacts, "chat-transcripts.png") });
   }
 } catch (error) {
   result = { ok: false, error: error instanceof Error ? error.message : String(error) };
+  console.error(result.error);
   const pet = await roleWindow(app, "pet");
   if (!uiOnly) result.probe = await pet.evaluate(() => { const { active, speak, audio, ...rest } = (window as any).__nekoProbe; return { ...rest, activeCount: active.size, audioBytes: audio.reduce((sum: number, chunk: number[]) => sum + chunk.length, 0) }; });
   const settings = await roleWindow(app, "settings"); await settings.screenshot({ path: join(artifacts, "failure.png") });
   result.state = await settings.locator('[data-testid="neko-plugin-status"]').textContent().catch(() => "unknown");
+  if (await settings.getByTestId("neko-stop").isVisible()) {
+    await settings.getByTestId("neko-stop").click();
+    await settings.locator('[data-testid="neko-plugin-status"][data-status="stopped"]').waitFor({ timeout: 15_000 }).catch(() => {});
+  }
   process.exitCode = 1;
 } finally {
-  await app.close(); await writeFile(join(artifacts, uiOnly ? "preview-acceptance.json" : "acceptance.json"), JSON.stringify(result, null, 2)); console.log(JSON.stringify(result, null, 2));
+  await writeFile(join(artifacts, uiOnly ? "preview-acceptance.json" : "acceptance.json"), JSON.stringify(result, null, 2));
+  await app.close(); console.log(JSON.stringify(result, null, 2));
 }
 async function roleWindow(app: ElectronApplication, role: string) {
   const until = Date.now() + 15_000;
