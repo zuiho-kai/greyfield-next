@@ -428,11 +428,17 @@ describe("RuntimeService", () => {
     );
 
     const bodies = (fetch.mock.calls as unknown as Array<[unknown, RequestInit?]>).map(
-      (call) => JSON.parse(String(call[1]?.body)) as { model: string; messages: unknown[] }
+      (call) => JSON.parse(String(call[1]?.body)) as { model: string; messages: unknown[]; tools?: unknown[] }
     );
-    expect(bodies.map((body) => body.model)).toEqual(["chat-model", "vision-model"]);
+    expect(bodies.map((body) => body.model)).toEqual(["chat-model", "vision-model", "chat-model", "chat-model"]);
     expect(JSON.stringify(bodies[0]?.messages)).not.toContain("image_url");
     expect(JSON.stringify(bodies[1]?.messages)).toContain("image_url");
+    expect(JSON.stringify(bodies[2]?.messages)).not.toContain("image_url");
+    expect(JSON.stringify(bodies[2]?.messages)).toContain("Temporary screen description");
+    expect(JSON.stringify(bodies[2]?.messages)).not.toContain("普通聊天");
+    expect(JSON.stringify(bodies[3]?.messages)).toContain("普通聊天");
+    expect(JSON.stringify(bodies[3]?.messages)).not.toContain("image_url");
+    expect(bodies[3]?.tools).toBeUndefined();
   });
 
   it("routes visual input to the Multimodal slot when the Vision slot is empty", async () => {

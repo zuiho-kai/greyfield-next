@@ -69,7 +69,7 @@
       </div>
     </div>
 
-    <div class="message-list-container message-list" aria-live="polite">
+    <div ref="messageList" class="message-list-container message-list" aria-live="polite" @scroll="updateFollowLatest">
       <div
         v-for="messageView in messagesWithSegments"
         :key="messageView.key"
@@ -85,7 +85,7 @@
               :class="['message-bubble', { 'message-bubble--collapsed': segment.isLong && !isExpandedMessage(segment.key) }]"
               :data-message-expanded="isExpandedMessage(segment.key)"
             >
-              {{ segment.text }}
+              <ChatReplyText :text="segment.text" />
             </div>
             <button
               v-if="segment.isLong"
@@ -106,6 +106,9 @@
         </div>
       </div>
 
+      <div v-if="state.toolStatus" class="tool-progress" role="status" data-testid="chat-tool-status">
+        {{ toolStatusText }}
+      </div>
       <div v-if="state.assistantDraft" class="message-item assistant draft">
         <div class="message-content">
           <template
@@ -117,7 +120,7 @@
               :class="['message-bubble', { 'message-bubble--collapsed': segment.isLong && !isExpandedMessage(segment.key) }]"
               :data-message-expanded="isExpandedMessage(segment.key)"
             >
-              {{ segment.text }}
+              <ChatReplyText :text="segment.text" />
             </div>
             <button
               v-if="segment.isLong"
@@ -157,11 +160,13 @@
         <button
           type="button"
           class="voice-input-button"
-          :class="{ 'voice-input-button--active': state.voiceInput.status === 'listening' }"
-          :disabled="state.voiceInput.status === 'transcribing'"
+          :class="{ 'voice-input-button--active': state.voiceInput.status === 'listening' || state.nekoPlugin.status === 'ready' }"
+          :disabled="voiceConnecting || state.voiceInput.status === 'transcribing'"
+          :aria-busy="voiceConnecting"
+          :data-neko-status="state.nekoPlugin.status"
           data-testid="chat-voice-input-button"
           :title="voiceInputExperience.isPreview ? voiceInputExperience.label : voiceInputLabel"
-          @click="$emit(state.voiceInput.status === 'listening' ? 'stop-voice-input' : 'start-voice-input')"
+          @click="$emit(state.voiceInput.status === 'listening' || state.nekoPlugin.status === 'ready' ? 'stop-voice-input' : 'start-voice-input')"
         >
           <span>🎙️</span>
           <span>{{ voiceInputLabel }}</span>
@@ -169,7 +174,7 @@
             {{ voiceInputExperience.label }}
           </small>
         </button>
-        <button type="button" class="stop-button" :disabled="!chatStatus.canStop" data-testid="chat-stop-button" @click="$emit('interrupt')">
+        <button type="button" class="stop-button" :disabled="!chatStatus.canStop && state.nekoPlugin.status !== 'ready'" data-testid="chat-stop-button" @click="$emit('interrupt')">
           <span>⏹️</span> {{ chatStatus.stopLabel }}
         </button>
       </div>
@@ -178,7 +183,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
+import ChatReplyText from "./ChatReplyText.vue";
 import type { DesktopMessage, DesktopRendererState } from "./desktop-runtime-bridge";
 import { describeScreenAwarenessNotice } from "./chat-screen-awareness-notice";
 import { describeChatStatus } from "./chat-status";
@@ -195,6 +201,18 @@ const props = defineProps<{
   state: DesktopRendererState;
   draft: string;
 }>();
+
+const messageList = ref<HTMLElement>();
+let followLatest = true;
+function updateFollowLatest(): void {
+  const list = messageList.value;
+  if (list) followLatest = list.scrollHeight - list.clientHeight - list.scrollTop < 64;
+}
+watch(() => [props.state.messages.length, props.state.assistantDraft, props.state.toolStatus], async () => {
+  const shouldFollow = followLatest;
+  await nextTick();
+  if (shouldFollow && messageList.value) messageList.value.scrollTop = messageList.value.scrollHeight;
+});
 
 defineEmits<{
   "update:draft": [value: string];
@@ -234,7 +252,7 @@ const messagesWithSegments = computed<ChatMessageView[]>(() =>
     return {
       key,
       message,
-      segments: createMessageSegments(splitAssistantReplyForDisplay(message.text), key, (segmentIndex) =>
+      segments: createMessageSegments(splitChatReply(message.text), key, (segmentIndex) =>
         messageBubbleId(index, segmentIndex)
       )
     };
@@ -242,8 +260,24 @@ const messagesWithSegments = computed<ChatMessageView[]>(() =>
 );
 
 const draftSegments = computed<ChatMessageSegmentView[]>(() =>
-  createMessageSegments(splitAssistantReplyForDisplay(props.state.assistantDraft), draftMessageKey, draftBubbleId)
+  createMessageSegments(splitChatReply(props.state.assistantDraft), draftMessageKey, draftBubbleId)
 );
+
+function splitChatReply(text: string): string[] {
+  const paragraphs: string[] = [];
+  let lines: string[] = [];
+  let inCodeFence = false;
+  for (const line of text.split(/\r?\n/)) {
+    if (line.trimStart().startsWith("```")) inCodeFence = !inCodeFence;
+    if (!line.trim() && !inCodeFence) {
+      if (lines.length) paragraphs.push(lines.join("\n"));
+      lines = [];
+    } else lines.push(line);
+  }
+  if (lines.length) paragraphs.push(lines.join("\n"));
+  // Preserve source URLs and whole code blocks when splitting display bubbles.
+  return paragraphs.flatMap((paragraph) => /https?:\/\/|```|(?:^|\n)\s*(?:\d+[.)]|\*\*步骤)/.test(paragraph) ? [paragraph] : splitAssistantReplyForDisplay(paragraph));
+}
 
 function createMessageSegments(
   texts: string[],
@@ -281,13 +315,37 @@ function toggleMessageExpansion(key: string): void {
 }
 
 const locale = computed(() => normalizeSettingsLocale(props.state.settings.settingsLocale));
+const toolStatusText = computed(() => {
+  const tool = props.state.toolStatus;
+  if (!tool) return "";
+  const chinese = locale.value === "zh-CN";
+  if (tool.status === "failed") return `${chinese ? "资料获取失败" : "Research failed"}: ${tool.message ?? ""}`;
+  if (tool.status === "completed") return chinese ? "资料已获取，正在整理…" : "Sources received, preparing the answer…";
+  if (tool.name === "screen_context") return chinese ? "正在看你眼前的报错…" : "Reading the current screen…";
+  return ["web_search", "research_web"].includes(tool.name) ? (chinese ? "正在用 Chrome 查资料…" : "Searching in Chrome…") : (chinese ? "正在浏览来源网页…" : "Browsing a source…");
+});
 const t = (key: SettingsI18nKey, values?: Record<string, string | number>): string =>
   settingsT(locale.value, key, values);
-const chatStatus = computed(() => describeChatStatus(props.state, props.draft, locale.value));
+const chatStatus = computed(() => {
+  const view = describeChatStatus(props.state, props.draft, locale.value);
+  const status = props.state.nekoPlugin.status;
+  if (["starting", "connecting", "ready"].includes(status) && ["idle", "interrupted"].includes(props.state.status)) {
+    const chinese = locale.value === "zh-CN";
+    return { ...view, tone: "waiting" as const, label: status === "ready" ? (chinese ? "语音已连接" : "Voice connected") : (chinese ? "连接中" : "Connecting"),
+      detail: status === "ready" ? (chinese ? "可以直接开口说话。" : "You can speak now.") : (chinese ? "连接完成后即可开口。" : "You can speak once connected."),
+      canStop: true, stopLabel: t("chat.action.stop") };
+  }
+  return view;
+});
 const providerExperience = computed(() => describeProviderExperience(props.state, locale.value));
 const voiceInputExperience = computed(() => describeVoiceInputExperience(props.state, locale.value));
 const screenAwarenessNoticeText = computed(() => describeScreenAwarenessNotice(props.state, locale.value));
 const voiceInputLabel = computed(() => {
+  const chinese = locale.value === "zh-CN";
+  if (props.state.nekoPlugin.status === "starting") return chinese ? "启动中…" : "Starting…";
+  if (props.state.nekoPlugin.status === "connecting") return chinese ? "连接中…" : "Connecting…";
+  if (props.state.nekoPlugin.status === "ready") return chinese ? "结束语音" : "End voice";
+  if (["stopped", "error"].includes(props.state.nekoPlugin.status)) return chinese ? "开始语音" : "Start voice";
   if (props.state.voiceInput.status === "listening") {
     return t("chat.voice.stopMic");
   }
@@ -296,9 +354,12 @@ const voiceInputLabel = computed(() => {
   }
   return t("chat.voice");
 });
+const voiceConnecting = computed(() => ["starting", "connecting"].includes(props.state.nekoPlugin.status));
 </script>
 
 <style scoped>
+.voice-input-button { white-space: nowrap; }
+.tool-progress { color: #17675c; padding: 8px 12px; font-size: 13px; }
 .chat-provider-experience {
   display: flex;
   align-items: center;

@@ -16,6 +16,8 @@ export * from "./persona";
 export * from "./profile-view";
 export * from "./prompt-assembler";
 export * from "./providers";
+// The implementation uses Node DNS; keep the shared browser entry type-only.
+export type { WebSource, WebToolResult, WebTools } from "./web-tools";
 export * from "./runtime-loop";
 export * from "./session-store";
 export * from "./stage-driver";

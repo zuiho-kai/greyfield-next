@@ -32,6 +32,9 @@ importers:
       '@greyfield/audio-runtime':
         specifier: workspace:*
         version: link:../../packages/audio-runtime
+      '@greyfield/browser-runtime':
+        specifier: workspace:*
+        version: link:../../packages/browser-runtime
       '@greyfield/core-runtime':
         specifier: workspace:*
         version: link:../../packages/core-runtime
@@ -47,6 +50,9 @@ importers:
       lucide-vue-next:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.34(typescript@5.9.3))
+      playwright-core:
+        specifier: 1.60.0
+        version: 1.60.0
       vue:
         specifier: ^3.5.24
         version: 3.5.34(typescript@5.9.3)
@@ -66,6 +72,15 @@ importers:
 
   packages/audio-runtime: {}
 
+  packages/browser-runtime:
+    dependencies:
+      '@greyfield/core-runtime':
+        specifier: workspace:*
+        version: link:../core-runtime
+      playwright-core:
+        specifier: 1.60.0
+        version: 1.60.0
+
   packages/core-runtime:
     dependencies:
       '@greyfield/audio-runtime':
@@ -83,6 +98,8 @@ importers:
       '@greyfield/stage-live2d':
         specifier: workspace:*
         version: link:../stage-live2d
+
+  packages/neko-plugin: {}
 
   packages/persistence:
     dependencies:

@@ -58,7 +58,7 @@ describe("Windows portable stage", () => {
     const buildMain = await readFile(join(process.cwd(), "apps", "desktop", "scripts", "build-main.mjs"), "utf8");
     const runtimeService = await readFile(join(process.cwd(), "apps", "desktop", "src", "main", "runtime-service.ts"), "utf8");
 
-    expect(buildMain).toMatch(/external:\s*\[\s*["']electron["']\s*\]/u);
+    expect(buildMain).toMatch(/external:\s*\[\s*["']electron["'],\s*["']playwright-core["']\s*\]/u);
     expect(buildMain).not.toMatch(/better-sqlite3|sqlite-vss/u);
     expect(runtimeService).toContain("initializeMemoryStoresV2?:");
     expect(runtimeService).not.toMatch(/import\s*\{[^}]*initializeMemoryStoresV2[^}]*\}\s*from\s*["']\.\/memory-v2-init["']/su);

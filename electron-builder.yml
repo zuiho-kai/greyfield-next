@@ -11,8 +11,10 @@ files:
   - dist-main/index.mjs
   - dist-preload/index.cjs
   - dist-renderer/**/*
+  - node_modules/playwright-core/**/*
 asarUnpack:
   - dist-renderer/assets/live2d/**/*
+  - node_modules/playwright-core/**/*
 extraResources:
   - from: .cache/greyfield-windows-portable/app/bootstrap/characters
     to: bootstrap/characters

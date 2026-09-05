@@ -1,10 +1,11 @@
 import { _electron as electron, type Locator, type Page } from "playwright";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { join } from "node:path";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
 import { getElectronExecutablePath } from "./electron-install";
+import { resolveLive2DFixturePath } from "./live2d-fixture";
 import {
   dispatchStageMove,
   dispatchStageWheel,
@@ -24,6 +25,7 @@ const workspaceRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const desktopRoot = join(workspaceRoot, "apps", "desktop");
 const executablePath = await getElectronExecutablePath(desktopRoot);
 const quickMode = process.argv.includes("--quick");
+const live2dInitMode = process.argv.includes("--live2d-init");
 const runningInGitHubActions = process.env.GITHUB_ACTIONS === "true";
 const tempDir = await mkdtemp(join(tmpdir(), "greyfield-electron-"));
 const configPath = join(tempDir, "greyfield.config.json");
@@ -36,6 +38,11 @@ await writeFile(
   `${JSON.stringify(
     {
       ...defaultGreyfieldConfig,
+      live2d: {
+        ...defaultGreyfieldConfig.live2d,
+        // Hydration replaces the initial bundled path while Cubism initializes.
+        modelPath: live2dInitMode ? pathToFileURL(resolveLive2DFixturePath()).href : defaultGreyfieldConfig.live2d.modelPath
+      },
       provider: {
         ...defaultGreyfieldConfig.provider,
         tts: "fake"
@@ -58,6 +65,13 @@ const app = await electron.launch({
     GREYFIELD_USER_DATA_PATH: tempDir
   }
 });
+
+const shaderErrors: string[] = [];
+const observeRendering = (page: Page) => page.on("console", (message) => {
+  if (/INVALID_OPERATION|no valid shader|Live2D stage failed/i.test(message.text())) shaderErrors.push(message.text());
+});
+app.windows().forEach(observeRendering);
+app.on("window", observeRendering);
 
 try {
   const petWindow = await waitForRoleWindow("pet");
@@ -116,6 +130,43 @@ try {
     throw new Error(`Pet window is not transparent: ${JSON.stringify(petSnapshot)}`);
   }
 
+  if (live2dInitMode) {
+    await petWindow.waitForSelector('[data-stage-mode="live2d"] canvas.live2d-stage-canvas');
+    // Let both startup load continuations and several animation frames finish.
+    await petWindow.waitForTimeout(500);
+    const rendering = await petWindow.evaluate(() => {
+      const canvases = document.querySelectorAll<HTMLCanvasElement>(".live2d-host canvas");
+      const canvas = canvases[0];
+      const gl = canvas?.getContext("webgl2") ?? canvas?.getContext("webgl");
+      let nonTransparentPixels = 0;
+      if (canvas && gl) {
+        const pixels = new Uint8Array(canvas.width * canvas.height * 4);
+        gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        for (let index = 3; index < pixels.length; index += 4) if (pixels[index] > 0) nonTransparentPixels++;
+      }
+      return { canvasCount: canvases.length, nonTransparentPixels };
+    });
+    const windows = await app.evaluate(({ BrowserWindow, screen }) => ({
+      windows: BrowserWindow.getAllWindows().map((window) => ({
+        role: new URL(window.webContents.getURL()).searchParams.get("window"),
+        visible: window.isVisible(), bounds: window.getBounds()
+      })),
+      displays: screen.getAllDisplays().map((display) => display.bounds)
+    }));
+    const artifactDir = join(workspaceRoot, ".cache", "greyfield-live2d-init", "latest");
+    await mkdir(artifactDir, { recursive: true });
+    const screenshot = join(artifactDir, "pet.png");
+    await petWindow.screenshot({ path: screenshot, omitBackground: true });
+    const visiblePet = windows.windows.some((window) => window.role === "pet" && window.visible &&
+      windows.displays.some((display) => window.bounds.x < display.x + display.width &&
+        window.bounds.x + window.bounds.width > display.x && window.bounds.y < display.y + display.height &&
+        window.bounds.y + window.bounds.height > display.y));
+    const result = { ok: rendering.canvasCount === 1 && rendering.nonTransparentPixels >= 2000 &&
+      shaderErrors.length === 0 && visiblePet, mode: "live2d-init", rendering, shaderErrors, ...windows, screenshot };
+    await writeFile(join(artifactDir, "summary.json"), JSON.stringify(result, null, 2));
+    if (!result.ok) throw new Error(`Live2D startup failed: ${JSON.stringify(result)}`);
+    console.log(JSON.stringify(result, null, 2));
+  } else {
   const transparentPoint = await findStagePoint(petWindow, false);
   const modelPoint = await findStagePoint(petWindow, true);
   await petWindow.evaluate(() =>
@@ -402,6 +453,7 @@ try {
       2
     )
   );
+  }
   }
 } finally {
   await app.close();

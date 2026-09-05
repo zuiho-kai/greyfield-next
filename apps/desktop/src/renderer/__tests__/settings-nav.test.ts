@@ -21,9 +21,9 @@ describe("settings nav", () => {
   });
 
   it("keeps real chat setup primary and all low-frequency sections behind advanced settings", () => {
-    expect(settingsPrimarySectionIds).toEqual(["provider"]);
+    expect(settingsPrimarySectionIds).toEqual(["provider", "plugins"]);
     expect(settingsAdvancedSectionIds).toEqual(["persona", "voice", "model", "window", "memory"]);
-    expect(settingsNavSectionIds).toEqual(["provider", "persona", "voice", "model", "window", "memory"]);
+    expect(settingsNavSectionIds).toEqual(["provider", "plugins", "persona", "voice", "model", "window", "memory"]);
     expect(
       resolveActiveSettingsSection(
         [

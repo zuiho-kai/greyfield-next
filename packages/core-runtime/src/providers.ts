@@ -9,7 +9,19 @@ export type ChatContentPart =
 export interface ChatMessage {
   role: MessageRole;
   content: ChatMessageContent;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
 }
+
+export interface ToolCall {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
+
+export type LLMStreamEvent =
+  | { type: "text"; text: string }
+  | { type: "tool_call"; call: ToolCall };
 
 export interface ToolDefinition {
   name: string;
@@ -24,6 +36,7 @@ export interface LLMStreamOptions {
 export interface LLMProvider {
   readonly supportsVision?: boolean;
   stream(messages: ChatMessage[], tools?: ToolDefinition[], options?: LLMStreamOptions): AsyncIterable<string>;
+  streamEvents?(messages: ChatMessage[], tools?: ToolDefinition[], options?: LLMStreamOptions): AsyncIterable<LLMStreamEvent>;
 }
 
 export interface ASRTranscribeOptions {

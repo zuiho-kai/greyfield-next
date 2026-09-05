@@ -31,6 +31,7 @@ export interface DesktopMessage {
 }
 
 export interface DesktopRendererState {
+  nekoPlugin: import("../../../../packages/neko-plugin/src/index").NekoPluginState;
   status: string;
   errorMessage: string;
   screenAwarenessNotice: string;
@@ -57,6 +58,7 @@ export interface DesktopRendererState {
   messages: DesktopMessage[];
   screenAwareness: DesktopScreenAwarenessState;
   assistantDraft: string;
+  toolStatus?: { name: string; status: "running" | "completed" | "failed"; message?: string };
   proactiveMessage: {
     text: string;
     createdAt: string;
@@ -155,6 +157,7 @@ export interface WindowStatePatch {
 }
 
 export class DesktopRuntimeBridge {
+  private nekoSources = new Map<string, { title: string; url: string }>();
   private state: DesktopRendererState = createInitialDesktopRendererState();
   private readonly stateChangeHandlers = new Set<DesktopStateChangeHandler>();
   private readonly interactionProfile = createDefaultInteractionProfile();
@@ -204,6 +207,34 @@ export class DesktopRuntimeBridge {
       };
       this.emitStateChange();
     });
+    this.host?.on("neko:event", (event) => {
+      if (event.type === "interrupt") { this.nekoSources.clear(); this.state = { ...this.state, status: "idle", assistantDraft: "", toolStatus: undefined }; }
+      if (event.type === "research") {
+        for (const source of event.sources ?? []) this.nekoSources.set(source.url, source);
+        this.state = { ...this.state, status: "thinking", toolStatus: { name: "research_web", status: event.status === "done" ? "completed" : event.status === "error" ? "failed" : "running", message: event.message } };
+      }
+      if (event.type === "state") {
+        const wasActive = ["starting", "connecting", "ready"].includes(this.state.nekoPlugin.status);
+        this.state = { ...this.state, nekoPlugin: event.state };
+        if (["stopped", "error", "not-installed"].includes(event.state.status)) this.nekoSources.clear();
+        if (wasActive && ["stopped", "error", "not-installed"].includes(event.state.status)) {
+          this.state = { ...this.state, status: "idle", assistantDraft: "", toolStatus: undefined, stage: { ...this.state.stage, mouthOpen: 0 } };
+        }
+      }
+      if (event.type === "message" && event.data.type === "user_transcript") {
+        this.nekoSources.clear();
+        this.state = { ...this.state, status: "thinking", toolStatus: undefined, messages: [...this.state.messages, { role: "user", text: String(event.data.text ?? "") }] };
+      }
+      if (event.type === "message" && event.data.type === "gemini_response") {
+        this.state = { ...this.state, status: "speaking", toolStatus: undefined, assistantDraft: `${event.data.isNewMessage ? "" : this.state.assistantDraft}${String(event.data.text ?? "")}` };
+      }
+      if (event.type === "message" && event.data.type === "system" && event.data.data === "turn end") {
+        const sourceText = this.nekoSources.size ? `\n\n资料来源：\n${[...this.nekoSources.values()].map((source) => `[${source.title.replace(/[\[\]\r\n]/g, " ")}](${source.url})`).join("\n")}` : "";
+        if (this.state.assistantDraft) this.nekoSources.clear();
+        this.state = { ...this.state, status: this.state.assistantDraft ? "idle" : this.state.status, messages: this.state.assistantDraft ? [...this.state.messages, { role: "assistant", text: this.state.assistantDraft + sourceText }] : this.state.messages, assistantDraft: "" };
+      }
+      this.emitStateChange();
+    });
     this.host?.on("runtime:event", (event) => {
       this.state = reduceRuntimeEvent(this.state, event, this.interactionProfile);
       if (event.type === "memory.recall.context" && this.state.memoryDebug.snapshot) {
@@ -224,6 +255,7 @@ export class DesktopRuntimeBridge {
         this.playSpeech(event.text, event.data);
       }
       if (event.type === "runtime.status" && event.status === "interrupted") {
+        this.speechPlaybackEpoch += 1;
         this.speechOutput?.cancel();
       }
       this.emitStateChange();
@@ -1130,6 +1162,7 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       exportText: "",
       snapshot: null
     },
+    nekoPlugin: { status: "not-installed", message: "N.E.K.O 原版实时语音" },
     memoryExtraction: null,
     sessionContinuity: {
       restoredRecentMessageCount: 0,
@@ -1213,8 +1246,8 @@ function createDefaultPersonaForm(): DesktopPersonaFormState {
     personality: "Warm, steady, observant, and lightly playful without pretending to control the desktop.",
     speakingStyle: "Keep replies short enough to speak naturally and prefer concrete progress over vague planning.",
     boundariesText: [
-      "V1 cannot control the desktop.",
-      "V1 cannot browse the web or operate external applications by itself."
+      "No arbitrary desktop or external-application control; use only the browser tools explicitly available for research.",
+      "Screen awareness is available only when the user enables it and current visual context is supplied. Without tools or visual context, do not claim to browse or see the screen."
     ].join("\n"),
     greeting: "你好，我在。",
     tone: "warm, concise, slightly playful",

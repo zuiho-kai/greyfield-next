@@ -1,5 +1,15 @@
 # QA Retro: Desktop Pet Interaction Miss
 
+## 2026-09-05: Screen Research Returned Links Before Reading A Source
+
+Real-provider QA found that successful search results were being treated as proof of successful page reading, even when every `read_webpage` request failed. The first runtime loop also accumulated tool-round preambles into the saved answer and sent them to TTS.
+
+- Research acceptance must observe both a completed search and a successful page read, then open a retained source through the ordinary Chat link. A URL alone is not evidence that its relevant content was read.
+- Keep only successfully read pages in the attached source list. For long documentation, verify that the requested error section is actually included.
+- Tool-round text is temporary feedback. Reset only the current draft between rounds and keep preambles out of the final saved answer and speech queue.
+- Keep stub timing, real-provider failures, and subsequent successful runs as separate evidence; a renderer failure does not become a passing desktop acceptance because a backend request worked.
+- Electron `net.fetch` rejects manual redirects instead of returning their headers. Web tools use a narrow `net.request` adapter and must prove a real redirect reaches readable content; provider streaming remains on `net.fetch`.
+
 ## 2026-08-09 Regression: Dev Launcher Replaced Saved Configuration On Every Relaunch
 
 The default Windows/dev launcher used a safe test patch as an unconditional startup write. After a user saved a real provider, API key, voice setting, character file, persona, or task-model override, the next ordinary launch replaced the complete config with only the safe `window` and `live2d` fields.
@@ -401,3 +411,47 @@ How we avoid repeating it:
 - Main-process ESM bundles that include CommonJS dependencies must provide a `createRequire(import.meta.url)` shim, or the dependency must be proven ESM-safe.
 - Harness checks for async persistence must poll the persisted condition, not read once after a UI event that can precede disk writes.
 - `GFN-V1-015` acceptance must include both full Electron session write proof and a restart harness proving the next launch prompt sees the previous turn.
+
+## 2026-09-05: Live2D startup initialized two renderers
+
+Issue #234 was exposed by ordinary Electron startup with an absolute model path: the initial bundled path began loading before settings hydration changed it. Both entries passed the completed-driver check while Cubism initialization was still pending, leaving two canvases and WebGL shader errors instead of a visible pet.
+
+The stage now shares pending initialization, serializes model replacement, ignores superseded load results, and destroys a pending renderer after unmount. Regression acceptance under `GFN-V1-002` uses the real bundled `.model3.json` through persisted configuration and requires exactly one canvas, at least 2,000 non-transparent pixels, a visible pet window, an inspected screenshot, and no related shader errors. `pnpm exec tsx packages/dev-harness/src/electron-check.ts --live2d-init` runs this focused path after the desktop build; the unchanged Live2D harness covers animation and touch reactions.
+
+## 2026-09-05: N.E.K.O plugin acceptance follows audible behavior
+
+The original runtime's local HTTP health was blocked by first-run storage selection; initialize the isolated root through its official bootstrap/select API and align the child process's LOCALAPPDATA with that root. Only original `session_started` proves the upstream voice session. The native upstream emitted `user_activity` near the end of the fixture utterance, so waiting for that event alone did not stop existing sound promptly. Local onset now silences only Greyfield playback and rejects late chunks from the interrupted speech ID, while N.E.K.O retains all turn processing.
+
+The focused plugin harness starts a second real utterance while an AudioBufferSource is actually playing, checks source.stop, a second upstream transcript/reply, mouth motion and released tracks. It also clicks the ordinary installation button against the pinned official source. Plugin navigation must open an independent first-screen content area with visible actions; scrolling under the unrelated provider form left fake-provider warnings above the real plugin state and failed product acceptance. Virtual-microphone evidence does not establish room echo performance.
+
+Review found that Stop during asynchronous startup cleanup or port/directory preparation could be overwritten by a later startup token or followed by an untracked process launch. Capture startup intent before its first await, keep resource cleanup separate from cancellation, and recheck intent before process launch and socket connection. The cancellation test pauses cleanup and directory preparation, stops the plugin, then resumes startup and requires no launch or connection. Typed input ends an active N.E.K.O session before entering the separate text runtime so the two engines cannot concurrently overwrite the shared reply surface.
+
+## 2026-09-05: Browser execution is not answer-quality acceptance
+
+Issue #238 replaced search HTML scraping with real Chrome navigation, rendered text, visible-link clicks and page search. The first run found real lifecycle bugs: closing Chrome's last tab raced the next turn, redirect clicks were read before navigation completed, and long documentation needed the matched section rather than its opening. The focused Chrome harness now exercises search, clicked upstream sources, JavaScript pagination, Stop closing the turn's page, and a successful new turn.
+
+The first review also caught search submission reading the old page: its existing `domcontentloaded` state is not evidence of a completed new search. Submission now waits for a replacement document or changed rendered content, including same-URL JavaScript search, and respects the page's busy state. `chrome-search-submit-check.ts` proves both a delayed local dynamic search and normal navigation without a model call.
+
+The ordinary real-provider screen-help run completed in 51.9 seconds with visible Live2D, clickable sources and Stop, yet still gave unsupported dependency deletion and called nodejs.cn official. Its executable flow passed; its answer quality did not. A fixed-source request-boundary replay confirmed the research instructions were serialized intact, so further prompt additions must not be reported as a proven fix. Inspect actual advice, source attribution, preserved URLs and elapsed time separately from tool counts. The current DeepSeek configuration remains an answer-quality limitation; Chrome capability alone does not establish a reliable repair assistant. Plain URLs also need protection from speech-bubble sentence splitting, not only Markdown links.
+
+## 2026-09-05: Native voice research needs the actual answer, not registration alone
+
+Chat's native voice entry must handle the pending IPC gap as well as starting/connecting/ready. Disabling the button alone does not protect direct hook calls from falling into legacy recording. Verify repeated starts and the original ready-to-stop path at the default chat width; inspect the header too, since stopping an old text turn can otherwise leave a misleading "stopped" label during an active voice connection.
+
+Issue #240 proved the pinned original N.E.K.O runtime can call a Greyfield localhost tool and receive its result on the same native voice connection. A tool-only response emits `turn end` with no audio before executing its callback; that event is not a completed user answer. The first multi-call attempt spent about 31 seconds per native tool decision and hit the original 90-second silence limit. One `research_web` callback now lets the utility model navigate Chrome while N.E.K.O remains the voice owner. The callback returns observed text even if the browsing model ends without a summary; cancellation or timeout still discards the result.
+
+Long spoken English URLs were misrecognized by native ASR. Keep those failed artifacts, and exercise ordinary Chinese research requests as well. A weather flow that found a monthly forecast and spoke a sourced answer proved the plumbing but did not answer today's weather. Requested date, target page, source text, spoken answer, and visible chat links require separate inspection. Open chat through Settings before screenshots: a hidden window can retain an old rendered frame despite receiving all events. Native transcription should immediately show processing, then actual research progress, rather than appearing idle through the native model's tool decision.
+
+The focused 27B utility run searched and read the official current local forecast (2026-09-05 12:45), then the original voice returned its correct afternoon/tonight/next-day details with a visible source link and non-empty PCM. First audio still took 80.44 seconds from input onset, including the native model's roughly 31-second tool decision. This is a working path, not a low-latency claim. The interruption pass also exposed that `onBargeIn` was gated by active audio playback; silent browser work needs the same VAD's independent speech-onset notification to cancel promptly.
+
+Owner review caught a second late-response path: rejecting old binary audio alone still allowed cancelled `gemini_response` text and `turn end` to reach chat. Filter response JSON before broadcasting, while retaining audio headers so binary frames remain aligned. Original unscoped `turn end` follows the most recent identified response event on the ordered socket; it has no independent ID for arbitrary cross-response reordering. Consume source links with a real answer, clear them on Stop/error, and retain them through tool-only empty ends.
+
+## 2026-09-05: Keep private conversation out of external-source tool rounds
+
+Review #256 found private prompt history and memory remained available after a page/screen supplied untrusted material. Keep ordinary chat's contextual first response to one request; after the first tool decision, rebuild research from the current request and this turn's tool evidence. Screen interpretation receives only the current request and screenshot, and its research starts isolated. Rejoin history only for a final response with no tools. Dropping only history messages is insufficient: a contextual assistant preamble can repeat private text, so it is also excluded from the isolated round. Vision rejection, empty results and interruption must finish audio/status and release the turn controller before a new turn. Tool-call fragment arrival order is not execution order; use numeric indices.
+
+## 2026-09-05: Review advice must match the native turn protocol
+
+Issue #257 initially accepted a review suggestion to make every empty `turn end` idle and clear its sources. Owner review caught the conflict with the earlier native evidence. In `combined-neko-weather-barge/acceptance.json`, the empty end arrived at 57.393 seconds, before research started at 57.401 seconds; sources arrived at 83.291 seconds, followed by the answer and final end at 90.146/90.151 seconds. The tool-only and final events both have `request_id: null`, and even the research-running flag arrives too late to classify the earlier end. That event alone cannot establish completion.
+
+The unconditional cleanup suggestion was withdrawn. Replay the observed event order, retain pending state and sources across empty tool ends, consume sources with a real answer, and clear them on a new user transcript or Stop/error/interrupt. A synthetic test that assumes an empty end is terminal is not evidence of the original protocol. The real source-lifecycle repair is cleanup at the new user-turn boundary; this review follow-up uses focused tests without claiming a new live upstream speech run.

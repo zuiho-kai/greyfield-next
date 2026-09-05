@@ -1,5 +1,5 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, screen, Tray } from "electron";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, screen, shell, Tray } from "electron";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import type { GreyfieldConfig, GreyfieldConfigPatch } from "@greyfield/persistence/config-schema";
@@ -14,6 +14,9 @@ import { toWindowMenuPoint } from "./pet-menu";
 import { PetWindowController } from "./pet-window-controller";
 import { RuntimeIpcController } from "./runtime-ipc-controller";
 import { RuntimeService } from "./runtime-service";
+import { fetchWebPage } from "./web-fetch";
+import { registerNekoPluginHost } from "./neko-plugin-host";
+import { createBrowserResearchTools } from "@greyfield/browser-runtime";
 import { ElectronScreenCaptureSource } from "./screen-capture-source";
 import { redactConfigForRenderer } from "./settings-redaction";
 import { SettingsController } from "./settings-controller";
@@ -44,6 +47,7 @@ let controlsWindow: BrowserWindow | undefined;
 let tray: Tray | undefined;
 let settingsController: SettingsController | undefined;
 let runtimeService: RuntimeService | undefined;
+let nekoPlugin: ReturnType<typeof registerNekoPluginHost> | undefined;
 let runtimeIpcController: RuntimeIpcController | undefined;
 let observationController: ObservationController | undefined;
 let petWindowController: PetWindowController | undefined;
@@ -66,7 +70,20 @@ function profileActionFailure(message: string): DesktopMemoryActionResult {
 
 async function createWindows(): Promise<void> {
   const config = await loadGreyfieldConfig(resolveConfigPath());
+  const browserTracePath = process.env.GREYFIELD_BROWSER_TRACE_PATH;
+  let browserTraceStep = 0;
   runtimeService = new RuntimeService(config, {
+    fetch: (input, init) => net.fetch(input instanceof URL ? input.href : input, init),
+    webFetch: fetchWebPage,
+    webTools: createBrowserResearchTools({
+      profilePath: resolve(app.getPath("userData"), "research-chrome"),
+      ...(browserTracePath ? { onResult: async (event, page) => {
+        await mkdir(browserTracePath, { recursive: true });
+        const name = `${++browserTraceStep}-${event.name}`;
+        await writeFile(resolve(browserTracePath, `${name}.json`), JSON.stringify({ name: event.name, elapsedMs: event.elapsedMs, ...JSON.parse(event.result.text) }, null, 2));
+        await page.screenshot({ path: resolve(browserTracePath, `${name}.png`) });
+      } } : {})
+    }),
     ...createDesktopRuntimeStoreOptions(resolveRuntimeStorePaths()),
     llmTimeoutMs: resolvePositiveIntegerEnv("GREYFIELD_LLM_TIMEOUT_MS"),
     recentTurnLimit: resolvePositiveIntegerEnv("GREYFIELD_RECENT_TURN_LIMIT"),
@@ -122,6 +139,10 @@ async function createWindows(): Promise<void> {
   settingsWindow = new BrowserWindow(createSettingsWindowOptions(preload));
   attachSettingsReplayOnLoad(settingsWindow);
   chatWindow = new BrowserWindow(createChatWindowOptions(preload));
+  chatWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url).catch((error) => console.warn("Could not open source link", error));
+    return { action: "deny" };
+  });
   attachSettingsReplayOnLoad(chatWindow);
   controlsWindow = new BrowserWindow(createControlsWindowOptions(config, preload, displayWorkAreas));
   attachSettingsReplayOnLoad(controlsWindow);
@@ -192,7 +213,14 @@ function createTrayIcon(): Electron.NativeImage {
 }
 
 function registerIpc(): void {
-  ipcMain.on("runtime:input", (_event, payload) => {
+  nekoPlugin = registerNekoPluginHost(app.getPath("userData"), () => handleRuntimeInput({ type: "runtime.interrupt" }), () => settingsController?.getCurrent());
+  ipcMain.on("runtime:input", (event, payload) => {
+    if (payload.type === "runtime.interrupt") void nekoPlugin?.stop();
+    if (payload.type === "text.input" && typeof payload.text === "string") {
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (window.webContents.id !== event.sender.id) window.webContents.send("runtime:event", { type: "user.text.accepted", text: payload.text });
+      }
+    }
     handleRuntimeInput(payload);
   });
 
@@ -447,8 +475,11 @@ function attachHideOnClose(window: BrowserWindow | undefined, markDestroyed: () 
 
 function handleRuntimeInput(payload: Parameters<NonNullable<typeof runtimeService>["handle"]>[0]): void {
   void (async () => {
+    if (payload.type === "text.input" && nekoPlugin && ["starting", "connecting", "ready"].includes(nekoPlugin.getState().status)) {
+      await nekoPlugin.stop();
+    }
     const input =
-      payload.type === "text.input" && observationController?.isEnabled()
+      (payload.type === "text.input" || payload.type === "audio.end") && observationController?.isEnabled()
         ? {
             ...payload,
             ...(await observationController.ensureFreshContext())
@@ -992,7 +1023,7 @@ app.on("before-quit", (event) => {
     event.preventDefault();
     memoryShutdownDone = true;
     const timeout = new Promise<void>((resolve) => setTimeout(resolve, 10_000));
-    void Promise.race([runtimeService.shutdown(), timeout]).finally(() => app.quit());
+    void Promise.race([Promise.all([runtimeService.shutdown(), nekoPlugin?.stop()]), timeout]).finally(() => app.quit());
   }
 });
 

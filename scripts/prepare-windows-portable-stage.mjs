@@ -1,4 +1,5 @@
 import { builtinModules } from "node:module";
+import { createRequire } from "node:module";
 import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, extname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -6,11 +7,12 @@ import { pathToFileURL } from "node:url";
 const portableVersion = "0.1.0-preview.1";
 const allowedBareImports = new Set([
   "electron",
+  "playwright-core",
   ...builtinModules,
   ...builtinModules.map((name) => `node:${name}`)
 ]);
 const textExtensions = new Set([".cjs", ".css", ".html", ".js", ".json", ".md", ".mjs", ".txt", ".yaml", ".yml"]);
-const forbiddenContent = /better-sqlite3|sqlite-vss|(?:^|[^A-Za-z])playwright(?:[^A-Za-z]|$)/iu;
+const forbiddenContent = /better-sqlite3|sqlite-vss|(?:^|[^A-Za-z])playwright(?!-core)(?:[^A-Za-z]|$)/iu;
 const nativeAddonLiteral = /(?:^|[\\/"'`])[^\\/"'`\s]+\.node(?:["'`\s,;)]|$)/imu;
 const importSpecifierPatterns = [
   /^\s*import\s+(?:[^"'\n]+?\s+from\s+)?["']([^"']+)["']/gmu,
@@ -59,6 +61,15 @@ export async function prepareWindowsPortableStage(options = {}) {
     join(stageRoot, "bootstrap", "characters", "greyfield.yaml")
   );
   await copyFile(join(workspaceRoot, "data", "memory.md"), join(stageRoot, "bootstrap", "data", "memory.md"));
+  // The Chrome driver is a production dependency; Chrome itself stays system-installed.
+  const usesChrome = (await readFile(mainPath, "utf8")).includes('"playwright-core"');
+  let chromeVersion;
+  if (usesChrome) {
+    const require = createRequire(join(desktopRoot, "package.json"));
+    const driverPackagePath = require.resolve("playwright-core/package.json");
+    chromeVersion = JSON.parse(await readFile(driverPackagePath, "utf8")).version;
+    await copyTree(dirname(driverPackagePath), join(stageRoot, "node_modules", "playwright-core"), (source) => extname(source) !== ".map");
+  }
   await writeFile(
     join(stageRoot, "package.json"),
     `${JSON.stringify(
@@ -67,7 +78,7 @@ export async function prepareWindowsPortableStage(options = {}) {
         productName: "Greyfield",
         version: portableVersion,
         main: "dist-main/index.mjs",
-        dependencies: {}
+        dependencies: chromeVersion ? { "playwright-core": chromeVersion } : {}
       },
       null,
       2
@@ -111,6 +122,8 @@ async function assertStageAllowlist({ stageRoot, files, workspaceRoot }) {
     }
   }
   for (const path of files) {
+    // Only this explicitly packaged driver is allowed; no dev runner or browser download.
+    if (path.startsWith("node_modules/playwright-core/") && !path.endsWith(".node") && !path.includes(".local-browsers/")) continue;
     if (
       path.endsWith(".map") ||
       path.includes("node_modules/") ||

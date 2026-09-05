@@ -14,6 +14,13 @@ export function useWindowRuntimeState(params: {
   const lastSyncedInputDraft = ref(state.value.inputDraft);
   const modelPassThrough = computed(() => state.value.window.modelPassThrough);
   const locked = computed(() => state.value.window.locked);
+  let nekoStartPending = false;
+  const detachNekoStart = window.greyfield?.on("neko:event", (event) => {
+    if (event.type === "state") {
+      nekoStartPending = false;
+      syncDraft(bridge.getState());
+    }
+  });
 
   function applyState(nextState: DesktopRendererState): DesktopRendererState {
     syncDraft(nextState);
@@ -25,7 +32,7 @@ export function useWindowRuntimeState(params: {
       draft.value = nextState.inputDraft;
       lastSyncedInputDraft.value = nextState.inputDraft;
     }
-    syncState(nextState);
+    syncState(nekoStartPending ? { ...nextState, nekoPlugin: { status: "starting", message: "正在启动 N.E.K.O 原版语音运行时…" } } : nextState);
   }
 
   const detachDraftSync = bridge.onStateChange(syncDraft);
@@ -40,10 +47,23 @@ export function useWindowRuntimeState(params: {
   }
 
   async function startVoiceInput(): Promise<DesktopRendererState> {
+    if (nekoStartPending || ["starting", "connecting", "ready"].includes(state.value.nekoPlugin.status)) {
+      return state.value;
+    }
+    if (state.value.nekoPlugin.status === "stopped" || state.value.nekoPlugin.status === "error") {
+      nekoStartPending = true;
+      syncDraft(bridge.getState());
+      window.greyfield?.send("neko:command", { action: "start" });
+      return state.value;
+    }
     return applyState(bridge.startVoiceInput());
   }
 
   async function stopVoiceInput(audio?: Uint8Array): Promise<DesktopRendererState> {
+    if (["starting", "connecting", "ready"].includes(state.value.nekoPlugin.status)) {
+      window.greyfield?.send("neko:command", { action: "stop" });
+      return applyState(bridge.getState());
+    }
     if (!microphoneRecorder) {
       return applyState(bridge.failVoiceInput("Voice input is available from the pet controls or Chat window."));
     }
@@ -119,6 +139,7 @@ export function useWindowRuntimeState(params: {
   function hideControls(): void { window.greyfield?.send("window:hide-controls", {}); }
 
   function dispose(): void {
+    detachNekoStart?.();
     detachDraftSync();
     disposeBridge();
   }
