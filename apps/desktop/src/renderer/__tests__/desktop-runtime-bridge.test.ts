@@ -22,10 +22,14 @@ describe("createDesktopRuntimeBridge", () => {
     receive?.({ type: "message", data: { type: "gemini_response", text: "这是文档示例域名。", isNewMessage: true } });
     receive?.({ type: "message", data: { type: "system", data: "turn end" } });
     expect(bridge.getState().messages.at(-1)?.text).toContain("[Example Domain](https://example.com/)");
-    receive?.({ type: "interrupt" });
     receive?.({ type: "message", data: { type: "gemini_response", text: "你好。", isNewMessage: true } });
     receive?.({ type: "message", data: { type: "system", data: "turn end" } });
     expect(bridge.getState().messages.at(-1)?.text).toBe("你好。");
+    receive?.({ type: "research", name: "read_webpage", status: "done", sources: [{ title: "Old", url: "https://old.example/" }] });
+    receive?.({ type: "state", state: { status: "stopped", message: "stopped" } });
+    receive?.({ type: "message", data: { type: "gemini_response", text: "重启后的回答。", isNewMessage: true } });
+    receive?.({ type: "message", data: { type: "system", data: "turn end" } });
+    expect(bridge.getState().messages.at(-1)?.text).toBe("重启后的回答。");
   });
   it("resets the speaking surface when the active NEKO plugin is disabled", () => {
     let receive: ((event: import("../../../../../packages/neko-plugin/src/index").NekoPluginEvent) => void) | undefined;

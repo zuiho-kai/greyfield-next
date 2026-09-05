@@ -32,6 +32,7 @@ export class NekoPlugin {
   private audioHeaders: string[] = [];
   private interruptedSpeech = new Set<string>();
   private activeSpeechId?: string;
+  private responseMessageSpeechId?: string;
   private state: NekoPluginState;
   private browserTools?: NekoBrowserTools;
   private closeBrowserTools?: () => Promise<void>;
@@ -166,9 +167,16 @@ export class NekoPlugin {
         }
         let data: Record<string, unknown>;
         try { data = JSON.parse(String(event.data)); } catch { return; }
-        this.options.emit({ type: "message", data });
-        if ((data.type === "audio_chunk" || data.type === "audio_done") && typeof data.speech_id === "string" && !this.interruptedSpeech.has(data.speech_id)) this.activeSpeechId = data.speech_id;
+        // Every audio header still consumes its binary frame, even when cancelled.
         if (data.type === "audio_chunk") this.audioHeaders.push(String(data.speech_id ?? ""));
+        const responseId = typeof data.turn_id === "string" ? data.turn_id : typeof data.speech_id === "string" ? data.speech_id : undefined;
+        if (responseId) this.responseMessageSpeechId = responseId;
+        // Original `turn end` has no ID. Associate it with the most recent
+        // response event on this ordered socket (including cancelled audio_done).
+        const owner = responseId ?? (data.type === "system" && data.data === "turn end" ? this.responseMessageSpeechId : undefined);
+        if (owner && this.interruptedSpeech.has(owner)) return;
+        if (responseId) this.activeSpeechId = responseId;
+        this.options.emit({ type: "message", data });
         if (data.type === "user_activity") {
           this.browserTools?.cancel();
           const speechId = typeof data.interrupted_speech_id === "string" ? data.interrupted_speech_id : undefined;
@@ -212,7 +220,7 @@ export class NekoPlugin {
     await closeBrowserTools?.();
     this.send({ action: "pause_session" });
     this.socket?.close(); this.socket = undefined;
-    this.audioHeaders = []; this.interruptedSpeech.clear(); this.activeSpeechId = undefined;
+    this.audioHeaders = []; this.interruptedSpeech.clear(); this.activeSpeechId = undefined; this.responseMessageSpeechId = undefined;
     const children = [...this.children.splice(0), ...this.operations];
     await Promise.all(children.map(terminateChild));
   }

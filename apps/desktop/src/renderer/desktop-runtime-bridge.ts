@@ -208,7 +208,7 @@ export class DesktopRuntimeBridge {
       this.emitStateChange();
     });
     this.host?.on("neko:event", (event) => {
-      if (event.type === "interrupt") { this.nekoSources.clear(); this.state = { ...this.state, status: "idle", toolStatus: undefined }; }
+      if (event.type === "interrupt") { this.nekoSources.clear(); this.state = { ...this.state, status: "idle", assistantDraft: "", toolStatus: undefined }; }
       if (event.type === "research") {
         for (const source of event.sources ?? []) this.nekoSources.set(source.url, source);
         this.state = { ...this.state, status: "thinking", toolStatus: { name: "research_web", status: event.status === "done" ? "completed" : event.status === "error" ? "failed" : "running", message: event.message } };
@@ -216,6 +216,7 @@ export class DesktopRuntimeBridge {
       if (event.type === "state") {
         const wasActive = ["starting", "connecting", "ready"].includes(this.state.nekoPlugin.status);
         this.state = { ...this.state, nekoPlugin: event.state };
+        if (["stopped", "error", "not-installed"].includes(event.state.status)) this.nekoSources.clear();
         if (wasActive && ["stopped", "error", "not-installed"].includes(event.state.status)) {
           this.state = { ...this.state, status: "idle", assistantDraft: "", toolStatus: undefined, stage: { ...this.state.stage, mouthOpen: 0 } };
         }
@@ -228,6 +229,7 @@ export class DesktopRuntimeBridge {
       }
       if (event.type === "message" && event.data.type === "system" && event.data.data === "turn end") {
         const sourceText = this.nekoSources.size ? `\n\n资料来源：\n${[...this.nekoSources.values()].map((source) => `[${source.title.replace(/[\[\]\r\n]/g, " ")}](${source.url})`).join("\n")}` : "";
+        if (this.state.assistantDraft) this.nekoSources.clear();
         this.state = { ...this.state, status: this.state.assistantDraft ? "idle" : this.state.status, messages: this.state.assistantDraft ? [...this.state.messages, { role: "assistant", text: this.state.assistantDraft + sourceText }] : this.state.messages, assistantDraft: "" };
       }
       this.emitStateChange();
