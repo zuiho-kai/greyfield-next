@@ -1,4 +1,6 @@
-/** Browser PCM transport only; turn detection and interruption stay in N.E.K.O. */
+import { detectVoiceActivity } from "./vad";
+
+/** Browser PCM transport. N.E.K.O still owns turns; local onset only silences playback. */
 export class RealtimeAudio {
   private epoch = 0;
   private playbackEpoch = 0;
@@ -13,7 +15,7 @@ export class RealtimeAudio {
 
   constructor(private readonly onMouth: (value: number) => void) {}
 
-  async start(onPcm: (data: Uint8Array, sampleRate: number) => void): Promise<void> {
+  async start(onPcm: (data: Uint8Array, sampleRate: number) => void, onBargeIn?: () => void): Promise<void> {
     this.stop();
     const epoch = this.epoch;
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
@@ -26,9 +28,21 @@ export class RealtimeAudio {
       this.analyser.connect(context.destination);
       this.source = context.createMediaStreamSource(stream);
       this.processor = context.createScriptProcessor(2048, 1, 1);
+      let voiceMs = 0;
+      let silenceMs = 0;
+      let voicing = false;
       this.processor.onaudioprocess = (event) => {
         if (epoch !== this.epoch) return;
         const samples = event.inputBuffer.getChannelData(0);
+        const active = detectVoiceActivity(samples).active;
+        const durationMs = samples.length / context.sampleRate * 1000;
+        voiceMs = active ? voiceMs + durationMs : 0;
+        silenceMs = active ? 0 : silenceMs + durationMs;
+        if (silenceMs > 250) voicing = false;
+        if (!voicing && voiceMs >= 90) {
+          voicing = true;
+          if (this.playback.size) onBargeIn?.();
+        }
         // 2048 frames at 48k are below the official 120ms packet limit.
         const pcm = new Uint8Array(samples.length * 2);
         const view = new DataView(pcm.buffer);

@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, appendFile } from "node:fs/promises";
+import { mkdir, appendFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -22,6 +23,7 @@ const sourceDirectories = ["app", "brain", "config", "deps", "local_server", "ma
 export class NekoPlugin {
   readonly sourcePath: string;
   private children: ChildProcess[] = [];
+  private operations = new Set<ChildProcess>();
   private socket?: WebSocket;
   private generation = 0;
   private audioHeaders: string[] = [];
@@ -30,44 +32,61 @@ export class NekoPlugin {
 
   constructor(private readonly options: { root: string; sourcePath?: string; uvPath?: string; emit(event: NekoPluginEvent): void }) {
     this.sourcePath = options.sourcePath ?? join(options.root, "runtime");
-    this.state = { status: existsSync(this.pythonPath) ? "stopped" : "not-installed", message: "N.E.K.O 原版实时语音" };
+    this.state = { status: this.installed ? "stopped" : "not-installed", message: "N.E.K.O 原版实时语音" };
   }
 
   getState(): NekoPluginState { return { ...this.state }; }
   private get pythonPath(): string { return join(this.sourcePath, ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python"); }
+  private get installed(): boolean { return existsSync(this.pythonPath) && (Boolean(this.options.sourcePath) || existsSync(join(this.options.root, "installed-revision"))); }
   private setState(status: NekoPluginState["status"], message: string): void {
     this.state = { status, message }; this.options.emit({ type: "state", state: this.getState() });
   }
 
   async install(): Promise<void> {
     if (["installing", "starting", "connecting", "ready"].includes(this.state.status)) return;
+    const generation = ++this.generation;
     this.setState("installing", "正在下载 N.E.K.O 官方运行时…");
     try {
       await mkdir(this.options.root, { recursive: true });
+      if (generation !== this.generation) return;
       if (!existsSync(join(this.sourcePath, ".git"))) {
         await this.command("git", ["clone", "--filter=blob:none", "--no-checkout", "https://github.com/Project-N-E-K-O/N.E.K.O.git", this.sourcePath], this.options.root);
       }
+      if (generation !== this.generation) return;
       await this.command("git", ["sparse-checkout", "set", ...sourceDirectories], this.sourcePath);
+      if (generation !== this.generation) return;
       await this.command("git", ["checkout", "--detach", NEKO_REVISION], this.sourcePath);
+      if (generation !== this.generation) return;
       this.setState("installing", "正在安装 Python 3.11 和官方语音依赖，首次安装需要几分钟…");
       const uv = this.options.uvPath ?? (process.platform === "win32" ? join(homedir(), ".local", "bin", "uv.exe") : "uv");
       await this.command(uv, ["sync", "--no-dev", "--python", "3.11"], this.sourcePath);
+      if (generation !== this.generation) return;
+      await writeFile(join(this.options.root, "installed-revision"), NEKO_REVISION);
+      if (generation !== this.generation) return;
       this.setState("stopped", "已安装，点击启动连接原版语音服务");
-    } catch (error) { this.setState("error", `安装失败：${errorText(error)}`); }
+    } catch (error) { if (generation === this.generation) this.setState("error", `安装失败：${errorText(error)}`); }
   }
 
   async start(): Promise<void> {
     if (["installing", "starting", "connecting", "ready"].includes(this.state.status)) return;
+    this.setState("starting", "正在启动 N.E.K.O 原版语音运行时…");
     await this.stop(false);
     const generation = ++this.generation;
-    this.setState("starting", "正在启动 N.E.K.O 原版语音运行时…");
     try {
       if (!existsSync(this.pythonPath)) throw new Error("请先安装插件。");
+      const revision = await this.command("git", ["rev-parse", "HEAD"], this.sourcePath);
+      if (revision.trim() !== NEKO_REVISION) throw new Error("N.E.K.O 源码版本不匹配，请重新安装插件。");
+      await this.command("git", ["diff", "--quiet", "HEAD", "--"], this.sourcePath);
+      if (generation !== this.generation) return;
       const ports = [await freePort(), await freePort()];
+      const servicePorts: Record<string, string> = {};
+      for (const name of ["MONITOR_SERVER_PORT", "COMMENTER_SERVER_PORT", "TOOL_SERVER_PORT", "USER_PLUGIN_SERVER_PORT", "AGENT_MQ_PORT", "MAIN_AGENT_EVENT_PORT"]) {
+        servicePorts[`NEKO_${name}`] = String(await freePort());
+      }
       const localDataRoot = join(this.options.root, "local");
       const dataRoot = join(localDataRoot, "N.E.K.O");
       await mkdir(dataRoot, { recursive: true });
-      const env = { ...process.env, LOCALAPPDATA: localDataRoot, APPDATA: join(this.options.root, "roaming"), XDG_DATA_HOME: localDataRoot,
+      const env = { ...process.env, ...servicePorts, NEKO_INSTANCE_ID: randomUUID(), LOCALAPPDATA: localDataRoot, APPDATA: join(this.options.root, "roaming"), XDG_DATA_HOME: localDataRoot,
         PYTHONIOENCODING: "utf-8", NEKO_STORAGE_SELECTED_ROOT: dataRoot,
         NEKO_STORAGE_ANCHOR_ROOT: dataRoot, NEKO_MAIN_SERVER_PORT: String(ports[0]), NEKO_MEMORY_SERVER_PORT: String(ports[1]) };
       const launch = (module: string, args: string[] = []) => {
@@ -95,10 +114,12 @@ export class NekoPlugin {
       // Official configuration API selects the official free profile, retaining its initialization.
       const configResponse = await fetch(`${base}/api/config/core_api`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ coreApi: "free", assistApi: "free" }) });
       if (!configResponse.ok) throw new Error(`原版语音配置失败 (${configResponse.status})`);
+      const configResult = await configResponse.json() as { success?: boolean; error?: string };
+      if (configResult.success === false) throw new Error(`原版语音配置失败：${configResult.error ?? "unknown"}`);
       if (generation !== this.generation) return;
       this.setState("connecting", "运行时已启动，正在连接原版实时语音服务…");
       await this.connect(`${base.replace("http:", "ws:")}/ws/${encodeURIComponent(character.current_catgirl)}`, generation);
-    } catch (error) { if (generation === this.generation) this.fail(errorText(error)); }
+    } catch (error) { if (generation === this.generation) await this.fail(errorText(error)); }
   }
 
   private async connect(url: string, generation: number): Promise<void> {
@@ -111,10 +132,10 @@ export class NekoPlugin {
         this.send({ action: "voice_input_control", event: "lease_sync", owner: "core", hard_muted: false, focus_suppressed: false, engaged: true, lease_generation: 1 });
         this.send({ action: "start_session", input_type: "audio", new_session: true });
       };
-      socket.onerror = () => finish(new Error("无法连接 N.E.K.O 本地语音接口。"));
+      socket.onerror = () => { finish(new Error("无法连接 N.E.K.O 本地语音接口。")); if (this.state.status === "ready") void this.fail("原版语音连接发生错误。"); };
       socket.onclose = (event) => {
         finish(new Error(`N.E.K.O 语音连接关闭 (${event.code}) ${event.reason}`));
-        if (generation === this.generation) this.fail(`语音连接已断开 (${event.code}) ${event.reason}`);
+        if (generation === this.generation && this.state.status === "ready") void this.fail(`语音连接已断开 (${event.code}) ${event.reason}`);
       };
       socket.onmessage = (event) => {
         if (generation !== this.generation) return;
@@ -148,23 +169,20 @@ export class NekoPlugin {
     if ((this.socket?.bufferedAmount ?? 0) < 192_000) this.socket?.send(frame);
   }
   send(data: Record<string, unknown>): void { if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(data)); }
+  reportError(message: string): Promise<void> { return this.fail(message); }
 
   async stop(report = true): Promise<void> {
     ++this.generation;
     this.send({ action: "pause_session" });
     this.socket?.close(); this.socket = undefined;
     this.audioHeaders = []; this.interruptedSpeech.clear();
-    const children = this.children.splice(0);
-    await Promise.all(children.map(async (child) => {
-      if (!child.pid || child.exitCode !== null) return;
-      if (process.platform === "win32") await this.command("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], this.sourcePath).catch(() => undefined);
-      else child.kill("SIGTERM");
-    }));
-    if (report) this.setState(existsSync(this.pythonPath) ? "stopped" : "not-installed", "已停用，麦克风和插件进程已关闭");
+    const children = [...this.children.splice(0), ...this.operations];
+    await Promise.all(children.map(terminateChild));
+    if (report) this.setState(this.installed ? "stopped" : "not-installed", "已停用，麦克风和插件进程已关闭");
   }
 
-  private fail(message: string): void {
-    void this.stop(false).then(() => this.setState("error", message));
+  private async fail(message: string): Promise<void> {
+    await this.stop(false); this.setState("error", message);
   }
   private async waitHttp(url: string, generation: number): Promise<unknown> {
     const deadline = Date.now() + 90_000;
@@ -177,19 +195,28 @@ export class NekoPlugin {
     }
     throw new Error("N.E.K.O 本地运行时未就绪。");
   }
-  private command(command: string, args: string[], cwd: string): Promise<void> {
+  private command(command: string, args: string[], cwd: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const child = spawn(command, args, { cwd, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+      this.operations.add(child);
       let tail = "";
       child.stdout?.on("data", (chunk) => { tail = (tail + String(chunk)).slice(-1500); });
       child.stderr?.on("data", (chunk) => { tail = (tail + String(chunk)).slice(-1500); });
-      child.on("error", reject);
-      child.on("exit", (code) => code === 0 ? resolve() : reject(new Error(`${command} 退出 (${code})：${tail}`)));
+      child.on("error", (error) => { this.operations.delete(child); reject(error); });
+      child.on("exit", (code) => { this.operations.delete(child); code === 0 ? resolve(tail) : reject(new Error(`${command} 退出 (${code})：${tail}`)); });
     });
   }
 }
 
 function errorText(error: unknown): string { return error instanceof Error ? error.message : String(error); }
+function terminateChild(child: ChildProcess): Promise<void> {
+  if (!child.pid || child.exitCode !== null) return Promise.resolve();
+  if (process.platform !== "win32") { child.kill("SIGTERM"); return Promise.resolve(); }
+  return new Promise((resolve) => {
+    const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+    killer.on("exit", () => resolve()); killer.on("error", () => resolve());
+  });
+}
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = createServer(); server.on("error", reject);

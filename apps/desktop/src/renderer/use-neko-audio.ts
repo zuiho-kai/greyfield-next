@@ -5,23 +5,31 @@ export function useNekoAudio(isPetWindow: boolean, onMouth: (value: number) => v
   const audio = isPetWindow ? new RealtimeAudio(onMouth) : undefined;
   let capturing = false;
   let epoch = 0;
+  let currentSpeechId = "";
+  const interruptedSpeech = new Set<string>();
   const detach = host?.on("neko:event", (event) => {
     if (!audio) return;
     if (event.type === "state") {
       if (event.state.status === "ready" && !capturing) {
         capturing = true;
         const current = ++epoch;
-        void audio.start((data, sampleRate) => host.send("neko:audio", { data, sampleRate })).catch((error) => {
+        void audio.start((data, sampleRate) => host.send("neko:audio", { data, sampleRate }), () => {
+          interruptedSpeech.add(currentSpeechId);
+          audio.interrupt();
+        }).catch((error) => {
           if (current !== epoch) return;
           host.send("neko:command", { action: "stop", message: `麦克风无法开启：${error instanceof Error ? error.message : String(error)}` });
         });
       } else if (event.state.status !== "ready") {
-        ++epoch; capturing = false; audio.stop();
+        ++epoch; capturing = false; audio.stop(); interruptedSpeech.clear(); currentSpeechId = "";
       }
     }
-    if (event.type === "audio") void audio.play(event.data, volume()).catch((error) => {
+    if (event.type === "audio" && !interruptedSpeech.has(event.speechId)) {
+      currentSpeechId = event.speechId;
+      void audio.play(event.data, volume()).catch((error) => {
       host.send("neko:command", { action: "stop", message: `语音播放失败：${error instanceof Error ? error.message : String(error)}` });
-    });
+      });
+    }
     if (event.type === "interrupt") audio.interrupt();
   });
   host?.send("neko:command", { action: "status" });

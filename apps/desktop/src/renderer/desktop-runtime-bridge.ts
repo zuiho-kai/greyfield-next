@@ -206,7 +206,13 @@ export class DesktopRuntimeBridge {
       this.emitStateChange();
     });
     this.host?.on("neko:event", (event) => {
-      if (event.type === "state") this.state = { ...this.state, nekoPlugin: event.state };
+      if (event.type === "state") {
+        const wasActive = ["starting", "connecting", "ready"].includes(this.state.nekoPlugin.status);
+        this.state = { ...this.state, nekoPlugin: event.state };
+        if (wasActive && ["stopped", "error", "not-installed"].includes(event.state.status)) {
+          this.state = { ...this.state, status: "idle", assistantDraft: "", stage: { ...this.state.stage, mouthOpen: 0 } };
+        }
+      }
       if (event.type === "message" && event.data.type === "user_transcript") {
         this.state = { ...this.state, messages: [...this.state.messages, { role: "user", text: String(event.data.text ?? "") }] };
       }
@@ -238,6 +244,7 @@ export class DesktopRuntimeBridge {
         this.playSpeech(event.text, event.data);
       }
       if (event.type === "runtime.status" && event.status === "interrupted") {
+        this.speechPlaybackEpoch += 1;
         this.speechOutput?.cancel();
       }
       this.emitStateChange();

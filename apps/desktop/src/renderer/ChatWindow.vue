@@ -157,7 +157,7 @@
         <button
           type="button"
           class="voice-input-button"
-          :class="{ 'voice-input-button--active': state.voiceInput.status === 'listening' }"
+          :class="{ 'voice-input-button--active': state.voiceInput.status === 'listening' || state.nekoPlugin.status === 'ready' }"
           :disabled="state.voiceInput.status === 'transcribing'"
           data-testid="chat-voice-input-button"
           :title="voiceInputExperience.isPreview ? voiceInputExperience.label : voiceInputLabel"
@@ -289,6 +289,7 @@ const voiceInputExperience = computed(() => describeVoiceInputExperience(props.s
 const screenAwarenessNoticeText = computed(() => describeScreenAwarenessNotice(props.state, locale.value));
 const voiceInputLabel = computed(() => {
   if (props.state.nekoPlugin.status === "ready") return "结束 N.E.K.O 语音";
+  if (["stopped", "error"].includes(props.state.nekoPlugin.status)) return "启动 N.E.K.O 语音";
   if (props.state.voiceInput.status === "listening") {
     return t("chat.voice.stopMic");
   }

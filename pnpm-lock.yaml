@@ -84,6 +84,8 @@ importers:
         specifier: workspace:*
         version: link:../stage-live2d
 
+  packages/neko-plugin: {}
+
   packages/persistence:
     dependencies:
       '@greyfield/core-runtime':

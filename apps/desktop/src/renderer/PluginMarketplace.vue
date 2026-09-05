@@ -34,5 +34,6 @@ function command(action: 'install' | 'start' | 'stop'): void { window.greyfield?
 h3 { margin: 0 0 8px; } p { line-height: 1.6; } small { opacity: .65; }
 .neko-plugin-status { overflow-wrap: anywhere; }
 .neko-plugin-actions { display: flex; gap: 12px; }
-.neko-plugin-actions button { cursor: pointer; padding: 10px 18px; border: 1px solid rgba(255,255,255,.2); border-radius: 10px; color: inherit; background: rgba(255,255,255,.08); }
+.neko-plugin-actions button { cursor: pointer; padding: 10px 18px; border: 1px solid #166f66; border-radius: 10px; color: #fff; background: #197c71; font-weight: 650; }
+.neko-plugin-actions button:hover { background: #11655c; }
 </style>

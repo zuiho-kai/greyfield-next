@@ -40,6 +40,10 @@ export function useWindowRuntimeState(params: {
   }
 
   async function startVoiceInput(): Promise<DesktopRendererState> {
+    if (state.value.nekoPlugin.status === "stopped" || state.value.nekoPlugin.status === "error") {
+      window.greyfield?.send("neko:command", { action: "start" });
+      return applyState(bridge.getState());
+    }
     return applyState(bridge.startVoiceInput());
   }
 

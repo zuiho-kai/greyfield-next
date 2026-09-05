@@ -2,7 +2,7 @@ import { BrowserWindow, ipcMain } from "electron";
 import { join } from "node:path";
 import { NekoPlugin, type NekoPluginEvent } from "../../../../packages/neko-plugin/src/index";
 
-export function registerNekoPluginHost(userDataPath: string): NekoPlugin {
+export function registerNekoPluginHost(userDataPath: string, interruptReply: () => void): NekoPlugin {
   const broadcast = (event: NekoPluginEvent) => {
     for (const window of BrowserWindow.getAllWindows()) window.webContents.send("neko:event", event);
   };
@@ -10,10 +10,8 @@ export function registerNekoPluginHost(userDataPath: string): NekoPlugin {
   ipcMain.on("neko:command", (_event, payload: { action: string; message?: string }) => {
     if (payload.action === "status") broadcast({ type: "state", state: plugin.getState() });
     if (payload.action === "install") void plugin.install();
-    if (payload.action === "start") void plugin.start();
-    if (payload.action === "stop") void plugin.stop().then(() => {
-      if (payload.message) broadcast({ type: "state", state: { status: "error", message: payload.message } });
-    });
+    if (payload.action === "start") { interruptReply(); void plugin.start(); }
+    if (payload.action === "stop") void (payload.message ? plugin.reportError(payload.message) : plugin.stop());
   });
   ipcMain.on("neko:audio", (_event, payload: { data: Uint8Array; sampleRate: number }) => plugin.sendPcm(payload.data, payload.sampleRate));
   return plugin;

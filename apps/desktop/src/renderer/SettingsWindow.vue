@@ -62,6 +62,7 @@
 
       <section class="settings-panel" :aria-label="t('settings.label')">
         <ProviderSettingsSection
+          v-show="!pluginMarketplaceOpen"
           :state="state"
           :stage-status="stageStatus"
           :locale="locale"
@@ -71,11 +72,11 @@
           @test-llm="$emit('test-llm')"
         />
 
-        <div :ref="setSectionRef('plugins')" id="settings-section-plugins" tabindex="-1" data-settings-section="plugins">
+        <div v-show="pluginMarketplaceOpen" :ref="setSectionRef('plugins')" id="settings-section-plugins" tabindex="-1" data-settings-section="plugins">
           <PluginMarketplace :state="state.nekoPlugin" :locale="locale" />
         </div>
         <div
-          v-show="advancedSettingsOpen"
+          v-show="advancedSettingsOpen && !pluginMarketplaceOpen"
           id="settings-advanced-content"
           class="settings-advanced-content"
           data-harness="settings-advanced-content"
@@ -554,7 +555,7 @@
         </div>
       </section>
 
-      <section v-if="modelInfo" class="model-inspector" aria-label="Live2D model info">
+      <section v-if="modelInfo && !pluginMarketplaceOpen" class="model-inspector" aria-label="Live2D model info">
         <header>
           <h2>{{ t("section.modelInfo") }}</h2>
           <span>{{ modelInfo.expressions.length }} exp / {{ motionCount }} mot</span>
@@ -581,7 +582,7 @@
         </div>
       </section>
 
-      <div class="toggles">
+      <div v-show="!pluginMarketplaceOpen" class="toggles">
         <label>
           <input :checked="modelPassThrough" type="checkbox" @change="$emit('update:model-pass-through', checkedFrom($event))" />
           {{ t("toggle.modelPassThrough") }}
@@ -592,7 +593,7 @@
         </label>
       </div>
 
-      <div class="audio-strip">
+      <div v-show="!pluginMarketplaceOpen" class="audio-strip">
         <span v-for="(item, index) in state.audioQueue" :key="index">{{ item }}</span>
       </div>
     </aside>
@@ -699,6 +700,7 @@ const locale = computed(() => normalizeSettingsLocale(props.state.settings.setti
 const t = (key: SettingsI18nKey, values?: Record<string, string | number>): string =>
   settingsT(locale.value, key, values);
 const advancedSettingsOpen = ref(false);
+const pluginMarketplaceOpen = ref(false);
 const localizedStageStatus = computed(() => {
   const key = `status.${props.state.status}` as SettingsI18nKey;
   return settingsT(locale.value, key) === key ? props.state.status : settingsT(locale.value, key);
@@ -1011,6 +1013,8 @@ function setSectionRef(id: SettingsSectionId): (element: Element | null) => void
 }
 
 async function scrollToSection(id: SettingsSectionId): Promise<void> {
+  pluginMarketplaceOpen.value = id === "plugins";
+  await nextTick();
   if (settingsAdvancedSectionIds.includes(id) && !advancedSettingsOpen.value) {
     advancedSettingsOpen.value = true;
     await nextTick();
@@ -1025,6 +1029,7 @@ async function scrollToSection(id: SettingsSectionId): Promise<void> {
 }
 
 function toggleAdvancedSettings(): void {
+  pluginMarketplaceOpen.value = false;
   advancedSettingsOpen.value = !advancedSettingsOpen.value;
   if (!advancedSettingsOpen.value) {
     activeSectionId.value = "provider";
@@ -1033,7 +1038,9 @@ function toggleAdvancedSettings(): void {
 }
 
 function updateActiveSection(): void {
+  if (pluginMarketplaceOpen.value) { activeSectionId.value = "plugins"; return; }
   const sections = settingsNavItems.value.flatMap((item) => {
+    if (item.id === "plugins") return [];
     const element = sectionRefs.get(item.id);
     return element ? [{ id: item.id, top: element.getBoundingClientRect().top }] : [];
   });

@@ -194,7 +194,7 @@ function createTrayIcon(): Electron.NativeImage {
 }
 
 function registerIpc(): void {
-  nekoPlugin = registerNekoPluginHost(app.getPath("userData"));
+  nekoPlugin = registerNekoPluginHost(app.getPath("userData"), () => handleRuntimeInput({ type: "runtime.interrupt" }));
   ipcMain.on("runtime:input", (_event, payload) => {
     if (payload.type === "runtime.interrupt") void nekoPlugin?.stop();
     handleRuntimeInput(payload);

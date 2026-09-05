@@ -74,7 +74,7 @@
           type="button"
           class="desktop-control-button"
           :class="{
-            'desktop-control-button--active': state.voiceInput.status === 'listening',
+            'desktop-control-button--active': state.voiceInput.status === 'listening' || state.nekoPlugin.status === 'ready',
             'desktop-control-button--voice-preview': voiceInputExperience.isPreview
           }"
           :disabled="state.voiceInput.status === 'transcribing'"
@@ -192,6 +192,7 @@ const voiceInputExperience = computed(() => describeVoiceInputExperience(props.s
 const canStop = computed(() => chatStatus.value.canStop || props.state.voiceInput.status === "listening" || props.state.voiceInput.status === "transcribing" || ["starting", "connecting", "ready"].includes(props.state.nekoPlugin.status));
 const voiceInputTitle = computed(() => {
   if (props.state.nekoPlugin.status === "ready") return "结束 N.E.K.O 语音";
+  if (["stopped", "error"].includes(props.state.nekoPlugin.status)) return "启动 N.E.K.O 语音";
   const previewPrefix = voiceInputExperience.value.isPreview ? `${voiceInputExperience.value.label} · ` : "";
   if (props.state.voiceInput.status === "listening") {
     return `${previewPrefix}${t("controls.mic.stop")}`;
