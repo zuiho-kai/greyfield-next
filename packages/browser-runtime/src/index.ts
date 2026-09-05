@@ -1,4 +1,4 @@
-import { chromium, type BrowserContext, type Page } from "playwright-core";
+import { chromium, errors, type BrowserContext, type Page } from "playwright-core";
 import type { WebTools, WebToolResult, ToolDefinition } from "@greyfield/core-runtime";
 
 const definitions: ToolDefinition[] = [
@@ -125,7 +125,8 @@ export function createBrowserResearchTools(options: BrowserResearchOptions): Web
           }
         } else if (name !== "browser_read") throw new Error(`Unknown browser tool: ${name}`);
         if (typeof input.waitForText === "string" && input.waitForText.trim()) await page.getByText(input.waitForText, { exact: false }).first().waitFor();
-        result = await readPage(page, input, `g${++generation}-`);
+        const renderingPending = await waitForRenderedBody(page);
+        result = await readPage(page, input, `g${++generation}-`, renderingPending);
       }
       signal.throwIfAborted();
       await options.onResult?.({ name, result, elapsedMs: Date.now() - start }, page);
@@ -144,7 +145,31 @@ export function createBrowserResearchTools(options: BrowserResearchOptions): Web
   };
 }
 
-async function readPage(page: Page, input: Record<string, unknown>, prefix: string): Promise<WebToolResult> {
+async function waitForRenderedBody(page: Page): Promise<boolean> {
+  // DOMContentLoaded can precede the data requests that fill a page's empty body.
+  // Bound both waits: a background connection must not hold research indefinitely.
+  // Closing the turn's page on Stop interrupts the Playwright waits immediately.
+  const outcomes = await Promise.all([
+    page.waitForLoadState("networkidle", { timeout: 6_000 }),
+    page.waitForFunction((state) => {
+      const root = document.querySelector<HTMLElement>("main, [role=main], article, #apicontent") ?? document.body;
+      if (!root || document.readyState === "loading") return false;
+      const text = root.innerText;
+      if (text !== state.text || root.matches('[aria-busy="true"]') || root.querySelector('[aria-busy="true"]')) {
+        state.text = text;
+        state.changedAt = Date.now();
+        return false;
+      }
+      return Date.now() - state.changedAt >= 200;
+    }, { text: "", changedAt: Date.now() }, { timeout: 6_000, polling: 100 }).then((handle) => handle.dispose())
+  ].map((wait) => wait.then(() => false).catch((error: unknown) => {
+    if (error instanceof errors.TimeoutError) return true;
+    throw error;
+  })));
+  return outcomes.some(Boolean);
+}
+
+async function readPage(page: Page, input: Record<string, unknown>, prefix: string, renderingPending: boolean): Promise<WebToolResult> {
   const snapshot = await page.evaluate(({ focus, offset, prefix }) => {
     const root = document.querySelector<HTMLElement>("main, [role=main], article, #apicontent") ?? document.body;
     let text = root.innerText;
@@ -187,7 +212,7 @@ async function readPage(page: Page, input: Record<string, unknown>, prefix: stri
   }, { focus: typeof input.focus === "string" ? input.focus.trim() : "", offset: typeof input.offset === "number" ? Math.max(0, Math.floor(input.offset)) : 0, prefix });
   if (/captcha|verify you are human|just a moment|access denied/i.test(snapshot.title) || /\/sorry\//.test(snapshot.url)) throw new Error(`Source needs human verification: ${snapshot.url}. Use another source; do not bypass it.`);
   if (snapshot.content.trim().length < 40) throw new Error("Page has little rendered text yet; use browser_read with waitForText or follow a visible link.");
-  return { text: JSON.stringify(snapshot), sources: [{ title: snapshot.title, url: snapshot.url }] };
+  return { text: JSON.stringify({ ...snapshot, ...(renderingPending ? { renderingPending: true } : {}) }), sources: [{ title: snapshot.title, url: snapshot.url }] };
 }
 
 function stringArg(value: unknown, name: string): string {
