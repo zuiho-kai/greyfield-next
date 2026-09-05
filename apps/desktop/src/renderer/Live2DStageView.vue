@@ -40,6 +40,7 @@ import cubismCoreScriptUrl from "live2dcubismcore/live2dcubismcore.min.js?url";
 
 import { renderFallbackStageCanvas } from "./fallback-stage-canvas";
 import { toRendererModelUrl } from "./live2d-model-url";
+import { createLive2DStageLoader } from "./live2d-stage-loader";
 
 const props = defineProps<{
   modelPath: string;
@@ -82,6 +83,8 @@ let resizeObserver: ResizeObserver | null = null;
 const dragging = ref(false);
 let lastHitTestAt = 0;
 const lastHitModel = ref(false);
+let loadRevision = 0;
+let unmounted = false;
 
 const transform = computed(() => ({
   scale: props.modelScale,
@@ -90,10 +93,7 @@ const transform = computed(() => ({
 }));
 const mouthOpenLabel = computed(() => props.mouthOpen.toFixed(3));
 
-async function ensureRenderer(): Promise<Live2DStageDriver> {
-  if (driver.value) {
-    return driver.value;
-  }
+const modelLoader = createLive2DStageLoader(async () => {
   if (!live2dHost.value) {
     throw new Error("Live2D host is not mounted");
   }
@@ -107,28 +107,32 @@ async function ensureRenderer(): Promise<Live2DStageDriver> {
   });
   driver.value = new Live2DStageDriver(renderer.value);
   return driver.value;
-}
+});
 
 async function loadModel(): Promise<void> {
+  const revision = ++loadRevision;
+  const isCurrent = () => !unmounted && revision === loadRevision;
   const modelUrl = toRendererModelUrl(props.modelPath);
-  if (!modelUrl) {
-    usingFallback.value = true;
-    await nextTick();
-    renderFallback();
-    return;
-  }
-
   try {
-    const nextDriver = await ensureRenderer();
-    await nextDriver.loadModel(modelUrl);
+    const nextDriver = await modelLoader.load(modelUrl);
+    if (!isCurrent()) return;
+    if (!nextDriver) {
+      usingFallback.value = true;
+      await nextTick();
+      if (isCurrent()) renderFallback();
+      return;
+    }
     nextDriver.setTransform(transform.value);
     await nextDriver.setMouthOpen(props.mouthOpen);
+    if (!isCurrent()) return;
     usingFallback.value = false;
     requestAnimationFrame(() => emitModelBounds());
   } catch (error) {
+    if (!isCurrent()) return;
     console.error("[Greyfield] Live2D stage failed, showing fallback preview.", error);
     usingFallback.value = true;
     await nextTick();
+    if (!isCurrent()) return;
     renderFallback();
     emitModelBounds();
   }
@@ -398,6 +402,7 @@ onMounted(async () => {
     sampleModelHit
   };
   await nextTick();
+  if (unmounted) return;
   syncStageSize();
   if (live2dHost.value) {
     resizeObserver = new ResizeObserver(() => syncStageSize());
@@ -408,11 +413,13 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  unmounted = true;
+  loadRevision++;
   delete (window as typeof window & { __greyfieldStageSmoke?: unknown }).__greyfieldStageSmoke;
   cancelAnimationFrame(frameHandle);
   emit("dragEnd");
   resizeObserver?.disconnect();
-  driver.value?.destroy();
+  void modelLoader.dispose();
 });
 
 watch(() => props.modelPath, () => loadModel());

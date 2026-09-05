@@ -62,12 +62,13 @@
         "A .model3.json file or containing directory resolves to one model manifest.",
         "The model3 manifest parser extracts moc, textures, expression names, and motion groups.",
         "The desktop stage loads a real Live2D model through Pixi/Cubism.",
+        "Startup config hydration shares one renderer initialization, applies the latest model path, and leaves exactly one painted Live2D canvas.",
         "The fallback preview is never counted as V1 Live2D acceptance.",
         "The Live2D harness proves usedFallback=false with non-transparent WebGL pixels and frame changes.",
         "Model scale and position settings affect the real stage and persist through settings IPC."
       ],
       "qa": {
-        "script": "vitest model-manifest model3-parser fallback-stage-frame live2d-deps; pnpm harness:live2d"
+        "script": "vitest model-manifest model3-parser fallback-stage-frame live2d-deps live2d-stage-loader; pnpm harness:live2d; pnpm build:desktop && pnpm exec tsx packages/dev-harness/src/electron-check.ts --live2d-init"
       }
     },
     {
