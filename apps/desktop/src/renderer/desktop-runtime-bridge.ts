@@ -222,6 +222,7 @@ export class DesktopRuntimeBridge {
         }
       }
       if (event.type === "message" && event.data.type === "user_transcript") {
+        this.nekoSources.clear();
         this.state = { ...this.state, status: "thinking", toolStatus: undefined, messages: [...this.state.messages, { role: "user", text: String(event.data.text ?? "") }] };
       }
       if (event.type === "message" && event.data.type === "gemini_response") {
@@ -229,8 +230,8 @@ export class DesktopRuntimeBridge {
       }
       if (event.type === "message" && event.data.type === "system" && event.data.data === "turn end") {
         const sourceText = this.nekoSources.size ? `\n\n资料来源：\n${[...this.nekoSources.values()].map((source) => `[${source.title.replace(/[\[\]\r\n]/g, " ")}](${source.url})`).join("\n")}` : "";
-        this.nekoSources.clear();
-        this.state = { ...this.state, status: "idle", messages: this.state.assistantDraft ? [...this.state.messages, { role: "assistant", text: this.state.assistantDraft + sourceText }] : this.state.messages, assistantDraft: "" };
+        if (this.state.assistantDraft) this.nekoSources.clear();
+        this.state = { ...this.state, status: this.state.assistantDraft ? "idle" : this.state.status, messages: this.state.assistantDraft ? [...this.state.messages, { role: "assistant", text: this.state.assistantDraft + sourceText }] : this.state.messages, assistantDraft: "" };
       }
       this.emitStateChange();
     });
