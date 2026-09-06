@@ -43,6 +43,7 @@ export function useWindowRuntimeState(params: {
 
   async function interrupt(): Promise<DesktopRendererState> {
     microphoneRecorder?.cancel();
+    if (state.value.cascadeVoice.active) window.greyfield?.send("cascade:command", { action: "stop" });
     return applyState(await bridge.interrupt());
   }
 

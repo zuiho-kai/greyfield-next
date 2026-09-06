@@ -190,7 +190,7 @@ const t = (key: SettingsI18nKey, values?: Record<string, string | number>): stri
 const chatStatus = computed(() => describeChatStatus(props.state, inlineDraft.value, locale.value));
 const providerExperience = computed(() => describeProviderExperience(props.state, locale.value));
 const voiceInputExperience = computed(() => describeVoiceInputExperience(props.state, locale.value));
-const canStop = computed(() => chatStatus.value.canStop || props.state.voiceInput.status === "listening" || props.state.voiceInput.status === "transcribing" || ["starting", "connecting", "ready"].includes(props.state.nekoPlugin.status));
+const canStop = computed(() => props.state.cascadeVoice.active || chatStatus.value.canStop || props.state.voiceInput.status === "listening" || props.state.voiceInput.status === "transcribing" || ["starting", "connecting", "ready"].includes(props.state.nekoPlugin.status));
 const voiceInputTitle = computed(() => {
   if (props.state.cascadeVoice.available) return props.state.cascadeVoice.active ? "结束连续语音" : "开始连续语音（ASR + LLM + TTS）";
   if (props.state.nekoPlugin.status === "ready") return "结束 N.E.K.O 语音";

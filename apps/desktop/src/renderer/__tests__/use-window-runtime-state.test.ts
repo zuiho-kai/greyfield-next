@@ -7,6 +7,21 @@ afterEach(() => {
 });
 
 describe("useWindowRuntimeState", () => {
+  it("explicit user Stop closes continuous microphone while speech barge-in keeps it open", async () => {
+    let cascadeState: ((state: { available: boolean; active: boolean; message: string }) => void) | undefined;
+    const send = vi.fn();
+    vi.stubGlobal("window", { greyfield: { send, on: (channel: string, handler: typeof cascadeState) => {
+      if (channel === "cascade:state") cascadeState = handler;
+      return () => undefined;
+    } } });
+    const runtime = useWindowRuntimeState({ isPetWindow: false, isChatWindow: false, isControlsWindow: false, queryModelPath: null });
+    cascadeState!({ available: true, active: true, message: "" });
+    await runtime.bridge.interrupt(); // Speech onset calls the bridge directly.
+    expect(send).not.toHaveBeenCalledWith("cascade:command", { action: "stop" });
+    await runtime.interrupt(); // The ordinary Stop button calls the window hook.
+    expect(send).toHaveBeenCalledWith("cascade:command", { action: "stop" });
+    runtime.dispose();
+  });
   it("keeps repeated starts on NEKO through delayed host states and allows retry after error", async () => {
     const handlers: Array<(event: any) => void> = [];
     const send = vi.fn();

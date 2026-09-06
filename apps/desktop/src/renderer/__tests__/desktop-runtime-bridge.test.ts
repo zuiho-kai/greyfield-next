@@ -216,6 +216,7 @@ describe("createDesktopRuntimeBridge", () => {
     });
 
     expect(sent).toEqual([
+      ["cascade:command", { action: "status" }],
       [
         "settings:update",
         {
@@ -273,6 +274,7 @@ describe("createDesktopRuntimeBridge", () => {
     bridge.updateSettings({ providerApiKey: API_KEY_MASK, providerModel: "next-model" });
 
     expect(sent).toEqual([
+      ["cascade:command", { action: "status" }],
       [
         "settings:update",
         {

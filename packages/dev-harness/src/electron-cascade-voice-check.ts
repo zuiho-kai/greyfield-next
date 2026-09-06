@@ -7,7 +7,7 @@ const root = fileURLToPath(new URL("../../..", import.meta.url));
 const artifacts = join(root, ".cache", "cascade-acceptance");
 const config = process.env.GREYFIELD_CASCADE_CONFIG_PATH ?? join(root, ".cache", "provider-probe", "greyfield.preview.config.json");
 await mkdir(artifacts, { recursive: true });
-const fixtures = await Promise.all(["hello", "interrupt", "example"].map(async (name) => Array.from(await readFile(join(root, ".cache", "provider-probe", "fixtures", `${name}.wav`)))));
+const fixtures = await Promise.all(["hello", "interrupt", "example"].map(async (name) => Array.from(await readFile(join(root, "packages", "dev-harness", "src", "fixtures", "cascade-voice", `${name}.wav`)))));
 const env: Record<string, string> = { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)), GREYFIELD_CASCADE_VOICE: "1", GREYFIELD_CONFIG_PATH: config,
   GREYFIELD_PROJECT_ROOT: root, GREYFIELD_USER_DATA_PATH: join(artifacts, `user-data-${Date.now()}`) };
 delete env.ELECTRON_RUN_AS_NODE;
@@ -79,6 +79,11 @@ try {
   await chat.screenshot({ path: join(artifacts, "chat-result.png") });
   await controls.getByRole("button", { name: "结束连续语音", exact: true }).click();
   await pet.waitForFunction(() => { const p = (window as any).__cascadeProbe; return p.trackStops > 0 && p.active.size === 0; });
+  await controls.getByRole("button", { name: "开始连续语音（ASR + LLM + TTS）", exact: true }).click();
+  await controls.getByRole("button", { name: "结束连续语音", exact: true }).waitFor();
+  await chat.getByTestId("chat-stop-button").click();
+  await pet.waitForFunction(() => { const p = (window as any).__cascadeProbe; return p.trackStops >= 2 && p.active.size === 0; });
+  await controls.getByRole("button", { name: "开始连续语音（ASR + LLM + TTS）", exact: true }).waitFor();
   const probe = await pet.evaluate(() => { const { active, speak, ...rest } = (window as any).__cascadeProbe; return { ...rest, activeCount: active.size }; });
   for (const [index, audio] of probe.audio.entries()) await writeFile(join(artifacts, `reply-${index}.mp3`), Buffer.from(audio));
   delete probe.audio;

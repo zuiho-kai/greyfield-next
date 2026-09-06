@@ -124,6 +124,21 @@ pnpm verify:windows:portable
 
 打开 Controls 中的“配置真实聊天”，在 Settings 完成 OpenAI-compatible LLM 配置并点击 **Test LLM**。保存字段本身不等于连接已就绪；测试结果也不会作为跨重启凭据持久化。
 
+### ASR + LLM + TTS 连续语音试用（可选）
+
+这是独立试用入口，不替换默认语音路线。将完整的私有配置保存为 `.cache/provider-probe/greyfield.preview.config.json`，配置真实 OpenAI-compatible ASR、LLM、TTS 和音色，开启 `voice.speechEnabled`，并使用有效的角色文件和 `.model3.json` 路径。不要提交 API key 或私有配置。当前三段 provider 使用同一 Base URL/API key；此次实测组合为 TeleSpeechASR、Qwen3.5-35B-A3B 非思考与 CosyVoice2 anna。
+
+```bash
+pnpm build:desktop
+node scripts/start-cascade-preview.mjs
+```
+
+启动脚本仅为此进程设置 `GREYFIELD_CASCADE_VOICE=1`，使用独立的 `cascade-user-data`；可用 `GREYFIELD_CASCADE_PREVIEW_DIR` 指定其他私有配置目录。点击桌宠控制面板或 Chat 的“开始连续语音”，说完后自动识别和回复，开口会打断旧回复并继续听；“结束连续语音”或普通 Stop 按钮关闭麦克风。
+
+使用相同私有配置，可运行 `pnpm exec tsx packages/dev-harness/src/electron-cascade-voice-check.ts` 复跑合成麦克风验收；三个合成 WAV 已包含在仓库中，真实 provider 凭据仍需自行配置。该命令会调用实际供应商和网页工具，验收产物写入 `.cache/cascade-acceptance`。
+
+当前采用逐句完整 TTS 播放。合成麦克风经 Electron 的真实 ASR/LLM/TTS、自然停顿保留、插话、嘴型、网页读取和关麦路径已有验收；这不等于真人麦克风验收。真实设备的弱声外放漏检、噪声误触发稳定性仍未解决，已生成但未听完的回复也没有逐字截断历史。连续监听遇到合法空转写会安静回到监听，认证、网络和协议错误仍会显示。此入口用于实际试用，不代表已替换默认渠道或完成语音产品验收。
+
 ### 窄验证
 
 ```bash

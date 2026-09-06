@@ -174,7 +174,7 @@
             {{ voiceInputExperience.label }}
           </small>
         </button>
-        <button type="button" class="stop-button" :disabled="!chatStatus.canStop && state.nekoPlugin.status !== 'ready'" data-testid="chat-stop-button" @click="$emit('interrupt')">
+        <button type="button" class="stop-button" :disabled="!state.cascadeVoice.active && !chatStatus.canStop && state.nekoPlugin.status !== 'ready'" data-testid="chat-stop-button" @click="$emit('interrupt')">
           <span>⏹️</span> {{ chatStatus.stopLabel }}
         </button>
       </div>
