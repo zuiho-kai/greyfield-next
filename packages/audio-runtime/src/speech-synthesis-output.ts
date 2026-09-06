@@ -277,7 +277,11 @@ async function createMouthDriver(audioData: Uint8Array, onMouthOpen: (value: num
     const buffer = await context.decodeAudioData(audioData.slice().buffer);
     const timeline = createMouthOpenTimelineFromPcm(buffer.getChannelData(0), {
       sampleRate: buffer.sampleRate,
-      frameMs: 50
+      frameMs: 50,
+      // Synthesized speech can be quiet (CosyVoice ~0.02-0.07 RMS).
+      // The microphone noise gate would flatten its mouth motion entirely.
+      noiseGate: 0.008,
+      gain: 2.5
     });
     let index = 0;
     onMouthOpen(timeline[index] ?? 0);
@@ -368,7 +372,9 @@ function driveMouthFromAudioBuffer(
   const frameMs = options.frameMs ?? 50;
   const timeline = createMouthOpenTimelineFromPcm(buffer.getChannelData(0), {
     sampleRate: buffer.sampleRate,
-    frameMs
+    frameMs,
+    noiseGate: 0.008,
+    gain: 2.5
   });
   let index = 0;
   onMouthOpen(0);

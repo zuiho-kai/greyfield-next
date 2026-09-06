@@ -47,6 +47,10 @@ export function useWindowRuntimeState(params: {
   }
 
   async function startVoiceInput(): Promise<DesktopRendererState> {
+    if (state.value.cascadeVoice.available) {
+      window.greyfield?.send("cascade:command", { action: "start" });
+      return state.value;
+    }
     if (nekoStartPending || ["starting", "connecting", "ready"].includes(state.value.nekoPlugin.status)) {
       return state.value;
     }
@@ -60,6 +64,10 @@ export function useWindowRuntimeState(params: {
   }
 
   async function stopVoiceInput(audio?: Uint8Array): Promise<DesktopRendererState> {
+    if (state.value.cascadeVoice.available) {
+      window.greyfield?.send("cascade:command", { action: "stop" });
+      return state.value;
+    }
     if (["starting", "connecting", "ready"].includes(state.value.nekoPlugin.status)) {
       window.greyfield?.send("neko:command", { action: "stop" });
       return applyState(bridge.getState());

@@ -360,8 +360,12 @@ export class RuntimeService {
       }
       return;
     }
+    if (input.type === "runtime.interrupt") {
+      await this.emitRuntimeEvent({ type: "runtime.status", status: "interrupted" }, emit);
+      return;
+    }
 
-    if (input.type === "text.input" && this.activeRuntime) {
+    if ((input.type === "text.input" || input.type === "audio.input") && this.activeRuntime) {
       await this.activeRuntime.handle({ type: "runtime.interrupt" }, (event) => this.emitRuntimeEvent(event, emit));
     }
 
@@ -383,11 +387,14 @@ export class RuntimeService {
     }
 
     const runtime = await this.createRuntime();
-    if (input.type === "text.input" || input.type === "audio.chunk") {
+    if (input.type === "text.input" || input.type === "audio.chunk" || input.type === "audio.input") {
       this.activeRuntime = runtime;
     }
     try {
-      await runtime.handle(input, (event) => this.emitRuntimeEvent(event, emit));
+      await runtime.handle(input, (event) => {
+        if ((input.type === "audio.input" || input.type === "text.input") && this.activeRuntime !== runtime) return;
+        return this.emitRuntimeEvent(event, emit);
+      });
     } finally {
       if (this.activeRuntime === runtime && input.type !== "audio.chunk") {
         this.activeRuntime = undefined;

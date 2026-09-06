@@ -161,6 +161,10 @@ describe("research conversation", () => {
     expect(turns[1]?.content).not.toContain("我查一下");
     expect(turns[1]?.content).not.toContain("我再读一下");
     expect(spoken).toEqual(["安装缺少的依赖，然后重新运行。"]);
+    const finalRequest = requests.at(-1)!;
+    expect(finalRequest.tools).toBeUndefined();
+    expect(finalRequest.messages[0]?.role).toBe("system");
+    expect(finalRequest.messages.slice(1).some((message) => message.role === "system")).toBe(false);
     expect(JSON.stringify(turns)).not.toContain("RAW_PAGE_CONTENT");
     await context.runtime.handle({ type: "text.input", text: "第二步为什么" }, context.emit);
     expect(JSON.stringify(requests.at(-1)?.messages)).toContain("安装缺少的依赖");

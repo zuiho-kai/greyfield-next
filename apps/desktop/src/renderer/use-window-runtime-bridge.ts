@@ -3,6 +3,7 @@ import { BrowserMicrophoneRecorder, BrowserSpeechSynthesisOutput } from "@greyfi
 import { createDesktopRuntimeBridgeWithSpeech, type DesktopRendererState } from "./desktop-runtime-bridge";
 import { isMaskedApiKey } from "../shared/secrets";
 import { useNekoAudio } from "./use-neko-audio";
+import { useCascadeAudio } from "./use-cascade-audio";
 
 export function useWindowRuntimeBridge(params: {
   isPetWindow: boolean;
@@ -25,6 +26,7 @@ export function useWindowRuntimeBridge(params: {
   const modelInfo = ref<{ modelPath: string; expressions: string[]; motions: Record<string, number> } | null>(null);
   const detachHostListeners: Array<() => void> = [];
   const detachNekoAudio = useNekoAudio(params.isPetWindow, (value) => { state.value.stage.mouthOpen = value; }, () => state.value.settings.voiceVolume);
+  const detachCascadeAudio = useCascadeAudio(params.isPetWindow, bridge);
 
   detachHostListeners.push(bridge.onStateChange((nextState) => syncState(nextState)));
 
@@ -80,6 +82,7 @@ export function useWindowRuntimeBridge(params: {
 
   function dispose(): void {
     detachNekoAudio();
+    detachCascadeAudio();
     microphoneRecorder?.cancel();
     for (const detach of detachHostListeners) detach();
   }

@@ -154,6 +154,7 @@ export interface DesktopIpcRequestMap {
   "neko:command": { action: "install" | "start" | "stop" | "status" | "user-activity"; message?: string };
   "neko:audio": { data: Uint8Array; sampleRate: number };
   "runtime:input": RuntimeInputEvent;
+  "cascade:command": { action: "status" | "start" | "stop" | "error"; message?: string };
   "runtime:speech-playback": DesktopSpeechPlaybackEvent;
   "provider:test-llm": {};
   "provider:test-voice": {};
@@ -201,6 +202,7 @@ export interface DesktopIpcRequestMap {
 
 export interface DesktopIpcEventMap {
   "neko:event": import("../../../../packages/neko-plugin/src/index").NekoPluginEvent;
+  "cascade:state": { available: boolean; active: boolean; message: string };
   "provider:test-reset": {};
   "session:continuity": {
     restoredRecentMessageCount: number;

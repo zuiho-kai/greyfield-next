@@ -5,6 +5,7 @@ import type { RuntimeImageAttachment, RuntimeObservationInput, RuntimeObservatio
 export type RuntimeInputEvent =
   | { type: "text.input"; text: string; attachments?: RuntimeImageAttachment[]; observation?: RuntimeObservationInput }
   | { type: "audio.chunk"; data: Uint8Array }
+  | { type: "audio.input"; data: Uint8Array }
   | { type: "audio.end"; attachments?: RuntimeImageAttachment[]; observation?: RuntimeObservationInput }
   | { type: "runtime.interrupt" }
   | { type: "stage.touch"; areaId: string; x?: number; y?: number }

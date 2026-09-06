@@ -51,6 +51,7 @@ export class RuntimeProviderFactory {
         baseUrl: this.config.provider.baseUrl,
         apiKey: this.config.provider.apiKey,
         model: this.resolveTaskModel(slot),
+        ...(process.env.GREYFIELD_CASCADE_VOICE === "1" ? { enableThinking: false } : {}),
         fetch: this.options.fetch,
         timeoutMs: this.options.llmTimeoutMs
       });

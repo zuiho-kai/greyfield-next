@@ -160,13 +160,13 @@
         <button
           type="button"
           class="voice-input-button"
-          :class="{ 'voice-input-button--active': state.voiceInput.status === 'listening' || state.nekoPlugin.status === 'ready' }"
-          :disabled="voiceConnecting || state.voiceInput.status === 'transcribing'"
+          :class="{ 'voice-input-button--active': state.cascadeVoice.active || state.voiceInput.status === 'listening' || state.nekoPlugin.status === 'ready' }"
+          :disabled="voiceConnecting || (!state.cascadeVoice.available && state.voiceInput.status === 'transcribing')"
           :aria-busy="voiceConnecting"
           :data-neko-status="state.nekoPlugin.status"
           data-testid="chat-voice-input-button"
           :title="voiceInputExperience.isPreview ? voiceInputExperience.label : voiceInputLabel"
-          @click="$emit(state.voiceInput.status === 'listening' || state.nekoPlugin.status === 'ready' ? 'stop-voice-input' : 'start-voice-input')"
+          @click="$emit(state.cascadeVoice.active || state.voiceInput.status === 'listening' || state.nekoPlugin.status === 'ready' ? 'stop-voice-input' : 'start-voice-input')"
         >
           <span>🎙️</span>
           <span>{{ voiceInputLabel }}</span>
@@ -341,6 +341,7 @@ const providerExperience = computed(() => describeProviderExperience(props.state
 const voiceInputExperience = computed(() => describeVoiceInputExperience(props.state, locale.value));
 const screenAwarenessNoticeText = computed(() => describeScreenAwarenessNotice(props.state, locale.value));
 const voiceInputLabel = computed(() => {
+  if (props.state.cascadeVoice.available) return props.state.cascadeVoice.active ? "结束连续语音" : "开始连续语音";
   const chinese = locale.value === "zh-CN";
   if (props.state.nekoPlugin.status === "starting") return chinese ? "启动中…" : "Starting…";
   if (props.state.nekoPlugin.status === "connecting") return chinese ? "连接中…" : "Connecting…";

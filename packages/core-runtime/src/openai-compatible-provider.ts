@@ -5,6 +5,7 @@ export interface OpenAICompatibleLLMProviderOptions {
   apiKey: string;
   model: string;
   supportsVision?: boolean;
+  enableThinking?: boolean;
   fetch?: typeof fetch;
   timeoutMs?: number;
 }
@@ -71,6 +72,7 @@ export class OpenAICompatibleLLMProvider implements LLMProvider {
           model: this.options.model,
           messages,
           stream: true,
+          ...(this.options.enableThinking === undefined ? {} : { enable_thinking: this.options.enableThinking }),
           ...(tools && tools.length > 0 ? { tools: tools.map((tool) => ({ type: "function", function: tool })) } : {})
         })
       });

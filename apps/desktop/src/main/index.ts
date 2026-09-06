@@ -213,6 +213,17 @@ function createTrayIcon(): Electron.NativeImage {
 }
 
 function registerIpc(): void {
+  let cascadeActive = false;
+  ipcMain.on("cascade:command", (_event, payload) => {
+    const available = process.env.GREYFIELD_CASCADE_VOICE === "1";
+    if (available && payload.action !== "status") {
+      cascadeActive = payload.action === "start";
+      if (!cascadeActive) handleRuntimeInput({ type: "runtime.interrupt" });
+    }
+    for (const window of BrowserWindow.getAllWindows()) window.webContents.send("cascade:state", {
+      available, active: cascadeActive, message: payload.action === "error" ? String(payload.message ?? "麦克风错误") : ""
+    });
+  });
   nekoPlugin = registerNekoPluginHost(app.getPath("userData"), () => handleRuntimeInput({ type: "runtime.interrupt" }), () => settingsController?.getCurrent());
   ipcMain.on("runtime:input", (event, payload) => {
     if (payload.type === "runtime.interrupt") void nekoPlugin?.stop();

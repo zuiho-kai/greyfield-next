@@ -31,6 +31,7 @@ export interface DesktopMessage {
 }
 
 export interface DesktopRendererState {
+  cascadeVoice: { available: boolean; active: boolean; message: string };
   nekoPlugin: import("../../../../packages/neko-plugin/src/index").NekoPluginState;
   status: string;
   errorMessage: string;
@@ -166,6 +167,11 @@ export class DesktopRuntimeBridge {
   private speechPlaybackChain: Promise<void> = Promise.resolve();
 
   constructor(private readonly host?: DesktopHostApi, private readonly speechOutput?: SpeechOutput) {
+    this.host?.on("cascade:state", (cascadeVoice) => {
+      this.state = { ...this.state, cascadeVoice, ...(cascadeVoice.message ? { voiceErrorMessage: cascadeVoice.message } : {}) };
+      this.emitStateChange();
+    });
+    this.host?.send("cascade:command", { action: "status" });
     this.host?.on("settings:changed", (config) => {
       const settings = settingsFromConfig(config);
       if (isMaskedApiKey(config.provider.apiKey) && this.state.settings.providerApiKey.length > 0) {
@@ -1162,6 +1168,7 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       exportText: "",
       snapshot: null
     },
+    cascadeVoice: { available: false, active: false, message: "" },
     nekoPlugin: { status: "not-installed", message: "N.E.K.O 原版实时语音" },
     memoryExtraction: null,
     sessionContinuity: {

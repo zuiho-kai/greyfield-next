@@ -1,0 +1,20 @@
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const preview = process.env.GREYFIELD_CASCADE_PREVIEW_DIR || join(root, ".cache", "provider-probe");
+const config = join(preview, "greyfield.preview.config.json");
+if (!existsSync(config)) throw new Error("Missing private cascade trial config.");
+const desktop = join(root, "apps", "desktop");
+const entry = join(desktop, "dist-main", "index.mjs");
+if (!existsSync(entry)) throw new Error("Run pnpm build:desktop first.");
+const require = createRequire(join(desktop, "package.json"));
+const env = { ...process.env, GREYFIELD_PROJECT_ROOT: root, GREYFIELD_CONFIG_PATH: config,
+  GREYFIELD_CASCADE_VOICE: "1", GREYFIELD_USER_DATA_PATH: join(preview, "cascade-user-data") };
+delete env.ELECTRON_RUN_AS_NODE;
+const child = spawn(require("electron"), ["--remote-debugging-port=0", entry], { cwd: desktop, env, detached: true, stdio: "ignore", windowsHide: true });
+await new Promise((resolve, reject) => { child.once("error", reject); child.once("spawn", resolve); });
+child.unref();
+console.log("Cascade trial launched. Click the microphone to start continuous voice.");

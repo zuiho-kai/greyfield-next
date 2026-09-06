@@ -135,6 +135,11 @@ export class GreyfieldRuntime {
     }
 
     if (input.type !== "text.input") {
+      if (input.type === "audio.input") {
+        await this.handleAudioChunk(input.data, emit);
+        await this.handleAudioEnd({ type: "audio.end" }, emit);
+        return;
+      }
       if (input.type === "audio.chunk") {
         await this.handleAudioChunk(input.data, emit);
         return;

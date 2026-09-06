@@ -74,15 +74,15 @@
           type="button"
           class="desktop-control-button"
           :class="{
-            'desktop-control-button--active': state.voiceInput.status === 'listening' || state.nekoPlugin.status === 'ready',
+            'desktop-control-button--active': state.cascadeVoice.active || state.voiceInput.status === 'listening' || state.nekoPlugin.status === 'ready',
             'desktop-control-button--voice-preview': voiceInputExperience.isPreview
           }"
-          :disabled="state.voiceInput.status === 'transcribing' || ['starting', 'connecting'].includes(state.nekoPlugin.status)"
+          :disabled="(!state.cascadeVoice.available && state.voiceInput.status === 'transcribing') || ['starting', 'connecting'].includes(state.nekoPlugin.status)"
           :data-neko-status="state.nekoPlugin.status"
           :title="voiceInputTitle"
           :aria-label="voiceInputTitle"
           :data-testid="voiceInputExperience.isPreview ? 'controls-fake-asr-disclosure' : undefined"
-          @click="$emit(state.voiceInput.status === 'listening' || state.nekoPlugin.status === 'ready' ? 'stop-voice-input' : 'start-voice-input')"
+          @click="$emit(state.cascadeVoice.active || state.voiceInput.status === 'listening' || state.nekoPlugin.status === 'ready' ? 'stop-voice-input' : 'start-voice-input')"
         >
           <Mic :size="16" stroke-width="2.35" />
           <span v-if="voiceInputExperience.isPreview" class="desktop-control-button__micro-label">
@@ -192,6 +192,7 @@ const providerExperience = computed(() => describeProviderExperience(props.state
 const voiceInputExperience = computed(() => describeVoiceInputExperience(props.state, locale.value));
 const canStop = computed(() => chatStatus.value.canStop || props.state.voiceInput.status === "listening" || props.state.voiceInput.status === "transcribing" || ["starting", "connecting", "ready"].includes(props.state.nekoPlugin.status));
 const voiceInputTitle = computed(() => {
+  if (props.state.cascadeVoice.available) return props.state.cascadeVoice.active ? "结束连续语音" : "开始连续语音（ASR + LLM + TTS）";
   if (props.state.nekoPlugin.status === "ready") return "结束 N.E.K.O 语音";
   if (["stopped", "error"].includes(props.state.nekoPlugin.status)) return "启动 N.E.K.O 语音";
   const previewPrefix = voiceInputExperience.value.isPreview ? `${voiceInputExperience.value.label} · ` : "";

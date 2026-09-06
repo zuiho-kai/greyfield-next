@@ -29,7 +29,8 @@ export class OpenAICompatibleASRProvider implements ASRProvider {
       const form = new FormData();
       form.append("model", this.options.model.trim());
       form.append("response_format", "json");
-      form.append("file", new Blob([audio.slice().buffer], { type: "audio/webm" }), "greyfield-microphone.webm");
+      const wav = String.fromCharCode(...audio.slice(0, 4)) === "RIFF";
+      form.append("file", new Blob([audio.slice().buffer], { type: wav ? "audio/wav" : "audio/webm" }), `greyfield-microphone.${wav ? "wav" : "webm"}`);
       const response = await fetchImpl(`${trimTrailingSlash(this.options.baseUrl)}/audio/transcriptions`, {
         method: "POST",
         headers: {
