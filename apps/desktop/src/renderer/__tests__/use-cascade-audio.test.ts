@@ -39,5 +39,8 @@ it("retains a natural pause clause cancelled during ASR, then clears it after ac
   handlers.get("runtime:event")!({ type: "error", message: "ASR failed" });
   utterance();
   expect(send.mock.calls.at(-1)![1].data.length).toBe(firstSize);
+  handlers.get("runtime:event")!({ type: "transcript.empty" });
+  utterance();
+  expect(send.mock.calls.at(-1)![1].data.length).toBe(firstSize);
   dispose(); expect(capture.stop).toHaveBeenCalled(); expect(handlers.size).toBe(0);
 });

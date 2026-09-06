@@ -17,6 +17,7 @@ export type RuntimeOutputEvent =
   | { type: "runtime.status"; status: RuntimeStatus }
   | { type: "transcript.partial"; text: string }
   | { type: "transcript.final"; text: string }
+  | { type: "transcript.empty" }
   | { type: "user.text.accepted"; text: string }
   | { type: "assistant.text.delta"; text: string }
   | { type: "assistant.text.reset" }

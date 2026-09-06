@@ -20,6 +20,25 @@ const memoryStore: MemoryStore = {
 };
 
 describe("GreyfieldRuntime", () => {
+  it.each(["audio.input", "audio.end"] as const)("handles no-speech in %s without inventing a conversation", async (mode) => {
+    const stream = vi.fn(async function* () { yield "must not run"; });
+    const synthesize = vi.fn(async () => new Uint8Array());
+    const sessionStore = new InMemorySessionStore("silence");
+    const runtime = new GreyfieldRuntime({ llm: { stream }, tts: { synthesize }, asr: { transcribe: async () => "" },
+      memoryStore, sessionStore, persona: { name: "Greyfield", tone: "alive", boundaries: [], expressionMap: {} }, voice: "default" });
+    const events: RuntimeOutputEvent[] = [];
+    const emit = (event: RuntimeOutputEvent) => { events.push(event); };
+    if (mode === "audio.input") await runtime.handle({ type: mode, data: new Uint8Array([1]) }, emit);
+    else {
+      await runtime.handle({ type: "audio.chunk", data: new Uint8Array([1]) }, emit);
+      await runtime.handle({ type: mode }, emit);
+    }
+    expect(events.some((event) => event.type === "error")).toBe(mode === "audio.end");
+    expect(events.some((event) => event.type === "transcript.empty")).toBe(mode === "audio.input");
+    expect(events.some((event) => event.type === "transcript.final")).toBe(false);
+    expect(stream).not.toHaveBeenCalled(); expect(synthesize).not.toHaveBeenCalled();
+    expect(await sessionStore.getRecent(10)).toEqual([]);
+  });
   it("keeps profile section classification aligned with explicit user-facing categories", () => {
     expect(profilePortraitSectionId({ category: "identity", key: "家人称呼", value: "姐姐" })).toBe("identity");
     expect(profilePortraitSectionId({ category: "preference", key: "family topic", value: "likes brief replies" })).toBe("preference");

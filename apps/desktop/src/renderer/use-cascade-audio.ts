@@ -17,7 +17,7 @@ export function useCascadeAudio(isPetWindow: boolean, bridge: DesktopRuntimeBrid
     host.send("runtime:input", { type: "audio.input", data: mergeUtteranceWaves(pendingAudio) });
   });
   const detachTranscript = host.on("runtime:event", (event) => {
-    if (event.type === "transcript.final" || event.type === "error") pendingAudio = [];
+    if (event.type === "transcript.final" || event.type === "transcript.empty" || event.type === "error") pendingAudio = [];
   });
   const detach = host.on("cascade:state", (state) => {
     if (state.active && !capturing) {

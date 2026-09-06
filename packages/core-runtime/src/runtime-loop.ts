@@ -137,7 +137,7 @@ export class GreyfieldRuntime {
     if (input.type !== "text.input") {
       if (input.type === "audio.input") {
         await this.handleAudioChunk(input.data, emit);
-        await this.handleAudioEnd({ type: "audio.end" }, emit);
+        await this.handleAudioEnd({ type: "audio.end" }, emit, true);
         return;
       }
       if (input.type === "audio.chunk") {
@@ -170,7 +170,7 @@ export class GreyfieldRuntime {
     }
   }
 
-  private async handleAudioEnd(input: Extract<RuntimeInputEvent, { type: "audio.end" }>, emit: RuntimeEventHandler): Promise<void> {
+  private async handleAudioEnd(input: Extract<RuntimeInputEvent, { type: "audio.end" }>, emit: RuntimeEventHandler, continuous = false): Promise<void> {
     if (!this.activeAbortController) {
       this.activeAbortController = new AbortController();
     }
@@ -195,7 +195,10 @@ export class GreyfieldRuntime {
         return;
       }
       if (transcript.length === 0) {
-        await emit({ type: "error", message: "Voice input was empty. Try speaking again." });
+        if (continuous) {
+          await emit({ type: "transcript.empty" });
+          await emit({ type: "runtime.status", status: "listening" });
+        } else await emit({ type: "error", message: "Voice input was empty. Try speaking again." });
         this.activeAbortController = undefined;
         return;
       }

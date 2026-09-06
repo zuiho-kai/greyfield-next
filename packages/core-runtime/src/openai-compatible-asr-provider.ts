@@ -43,11 +43,8 @@ export class OpenAICompatibleASRProvider implements ASRProvider {
         throw new Error(`OpenAI-compatible ASR request failed: ${response.status} ${response.statusText}`.trim());
       }
       const payload = (await response.json()) as { text?: unknown };
-      const text = typeof payload.text === "string" ? payload.text.trim() : "";
-      if (text.length === 0) {
-        throw new Error("OpenAI-compatible ASR returned an empty transcript.");
-      }
-      return text;
+      if (typeof payload.text !== "string") throw new Error("OpenAI-compatible ASR returned an invalid transcript response.");
+      return payload.text.trim();
     } catch (error) {
       if (controller.signal.aborted && error instanceof DOMException && error.name === "AbortError") {
         throw new Error("OpenAI-compatible ASR request timed out or was stopped.");

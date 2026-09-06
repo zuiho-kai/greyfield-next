@@ -2,6 +2,16 @@ import { describe, expect, it, vi } from "vitest";
 import { OpenAICompatibleASRProvider } from "../openai-compatible-asr-provider";
 
 describe("OpenAICompatibleASRProvider", () => {
+  it("distinguishes a successful no-speech result from a malformed response", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ text: " " }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ result: "missing text" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response("unauthorized", { status: 401 }));
+    const provider = new OpenAICompatibleASRProvider({ baseUrl: "https://voice.example/v1", apiKey: "key", model: "asr", fetch });
+    await expect(provider.transcribe(new Uint8Array([1]))).resolves.toBe("");
+    await expect(provider.transcribe(new Uint8Array([1]))).rejects.toThrow("invalid transcript response");
+    await expect(provider.transcribe(new Uint8Array([1]))).rejects.toThrow("401");
+  });
   it("posts microphone audio to the OpenAI-compatible transcription endpoint", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(JSON.stringify({ text: "你好 Greyfield" }), { status: 200 }));
     const provider = new OpenAICompatibleASRProvider({
