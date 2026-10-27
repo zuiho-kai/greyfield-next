@@ -333,7 +333,7 @@ describe("RuntimeService", () => {
 
     await expect(missingKey.testVoice()).resolves.toEqual({
       ok: false,
-      message: "OpenAI-compatible TTS needs an API key before testing voice."
+      message: "OpenAI-compatible TTS needs an API key before testing voice. Set the shared API key or the TTS API key."
     });
     await expect(missingVoice.testVoice()).resolves.toEqual({
       ok: false,

@@ -33,6 +33,27 @@
         />
       </label>
       <label>
+        <span>{{ t("field.asrBaseUrl") }}</span>
+        <input
+          :value="state.settings.providerASRBaseUrl"
+          autocomplete="off"
+          spellcheck="false"
+          :placeholder="t('field.endpointFallback')"
+          @input="emit('update-setting', 'providerASRBaseUrl', valueFrom($event))"
+        />
+      </label>
+      <label>
+        <span>{{ t("field.asrApiKey") }}</span>
+        <input
+          :value="state.settings.providerASRApiKey"
+          autocomplete="off"
+          spellcheck="false"
+          :placeholder="state.settings.providerHasASRApiKey ? t('provider.savedApiKey') : t('field.apiKeyFallback')"
+          type="password"
+          @input="emit('update-setting', 'providerASRApiKey', valueFrom($event))"
+        />
+      </label>
+      <label>
         <span>{{ t("field.tts") }}</span>
         <select
           :value="state.settings.providerTTS"
@@ -50,6 +71,27 @@
           autocomplete="off"
           spellcheck="false"
           @input="emit('update-setting', 'providerTTSModel', valueFrom($event))"
+        />
+      </label>
+      <label>
+        <span>{{ t("field.ttsBaseUrl") }}</span>
+        <input
+          :value="state.settings.providerTTSBaseUrl"
+          autocomplete="off"
+          spellcheck="false"
+          :placeholder="t('field.endpointFallback')"
+          @input="emit('update-setting', 'providerTTSBaseUrl', valueFrom($event))"
+        />
+      </label>
+      <label>
+        <span>{{ t("field.ttsApiKey") }}</span>
+        <input
+          :value="state.settings.providerTTSApiKey"
+          autocomplete="off"
+          spellcheck="false"
+          :placeholder="state.settings.providerHasTTSApiKey ? t('provider.savedApiKey') : t('field.apiKeyFallback')"
+          type="password"
+          @input="emit('update-setting', 'providerTTSApiKey', valueFrom($event))"
         />
       </label>
       <label>
@@ -178,10 +220,17 @@ function describeVoiceBlockedReason(state: DesktopRendererState): string {
   if (state.settings.providerTTS !== "openai-compatible") {
     return "";
   }
-  if (state.settings.providerBaseUrl.trim().length === 0) {
+  // TTS 可以指向和聊天不同的服务，缺哪一项就按它实际会用的地址/密钥来判断。
+  const ttsBaseUrl = state.settings.providerTTSBaseUrl.trim() || state.settings.providerBaseUrl.trim();
+  if (ttsBaseUrl.length === 0) {
     return t("voice.blocked.baseUrl");
   }
-  if (!state.settings.providerHasApiKey && state.settings.providerApiKey.trim().length === 0) {
+  const ttsHasApiKey =
+    state.settings.providerHasTTSApiKey ||
+    state.settings.providerTTSApiKey.trim().length > 0 ||
+    state.settings.providerHasApiKey ||
+    state.settings.providerApiKey.trim().length > 0;
+  if (!ttsHasApiKey) {
     return t("voice.blocked.apiKey");
   }
   if (state.settings.providerTTSModel.trim().length === 0) {

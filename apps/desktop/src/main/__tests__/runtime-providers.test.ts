@@ -132,4 +132,125 @@ describe("RuntimeProviderFactory", () => {
       text: "你好，这是 Greyfield 的语音测试。"
     });
   });
+
+  it("sends ASR and TTS to their own endpoints while chat keeps the shared one", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push({ url, init });
+      if (url.endsWith("/audio/transcriptions")) {
+        return new Response(JSON.stringify({ text: "你好" }), { status: 200 });
+      }
+      return new Response(new Uint8Array([1, 2, 3]), { status: 200 });
+    });
+    const factory = new RuntimeProviderFactory(
+      mergeConfig({
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          llm: "openai-compatible",
+          asr: "openai-compatible",
+          tts: "openai-compatible",
+          // 典型场景：文本中转站只有聊天能力，语音在另外两个服务上
+          baseUrl: "https://text-only.example/v1",
+          apiKey: "chat-key",
+          model: "chat-model",
+          asrBaseUrl: "https://voice.example/v1",
+          asrApiKey: "asr-key",
+          ttsBaseUrl: "http://127.0.0.1:8787/v1",
+          taskModels: {
+            ...defaultGreyfieldConfig.provider.taskModels,
+            voiceAsr: "whisper-small",
+            voiceTts: "edge-tts"
+          }
+        }
+      }),
+      { fetch }
+    );
+
+    await expect(factory.createASRProvider().transcribe(new Uint8Array([1, 2, 3]))).resolves.toBe("你好");
+    await factory.createTTSProvider().synthesize("你好", "zh-CN-XiaoxiaoNeural");
+
+    expect(calls[0]?.url).toBe("https://voice.example/v1/audio/transcriptions");
+    expect(calls[1]?.url).toBe("http://127.0.0.1:8787/v1/audio/speech");
+    expect((calls[0]?.init?.headers as Record<string, string>).Authorization).toBe("Bearer asr-key");
+    // TTS 没单独填 key，应当回退到共享密钥
+    expect((calls[1]?.init?.headers as Record<string, string>).Authorization).toBe("Bearer chat-key");
+  });
+
+  it("keeps the shared endpoint when a capability does not override it", async () => {
+    const fetch = vi.fn(async (_input: RequestInfo | URL) => new Response(JSON.stringify({ text: "ok" }), { status: 200 }));
+    const factory = new RuntimeProviderFactory(
+      mergeConfig({
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          asr: "openai-compatible",
+          baseUrl: "https://shared.example/v1",
+          apiKey: "shared-key",
+          taskModels: {
+            ...defaultGreyfieldConfig.provider.taskModels,
+            voiceAsr: "whisper-small"
+          }
+        }
+      }),
+      { fetch }
+    );
+
+    await factory.createASRProvider().transcribe(new Uint8Array([1, 2, 3]));
+    expect(String(fetch.mock.calls[0]?.[0])).toBe("https://shared.example/v1/audio/transcriptions");
+  });
+
+  it("validates against the capability endpoint instead of only the shared one", () => {
+    const dedicatedOnly = new RuntimeProviderFactory(
+      mergeConfig({
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          asr: "openai-compatible",
+          tts: "openai-compatible",
+          baseUrl: "",
+          apiKey: "shared-key",
+          asrBaseUrl: "https://voice.example/v1",
+          taskModels: {
+            ...defaultGreyfieldConfig.provider.taskModels,
+            voiceAsr: "whisper-small",
+            voiceTts: "edge-tts"
+          }
+        }
+      })
+    );
+
+    // ASR 有专用地址，就不该再因为共享地址为空而拦下来
+    expect(dedicatedOnly.validateASRProviderConfig("transcribing")).toBe("");
+    // TTS 没有专用地址，仍按共享地址为空报错，并提示两处都可以填
+    expect(dedicatedOnly.validateTTSProviderConfig()).toBe(
+      "OpenAI-compatible TTS needs a Base URL before testing voice. Set the shared Base URL or the TTS Base URL."
+    );
+  });
+
+  it("rejects a capability endpoint that is present but has no API key anywhere", () => {
+    const missingKeys = new RuntimeProviderFactory(
+      mergeConfig({
+        provider: {
+          ...defaultGreyfieldConfig.provider,
+          asr: "openai-compatible",
+          tts: "openai-compatible",
+          baseUrl: "",
+          apiKey: "",
+          asrBaseUrl: "https://voice.example/v1",
+          ttsBaseUrl: "https://voice.example/v1",
+          taskModels: {
+            ...defaultGreyfieldConfig.provider.taskModels,
+            voiceAsr: "whisper-small",
+            voiceTts: "edge-tts"
+          }
+        }
+      })
+    );
+
+    expect(missingKeys.validateASRProviderConfig("transcribing")).toBe(
+      "OpenAI-compatible ASR needs an API key before transcribing. Set the shared API key or the ASR API key."
+    );
+    expect(missingKeys.validateTTSProviderConfig()).toBe(
+      "OpenAI-compatible TTS needs an API key before testing voice. Set the shared API key or the TTS API key."
+    );
+  });
 });

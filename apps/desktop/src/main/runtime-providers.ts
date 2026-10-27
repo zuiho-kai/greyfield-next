@@ -7,7 +7,7 @@ import {
   type LLMProvider,
   type TTSProvider
 } from "@greyfield/core-runtime";
-import type { GreyfieldConfig } from "@greyfield/persistence/config-schema";
+import { resolveProviderEndpoint, type GreyfieldConfig } from "@greyfield/persistence/config-schema";
 
 export interface RuntimeProviderFactoryOptions {
   fetch?: typeof fetch;
@@ -87,9 +87,10 @@ export class RuntimeProviderFactory {
       if (providerConfigError) {
         throw new Error(providerConfigError);
       }
+      const endpoint = resolveProviderEndpoint(this.config, "asr");
       return new OpenAICompatibleASRProvider({
-        baseUrl: this.config.provider.baseUrl,
-        apiKey: this.config.provider.apiKey,
+        baseUrl: endpoint.baseUrl,
+        apiKey: endpoint.apiKey,
         model: this.resolveTaskModel("voiceAsr"),
         fetch: this.options.fetch,
         timeoutMs: this.options.asrTimeoutMs
@@ -100,9 +101,10 @@ export class RuntimeProviderFactory {
 
   createTTSProvider(): TTSProvider {
     if (this.config.provider.tts === "openai-compatible") {
+      const endpoint = resolveProviderEndpoint(this.config, "tts");
       return new OpenAICompatibleTTSProvider({
-        baseUrl: this.config.provider.baseUrl,
-        apiKey: this.config.provider.apiKey,
+        baseUrl: endpoint.baseUrl,
+        apiKey: endpoint.apiKey,
         model: this.resolveTaskModel("voiceTts"),
         fetch: this.options.fetch,
         timeoutMs: this.options.ttsTimeoutMs
@@ -166,11 +168,12 @@ export class RuntimeProviderFactory {
     if (this.config.provider.tts !== "openai-compatible") {
       return "";
     }
-    if (this.config.provider.baseUrl.trim().length === 0) {
-      return "OpenAI-compatible TTS needs a Base URL before testing voice.";
+    const endpoint = resolveProviderEndpoint(this.config, "tts");
+    if (endpoint.baseUrl.length === 0) {
+      return "OpenAI-compatible TTS needs a Base URL before testing voice. Set the shared Base URL or the TTS Base URL.";
     }
-    if (this.config.provider.apiKey.trim().length === 0) {
-      return "OpenAI-compatible TTS needs an API key before testing voice.";
+    if (endpoint.apiKey.length === 0) {
+      return "OpenAI-compatible TTS needs an API key before testing voice. Set the shared API key or the TTS API key.";
     }
     if (this.resolveTaskModel("voiceTts").length === 0) {
       return "OpenAI-compatible TTS needs a TTS model before testing voice.";
@@ -185,11 +188,12 @@ export class RuntimeProviderFactory {
     if (this.config.provider.asr !== "openai-compatible") {
       return "";
     }
-    if (this.config.provider.baseUrl.trim().length === 0) {
-      return `OpenAI-compatible ASR needs a Base URL before ${action}.`;
+    const endpoint = resolveProviderEndpoint(this.config, "asr");
+    if (endpoint.baseUrl.length === 0) {
+      return `OpenAI-compatible ASR needs a Base URL before ${action}. Set the shared Base URL or the ASR Base URL.`;
     }
-    if (this.config.provider.apiKey.trim().length === 0) {
-      return `OpenAI-compatible ASR needs an API key before ${action}.`;
+    if (endpoint.apiKey.length === 0) {
+      return `OpenAI-compatible ASR needs an API key before ${action}. Set the shared API key or the ASR API key.`;
     }
     if (this.resolveTaskModel("voiceAsr").length === 0) {
       return `OpenAI-compatible ASR needs an ASR model before ${action}.`;

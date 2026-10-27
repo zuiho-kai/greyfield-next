@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { defaultGreyfieldConfig } from "@greyfield/persistence/config-schema";
 import type { DesktopIpcEventChannel, DesktopIpcEventMap, DesktopIpcRequestChannel, DesktopIpcRequestMap } from "../../shared/ipc";
+import type { RendererGreyfieldConfig } from "../../shared/renderer-config";
+import { API_KEY_MASK } from "../../shared/secrets";
 import { createDesktopRuntimeBridge, type DesktopHostApi } from "../desktop-runtime-bridge";
 import {
   configFromSettings,
@@ -30,6 +32,74 @@ describe("Settings persona state", () => {
     expect(settingsPatchToConfigPatch({ providerVisionModel: "vlm-model" })).toEqual({
       provider: { visionModel: "vlm-model", taskModels: { vision: "vlm-model" } }
     });
+  });
+
+  it("maps capability-specific endpoints between persisted config, renderer state, and patches", () => {
+    const settings = settingsFromConfig({
+      ...defaultGreyfieldConfig,
+      provider: {
+        ...defaultGreyfieldConfig.provider,
+        baseUrl: "https://chat.example/v1",
+        apiKey: "chat-key",
+        asrBaseUrl: "https://asr.example/v1",
+        ttsBaseUrl: "http://127.0.0.1:8787/v1",
+        ttsApiKey: "tts-key"
+      }
+    });
+
+    expect(settings.providerASRBaseUrl).toBe("https://asr.example/v1");
+    expect(settings.providerTTSBaseUrl).toBe("http://127.0.0.1:8787/v1");
+    expect(settings.providerTTSApiKey).toBe("tts-key");
+    expect(settings.providerHasTTSApiKey).toBe(true);
+    expect(settings.providerHasASRApiKey).toBe(false);
+
+    const roundTripped = configFromSettings({
+      ...settings,
+      providerASRBaseUrl: "https://asr-next.example/v1",
+      providerTTSApiKey: ""
+    });
+    expect(roundTripped.provider.asrBaseUrl).toBe("https://asr-next.example/v1");
+    expect(roundTripped.provider.ttsBaseUrl).toBe("http://127.0.0.1:8787/v1");
+    expect(roundTripped.provider.ttsApiKey).toBe("");
+    // 改语音端点不应该动到聊天地址
+    expect(roundTripped.provider.baseUrl).toBe("https://chat.example/v1");
+
+    expect(
+      settingsPatchToConfigPatch({
+        providerASRBaseUrl: "https://asr.example/v1",
+        providerASRApiKey: "asr-key",
+        providerTTSBaseUrl: "http://127.0.0.1:8787/v1",
+        providerTTSApiKey: ""
+      })
+    ).toEqual({
+      provider: {
+        asrBaseUrl: "https://asr.example/v1",
+        asrApiKey: "asr-key",
+        ttsBaseUrl: "http://127.0.0.1:8787/v1",
+        ttsApiKey: ""
+      }
+    });
+  });
+
+  it("shows masked capability API keys as unset while keeping their presence flag", () => {
+    const redacted = {
+      ...defaultGreyfieldConfig,
+      provider: {
+        ...defaultGreyfieldConfig.provider,
+        apiKey: API_KEY_MASK,
+        hasApiKey: true,
+        asrApiKey: API_KEY_MASK,
+        hasAsrApiKey: true,
+        ttsApiKey: "",
+        hasTtsApiKey: false
+      }
+    } satisfies RendererGreyfieldConfig;
+
+    const settings = settingsFromConfig(redacted);
+
+    expect(settings.providerASRApiKey).toBe("");
+    expect(settings.providerHasASRApiKey).toBe(true);
+    expect(settings.providerHasTTSApiKey).toBe(false);
   });
 
   it("maps task model slots without mutating the Chat model", () => {
@@ -286,7 +356,15 @@ describe("Settings persona state", () => {
     handlers.get("settings:changed")?.({
       ...config,
       characterFile: "characters/b.yaml",
-      provider: { ...config.provider, apiKey: "", hasApiKey: false }
+      provider: {
+        ...config.provider,
+        apiKey: "",
+        hasApiKey: false,
+        asrApiKey: "",
+        ttsApiKey: "",
+        hasAsrApiKey: false,
+        hasTtsApiKey: false
+      }
     } satisfies DesktopIpcEventMap["settings:changed"]);
 
     expect(sent).toContainEqual(["settings:update", { characterFile: "characters/b.yaml" }]);

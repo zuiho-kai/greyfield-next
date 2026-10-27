@@ -48,8 +48,14 @@ export type SettingsI18nKey =
   | "field.visionModel"
   | "field.asr"
   | "field.asrModel"
+  | "field.asrBaseUrl"
+  | "field.asrApiKey"
   | "field.tts"
   | "field.ttsModel"
+  | "field.ttsBaseUrl"
+  | "field.ttsApiKey"
+  | "field.endpointFallback"
+  | "field.apiKeyFallback"
   | "taskModel.chat.label"
   | "taskModel.chat.detail"
   | "taskModel.planner.label"
@@ -415,8 +421,14 @@ const enUS: Record<SettingsI18nKey, string> = {
   "field.visionModel": "Vision model",
   "field.asr": "ASR",
   "field.asrModel": "ASR Model",
+  "field.asrBaseUrl": "ASR Base URL",
+  "field.asrApiKey": "ASR API key",
   "field.tts": "TTS",
   "field.ttsModel": "TTS Model",
+  "field.ttsBaseUrl": "TTS Base URL",
+  "field.ttsApiKey": "TTS API key",
+  "field.endpointFallback": "Leave empty to reuse the shared one",
+  "field.apiKeyFallback": "Leave empty to reuse the shared key",
   "taskModel.chat.label": "Chat reply",
   "taskModel.chat.detail": "Normal messages use this model. Test LLM checks this slot.",
   "taskModel.planner.label": "Planning / proactive",
@@ -783,8 +795,14 @@ const zhCN: Partial<Record<SettingsI18nKey, string>> = {
   "field.visionModel": "视觉模型",
   "field.asr": "ASR",
   "field.asrModel": "ASR 模型",
+  "field.asrBaseUrl": "ASR 地址",
+  "field.asrApiKey": "ASR API key",
   "field.tts": "TTS",
   "field.ttsModel": "TTS 模型",
+  "field.ttsBaseUrl": "TTS 地址",
+  "field.ttsApiKey": "TTS API key",
+  "field.endpointFallback": "留空则复用上面的地址",
+  "field.apiKeyFallback": "留空则复用上面的密钥",
   "taskModel.chat.label": "聊天回复",
   "taskModel.chat.detail": "普通聊天回复使用这个模型；测试 LLM 也检查这个槽位。",
   "taskModel.planner.label": "规划 / 主动性",

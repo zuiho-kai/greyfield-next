@@ -98,8 +98,14 @@ export interface DesktopSettingsState {
   providerMemoryModel: string;
   providerMultimodalModel: string;
   providerASRModel: string;
+  providerASRBaseUrl: string;
+  providerASRApiKey: string;
+  providerHasASRApiKey: boolean;
   providerTTS: string;
   providerTTSModel: string;
+  providerTTSBaseUrl: string;
+  providerTTSApiKey: string;
+  providerHasTTSApiKey: boolean;
   voiceId: string;
   voiceVolume: number;
   voiceSpeechEnabled: boolean;
@@ -555,19 +561,29 @@ export class DesktopRuntimeBridge {
       patch.providerBaseUrl !== undefined ||
       patch.providerApiKey !== undefined ||
       patch.providerModel !== undefined;
+    const voiceConnectionChanged =
+      patch.providerTTS !== undefined ||
+      patch.providerASR !== undefined ||
+      patch.providerTTSBaseUrl !== undefined ||
+      patch.providerTTSApiKey !== undefined ||
+      patch.providerASRBaseUrl !== undefined ||
+      patch.providerASRApiKey !== undefined ||
+      patch.providerTTSModel !== undefined ||
+      patch.providerASRModel !== undefined ||
+      patch.voiceId !== undefined;
+    const nextHasApiKey = hasApiKeyAfterPatch(patch.providerApiKey, this.state.settings.providerHasApiKey);
+    const nextHasAsrApiKey = hasApiKeyAfterPatch(patch.providerASRApiKey, this.state.settings.providerHasASRApiKey);
+    const nextHasTtsApiKey = hasApiKeyAfterPatch(patch.providerTTSApiKey, this.state.settings.providerHasTTSApiKey);
     this.state = {
       ...this.state,
       providerTest: providerConnectionChanged ? { status: "idle", message: "" } : this.state.providerTest,
+      voiceTest: voiceConnectionChanged ? { status: "idle", message: "" } : this.state.voiceTest,
       settings: {
         ...this.state.settings,
         ...patch,
-        ...(patch.providerApiKey !== undefined
-          ? {
-              providerHasApiKey: isMaskedApiKey(patch.providerApiKey)
-                ? this.state.settings.providerHasApiKey
-                : patch.providerApiKey.length > 0
-            }
-          : {})
+        ...(nextHasApiKey !== undefined ? { providerHasApiKey: nextHasApiKey } : {}),
+        ...(nextHasAsrApiKey !== undefined ? { providerHasASRApiKey: nextHasAsrApiKey } : {}),
+        ...(nextHasTtsApiKey !== undefined ? { providerHasTTSApiKey: nextHasTtsApiKey } : {})
       },
       proactiveMessage:
         patch.proactiveMemoryEnabled === false || patch.proactivityLevel === 0 ? null : this.state.proactiveMessage
@@ -1139,6 +1155,17 @@ function isProviderConfigurationFailure(message: string): boolean {
   );
 }
 
+/**
+ * 密钥输入框拿到的是遮罩值时不能当成"改了密钥"，否则用户只是改了别的字段，
+ * 也会把"已配置"状态冲掉。返回 undefined 表示本次 patch 不动该标记。
+ */
+function hasApiKeyAfterPatch(nextApiKey: string | undefined, currentlyHasApiKey: boolean): boolean | undefined {
+  if (nextApiKey === undefined) {
+    return undefined;
+  }
+  return isMaskedApiKey(nextApiKey) ? currentlyHasApiKey : nextApiKey.length > 0;
+}
+
 export function createDesktopRuntimeBridge(host?: DesktopHostApi): DesktopRuntimeBridge {
   return new DesktopRuntimeBridge(host);
 }
@@ -1204,8 +1231,14 @@ export function createInitialDesktopRendererState(): DesktopRendererState {
       providerMemoryModel: defaultGreyfieldConfig.provider.taskModels.memory,
       providerMultimodalModel: defaultGreyfieldConfig.provider.taskModels.multimodal,
       providerASRModel: defaultGreyfieldConfig.provider.asrModel,
+      providerASRBaseUrl: defaultGreyfieldConfig.provider.asrBaseUrl,
+      providerASRApiKey: defaultGreyfieldConfig.provider.asrApiKey,
+      providerHasASRApiKey: defaultGreyfieldConfig.provider.asrApiKey.length > 0,
       providerTTS: defaultGreyfieldConfig.provider.tts,
       providerTTSModel: defaultGreyfieldConfig.provider.ttsModel,
+      providerTTSBaseUrl: defaultGreyfieldConfig.provider.ttsBaseUrl,
+      providerTTSApiKey: defaultGreyfieldConfig.provider.ttsApiKey,
+      providerHasTTSApiKey: defaultGreyfieldConfig.provider.ttsApiKey.length > 0,
       voiceId: defaultGreyfieldConfig.voice.id,
       voiceVolume: defaultGreyfieldConfig.voice.volume,
       voiceSpeechEnabled: defaultGreyfieldConfig.voice.speechEnabled,

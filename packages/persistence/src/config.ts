@@ -1,7 +1,23 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { defaultGreyfieldConfig, mergeConfig, type GreyfieldConfig, type GreyfieldConfigPatch } from "./config-schema";
+import {
+  defaultGreyfieldConfig,
+  mergeConfig,
+  resolveProviderEndpoint,
+  type GreyfieldConfig,
+  type GreyfieldConfigPatch,
+  type GreyfieldProviderCapability,
+  type GreyfieldProviderEndpoint
+} from "./config-schema";
 
-export { defaultGreyfieldConfig, mergeConfig, type GreyfieldConfig, type GreyfieldConfigPatch };
+export {
+  defaultGreyfieldConfig,
+  mergeConfig,
+  resolveProviderEndpoint,
+  type GreyfieldConfig,
+  type GreyfieldConfigPatch,
+  type GreyfieldProviderCapability,
+  type GreyfieldProviderEndpoint
+};
 
 export async function loadGreyfieldConfig(path: string): Promise<GreyfieldConfig> {
   try {

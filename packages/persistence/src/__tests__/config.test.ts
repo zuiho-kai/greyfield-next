@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { defaultGreyfieldConfig, loadGreyfieldConfig, mergeConfig } from "../config";
+import {
+  defaultGreyfieldConfig,
+  loadGreyfieldConfig,
+  mergeConfig,
+  resolveProviderEndpoint,
+  type GreyfieldConfig
+} from "../config";
 
 describe("Greyfield config", () => {
   it("keeps provider, voice, microphone, window, live2d, and character settings in one schema", () => {
@@ -285,5 +291,73 @@ describe("Greyfield config", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  it("defaults capability endpoints to empty so they fall back to the shared one", () => {
+    const config = mergeConfig({});
+
+    expect(config.provider.asrBaseUrl).toBe("");
+    expect(config.provider.asrApiKey).toBe("");
+    expect(config.provider.ttsBaseUrl).toBe("");
+    expect(config.provider.ttsApiKey).toBe("");
+    expect(resolveProviderEndpoint(config, "asr")).toEqual({
+      baseUrl: config.provider.baseUrl,
+      apiKey: config.provider.apiKey
+    });
+    expect(resolveProviderEndpoint(config, "tts")).toEqual({
+      baseUrl: config.provider.baseUrl,
+      apiKey: config.provider.apiKey
+    });
+  });
+
+  it("resolves a capability endpoint from its override plus the shared values it does not override", () => {
+    const config = mergeConfig({
+      provider: {
+        ...defaultGreyfieldConfig.provider,
+        baseUrl: "https://chat.example/v1",
+        apiKey: "chat-key",
+        asrBaseUrl: "https://asr.example/v1",
+        ttsBaseUrl: "http://127.0.0.1:8787/v1",
+        ttsApiKey: "tts-key"
+      }
+    });
+
+    // ASR 只换了地址，密钥沿用共享的那把
+    expect(resolveProviderEndpoint(config, "asr")).toEqual({
+      baseUrl: "https://asr.example/v1",
+      apiKey: "chat-key"
+    });
+    expect(resolveProviderEndpoint(config, "tts")).toEqual({
+      baseUrl: "http://127.0.0.1:8787/v1",
+      apiKey: "tts-key"
+    });
+  });
+
+  it("treats blank overrides as absent so stray whitespace does not break the fallback", () => {
+    const config = mergeConfig({
+      provider: {
+        ...defaultGreyfieldConfig.provider,
+        baseUrl: "https://chat.example/v1",
+        apiKey: "chat-key",
+        asrBaseUrl: "   ",
+        asrApiKey: "  "
+      }
+    });
+
+    expect(resolveProviderEndpoint(config, "asr")).toEqual({
+      baseUrl: "https://chat.example/v1",
+      apiKey: "chat-key"
+    });
+  });
+
+  it("keeps resolving for config files written before the capability endpoint fields existed", () => {
+    const legacy = {
+      provider: { baseUrl: "https://chat.example/v1", apiKey: "chat-key" }
+    } as unknown as GreyfieldConfig;
+
+    expect(resolveProviderEndpoint(legacy, "asr")).toEqual({
+      baseUrl: "https://chat.example/v1",
+      apiKey: "chat-key"
+    });
   });
 });

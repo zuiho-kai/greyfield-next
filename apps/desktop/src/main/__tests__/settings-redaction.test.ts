@@ -26,4 +26,27 @@ describe("settings redaction", () => {
     expect(redacted.provider.apiKey).toBe("");
     expect(redacted.provider.hasApiKey).toBe(false);
   });
+
+  it("masks capability-specific API keys independently of the shared one", () => {
+    const config = {
+      ...defaultGreyfieldConfig,
+      provider: {
+        ...defaultGreyfieldConfig.provider,
+        apiKey: "chat-secret",
+        asrApiKey: "asr-secret",
+        ttsApiKey: ""
+      }
+    };
+
+    const redacted = redactConfigForRenderer(config);
+
+    expect(redacted.provider.apiKey).toBe(API_KEY_MASK);
+    expect(redacted.provider.hasApiKey).toBe(true);
+    expect(redacted.provider.asrApiKey).toBe(API_KEY_MASK);
+    expect(redacted.provider.hasAsrApiKey).toBe(true);
+    expect(redacted.provider.ttsApiKey).toBe("");
+    expect(redacted.provider.hasTtsApiKey).toBe(false);
+    // 原始配置不能被就地改写
+    expect(config.provider.asrApiKey).toBe("asr-secret");
+  });
 });

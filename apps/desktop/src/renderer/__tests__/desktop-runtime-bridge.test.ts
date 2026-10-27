@@ -1212,7 +1212,16 @@ describe("createDesktopRuntimeBridge", () => {
 
     settingsChanged?.({
       ...bridge.getConfigSnapshot(),
-      provider: { ...bridge.getConfigSnapshot().provider, apiKey: "", model: "main-process-model", hasApiKey: false }
+      provider: {
+        ...bridge.getConfigSnapshot().provider,
+        apiKey: "",
+        model: "main-process-model",
+        hasApiKey: false,
+        asrApiKey: "",
+        ttsApiKey: "",
+        hasAsrApiKey: false,
+        hasTtsApiKey: false
+      }
     });
 
     expect(bridge.getState().settings.providerModel).toBe("main-process-model");
@@ -1232,12 +1241,41 @@ describe("createDesktopRuntimeBridge", () => {
 
     settingsChanged?.({
       ...bridge.getConfigSnapshot(),
-      provider: { ...bridge.getConfigSnapshot().provider, apiKey: API_KEY_MASK, hasApiKey: true }
+      provider: {
+        ...bridge.getConfigSnapshot().provider,
+        apiKey: API_KEY_MASK,
+        hasApiKey: true,
+        asrApiKey: "",
+        ttsApiKey: "",
+        hasAsrApiKey: false,
+        hasTtsApiKey: false
+      }
     });
 
     expect(bridge.getState().settings.providerApiKey).toBe("");
     expect(bridge.getState().settings.providerHasApiKey).toBe(true);
     expect(bridge.getConfigSnapshot().provider.apiKey).toBe("");
+  });
+
+  it("tracks capability API-key presence separately from the shared key", () => {
+    const bridge = createDesktopRuntimeBridge();
+
+    bridge.updateSettings({ providerASRApiKey: "asr-secret" });
+    expect(bridge.getState().settings.providerHasASRApiKey).toBe(true);
+    // 聊天那把密钥不该被带上
+    expect(bridge.getState().settings.providerHasApiKey).toBe(false);
+    expect(bridge.getState().settings.providerHasTTSApiKey).toBe(false);
+
+    // 回传遮罩值时不能把"已配置"状态冲掉
+    bridge.updateSettings({ providerASRApiKey: API_KEY_MASK });
+    expect(bridge.getState().settings.providerHasASRApiKey).toBe(true);
+
+    bridge.updateSettings({ providerASRApiKey: "" });
+    expect(bridge.getState().settings.providerHasASRApiKey).toBe(false);
+
+    bridge.updateSettings({ providerTTSApiKey: "tts-secret" });
+    expect(bridge.getState().settings.providerHasTTSApiKey).toBe(true);
+    expect(bridge.getState().settings.providerHasASRApiKey).toBe(false);
   });
 
   it("keeps the in-progress API key draft when Electron echoes masked saved settings", () => {
@@ -1255,7 +1293,15 @@ describe("createDesktopRuntimeBridge", () => {
     bridge.updateSettings({ providerApiKey: "typed-secret" });
     settingsChanged?.({
       ...bridge.getConfigSnapshot(),
-      provider: { ...bridge.getConfigSnapshot().provider, apiKey: API_KEY_MASK, hasApiKey: true }
+      provider: {
+        ...bridge.getConfigSnapshot().provider,
+        apiKey: API_KEY_MASK,
+        hasApiKey: true,
+        asrApiKey: "",
+        ttsApiKey: "",
+        hasAsrApiKey: false,
+        hasTtsApiKey: false
+      }
     });
 
     expect(bridge.getState().settings.providerApiKey).toBe("typed-secret");
@@ -1278,7 +1324,15 @@ describe("createDesktopRuntimeBridge", () => {
     bridge.updateSettings({ providerApiKey: "new-secret" });
     settingsChanged?.({
       ...bridge.getConfigSnapshot(),
-      provider: { ...bridge.getConfigSnapshot().provider, apiKey: "", hasApiKey: false }
+      provider: {
+        ...bridge.getConfigSnapshot().provider,
+        apiKey: "",
+        hasApiKey: false,
+        asrApiKey: "",
+        ttsApiKey: "",
+        hasAsrApiKey: false,
+        hasTtsApiKey: false
+      }
     });
 
     expect(bridge.getState().settings.providerApiKey).toBe("new-secret");

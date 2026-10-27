@@ -36,6 +36,15 @@ export interface GreyfieldConfig {
     taskModels: GreyfieldTaskModelConfig;
     baseUrl: string;
     apiKey: string;
+    /**
+     * 可选的按能力覆盖端点。留空即复用上面的 baseUrl / apiKey。
+     * 用于聊天、语音识别、语音合成分别落在不同服务商的场景
+     * （例如文本聊天用中转站，而 /audio/* 端点只在另一家服务上提供）。
+     */
+    asrBaseUrl: string;
+    asrApiKey: string;
+    ttsBaseUrl: string;
+    ttsApiKey: string;
   };
   voice: {
     id: string;
@@ -110,7 +119,11 @@ export const defaultGreyfieldConfig: GreyfieldConfig = {
       voiceTts: "FunAudioLLM/CosyVoice2-0.5B"
     },
     baseUrl: "https://api.openai.com/v1",
-    apiKey: ""
+    apiKey: "",
+    asrBaseUrl: "",
+    asrApiKey: "",
+    ttsBaseUrl: "",
+    ttsApiKey: ""
   },
   voice: {
     id: "FunAudioLLM/CosyVoice2-0.5B:anna",
@@ -182,6 +195,39 @@ export function mergeConfig(partial: GreyfieldConfigPatch): GreyfieldConfig {
       ...partial.memory,
       llmAtomExtractionInterval: normalizeMemoryAtomExtractionInterval(partial.memory?.llmAtomExtractionInterval)
     }
+  };
+}
+
+export type GreyfieldProviderCapability = "asr" | "tts";
+
+export interface GreyfieldProviderEndpoint {
+  baseUrl: string;
+  apiKey: string;
+}
+
+function endpointOverride(value: string | undefined): string {
+  // 旧配置文件里没有这些字段，运行时可能是 undefined，这里统一按"未设置"处理
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/**
+ * 解析某一能力实际要用的端点。
+ *
+ * 聊天、语音识别、语音合成可能分别落在不同服务商上：文本中转站通常只有
+ * `/chat/completions`，而 `/audio/transcriptions`、`/audio/speech` 往往在别家。
+ * 该项填了地址就用它，留空则回退到全局 `baseUrl`；`apiKey` 同理，
+ * 这样用户只改地址时不必把密钥再填一遍。
+ */
+export function resolveProviderEndpoint(
+  config: Pick<GreyfieldConfig, "provider">,
+  capability: GreyfieldProviderCapability
+): GreyfieldProviderEndpoint {
+  const provider = config.provider;
+  const baseUrlOverride = endpointOverride(capability === "asr" ? provider.asrBaseUrl : provider.ttsBaseUrl);
+  const apiKeyOverride = endpointOverride(capability === "asr" ? provider.asrApiKey : provider.ttsApiKey);
+  return {
+    baseUrl: baseUrlOverride || provider.baseUrl.trim(),
+    apiKey: apiKeyOverride || provider.apiKey.trim()
   };
 }
 

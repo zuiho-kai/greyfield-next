@@ -6,6 +6,10 @@ import type { DesktopPersonaFormState, DesktopSettingsPatch, DesktopSettingsStat
 
 export function settingsFromConfig(config: RendererGreyfieldConfig | GreyfieldConfig): DesktopSettingsState {
   const hasApiKey = "hasApiKey" in config.provider ? config.provider.hasApiKey : config.provider.apiKey.length > 0;
+  const hasAsrApiKey =
+    "hasAsrApiKey" in config.provider ? config.provider.hasAsrApiKey : (config.provider.asrApiKey ?? "").length > 0;
+  const hasTtsApiKey =
+    "hasTtsApiKey" in config.provider ? config.provider.hasTtsApiKey : (config.provider.ttsApiKey ?? "").length > 0;
   return {
     providerLLM: config.provider.llm,
     providerASR: config.provider.asr,
@@ -19,8 +23,14 @@ export function settingsFromConfig(config: RendererGreyfieldConfig | GreyfieldCo
     providerMemoryModel: config.provider.taskModels.memory,
     providerMultimodalModel: config.provider.taskModels.multimodal,
     providerASRModel: config.provider.asrModel,
+    providerASRBaseUrl: config.provider.asrBaseUrl ?? "",
+    providerASRApiKey: isMaskedApiKey(config.provider.asrApiKey ?? "") ? "" : (config.provider.asrApiKey ?? ""),
+    providerHasASRApiKey: hasAsrApiKey,
     providerTTS: config.provider.tts,
     providerTTSModel: config.provider.ttsModel,
+    providerTTSBaseUrl: config.provider.ttsBaseUrl ?? "",
+    providerTTSApiKey: isMaskedApiKey(config.provider.ttsApiKey ?? "") ? "" : (config.provider.ttsApiKey ?? ""),
+    providerHasTTSApiKey: hasTtsApiKey,
     voiceId: config.voice.id,
     voiceVolume: config.voice.volume,
     voiceSpeechEnabled: config.voice.speechEnabled,
@@ -57,6 +67,10 @@ export function configFromSettings(settings: DesktopSettingsState): GreyfieldCon
       asrModel: settings.providerASRModel,
       tts: settings.providerTTS,
       ttsModel: settings.providerTTSModel,
+      asrBaseUrl: settings.providerASRBaseUrl,
+      asrApiKey: settings.providerASRApiKey,
+      ttsBaseUrl: settings.providerTTSBaseUrl,
+      ttsApiKey: settings.providerTTSApiKey,
       taskModels: {
         chat: settings.providerModel,
         planner: settings.providerPlannerModel,
@@ -167,6 +181,18 @@ export function settingsPatchToConfigPatch(patch: DesktopSettingsPatch): Greyfie
       asrModel: patch.providerASRModel,
       taskModels: { ...configPatch.provider?.taskModels, voiceAsr: patch.providerASRModel }
     };
+  }
+  if (patch.providerASRBaseUrl !== undefined) {
+    configPatch.provider = { ...configPatch.provider, asrBaseUrl: patch.providerASRBaseUrl };
+  }
+  if (patch.providerASRApiKey !== undefined) {
+    configPatch.provider = { ...configPatch.provider, asrApiKey: patch.providerASRApiKey };
+  }
+  if (patch.providerTTSBaseUrl !== undefined) {
+    configPatch.provider = { ...configPatch.provider, ttsBaseUrl: patch.providerTTSBaseUrl };
+  }
+  if (patch.providerTTSApiKey !== undefined) {
+    configPatch.provider = { ...configPatch.provider, ttsApiKey: patch.providerTTSApiKey };
   }
   if (patch.providerLLM !== undefined) {
     configPatch.provider = { ...configPatch.provider, llm: patch.providerLLM };

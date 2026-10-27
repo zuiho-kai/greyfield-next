@@ -45,8 +45,18 @@ export function useWindowRuntimeBridge(params: {
         providerLLM: config.provider.llm,
         providerASR: config.provider.asr,
         providerASRModel: config.provider.asrModel,
+        providerASRBaseUrl: config.provider.asrBaseUrl,
+        providerASRApiKey: isMaskedApiKey(config.provider.asrApiKey)
+          ? state.value.settings.providerASRApiKey
+          : config.provider.asrApiKey,
+        providerHasASRApiKey: config.provider.hasAsrApiKey,
         providerTTS: config.provider.tts,
         providerTTSModel: config.provider.ttsModel,
+        providerTTSBaseUrl: config.provider.ttsBaseUrl,
+        providerTTSApiKey: isMaskedApiKey(config.provider.ttsApiKey)
+          ? state.value.settings.providerTTSApiKey
+          : config.provider.ttsApiKey,
+        providerHasTTSApiKey: config.provider.hasTtsApiKey,
         providerBaseUrl: config.provider.baseUrl,
         providerApiKey: isMaskedApiKey(config.provider.apiKey) ? state.value.settings.providerApiKey : config.provider.apiKey,
         providerHasApiKey: config.provider.hasApiKey,
